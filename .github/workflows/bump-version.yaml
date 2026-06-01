@@ -1,0 +1,34 @@
+name: Bump add-on version
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - ".github/**"
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Increment patch version in config.yaml
+        run: |
+          current=$(grep '^version:' config.yaml | sed 's/version: "//' | sed 's/"//')
+          IFS='.' read -r major minor patch <<< "$current"
+          new="${major}.${minor}.$((patch + 1))"
+          sed -i "s/^version: \".*\"/version: \"${new}\"/" config.yaml
+          echo "version: ${current} → ${new}"
+
+      - name: Commit & push
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add config.yaml
+          git diff --staged --quiet && echo "no change" && exit 0
+          git commit -m "chore: bump version [skip ci]"
+          git push
