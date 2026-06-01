@@ -1,5 +1,4 @@
-ARG BUILD_FROM=python:3.11-alpine
-FROM $BUILD_FROM
+FROM python:3.11-alpine
 
 WORKDIR /app
 
