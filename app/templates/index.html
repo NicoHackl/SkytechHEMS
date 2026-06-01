@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HEMS Monitor</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0f1117;
+      color: #c9d1d9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+      padding: 16px;
+      min-height: 100vh;
+    }
+
+    /* ---- Header ---- */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+    .header h1 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #e6edf3;
+    }
+    .dot {
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      background: #3fb950;
+      animation: pulse 2s infinite;
+    }
+    .dot.error { background: #f85149; animation: none; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: .4; }
+    }
+
+    /* ---- Chips ---- */
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+    .chip {
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 0.78rem;
+      font-weight: 500;
+      border: 1px solid transparent;
+    }
+    .chip-green  { background: #1a2d1a; color: #56d364; border-color: #2ea043; }
+    .chip-red    { background: #2d1a1a; color: #f85149; border-color: #da3633; }
+    .chip-blue   { background: #1a1f2d; color: #79c0ff; border-color: #1f6feb; }
+    .chip-grey   { background: #21262d; color: #8b949e; border-color: #30363d; }
+    .chip-orange { background: #2d1f10; color: #d29922; border-color: #9e6a03; }
+
+    /* ---- Metric tiles ---- */
+    .metrics { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 22px; }
+    .metric {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 10px 16px;
+      min-width: 130px;
+      text-align: center;
+    }
+    .metric .val {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #79c0ff;
+      line-height: 1.2;
+    }
+    .metric .val.warn { color: #f0883e; }
+    .metric .val.ok   { color: #56d364; }
+    .metric .lbl {
+      font-size: 0.72rem;
+      color: #8b949e;
+      margin-top: 3px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+
+    /* ---- Section title ---- */
+    .section { font-size: 0.75rem; color: #8b949e; text-transform: uppercase;
+               letter-spacing: .06em; margin: 18px 0 8px; }
+
+    /* ---- Device cards ---- */
+    .devices { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+    .card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-left: 3px solid #30363d;
+      border-radius: 8px;
+      padding: 12px 14px;
+    }
+    .card.active  { border-left-color: #2ea043; }
+    .card.idle    { border-left-color: #1f6feb; }
+    .card.off     { border-left-color: #30363d; }
+    .card.lockout { border-left-color: #da3633; }
+
+    .card-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .card-name { font-weight: 600; color: #e6edf3; }
+    .prio-badge {
+      font-size: 0.72rem;
+      background: #21262d;
+      color: #8b949e;
+      border-radius: 4px;
+      padding: 1px 6px;
+    }
+
+    .row { display: flex; justify-content: space-between; padding: 2px 0; }
+    .row .k { color: #8b949e; }
+    .row .v { font-weight: 500; color: #c9d1d9; }
+    .row .v.on      { color: #56d364; }
+    .row .v.off-val { color: #f85149; }
+    .row .v.changed { color: #f0883e; }
+    .row .v.dim     { color: #6e7681; }
+
+    /* ---- Footer ---- */
+    .footer {
+      margin-top: 20px;
+      font-size: 0.72rem;
+      color: #484f58;
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    /* ---- Error banner ---- */
+    .error-banner {
+      background: #2d1a1a;
+      border: 1px solid #da3633;
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: #f85149;
+      font-size: 0.85rem;
+      margin-bottom: 14px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="dot" id="live-dot"></div>
+    <h1>HEMS Monitor</h1>
+  </div>
+
+  <div class="error-banner" id="error-banner"></div>
+  <div class="chips"   id="chips"></div>
+  <div class="metrics" id="metrics"></div>
+
+  <div class="section">Regelbare Verbraucher</div>
+  <div class="devices" id="controllable"></div>
+
+  <div class="section">Binäre Verbraucher</div>
+  <div class="devices" id="binary"></div>
+
+  <div class="footer" id="footer"></div>
+
+  <script>
+    // Use a relative URL so ingress proxy paths are handled correctly.
+    const API = 'api/status';
+
+    async function poll() {
+      try {
+        const r = await fetch(API);
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+        render(data);
+        document.getElementById('live-dot').className = 'dot';
+      } catch (e) {
+        document.getElementById('live-dot').className = 'dot error';
+        showError('Verbindungsfehler: ' + e.message);
+      }
+    }
+
+    function render(data) {
+      const s = data.status || {};
+      showError(data.error || '');
+
+      // ----- Chips -----
+      const chips = [];
+      chips.push(chip(s.ems_enabled ? 'EMS Aktiv' : 'EMS Inaktiv',
+                      s.ems_enabled ? 'green' : 'grey'));
+      chips.push(chip('Modus: ' + (s.global_mode || '–'), 'blue'));
+      if (s.hard_lockout)         chips.push(chip('⚠ LOCKOUT', 'red'));
+      if (s.binary_immediate_off) chips.push(chip('Notabschaltung', 'red'));
+      if (!s.residual_sensor_valid && s.residual_sensor_valid !== undefined)
+        chips.push(chip('Sensor unavailable', 'red'));
+      document.getElementById('chips').innerHTML = chips.join('');
+
+      // ----- Metrics -----
+      const tiles = [];
+      tiles.push(tile(fmt(s.residual_w) + ' W', 'Überschuss',
+                      s.residual_w < 0 ? 'warn' : 'ok'));
+      tiles.push(tile(fmt(s.pool_w) + ' W', 'EMS Pool'));
+      if (s.current_deficit_w > 0)
+        tiles.push(tile(fmt(s.current_deficit_w) + ' W', 'Defizit', 'warn'));
+      tiles.push(tile(fmt(s.binary_total_w) + ' W', 'Binär gesamt'));
+      document.getElementById('metrics').innerHTML = tiles.join('');
+
+      // ----- Devices -----
+      const devices = s.devices || [];
+      document.getElementById('controllable').innerHTML =
+        devices.filter(d => d.type === 'controllable').map(renderControllable).join('');
+      document.getElementById('binary').innerHTML =
+        devices.filter(d => d.type === 'binary').map(renderBinary).join('');
+
+      // ----- Footer -----
+      document.getElementById('footer').innerHTML =
+        `<span>Letzter Zyklus: ${data.last_cycle_at || '–'}</span>` +
+        `<span>Zyklen: ${data.cycle_count || 0}</span>` +
+        `<span>Intervall: ${data.interval_s}s</span>`;
+    }
+
+    function renderControllable(d) {
+      const isActive  = d.eligible && d.new_w > 0;
+      const cardClass = !d.eligible ? 'off' : isActive ? 'active' : 'idle';
+      const changed   = Math.round(d.new_w) !== Math.round(d.anforderung_current_w);
+      return `<div class="card ${cardClass}">
+        <div class="card-title">
+          <span class="card-name">${d.id}</span>
+          <span class="prio-badge">Prio ${d.priority}</span>
+        </div>
+        ${row('Freigabe', d.eligible ? '✓ ja' : '✗ nein', d.eligible ? 'on' : 'off-val')}
+        ${row('Ist',             fmt(d.actual_w) + ' W')}
+        ${row('Anforderung',     fmt(d.anforderung_current_w) + ' W')}
+        ${row('Ziel (alloc)',    fmt(d.alloc_w) + ' W')}
+        ${row('Schutz-Reserve',  fmt(d.schutz_w) + ' W', 'dim')}
+        ${row('Neu → HA',        fmt(d.new_w) + ' W', changed ? 'changed' : '')}
+      </div>`;
+    }
+
+    function renderBinary(d) {
+      const cardClass = !d.eligible ? 'off' : d.final_on ? 'active' : 'idle';
+      const stateChanged = d.actual_on !== d.final_on;
+      return `<div class="card ${cardClass}">
+        <div class="card-title">
+          <span class="card-name">${d.id}</span>
+          <span class="prio-badge">Prio ${d.priority}</span>
+        </div>
+        ${row('Freigabe',  d.eligible ? '✓ ja' : '✗ nein', d.eligible ? 'on' : 'off-val')}
+        ${row('Leistung',  fmt(d.power_w) + ' W')}
+        ${row('Ist',       d.actual_on  ? '● AN' : '○ AUS', d.actual_on  ? 'on' : 'off-val')}
+        ${row('Gewünscht', d.desired_on ? '● AN' : '○ AUS', d.desired_on ? 'on' : 'dim')}
+        ${row('Kandidat',  d.candidate_on ? '● AN' : '○ AUS', d.candidate_on ? 'on' : 'dim')}
+        ${row('Final → HA', d.final_on ? '● AN' : '○ AUS',
+              stateChanged ? 'changed' : d.final_on ? 'on' : 'off-val')}
+      </div>`;
+    }
+
+    function chip(text, color) {
+      return `<span class="chip chip-${color}">${text}</span>`;
+    }
+
+    function tile(value, label, valClass = '') {
+      return `<div class="metric">
+        <div class="val ${valClass}">${value}</div>
+        <div class="lbl">${label}</div>
+      </div>`;
+    }
+
+    function row(key, val, cls = '') {
+      return `<div class="row"><span class="k">${key}</span><span class="v ${cls}">${val}</span></div>`;
+    }
+
+    function fmt(v) {
+      if (v == null) return '–';
+      return Math.round(v).toLocaleString('de-DE');
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('error-banner');
+      if (msg) {
+        el.style.display = 'block';
+        el.textContent = '⚠ ' + msg;
+      } else {
+        el.style.display = 'none';
+      }
+    }
+
+    poll();
+    setInterval(poll, 5000);
+  </script>
+</body>
+</html>
