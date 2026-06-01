@@ -38,6 +38,22 @@ class HAClient:
             for s in states_list
         }
 
+    async def call_service(self, domain: str, service: str, data: Dict[str, Any] = None) -> None:
+        """Fire a single HA service call."""
+        url = f"{_HA_URL}/api/services/{domain}/{service}"
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.post(
+                    url,
+                    headers=self._headers,
+                    json=data or {},
+                    timeout=aiohttp.ClientTimeout(total=5),
+                ) as resp:
+                    if resp.status not in (200, 201):
+                        log.warning("Service %s.%s → HTTP %s", domain, service, resp.status)
+            except Exception as exc:
+                log.error("Service call %s.%s failed: %s", domain, service, exc)
+
     async def execute_write_ops(self, write_ops: List[Tuple[str, str, Dict[str, Any]]]) -> None:
         """Execute (domain, service, service_data) tuples against the HA REST API."""
         if not write_ops:

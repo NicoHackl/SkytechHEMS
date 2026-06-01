@@ -17,6 +17,8 @@ panel_title: "HEMS"
 options:
   interval_s: 30
   log_level: "info"
+  post_cycle_script: ""
 schema:
   interval_s: int(5,300)
   log_level: list(debug|info|warning|error)
+  post_cycle_script: str?

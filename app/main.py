@@ -49,6 +49,7 @@ class HEMSApp:
     def __init__(self):
         cfg = _load_config()
         self.interval_s: int = int(cfg.get("interval_s", 30))
+        self.post_cycle_script: str = (cfg.get("post_cycle_script") or "").strip()
 
         log_level = cfg.get("log_level", "info").upper()
         logging.getLogger().setLevel(getattr(logging, log_level, logging.INFO))
@@ -71,6 +72,9 @@ class HEMSApp:
             st     = StateProxy(states)
             result = run_ems(st)
             await self.ha.execute_write_ops(result["write_ops"])
+            if self.post_cycle_script:
+                await self.ha.call_service("script", "turn_on",
+                                           {"entity_id": self.post_cycle_script})
             self._last_status   = result["status"]
             self._last_error    = ""
             self._cycle_count  += 1
