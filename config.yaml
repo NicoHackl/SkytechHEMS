@@ -18,5 +18,5 @@ options:
   interval_s: 30
   log_level: "info"
 schema:
-  interval_s: int(10,300)
+  interval_s: int(5,300)
   log_level: list(debug|info|warning|error)
