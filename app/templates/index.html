@@ -285,14 +285,19 @@
     const cls = !d.eligible ? 'off' : d.new_w > 0 ? 'active' : 'idle';
     const changed = Math.round(d.new_w) !== Math.round(d.anforderung_current_w);
     const isAmpere = d.output_unit === 'ampere';
+    const ph = isAmpere ? (d.current_phases || 1) : 1;
+    const uv = isAmpere ? (d.voltage_v || 230) : 230;
     // Current setpoint converted to A for display (anforderung_current_w is always in W)
-    const anfA = isAmpere ? Math.floor(d.anforderung_current_w / (d.phases * d.voltage_v)) : null;
+    const anfA = isAmpere ? Math.floor(d.anforderung_current_w / (ph * uv)) : null;
     const anfDisplay = isAmpere
       ? (anfA + ' A  (' + fmt(d.anforderung_current_w) + ' W)')
       : fmt(d.anforderung_current_w) + ' W';
     const neuDisplay = isAmpere
       ? (d.new_a != null ? d.new_a + ' A  (' + fmt(d.new_w) + ' W)' : '–')
       : fmt(d.new_w) + ' W';
+    const multiPhase = isAmpere && d.allowed_phases && d.allowed_phases.length > 1;
+    const phaseLock  = multiPhase && d.phase_lock_remaining_s > 0
+      ? ' (Lock: ' + fmtDur(d.phase_lock_remaining_s) + ')' : '';
     return `<div class="card ${cls}">
       <div class="card-title"><span class="card-name">${d.label || d.id}</span><span class="prio-badge">Prio ${d.priority}</span></div>
       ${row('Freigabe',     d.eligible ? '✓ ja' : '✗ nein', d.eligible ? 'on' : 'off-val')}
@@ -300,7 +305,8 @@
       ${row('Anforderung',  anfDisplay)}
       ${row('Ziel (alloc)', fmt(d.alloc_w) + ' W')}
       ${row('Schutz',       fmt(d.schutz_w) + ' W', 'dim')}
-      ${isAmpere ? row('Spannung', d.phases + '× ' + d.voltage_v + ' V', 'dim') : ''}
+      ${isAmpere ? row('Spannung', ph + '× ' + uv + ' V', 'dim') : ''}
+      ${multiPhase ? row('Phasen', ph + '-phasig' + phaseLock, phaseLock ? 'dim' : '') : ''}
       ${row('Neu → HA',     neuDisplay, changed ? 'changed' : '')}
     </div>`;
   }

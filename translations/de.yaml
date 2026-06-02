@@ -40,9 +40,16 @@ configuration:
       immer abgerundet) – benötigt von Wallboxen und ähnlichen Geräten.
 
       • phases (optional, nur controllable + ampere, Standard „1") –
-      Phasenanzahl: „1" (einphasig) oder „3" (dreiphasig). Bestimmt die
-      Umrechnung I = P ÷ (Phasen × Phasenspannung). Beispiel: 6900 W
-      ÷ (3 × 230 V) = 10 A.
+      Kommagetrennte Phasenkonfiguration. Erlaubte Werte: „1" (einphasig),
+      „3" (dreiphasig) oder „1,3" (automatische Phasenumschaltung). Bei „1,3"
+      wählt das EMS automatisch 3-phasiges Laden wenn der PV-Pool ausreicht
+      (floor(pool ÷ (3 × U)) ≥ min_technisch_a), sonst 1-phasig.
+      Umrechnungsformel: I = floor(P ÷ (Phasen × U)).
+
+      • phase_switch_delay_s (optional, nur controllable + ampere + phases=„1,3",
+      Standard 300) – Hysterese-Sperrzeit in Sekunden zwischen zwei
+      Phasenwechseln. Verhindert schnelles Hin- und Herschalten bei
+      Leistungsschwankungen. Empfehlung: 300 s (5 Minuten).
 
       • voltage_entity (optional, nur controllable + ampere) – HA-Sensor
       für die aktuelle Phasenspannung in Volt (z. B.

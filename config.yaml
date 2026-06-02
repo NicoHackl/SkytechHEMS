@@ -47,7 +47,8 @@ options:
       entity_prefix: wallbox
       allowed_modes: "auto,nur_laden"
       output_unit: "ampere"
-      phases: "3"
+      phases: "1,3"
+      phase_switch_delay_s: 300
       voltage_entity: ""
     - name: heizlufter_1
       label: "Heizlüfter 1"
@@ -72,5 +73,6 @@ schema:
       entity_prefix: str?
       allowed_modes: str?
       output_unit: list(watt|ampere)?
-      phases: list(1|3)?
+      phases: str?
+      phase_switch_delay_s: int?
       voltage_entity: str?
