@@ -1,6 +1,11 @@
 name: "Skytech HEMS"
-description: "PV-Überschuss Energiemanagementsystem – regelt Heizstab, Wallbox und Heizlüfter"
-version: "1.0.6"
+description: >-
+  PV-Überschuss-Energiemanagementsystem für Home Assistant. Verteilt den
+  Solarüberschuss automatisch und prioritätsbasiert auf regelbare Verbraucher
+  (Heizstab, Wallbox) und binäre Verbraucher (Heizlüfter) – mit Zeitschutz,
+  Hysterese, Rampenbegrenzung und Notabschaltung. Bedienung über ein
+  integriertes Web-UI und HA-Helfer-Entitäten.
+version: "1.0.4"
 slug: "skytech_hems"
 init: false
 arch:

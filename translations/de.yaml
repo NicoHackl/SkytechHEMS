@@ -1,0 +1,24 @@
+configuration:
+  interval_s:
+    name: Regelintervall (Sekunden)
+    description: >-
+      Wie oft der EMS-Regelzyklus ausgeführt wird. Kleinere Werte (z. B. 10 s)
+      reagieren schneller auf Leistungsänderungen der PV-Anlage, erzeugen aber
+      mehr HA-API-Anfragen. Empfehlung: 30 s für den normalen Betrieb.
+      Erlaubter Bereich: 5 – 300 s.
+  log_level:
+    name: Log-Level
+    description: >-
+      Detaillierungsgrad der Add-on-Protokolle. „info" ist für den
+      Normalbetrieb ausreichend. „debug" gibt zusätzlich alle
+      Regelentscheidungen (Pool, Defizit, Geräte-Kandidaten) aus –
+      nützlich zur Fehlersuche. Der Log-Level kann auch zur Laufzeit über
+      den HA-Helfer „input_boolean.ems_pyems_debug_output" umgeschaltet
+      werden, ohne das Add-on neu zu starten.
+  post_cycle_script:
+    name: Post-Cycle-Skript (optional)
+    description: >-
+      HA-Skript-Entity-ID (z. B. „script.hems_benachrichtigung"), das nach
+      jedem abgeschlossenen EMS-Zyklus aufgerufen wird. Kann z. B. für
+      Benachrichtigungen oder das Schreiben von Messwerten in einen externen
+      Speicher genutzt werden. Leer lassen, wenn nicht benötigt.
