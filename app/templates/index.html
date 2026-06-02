@@ -12,7 +12,6 @@
       color: #c9d1d9;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       font-size: 14px;
-      padding: 16px;
       min-height: 100vh;
     }
 
@@ -21,273 +20,524 @@
       display: flex;
       align-items: center;
       gap: 10px;
-      margin-bottom: 18px;
+      padding: 14px 16px 0;
     }
-    .header h1 {
-      font-size: 1.25rem;
-      font-weight: 600;
-      color: #e6edf3;
-    }
-    .dot {
-      width: 9px; height: 9px;
-      border-radius: 50%;
-      background: #3fb950;
-      animation: pulse 2s infinite;
-    }
+    .header h1 { font-size: 1.2rem; font-weight: 600; color: #e6edf3; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: #3fb950; animation: pulse 2s infinite; }
     .dot.error { background: #f85149; animation: none; }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50%       { opacity: .4; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    /* ---- Tabs ---- */
+    .tabs {
+      display: flex;
+      gap: 2px;
+      padding: 10px 16px 0;
+      border-bottom: 1px solid #21262d;
     }
+    .tab-btn {
+      padding: 7px 18px;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: #8b949e;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: color .15s, border-color .15s;
+      margin-bottom: -1px;
+    }
+    .tab-btn.active { color: #e6edf3; border-bottom-color: #1f6feb; }
+    .tab-btn:hover:not(.active) { color: #c9d1d9; }
+
+    /* ---- Content area ---- */
+    .tab-content { display: none; padding: 16px; }
+    .tab-content.active { display: block; }
 
     /* ---- Chips ---- */
-    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
-    .chip {
-      padding: 3px 10px;
-      border-radius: 12px;
-      font-size: 0.78rem;
-      font-weight: 500;
-      border: 1px solid transparent;
-    }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    .chip { padding: 3px 10px; border-radius: 12px; font-size: .78rem; font-weight: 500; border: 1px solid transparent; }
     .chip-green  { background: #1a2d1a; color: #56d364; border-color: #2ea043; }
     .chip-red    { background: #2d1a1a; color: #f85149; border-color: #da3633; }
     .chip-blue   { background: #1a1f2d; color: #79c0ff; border-color: #1f6feb; }
     .chip-grey   { background: #21262d; color: #8b949e; border-color: #30363d; }
     .chip-orange { background: #2d1f10; color: #d29922; border-color: #9e6a03; }
 
-    /* ---- Metric tiles ---- */
-    .metrics { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 22px; }
-    .metric {
-      background: #161b22;
-      border: 1px solid #30363d;
-      border-radius: 8px;
-      padding: 10px 16px;
-      min-width: 130px;
-      text-align: center;
-    }
-    .metric .val {
-      font-size: 1.5rem;
-      font-weight: 700;
-      color: #79c0ff;
-      line-height: 1.2;
-    }
+    /* ---- Metrics ---- */
+    .metrics { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+    .metric { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 10px 16px; min-width: 130px; text-align: center; }
+    .metric .val { font-size: 1.5rem; font-weight: 700; color: #79c0ff; line-height: 1.2; }
     .metric .val.warn { color: #f0883e; }
     .metric .val.ok   { color: #56d364; }
-    .metric .lbl {
-      font-size: 0.72rem;
-      color: #8b949e;
-      margin-top: 3px;
-      text-transform: uppercase;
-      letter-spacing: .04em;
-    }
+    .metric .lbl { font-size: .72rem; color: #8b949e; margin-top: 3px; text-transform: uppercase; letter-spacing: .04em; }
 
-    /* ---- Section title ---- */
-    .section { font-size: 0.75rem; color: #8b949e; text-transform: uppercase;
-               letter-spacing: .06em; margin: 18px 0 8px; }
+    /* ---- Section label ---- */
+    .section { font-size: .75rem; color: #8b949e; text-transform: uppercase; letter-spacing: .06em; margin: 16px 0 8px; }
 
-    /* ---- Device cards ---- */
+    /* ---- Monitor device cards ---- */
     .devices { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
-    .card {
-      background: #161b22;
-      border: 1px solid #30363d;
-      border-left: 3px solid #30363d;
-      border-radius: 8px;
-      padding: 12px 14px;
-    }
+    .card { background: #161b22; border: 1px solid #30363d; border-left: 3px solid #30363d; border-radius: 8px; padding: 12px 14px; }
     .card.active  { border-left-color: #2ea043; }
     .card.idle    { border-left-color: #1f6feb; }
     .card.off     { border-left-color: #30363d; }
-    .card.lockout { border-left-color: #da3633; }
-
-    .card-title {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 8px;
-    }
+    .card-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
     .card-name { font-weight: 600; color: #e6edf3; }
-    .prio-badge {
-      font-size: 0.72rem;
-      background: #21262d;
-      color: #8b949e;
-      border-radius: 4px;
-      padding: 1px 6px;
-    }
-
+    .prio-badge { font-size: .72rem; background: #21262d; color: #8b949e; border-radius: 4px; padding: 1px 6px; }
     .row { display: flex; justify-content: space-between; padding: 2px 0; }
     .row .k { color: #8b949e; }
-    .row .v { font-weight: 500; color: #c9d1d9; }
+    .row .v { font-weight: 500; }
     .row .v.on      { color: #56d364; }
     .row .v.off-val { color: #f85149; }
     .row .v.changed { color: #f0883e; }
     .row .v.dim     { color: #6e7681; }
 
     /* ---- Footer ---- */
-    .footer {
-      margin-top: 20px;
-      font-size: 0.72rem;
-      color: #484f58;
-      display: flex;
-      gap: 16px;
-      flex-wrap: wrap;
-    }
+    .footer { margin-top: 16px; font-size: .72rem; color: #484f58; display: flex; gap: 16px; flex-wrap: wrap; }
 
     /* ---- Error banner ---- */
-    .error-banner {
-      background: #2d1a1a;
-      border: 1px solid #da3633;
-      border-radius: 6px;
-      padding: 8px 12px;
-      color: #f85149;
-      font-size: 0.85rem;
-      margin-bottom: 14px;
-      display: none;
+    .error-banner { background: #2d1a1a; border: 1px solid #da3633; border-radius: 6px; padding: 8px 12px; color: #f85149; font-size: .85rem; margin-bottom: 12px; display: none; }
+
+    /* ============================================================
+       STEUERUNG TAB
+       ============================================================ */
+
+    .ctrl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+
+    .ctrl-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; overflow: hidden; }
+    .ctrl-card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 14px;
+      background: #1c2129;
+      border-bottom: 1px solid #30363d;
+      cursor: pointer;
+      user-select: none;
     }
+    .ctrl-card-header:hover { background: #21262d; }
+    .ctrl-card-title { font-weight: 600; color: #e6edf3; font-size: .95rem; }
+    .ctrl-card-arrow { color: #8b949e; font-size: .8rem; transition: transform .2s; }
+    .ctrl-card-arrow.open { transform: rotate(180deg); }
+    .ctrl-card-body { padding: 4px 0; }
+    .ctrl-card-body.collapsed { display: none; }
+
+    .ctrl-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 7px 14px;
+      border-bottom: 1px solid #21262d;
+      gap: 8px;
+      min-height: 38px;
+    }
+    .ctrl-row:last-child { border-bottom: none; }
+    .ctrl-row .k { color: #8b949e; flex: 1; min-width: 0; }
+    .ctrl-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+    /* Toggle button */
+    .toggle-btn {
+      padding: 3px 12px;
+      border-radius: 12px;
+      border: 1px solid #30363d;
+      background: #21262d;
+      color: #8b949e;
+      cursor: pointer;
+      font-size: .8rem;
+      font-weight: 600;
+      min-width: 46px;
+      transition: background .15s, color .15s, border-color .15s;
+    }
+    .toggle-btn.on { background: #1a2d1a; color: #56d364; border-color: #2ea043; }
+    .toggle-btn:hover { opacity: .85; }
+
+    /* Number input */
+    .num-wrap { display: flex; align-items: center; gap: 4px; }
+    .num-input {
+      width: 80px;
+      padding: 3px 7px;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #e6edf3;
+      font-size: .85rem;
+      text-align: right;
+      outline: none;
+    }
+    .num-input:focus { border-color: #1f6feb; }
+    .unit { color: #6e7681; font-size: .78rem; min-width: 16px; }
+
+    /* Select */
+    .sel-input {
+      padding: 3px 8px;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #e6edf3;
+      font-size: .85rem;
+      outline: none;
+      cursor: pointer;
+    }
+    .sel-input:focus { border-color: #1f6feb; }
+
+    /* Save indicator */
+    .save-indicator { font-size: .85rem; width: 16px; text-align: center; }
+    .save-indicator.saving { color: #8b949e; }
+    .save-indicator.saved  { color: #56d364; }
+    .save-indicator.err    { color: #f85149; }
+
+    .ctrl-not-found { color: #484f58; font-style: italic; font-size: .8rem; }
+
+    .ctrl-refresh { font-size: .72rem; color: #484f58; margin-top: 10px; }
   </style>
 </head>
 <body>
 
   <div class="header">
     <div class="dot" id="live-dot"></div>
-    <h1>HEMS Monitor</h1>
+    <h1>HEMS</h1>
   </div>
 
-  <div class="error-banner" id="error-banner"></div>
-  <div class="chips"   id="chips"></div>
-  <div class="metrics" id="metrics"></div>
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('monitor', this)">Status</button>
+    <button class="tab-btn"        onclick="switchTab('steuerung', this)">Steuerung</button>
+  </div>
 
-  <div class="section">Regelbare Verbraucher</div>
-  <div class="devices" id="controllable"></div>
+  <!-- ================================================================
+       TAB: STATUS / MONITOR
+       ================================================================ -->
+  <div id="tab-monitor" class="tab-content active">
+    <div class="error-banner" id="error-banner"></div>
+    <div class="chips"   id="chips"></div>
+    <div class="metrics" id="metrics"></div>
+    <div class="section">Regelbare Verbraucher</div>
+    <div class="devices" id="controllable"></div>
+    <div class="section">Binäre Verbraucher</div>
+    <div class="devices" id="binary"></div>
+    <div class="footer"  id="footer"></div>
+  </div>
 
-  <div class="section">Binäre Verbraucher</div>
-  <div class="devices" id="binary"></div>
+  <!-- ================================================================
+       TAB: STEUERUNG
+       ================================================================ -->
+  <div id="tab-steuerung" class="tab-content">
+    <div class="ctrl-grid" id="ctrl-grid"></div>
+    <div class="ctrl-refresh" id="ctrl-refresh">Warte auf Daten…</div>
+  </div>
 
-  <div class="footer" id="footer"></div>
 
   <script>
-    // Use a relative URL so ingress proxy paths are handled correctly.
-    const API = 'api/status';
+  // ================================================================
+  // TAB NAVIGATION
+  // ================================================================
+  function switchTab(name, btn) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    btn.classList.add('active');
+    if (name === 'steuerung') fetchControls();
+  }
 
-    async function poll() {
-      try {
-        const r = await fetch(API);
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        const data = await r.json();
-        render(data);
-        document.getElementById('live-dot').className = 'dot';
-      } catch (e) {
-        document.getElementById('live-dot').className = 'dot error';
-        showError('Verbindungsfehler: ' + e.message);
-      }
+  // ================================================================
+  // MONITOR
+  // ================================================================
+  async function pollStatus() {
+    try {
+      const r = await fetch('api/status');
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      render(await r.json());
+      document.getElementById('live-dot').className = 'dot';
+    } catch(e) {
+      document.getElementById('live-dot').className = 'dot error';
+      showError('Verbindungsfehler: ' + e.message);
     }
+  }
 
-    function render(data) {
-      const s = data.status || {};
-      showError(data.error || '');
+  function render(data) {
+    const s = data.status || {};
+    showError(data.error || '');
 
-      // ----- Chips -----
-      const chips = [];
-      chips.push(chip(s.ems_enabled ? 'EMS Aktiv' : 'EMS Inaktiv',
-                      s.ems_enabled ? 'green' : 'grey'));
-      chips.push(chip('Modus: ' + (s.global_mode || '–'), 'blue'));
-      if (s.hard_lockout)         chips.push(chip('⚠ LOCKOUT', 'red'));
-      if (s.binary_immediate_off) chips.push(chip('Notabschaltung', 'red'));
-      if (!s.residual_sensor_valid && s.residual_sensor_valid !== undefined)
-        chips.push(chip('Sensor unavailable', 'red'));
-      document.getElementById('chips').innerHTML = chips.join('');
+    const chips = [
+      chip(s.ems_enabled ? 'EMS Aktiv' : 'EMS Inaktiv', s.ems_enabled ? 'green' : 'grey'),
+      chip('Modus: ' + (s.global_mode || '–'), 'blue'),
+    ];
+    if (s.hard_lockout)         chips.push(chip('⚠ LOCKOUT', 'red'));
+    if (s.binary_immediate_off) chips.push(chip('Notabschaltung', 'red'));
+    document.getElementById('chips').innerHTML = chips.join('');
 
-      // ----- Metrics -----
-      const tiles = [];
-      tiles.push(tile(fmt(s.residual_w) + ' W', 'Überschuss',
-                      s.residual_w < 0 ? 'warn' : 'ok'));
-      tiles.push(tile(fmt(s.pool_w) + ' W', 'EMS Pool'));
-      if (s.current_deficit_w > 0)
-        tiles.push(tile(fmt(s.current_deficit_w) + ' W', 'Defizit', 'warn'));
-      tiles.push(tile(fmt(s.binary_total_w) + ' W', 'Binär gesamt'));
-      document.getElementById('metrics').innerHTML = tiles.join('');
+    const tiles = [
+      tile(fmt(s.residual_w) + ' W', 'Überschuss', s.residual_w < 0 ? 'warn' : 'ok'),
+      tile(fmt(s.pool_w)     + ' W', 'EMS Pool'),
+    ];
+    if (s.current_deficit_w > 0) tiles.push(tile(fmt(s.current_deficit_w) + ' W', 'Defizit', 'warn'));
+    tiles.push(tile(fmt(s.binary_total_w) + ' W', 'Binär gesamt'));
+    document.getElementById('metrics').innerHTML = tiles.join('');
 
-      // ----- Devices -----
-      const devices = s.devices || [];
-      document.getElementById('controllable').innerHTML =
-        devices.filter(d => d.type === 'controllable').map(renderControllable).join('');
-      document.getElementById('binary').innerHTML =
-        devices.filter(d => d.type === 'binary').map(renderBinary).join('');
+    const devices = s.devices || [];
+    document.getElementById('controllable').innerHTML =
+      devices.filter(d => d.type === 'controllable').map(renderControllable).join('');
+    document.getElementById('binary').innerHTML =
+      devices.filter(d => d.type === 'binary').map(renderBinary).join('');
 
-      // ----- Footer -----
-      document.getElementById('footer').innerHTML =
-        `<span>Letzter Zyklus: ${data.last_cycle_at || '–'}</span>` +
-        `<span>Zyklen: ${data.cycle_count || 0}</span>` +
-        `<span>Intervall: ${data.interval_s}s</span>`;
+    document.getElementById('footer').innerHTML =
+      `<span>Letzter Zyklus: ${data.last_cycle_at || '–'}</span>` +
+      `<span>Zyklen: ${data.cycle_count || 0}</span>` +
+      `<span>Intervall: ${data.interval_s}s</span>`;
+  }
+
+  function renderControllable(d) {
+    const cls = !d.eligible ? 'off' : d.new_w > 0 ? 'active' : 'idle';
+    const changed = Math.round(d.new_w) !== Math.round(d.anforderung_current_w);
+    return `<div class="card ${cls}">
+      <div class="card-title"><span class="card-name">${d.id}</span><span class="prio-badge">Prio ${d.priority}</span></div>
+      ${row('Freigabe',     d.eligible ? '✓ ja' : '✗ nein', d.eligible ? 'on' : 'off-val')}
+      ${row('Ist',          fmt(d.actual_w) + ' W')}
+      ${row('Anforderung',  fmt(d.anforderung_current_w) + ' W')}
+      ${row('Ziel (alloc)', fmt(d.alloc_w) + ' W')}
+      ${row('Schutz',       fmt(d.schutz_w) + ' W', 'dim')}
+      ${row('Neu → HA',     fmt(d.new_w) + ' W', changed ? 'changed' : '')}
+    </div>`;
+  }
+
+  function renderBinary(d) {
+    const cls = !d.eligible ? 'off' : d.final_on ? 'active' : 'idle';
+    const changed = d.actual_on !== d.final_on;
+    return `<div class="card ${cls}">
+      <div class="card-title"><span class="card-name">${d.id}</span><span class="prio-badge">Prio ${d.priority}</span></div>
+      ${row('Freigabe',   d.eligible  ? '✓ ja' : '✗ nein', d.eligible  ? 'on' : 'off-val')}
+      ${row('Leistung',   fmt(d.power_w) + ' W')}
+      ${row('Ist',        d.actual_on  ? '● AN' : '○ AUS', d.actual_on  ? 'on' : 'off-val')}
+      ${row('Gewünscht',  d.desired_on ? '● AN' : '○ AUS', d.desired_on ? 'on' : 'dim')}
+      ${row('Kandidat',   d.candidate_on ? '● AN' : '○ AUS', d.candidate_on ? 'on' : 'dim')}
+      ${row('Final → HA', d.final_on ? '● AN' : '○ AUS', changed ? 'changed' : d.final_on ? 'on' : 'off-val')}
+    </div>`;
+  }
+
+  function chip(t, c) { return `<span class="chip chip-${c}">${t}</span>`; }
+  function tile(v, l, vc='') { return `<div class="metric"><div class="val ${vc}">${v}</div><div class="lbl">${l}</div></div>`; }
+  function row(k, v, c='') { return `<div class="row"><span class="k">${k}</span><span class="v ${c}">${v}</span></div>`; }
+  function fmt(v) { return v == null ? '–' : Math.round(v).toLocaleString('de-DE'); }
+  function showError(msg) {
+    const el = document.getElementById('error-banner');
+    el.style.display = msg ? 'block' : 'none';
+    if (msg) el.textContent = '⚠ ' + msg;
+  }
+
+  pollStatus();
+  setInterval(pollStatus, 5000);
+
+  // ================================================================
+  // STEUERUNG – Struktur der Steuerelemente
+  // ================================================================
+  const DEVICE_CONTROLS = [
+    {
+      label: 'Global',
+      items: [
+        {entity: 'input_boolean.ems_pv_regelung_aktiv',       label: 'EMS aktiv'},
+        {entity: 'input_select.ems_regelmodus',               label: 'Regelmodus'},
+        {entity: 'input_number.ems_globaler_puffer_w',        label: 'Globaler Puffer'},
+        {entity: 'input_number.ems_einschaltreserve_global_w',label: 'Einschaltreserve global'},
+      ]
+    },
+    {
+      label: 'Heizstab',
+      items: [
+        {entity: 'input_boolean.ems_heizstab_freigabe',                    label: 'Freigabe'},
+        {entity: 'input_select.ems_heizstab_modus',                        label: 'Modus'},
+        {entity: 'input_number.ems_heizstab_prioritat',                    label: 'Priorität'},
+        {entity: 'input_number.ems_heizstab_geschutzte_mindestleistung_w', label: 'Geschützte Mindestleistung'},
+        {entity: 'input_number.ems_heizstab_min_technisch_w',              label: 'Min. Leistung technisch'},
+        {entity: 'input_number.ems_heizstab_max_technisch_w',              label: 'Max. Leistung'},
+        {entity: 'input_number.ems_heizstab_reserve_w',                    label: 'Reserve'},
+        {entity: 'input_number.ems_heizstab_hoch_regelzeit_s',             label: 'Hoch-Regelzeit'},
+        {entity: 'input_number.ems_heizstab_runter_regelzeit_s',           label: 'Runter-Regelzeit'},
+        {entity: 'input_number.ems_heizstab_max_anderung_pro_schritt_w',   label: 'Max. Änderung/Schritt'},
+        {entity: 'input_number.ems_heizstab_min_anderung_pro_schritt_w',   label: 'Deadband'},
+      ]
+    },
+    {
+      label: 'Heizlüfter 1',
+      items: [
+        {entity: 'input_boolean.ems_heizlufter_1_freigabe',           label: 'Freigabe'},
+        {entity: 'input_select.ems_heizlufter_1_modus',               label: 'Modus'},
+        {entity: 'input_number.ems_heizlufter_1_prioritat',           label: 'Priorität'},
+        {entity: 'input_number.ems_heizlufter_1_leistung_w',          label: 'Leistung'},
+        {entity: 'input_number.ems_heizlufter_1_einschaltreserve_w',  label: 'Einschaltreserve'},
+        {entity: 'input_number.ems_heizlufter_1_mindestlaufzeit_s',   label: 'Mindestlaufzeit'},
+        {entity: 'input_number.ems_heizlufter_1_mindestauszeit_s',    label: 'Mindestauszeit'},
+        {entity: 'input_number.ems_heizlufter_1_abschaltverzogerung_s',label: 'Abschaltverzögerung'},
+      ]
+    },
+    {
+      label: 'Heizlüfter 2',
+      items: [
+        {entity: 'input_boolean.ems_heizlufter_2_freigabe',           label: 'Freigabe'},
+        {entity: 'input_select.ems_heizlufter_2_modus',               label: 'Modus'},
+        {entity: 'input_number.ems_heizlufter_2_prioritat',           label: 'Priorität'},
+        {entity: 'input_number.ems_heizlufter_2_leistung_w',          label: 'Leistung'},
+        {entity: 'input_number.ems_heizlufter_2_einschaltreserve_w',  label: 'Einschaltreserve'},
+        {entity: 'input_number.ems_heizlufter_2_mindestlaufzeit_s',   label: 'Mindestlaufzeit'},
+        {entity: 'input_number.ems_heizlufter_2_mindestauszeit_s',    label: 'Mindestauszeit'},
+        {entity: 'input_number.ems_heizlufter_2_abschaltverzogerung_s',label: 'Abschaltverzögerung'},
+      ]
+    },
+    {
+      label: 'Wallbox 1',
+      items: [
+        {entity: 'input_boolean.ems_wallbox_freigabe',                    label: 'Freigabe'},
+        {entity: 'input_select.ems_wallbox_modus',                        label: 'Modus'},
+        {entity: 'input_number.ems_wallbox_prioritat',                    label: 'Priorität'},
+        {entity: 'input_number.ems_wallbox_geschutzte_mindestleistung_w', label: 'Geschützte Mindestleistung'},
+        {entity: 'input_number.ems_wallbox_min_technisch_w',              label: 'Min. Leistung technisch'},
+        {entity: 'input_number.ems_wallbox_max_technisch_w',              label: 'Max. Leistung'},
+        {entity: 'input_number.ems_wallbox_reserve_w',                    label: 'Reserve'},
+        {entity: 'input_number.ems_wallbox_hoch_regelzeit_s',             label: 'Hoch-Regelzeit'},
+        {entity: 'input_number.ems_wallbox_runter_regelzeit_s',           label: 'Runter-Regelzeit'},
+        {entity: 'input_number.ems_wallbox_max_anderung_pro_schritt_w',   label: 'Max. Änderung/Schritt'},
+      ]
+    },
+  ];
+
+  // ================================================================
+  // STEUERUNG – Logik
+  // ================================================================
+  let _saveTimers = {};
+  let _ctrlOpen   = {};   // collapsed state per card label
+
+  async function fetchControls() {
+    try {
+      const r = await fetch('api/controls');
+      const states = await r.json();
+      renderControls(states);
+      document.getElementById('ctrl-refresh').textContent =
+        'Aktualisiert: ' + new Date().toLocaleTimeString('de');
+    } catch(e) {
+      document.getElementById('ctrl-refresh').textContent = 'Fehler: ' + e.message;
     }
+  }
 
-    function renderControllable(d) {
-      const isActive  = d.eligible && d.new_w > 0;
-      const cardClass = !d.eligible ? 'off' : isActive ? 'active' : 'idle';
-      const changed   = Math.round(d.new_w) !== Math.round(d.anforderung_current_w);
-      return `<div class="card ${cardClass}">
-        <div class="card-title">
-          <span class="card-name">${d.id}</span>
-          <span class="prio-badge">Prio ${d.priority}</span>
+  function renderControls(states) {
+    document.getElementById('ctrl-grid').innerHTML = DEVICE_CONTROLS.map(group => {
+      const key  = group.label;
+      const open = _ctrlOpen[key] !== false;    // default: open
+      const rows = group.items.map(item => renderCtrlRow(item, states[item.entity])).join('');
+      return `<div class="ctrl-card">
+        <div class="ctrl-card-header" onclick="toggleCard('${key}', this)">
+          <span class="ctrl-card-title">${group.label}</span>
+          <span class="ctrl-card-arrow ${open ? 'open' : ''}">▼</span>
         </div>
-        ${row('Freigabe', d.eligible ? '✓ ja' : '✗ nein', d.eligible ? 'on' : 'off-val')}
-        ${row('Ist',             fmt(d.actual_w) + ' W')}
-        ${row('Anforderung',     fmt(d.anforderung_current_w) + ' W')}
-        ${row('Ziel (alloc)',    fmt(d.alloc_w) + ' W')}
-        ${row('Schutz-Reserve',  fmt(d.schutz_w) + ' W', 'dim')}
-        ${row('Neu → HA',        fmt(d.new_w) + ' W', changed ? 'changed' : '')}
-      </div>`;
-    }
-
-    function renderBinary(d) {
-      const cardClass = !d.eligible ? 'off' : d.final_on ? 'active' : 'idle';
-      const stateChanged = d.actual_on !== d.final_on;
-      return `<div class="card ${cardClass}">
-        <div class="card-title">
-          <span class="card-name">${d.id}</span>
-          <span class="prio-badge">Prio ${d.priority}</span>
+        <div class="ctrl-card-body ${open ? '' : 'collapsed'}" id="ctrlbody-${key}">
+          ${rows}
         </div>
-        ${row('Freigabe',  d.eligible ? '✓ ja' : '✗ nein', d.eligible ? 'on' : 'off-val')}
-        ${row('Leistung',  fmt(d.power_w) + ' W')}
-        ${row('Ist',       d.actual_on  ? '● AN' : '○ AUS', d.actual_on  ? 'on' : 'off-val')}
-        ${row('Gewünscht', d.desired_on ? '● AN' : '○ AUS', d.desired_on ? 'on' : 'dim')}
-        ${row('Kandidat',  d.candidate_on ? '● AN' : '○ AUS', d.candidate_on ? 'on' : 'dim')}
-        ${row('Final → HA', d.final_on ? '● AN' : '○ AUS',
-              stateChanged ? 'changed' : d.final_on ? 'on' : 'off-val')}
       </div>`;
-    }
+    }).join('');
+  }
 
-    function chip(text, color) {
-      return `<span class="chip chip-${color}">${text}</span>`;
-    }
+  function toggleCard(key, header) {
+    const body  = document.getElementById('ctrlbody-' + key);
+    const arrow = header.querySelector('.ctrl-card-arrow');
+    const isOpen = !body.classList.contains('collapsed');
+    body.classList.toggle('collapsed', isOpen);
+    arrow.classList.toggle('open', !isOpen);
+    _ctrlOpen[key] = !isOpen;
+  }
 
-    function tile(value, label, valClass = '') {
-      return `<div class="metric">
-        <div class="val ${valClass}">${value}</div>
-        <div class="lbl">${label}</div>
-      </div>`;
-    }
+  function renderCtrlRow(item, state) {
+    const siId = 'si-' + item.entity.replace(/\./g, '-');
+    let input;
 
-    function row(key, val, cls = '') {
-      return `<div class="row"><span class="k">${key}</span><span class="v ${cls}">${val}</span></div>`;
-    }
+    if (!state) {
+      input = `<span class="ctrl-not-found">nicht gefunden</span>`;
+    } else {
+      const domain = item.entity.split('.')[0];
+      const attrs  = state.attributes || {};
 
-    function fmt(v) {
-      if (v == null) return '–';
-      return Math.round(v).toLocaleString('de-DE');
-    }
+      if (domain === 'input_boolean') {
+        const on = state.state === 'on';
+        input = `<button class="toggle-btn ${on ? 'on' : ''}"
+          data-entity="${item.entity}"
+          onclick="ctrlToggle(this)">${on ? 'AN' : 'AUS'}</button>`;
 
-    function showError(msg) {
-      const el = document.getElementById('error-banner');
-      if (msg) {
-        el.style.display = 'block';
-        el.textContent = '⚠ ' + msg;
+      } else if (domain === 'input_number') {
+        const val  = parseFloat(state.state) || 0;
+        const unit = attrs.unit_of_measurement || '';
+        const min  = attrs.min  != null ? `min="${attrs.min}"`  : '';
+        const max  = attrs.max  != null ? `max="${attrs.max}"`  : '';
+        const step = attrs.step != null ? `step="${attrs.step}"` : 'step="1"';
+        input = `<div class="num-wrap">
+          <input type="number" class="num-input"
+            value="${val}" ${min} ${max} ${step}
+            data-entity="${item.entity}"
+            onchange="scheduleSet(this)"
+            onblur="immediateSet(this)">
+          ${unit ? `<span class="unit">${unit}</span>` : ''}
+        </div>`;
+
+      } else if (domain === 'input_select') {
+        const opts = (attrs.options || []).map(o =>
+          `<option value="${o}" ${o === state.state ? 'selected' : ''}>${o}</option>`
+        ).join('');
+        input = `<select class="sel-input" data-entity="${item.entity}" onchange="ctrlSelect(this)">
+          ${opts}
+        </select>`;
       } else {
-        el.style.display = 'none';
+        input = `<span class="ctrl-not-found">${state.state}</span>`;
       }
     }
 
-    poll();
-    setInterval(poll, 5000);
+    return `<div class="ctrl-row">
+      <span class="k">${item.label}</span>
+      <div class="ctrl-right">${input}<span class="save-indicator" id="${siId}"></span></div>
+    </div>`;
+  }
+
+  // ---- Control event handlers ----
+
+  function ctrlToggle(btn) {
+    const isOn = btn.classList.contains('on');
+    btn.classList.toggle('on', !isOn);
+    btn.textContent = !isOn ? 'AN' : 'AUS';
+    saveEntity(btn.dataset.entity, !isOn);
+  }
+
+  function scheduleSet(input) {
+    const id = input.dataset.entity;
+    clearTimeout(_saveTimers[id]);
+    _saveTimers[id] = setTimeout(() => immediateSet(input), 700);
+  }
+
+  function immediateSet(input) {
+    clearTimeout(_saveTimers[input.dataset.entity]);
+    saveEntity(input.dataset.entity, parseFloat(input.value));
+  }
+
+  function ctrlSelect(sel) {
+    saveEntity(sel.dataset.entity, sel.value);
+  }
+
+  async function saveEntity(entityId, value) {
+    const siId = 'si-' + entityId.replace(/\./g, '-');
+    const si   = document.getElementById(siId);
+    if (si) { si.textContent = '↑'; si.className = 'save-indicator saving'; }
+
+    try {
+      const r = await fetch('api/set', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({entity_id: entityId, value}),
+      });
+      const ok = (await r.json()).ok === true;
+      if (si) {
+        si.textContent = ok ? '✓' : '✗';
+        si.className   = 'save-indicator ' + (ok ? 'saved' : 'err');
+        setTimeout(() => { if (si) { si.textContent = ''; si.className = 'save-indicator'; } }, 2500);
+      }
+    } catch(e) {
+      if (si) { si.textContent = '✗'; si.className = 'save-indicator err'; }
+    }
+  }
+
+  // Auto-refresh controls every 15s when tab is active
+  setInterval(() => {
+    if (document.getElementById('tab-steuerung').classList.contains('active'))
+      fetchControls();
+  }, 15000);
   </script>
 </body>
 </html>

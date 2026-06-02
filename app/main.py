@@ -107,15 +107,58 @@ class HEMSApp:
             "interval_s":    self.interval_s,
         })
 
+    async def _handle_controls(self, request: web.Request) -> web.Response:
+        """Return fresh states for all EMS input_* helper entities."""
+        try:
+            states = await self.ha.fetch_all_states()
+            ems = {
+                eid: data for eid, data in states.items()
+                if eid.startswith((
+                    "input_boolean.ems_",
+                    "input_select.ems_",
+                    "input_number.ems_",
+                ))
+            }
+            return web.json_response(ems)
+        except Exception as exc:
+            return web.json_response({"error": str(exc)}, status=500)
+
+    async def _handle_set(self, request: web.Request) -> web.Response:
+        """Write a value to an HA input entity."""
+        try:
+            body       = await request.json()
+            entity_id: str = body["entity_id"]
+            value      = body["value"]
+            domain     = entity_id.split(".")[0]
+
+            if domain == "input_boolean":
+                svc = "turn_on" if value in (True, "on", "true", 1, "1") else "turn_off"
+                await self.ha.call_service("input_boolean", svc, {"entity_id": entity_id})
+            elif domain == "input_number":
+                await self.ha.call_service("input_number", "set_value",
+                                           {"entity_id": entity_id, "value": float(value)})
+            elif domain == "input_select":
+                await self.ha.call_service("input_select", "select_option",
+                                           {"entity_id": entity_id, "option": str(value)})
+            else:
+                return web.json_response({"error": f"Unsupported domain: {domain}"}, status=400)
+
+            return web.json_response({"ok": True})
+        except Exception as exc:
+            log.error("Set entity failed: %s", exc)
+            return web.json_response({"error": str(exc)}, status=500)
+
     # ------------------------------------------------------------------
     # Run
     # ------------------------------------------------------------------
 
     async def run(self) -> None:
         app = web.Application()
-        app.router.add_get("/",           self._handle_index)
-        app.router.add_get("/index.html", self._handle_index)
-        app.router.add_get("/api/status", self._handle_status)
+        app.router.add_get("/",              self._handle_index)
+        app.router.add_get("/index.html",    self._handle_index)
+        app.router.add_get("/api/status",    self._handle_status)
+        app.router.add_get("/api/controls",  self._handle_controls)
+        app.router.add_post("/api/set",      self._handle_set)
 
         runner = web.AppRunner(app)
         await runner.setup()
