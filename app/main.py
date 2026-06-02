@@ -74,8 +74,11 @@ class HEMSApp:
             result = self.ems.run_cycle(st)
             await self.ha.execute_write_ops(result["write_ops"])
             if self.post_cycle_script:
-                await self.ha.call_service("script", "turn_on",
-                                           {"entity_id": self.post_cycle_script})
+                try:
+                    await self.ha.call_service("script", "turn_on",
+                                               {"entity_id": self.post_cycle_script})
+                except Exception as exc:
+                    log.warning("Post-cycle script '%s' failed: %s", self.post_cycle_script, exc)
             self._last_status   = result["status"]
             self._last_error    = ""
             self._cycle_count  += 1
