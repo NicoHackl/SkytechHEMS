@@ -1,0 +1,21 @@
+configuration:
+  interval_s:
+    name: Control interval (seconds)
+    description: >-
+      How often the EMS control cycle runs. Shorter intervals (e.g. 10 s)
+      react faster to PV power changes but generate more HA API requests.
+      Recommended: 30 s for normal operation. Allowed range: 5 – 300 s.
+  log_level:
+    name: Log level
+    description: >-
+      Verbosity of the add-on logs. „info" is sufficient for normal
+      operation. „debug" additionally logs all control decisions (pool,
+      deficit, device candidates) and is useful for troubleshooting.
+      The log level can also be toggled at runtime via the HA helper
+      „input_boolean.ems_pyems_debug_output" without restarting the add-on.
+  post_cycle_script:
+    name: Post-cycle script (optional)
+    description: >-
+      HA script entity ID (e.g. „script.hems_notification") that is called
+      after each completed EMS cycle. Can be used for notifications or
+      writing values to an external store. Leave empty if not needed.
