@@ -1,4 +1,12 @@
 configuration:
+  devices:
+    name: Geräteliste
+    description: >-
+      Liste der vom EMS geregelten Verbraucher. Jeder Eintrag besteht aus Name,
+      Klasse und den gerätespezifischen Entitäten. Der Name wird als Präfix für
+      alle HA-Helfer-Entitäten verwendet (z. B. name=heizstab →
+      input_boolean.ems_heizstab_freigabe). Mit entity_prefix kann ein
+      abweichender Präfix gesetzt werden.
   interval_s:
     name: Regelintervall (Sekunden)
     description: >-

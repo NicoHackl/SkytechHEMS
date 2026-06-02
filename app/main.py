@@ -42,6 +42,47 @@ def _load_config() -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Steuerung-Tab: Kontroll-Schema aus Device-Konfiguration erzeugen
+# ---------------------------------------------------------------------------
+
+_GLOBAL_CTRL_ITEMS = [
+    {"entity": "input_boolean.ems_pv_regelung_aktiv",        "label": "EMS aktiv"},
+    {"entity": "input_select.ems_regelmodus",                "label": "Regelmodus"},
+    {"entity": "input_number.ems_globaler_puffer_w",         "label": "Globaler Puffer"},
+    {"entity": "input_number.ems_einschaltreserve_global_w", "label": "Einschaltreserve global"},
+]
+
+
+def _ctrl_items_controllable(p: str) -> list:
+    return [
+        {"entity": f"input_boolean.ems_{p}_freigabe",                    "label": "Freigabe"},
+        {"entity": f"input_select.ems_{p}_modus",                        "label": "Modus"},
+        {"entity": f"input_number.ems_{p}_prioritat",                    "label": "Priorität"},
+        {"entity": f"input_number.ems_{p}_geschutzte_mindestleistung_w", "label": "Geschützte Mindestleistung"},
+        {"entity": f"input_number.ems_{p}_min_technisch_w",              "label": "Min. Leistung technisch"},
+        {"entity": f"input_number.ems_{p}_max_technisch_w",              "label": "Max. Leistung"},
+        {"entity": f"input_number.ems_{p}_reserve_w",                    "label": "Reserve"},
+        {"entity": f"input_number.ems_{p}_hoch_regelzeit_s",             "label": "Hoch-Regelzeit"},
+        {"entity": f"input_number.ems_{p}_runter_regelzeit_s",           "label": "Runter-Regelzeit"},
+        {"entity": f"input_number.ems_{p}_max_anderung_pro_schritt_w",   "label": "Max. Änderung/Schritt"},
+        {"entity": f"input_number.ems_{p}_min_anderung_pro_schritt_w",   "label": "Deadband"},
+    ]
+
+
+def _ctrl_items_binary(p: str) -> list:
+    return [
+        {"entity": f"input_boolean.ems_{p}_freigabe",             "label": "Freigabe"},
+        {"entity": f"input_select.ems_{p}_modus",                 "label": "Modus"},
+        {"entity": f"input_number.ems_{p}_prioritat",             "label": "Priorität"},
+        {"entity": f"input_number.ems_{p}_leistung_w",            "label": "Leistung"},
+        {"entity": f"input_number.ems_{p}_einschaltreserve_w",    "label": "Einschaltreserve"},
+        {"entity": f"input_number.ems_{p}_mindestlaufzeit_s",     "label": "Mindestlaufzeit"},
+        {"entity": f"input_number.ems_{p}_mindestauszeit_s",      "label": "Mindestauszeit"},
+        {"entity": f"input_number.ems_{p}_abschaltverzogerung_s", "label": "Abschaltverzögerung"},
+    ]
+
+
+# ---------------------------------------------------------------------------
 # App
 # ---------------------------------------------------------------------------
 
@@ -54,8 +95,9 @@ class HEMSApp:
         log_level = cfg.get("log_level", "info").upper()
         logging.getLogger().setLevel(getattr(logging, log_level, logging.INFO))
 
+        self._device_configs: list = cfg.get("devices", [])
         self.ha  = HAClient()
-        self.ems = EMSController()
+        self.ems = EMSController(self._device_configs)
 
         # Shared state – written by scheduler, read by web handler
         self._last_status: dict = {}
@@ -111,6 +153,20 @@ class HEMSApp:
             "interval_s":    self.interval_s,
         })
 
+    async def _handle_device_controls_schema(self, request: web.Request) -> web.Response:
+        """Return the Steuerung-Tab control schema derived from configured devices."""
+        schema = [{"label": "Global", "items": _GLOBAL_CTRL_ITEMS}]
+        for cfg in self._device_configs:
+            name   = (cfg.get("name")          or "").strip()
+            cls    = (cfg.get("class")         or "").strip()
+            prefix = (cfg.get("entity_prefix") or "").strip() or name
+            label  = name.replace("_", " ").title()
+            if cls == "controllable":
+                schema.append({"label": label, "items": _ctrl_items_controllable(prefix)})
+            elif cls == "binary":
+                schema.append({"label": label, "items": _ctrl_items_binary(prefix)})
+        return web.json_response(schema)
+
     async def _handle_controls(self, request: web.Request) -> web.Response:
         """Return fresh states for all EMS input_* helper entities."""
         try:
@@ -160,9 +216,10 @@ class HEMSApp:
         app = web.Application()
         app.router.add_get("/",              self._handle_index)
         app.router.add_get("/index.html",    self._handle_index)
-        app.router.add_get("/api/status",    self._handle_status)
-        app.router.add_get("/api/controls",  self._handle_controls)
-        app.router.add_post("/api/set",      self._handle_set)
+        app.router.add_get("/api/status",                  self._handle_status)
+        app.router.add_get("/api/controls",               self._handle_controls)
+        app.router.add_get("/api/device_controls_schema", self._handle_device_controls_schema)
+        app.router.add_post("/api/set",                   self._handle_set)
 
         runner = web.AppRunner(app)
         await runner.setup()

@@ -339,88 +339,21 @@
   setInterval(pollStatus, 5000);
 
   // ================================================================
-  // STEUERUNG – Struktur der Steuerelemente
-  // ================================================================
-  const DEVICE_CONTROLS = [
-    {
-      label: 'Global',
-      items: [
-        {entity: 'input_boolean.ems_pv_regelung_aktiv',       label: 'EMS aktiv'},
-        {entity: 'input_select.ems_regelmodus',               label: 'Regelmodus'},
-        {entity: 'input_number.ems_globaler_puffer_w',        label: 'Globaler Puffer'},
-        {entity: 'input_number.ems_einschaltreserve_global_w',label: 'Einschaltreserve global'},
-      ]
-    },
-    {
-      label: 'Heizstab',
-      items: [
-        {entity: 'input_boolean.ems_heizstab_freigabe',                    label: 'Freigabe'},
-        {entity: 'input_select.ems_heizstab_modus',                        label: 'Modus'},
-        {entity: 'input_number.ems_heizstab_prioritat',                    label: 'Priorität'},
-        {entity: 'input_number.ems_heizstab_geschutzte_mindestleistung_w', label: 'Geschützte Mindestleistung'},
-        {entity: 'input_number.ems_heizstab_min_technisch_w',              label: 'Min. Leistung technisch'},
-        {entity: 'input_number.ems_heizstab_max_technisch_w',              label: 'Max. Leistung'},
-        {entity: 'input_number.ems_heizstab_reserve_w',                    label: 'Reserve'},
-        {entity: 'input_number.ems_heizstab_hoch_regelzeit_s',             label: 'Hoch-Regelzeit'},
-        {entity: 'input_number.ems_heizstab_runter_regelzeit_s',           label: 'Runter-Regelzeit'},
-        {entity: 'input_number.ems_heizstab_max_anderung_pro_schritt_w',   label: 'Max. Änderung/Schritt'},
-        {entity: 'input_number.ems_heizstab_min_anderung_pro_schritt_w',   label: 'Deadband'},
-      ]
-    },
-    {
-      label: 'Heizlüfter 1',
-      items: [
-        {entity: 'input_boolean.ems_heizlufter_1_freigabe',           label: 'Freigabe'},
-        {entity: 'input_select.ems_heizlufter_1_modus',               label: 'Modus'},
-        {entity: 'input_number.ems_heizlufter_1_prioritat',           label: 'Priorität'},
-        {entity: 'input_number.ems_heizlufter_1_leistung_w',          label: 'Leistung'},
-        {entity: 'input_number.ems_heizlufter_1_einschaltreserve_w',  label: 'Einschaltreserve'},
-        {entity: 'input_number.ems_heizlufter_1_mindestlaufzeit_s',   label: 'Mindestlaufzeit'},
-        {entity: 'input_number.ems_heizlufter_1_mindestauszeit_s',    label: 'Mindestauszeit'},
-        {entity: 'input_number.ems_heizlufter_1_abschaltverzogerung_s',label: 'Abschaltverzögerung'},
-      ]
-    },
-    {
-      label: 'Heizlüfter 2',
-      items: [
-        {entity: 'input_boolean.ems_heizlufter_2_freigabe',           label: 'Freigabe'},
-        {entity: 'input_select.ems_heizlufter_2_modus',               label: 'Modus'},
-        {entity: 'input_number.ems_heizlufter_2_prioritat',           label: 'Priorität'},
-        {entity: 'input_number.ems_heizlufter_2_leistung_w',          label: 'Leistung'},
-        {entity: 'input_number.ems_heizlufter_2_einschaltreserve_w',  label: 'Einschaltreserve'},
-        {entity: 'input_number.ems_heizlufter_2_mindestlaufzeit_s',   label: 'Mindestlaufzeit'},
-        {entity: 'input_number.ems_heizlufter_2_mindestauszeit_s',    label: 'Mindestauszeit'},
-        {entity: 'input_number.ems_heizlufter_2_abschaltverzogerung_s',label: 'Abschaltverzögerung'},
-      ]
-    },
-    {
-      label: 'Wallbox 1',
-      items: [
-        {entity: 'input_boolean.ems_wallbox_freigabe',                    label: 'Freigabe'},
-        {entity: 'input_select.ems_wallbox_modus',                        label: 'Modus'},
-        {entity: 'input_number.ems_wallbox_prioritat',                    label: 'Priorität'},
-        {entity: 'input_number.ems_wallbox_geschutzte_mindestleistung_w', label: 'Geschützte Mindestleistung'},
-        {entity: 'input_number.ems_wallbox_min_technisch_w',              label: 'Min. Leistung technisch'},
-        {entity: 'input_number.ems_wallbox_max_technisch_w',              label: 'Max. Leistung'},
-        {entity: 'input_number.ems_wallbox_reserve_w',                    label: 'Reserve'},
-        {entity: 'input_number.ems_wallbox_hoch_regelzeit_s',             label: 'Hoch-Regelzeit'},
-        {entity: 'input_number.ems_wallbox_runter_regelzeit_s',           label: 'Runter-Regelzeit'},
-        {entity: 'input_number.ems_wallbox_max_anderung_pro_schritt_w',   label: 'Max. Änderung/Schritt'},
-      ]
-    },
-  ];
-
-  // ================================================================
-  // STEUERUNG – Logik
+  // STEUERUNG
   // ================================================================
   let _saveTimers = {};
-  let _ctrlOpen   = {};   // collapsed state per card label
+  let _ctrlOpen   = {};
+  let _ctrlSchema  = null;   // loaded once from /api/device_controls_schema
 
   async function fetchControls() {
     try {
+      if (!_ctrlSchema) {
+        const rs = await fetch('api/device_controls_schema');
+        _ctrlSchema = await rs.json();
+      }
       const r = await fetch('api/controls');
       const states = await r.json();
-      renderControls(states);
+      renderControls(_ctrlSchema, states);
       document.getElementById('ctrl-refresh').textContent =
         'Aktualisiert: ' + new Date().toLocaleTimeString('de');
     } catch(e) {
@@ -428,8 +361,8 @@
     }
   }
 
-  function renderControls(states) {
-    document.getElementById('ctrl-grid').innerHTML = DEVICE_CONTROLS.map(group => {
+  function renderControls(schema, states) {
+    document.getElementById('ctrl-grid').innerHTML = schema.map(group => {
       const key  = group.label;
       const open = _ctrlOpen[key] !== false;    // default: open
       const rows = group.items.map(item => renderCtrlRow(item, states[item.entity])).join('');

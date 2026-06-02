@@ -23,7 +23,35 @@ options:
   interval_s: 30
   log_level: "info"
   post_cycle_script: ""
+  devices:
+    - name: heizstab
+      class: controllable
+      actual_power_entity: sensor.elwa_modbus_istleistung
+      entity_prefix: ""
+      allowed_modes: "auto,nur_heizen"
+    - name: wallbox_1
+      class: controllable
+      actual_power_entity: sensor.wallbox_1_istleistung
+      entity_prefix: wallbox
+      allowed_modes: "auto,nur_laden"
+    - name: heizlufter_1
+      class: binary
+      switch_entity: switch.heizlufter
+      entity_prefix: ""
+      allowed_modes: "auto,nur_heizen"
+    - name: heizlufter_2
+      class: binary
+      switch_entity: switch.heizlufter2
+      entity_prefix: ""
+      allowed_modes: "auto,nur_heizen"
 schema:
   interval_s: int(5,300)
   log_level: list(debug|info|warning|error)
   post_cycle_script: str?
+  devices:
+    - name: str
+      class: list(controllable|binary)
+      actual_power_entity: str?
+      switch_entity: str?
+      entity_prefix: str?
+      allowed_modes: str?

@@ -1,4 +1,12 @@
 configuration:
+  devices:
+    name: Device list
+    description: >-
+      List of consumers managed by the EMS. Each entry needs a name, a class
+      (controllable or binary), and the device-specific entity. The name is used
+      as the HA helper entity prefix (e.g. name=heizstab →
+      input_boolean.ems_heizstab_freigabe). Use entity_prefix to override the
+      prefix when the HA naming diverges from the device name.
   interval_s:
     name: Control interval (seconds)
     description: >-
