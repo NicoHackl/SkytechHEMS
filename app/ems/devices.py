@@ -359,7 +359,12 @@ class BinaryDevice(Device):
                 return
 
             if binary_immediate_off:
-                self._candidate_on = False
+                # Mindestlaufzeit schützt auch bei Notabschaltung
+                if self._switch_age_s < self.min_runtime_s:
+                    self._candidate_on = True
+                    self._off_since_ts = 0.0
+                else:
+                    self._candidate_on = False
                 return
 
             if self._switch_age_s < self.min_runtime_s:
@@ -392,13 +397,17 @@ class BinaryDevice(Device):
 
     def to_status_dict(self) -> Dict:
         return {
-            "type":         "binary",
-            "id":           self.id,
-            "priority":     self.priority,
-            "eligible":     self.eligible,
-            "power_w":      self.power_w,
-            "actual_on":    self._actual_on,
-            "desired_on":   self._desired_on,
-            "candidate_on": self._candidate_on,
-            "final_on":     self._final_on,
+            "type":           "binary",
+            "id":             self.id,
+            "priority":       self.priority,
+            "eligible":       self.eligible,
+            "power_w":        self.power_w,
+            "actual_on":      self._actual_on,
+            "desired_on":     self._desired_on,
+            "candidate_on":   self._candidate_on,
+            "final_on":       self._final_on,
+            "in_min_runtime": self.in_min_runtime,
+            "switch_age_s":   round(self._switch_age_s),
+            "min_runtime_s":  self.min_runtime_s,
+            "min_offtime_s":  self.min_offtime_s,
         }
