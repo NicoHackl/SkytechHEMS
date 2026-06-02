@@ -52,6 +52,9 @@ def _build_devices(device_configs: List[dict]) -> List[Device]:
                 actual_w = (cfg.get("actual_power_entity") or "").strip()
                 if not actual_w:
                     raise ValueError("actual_power_entity ist leer")
+                output_unit    = (cfg.get("output_unit") or "watt").strip()
+                phases         = int(cfg.get("phases") or 1)
+                voltage_entity = (cfg.get("voltage_entity") or "").strip() or None
                 devices.append(ControllableDevice(
                     id=name,
                     allowed_modes=modes,
@@ -59,6 +62,9 @@ def _build_devices(device_configs: List[dict]) -> List[Device]:
                     entity_anforderung_w=f"input_number.ems_{prefix}_anforderung_leistung_w",
                     entity_prefix=prefix,
                     label=label,
+                    output_unit=output_unit,
+                    phases=phases,
+                    voltage_entity=voltage_entity,
                 ))
 
             elif cls == "binary":

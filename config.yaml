@@ -5,6 +5,17 @@ description: >-
   (Heizstab, Wallbox) und binäre Verbraucher (Heizlüfter) – mit Zeitschutz,
   Hysterese, Rampenbegrenzung und Notabschaltung. Bedienung über ein
   integriertes Web-UI und HA-Helfer-Entitäten.
+
+  KONFIGURATION: Da das Schema eine Geräteliste enthält, zeigt HA die
+  Konfiguration als YAML-Editor an. Alle Felder und deren Bedeutung sind in
+  der README des Repositories dokumentiert. Felder je Gerät: name (Pflicht,
+  technischer Bezeichner für Entitätsnamen), label (optional, Anzeigename),
+  class (Pflicht: controllable oder binary), actual_power_entity (nur
+  controllable), switch_entity (nur binary), entity_prefix (optional,
+  überschreibt Entitätspräfix), allowed_modes (optional, Standard: auto),
+  output_unit (controllable: watt oder ampere, Standard: watt),
+  phases (controllable + ampere: 1 oder 3, Standard: 1),
+  voltage_entity (optional, HA-Sensor für Phasenspannung, Fallback 230 V).
 version: "1.0.11"
 slug: "skytech_hems"
 init: false
@@ -35,6 +46,9 @@ options:
       actual_power_entity: sensor.wallbox_1_istleistung
       entity_prefix: wallbox
       allowed_modes: "auto,nur_laden"
+      output_unit: "ampere"
+      phases: "3"
+      voltage_entity: ""
     - name: heizlufter_1
       label: "Heizlüfter 1"
       class: binary
@@ -57,3 +71,6 @@ schema:
       switch_entity: str?
       entity_prefix: str?
       allowed_modes: str?
+      output_unit: list(watt|ampere)?
+      phases: list(1|3)?
+      voltage_entity: str?

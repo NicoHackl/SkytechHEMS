@@ -10,6 +10,7 @@ Kein weiterer Code muss angefasst werden.
 """
 
 import logging
+import math
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Tuple
 
@@ -99,10 +100,16 @@ class ControllableDevice(Device):
     def __init__(self, id: str, allowed_modes: List[str],
                  entity_actual_w: str, entity_anforderung_w: str,
                  entity_prefix: Optional[str] = None,
-                 label: Optional[str] = None):
+                 label: Optional[str] = None,
+                 output_unit: str = 'watt',
+                 phases: int = 1,
+                 voltage_entity: Optional[str] = None):
         super().__init__(id, allowed_modes, entity_prefix, label)
         self.entity_actual_w       = entity_actual_w
         self.entity_anforderung_w  = entity_anforderung_w
+        self.output_unit           = output_unit if output_unit in ('watt', 'ampere') else 'watt'
+        self.phases                = max(1, int(phases))
+        self.voltage_entity        = voltage_entity  # optional HA sensor for phase voltage (V)
 
         # ---- Config params (refreshed from HA each cycle) ----
         self.min_technisch_w               = 0.0
@@ -117,7 +124,8 @@ class ControllableDevice(Device):
         # ---- Runtime state (read from HA each cycle) ----
         # The setpoint entity stays in HA so external integrations (Modbus, etc.) can read it.
         self._actual_w              = 0.0
-        self._anforderung_current_w = 0.0
+        self._anforderung_current_w = 0.0  # always in Watts internally
+        self._voltage_v             = 230.0  # phase voltage; refreshed from HA each cycle
         self._anforderung_age_s     = 0.0
         self._schutz_w              = 0.0
 
@@ -165,8 +173,23 @@ class ControllableDevice(Device):
         self.max_anderung_pro_schritt_w    = n("max_anderung_pro_schritt_w")
         self.deadband_w                    = n("min_anderung_pro_schritt_w")
 
-        self._actual_w              = max(safe_float(st.get(self.entity_actual_w)), 0.0)
-        self._anforderung_current_w = safe_float(st.get(self.entity_anforderung_w))
+        # Phase voltage: use sensor if available and plausible, else default 230 V
+        if self.voltage_entity:
+            v = safe_float(st.get(self.voltage_entity), 0.0)
+            self._voltage_v = v if 180.0 < v < 260.0 else 230.0
+        else:
+            self._voltage_v = 230.0
+
+        self._actual_w = max(safe_float(st.get(self.entity_actual_w)), 0.0)
+
+        # The setpoint entity holds Watts or Ampere depending on output_unit.
+        # Normalise to Watts for all internal calculations.
+        raw = safe_float(st.get(self.entity_anforderung_w))
+        if self.output_unit == 'ampere':
+            self._anforderung_current_w = raw * self.phases * self._voltage_v
+        else:
+            self._anforderung_current_w = raw
+
         self._anforderung_age_s     = now_ts - parse_ts(
             st.get(self.entity_anforderung_w + ".last_changed")
         )
@@ -227,15 +250,21 @@ class ControllableDevice(Device):
         write     = is_on_off or self.deadband_w <= 0 or delta >= self.deadband_w
 
         if write:
+            if self.output_unit == 'ampere':
+                eff = self.phases * self._voltage_v
+                value = math.floor(self._new_w / eff) if eff > 0 else 0
+            else:
+                value = self._new_w
             return [("input_number", "set_value", {
                 "entity_id": self.entity_anforderung_w,
-                "value":     self._new_w,
+                "value":     value,
             })]
         self._new_w = self._anforderung_current_w  # deadband active – no write
         return []
 
     def to_status_dict(self) -> Dict:
-        return {
+        eff = self.phases * self._voltage_v
+        d: Dict = {
             "type":                  "controllable",
             "id":                    self.id,
             "label":                 self.label,
@@ -246,7 +275,13 @@ class ControllableDevice(Device):
             "alloc_w":               self._alloc_w,
             "new_w":                 self._new_w,
             "schutz_w":              self._schutz_w,
+            "output_unit":           self.output_unit,
+            "phases":                self.phases,
+            "voltage_v":             round(self._voltage_v, 1),
         }
+        if self.output_unit == 'ampere':
+            d["new_a"] = math.floor(self._new_w / eff) if eff > 0 else 0
+        return d
 
 
 # =============================================================================
