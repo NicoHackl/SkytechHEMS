@@ -5,7 +5,7 @@ description: >-
   (Heizstab, Wallbox) und binäre Verbraucher (Heizlüfter) – mit Zeitschutz,
   Hysterese, Rampenbegrenzung und Notabschaltung. Bedienung über ein
   integriertes Web-UI und HA-Helfer-Entitäten.
-version: "1.0.4"
+version: "1.0.5"
 slug: "skytech_hems"
 init: false
 arch:
