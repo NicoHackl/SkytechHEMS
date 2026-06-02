@@ -34,12 +34,14 @@ Die Konfiguration und Bedienung erfolgt vollständig über Home-Assistant-Helfer
 - **Prioritätskaskade**: niedriger priorisierte Verbraucher werden zuerst abgeschaltet; höher priorisierte werden bei Bedarf zwangsweise gehalten.
 - **Globale und gerätespezifische Freigabe / Modi** (`auto`, `nur_heizen`, `nur_laden`, `aus`).
 - **Hysterese** für binäre Verbraucher über `einschaltreserve_w` (global und pro Gerät).
-- **Zeitschutz** für binäre Verbraucher: Mindestlaufzeit, Mindestauszeit, Abschaltverzögerung.
+- **Zeitschutz** für binäre Verbraucher: Mindestlaufzeit, Mindestauszeit, Abschaltverzögerung. Die Mindestlaufzeit schützt das Gerät auch bei Notabschaltung.
 - **One-Change-Limit**: pro Zyklus wird höchstens ein binäres Gerät geschaltet (außer bei Notabschaltung).
 - **Rampenbegrenzung** für regelbare Geräte: Hoch-/Runter-Regelzeit, max. Änderung pro Schritt, Deadband.
 - **Schutzleistung** pro regelbarem Gerät (`geschützte Mindestleistung + reserve_w + globaler Puffer`), die vor der binären Pool-Verteilung reserviert wird.
 - **Hard-Lockout** bei ungültigem oder stark negativem Überschuss-Sensor (`≤ −50 000 W`): alle Verbraucher werden abgeschaltet.
 - **Sofortabschaltung** binärer Verbraucher, sobald das Netzdefizit größer ist als das, was regelbare Geräte abregeln können.
+- **Ampere-Ausgabe** für regelbare Geräte (z. B. Wallbox): Das EMS regelt intern in Watt; bei `output_unit=ampere` wird der Sollwert vor dem Schreiben in ganzzahlige Ampere umgerechnet (immer abgerundet, konfigurierbare Phasenanzahl und optionaler Live-Spannungssensor).
+- **Config-driven Devices**: Geräte werden ausschließlich in den Add-on-Optionen (`config.yaml`) definiert – kein Python-Code muss für neue Geräte angefasst werden.
 - **Optionales Post-Cycle-Skript**: nach jedem Zyklus kann ein beliebiges HA-Script aufgerufen werden (z. B. zur Benachrichtigung oder zum Schreiben in einen externen Speicher).
 - **Web-UI als HA-Ingress-Panel** mit zwei Tabs (Status / Steuerung) zum Beobachten und Verändern aller relevanten Helfer-Entitäten.
 
@@ -56,8 +58,8 @@ app/
 └── templates/index.html  Web-UI (Status- und Steuerungs-Tab)
 ```
 
-- **`EMSController`** wird einmal beim Start gebaut, die Geräte-Objekte leben über alle Zyklen hinweg – dadurch bleiben interne Timer (z. B. `_off_since_ts`) ohne zusätzliche HA-Helfer erhalten.
-- **`Device`** ist die abstrakte Basis. Geräteinstanzen werden in `controller._build_devices()` zentral registriert. Ein neuer Gerätetyp braucht nur eine neue Subklasse und einen Eintrag dort – sonst muss nichts angefasst werden.
+- **`EMSController`** wird einmal beim Start aus den Add-on-Optionen gebaut; die Geräte-Objekte leben über alle Zyklen hinweg – dadurch bleiben interne Timer (z. B. `_off_since_ts`) ohne zusätzliche HA-Helfer erhalten.
+- **`Device`** ist die abstrakte Basis. Geräteinstanzen werden in `controller._build_devices()` automatisch aus der Konfigurationsliste `devices` aufgebaut. Ein neuer Gerätetyp braucht nur eine neue Subklasse und einen Eintrag dort – sonst muss nichts angefasst werden.
 
 ## Installation
 
@@ -72,15 +74,63 @@ Beim Add-on-Start steht der `SUPERVISOR_TOKEN` automatisch zur Verfügung – es
 
 ## Konfiguration des Add-ons
 
-In den Add-on-Optionen (`config.yaml`):
+In den Add-on-Optionen (YAML-Editor in HA):
 
-| Option              | Typ           | Default | Beschreibung                                                       |
-|---------------------|---------------|---------|--------------------------------------------------------------------|
-| `interval_s`        | int (5 – 300) | `30`    | Zyklusintervall in Sekunden.                                       |
-| `log_level`         | `debug` / `info` / `warning` / `error` | `info` | Log-Level des Add-ons. |
-| `post_cycle_script` | string?       | –       | Optional: `script.<name>`, wird nach jedem Zyklus aufgerufen.      |
+### Allgemeine Optionen
+
+| Option              | Typ                                     | Default | Beschreibung                                                       |
+|---------------------|-----------------------------------------|---------|--------------------------------------------------------------------|
+| `interval_s`        | int (5 – 300)                           | `30`    | Zyklusintervall in Sekunden.                                       |
+| `log_level`         | `debug` / `info` / `warning` / `error` | `info`  | Log-Level des Add-ons.                                             |
+| `post_cycle_script` | string?                                 | –       | Optional: `script.<name>`, wird nach jedem Zyklus aufgerufen.      |
 
 Zusätzliches Debug-Logging zur Regelentscheidung wird über den HA-Helfer `input_boolean.ems_pyems_debug_output` aktiviert (Laufzeit-Schalter, kein Add-on-Neustart nötig).
+
+### Geräteliste (`devices`)
+
+Die `devices`-Liste definiert alle vom EMS verwalteten Verbraucher. Das Add-on baut daraus beim Start automatisch die internen Geräteobjekte und leitet alle Entitätsnamen aus der Namenskonvention ab.
+
+| Feld                  | Pflicht                            | Beschreibung |
+|-----------------------|------------------------------------|--------------|
+| `name`                | ja                                 | Technischer Bezeichner – wird direkt als Entitätspräfix verwendet. Nur Kleinbuchstaben, Ziffern, Unterstriche. Beispiel: `heizstab` → `input_boolean.ems_heizstab_freigabe` usw. |
+| `label`               | nein                               | Anzeigename in der Web-UI (darf Umlaute, Leerzeichen und Sonderzeichen enthalten). Hat keinen Einfluss auf Entitätsnamen. |
+| `class`               | ja                                 | `controllable` für stufenlos regelbare Geräte (Heizstab, Wallbox) oder `binary` für AN/AUS-Geräte (Heizlüfter, Pumpe). |
+| `actual_power_entity` | ja (nur `controllable`)            | HA-Sensor-Entität für die aktuelle Ist-Leistung in Watt. Beispiel: `sensor.elwa_modbus_istleistung`. |
+| `switch_entity`       | ja (nur `binary`)                  | HA-Schalter-Entität des realen Geräts. Das EMS liest daraus `actual_on` und die Schaltdauer. Beispiel: `switch.heizlufter`. |
+| `entity_prefix`       | nein                               | Überschreibt den Entitätspräfix wenn er vom `name` abweicht. Nötig wenn die HA-Helfer bereits mit einem anderen Präfix angelegt wurden. Beispiel: `name=wallbox_1`, Helfer heißen `ems_wallbox_*` → `entity_prefix: wallbox`. |
+| `allowed_modes`       | nein (Standard: `auto`)            | Kommagetrennte Liste der globalen EMS-Modi, in denen das Gerät aktiv ist. Mögliche Werte: `auto`, `nur_heizen`, `nur_laden`. |
+| `output_unit`         | nein (Standard: `watt`, nur `controllable`) | `watt` schreibt Watt in die Anforderungs-Entität. `ampere` konvertiert den Sollwert in ganze Ampere (immer abgerundet) – benötigt von Wallboxen. Intern rechnet das EMS immer in Watt. |
+| `phases`              | nein (Standard: `1`, nur `controllable` + `ampere`) | Phasenanzahl: `1` (einphasig) oder `3` (dreiphasig). Bestimmt die Umrechnung: `I = floor(P / (phases × U_phase))`. Beispiel: 6900 W ÷ (3 × 230 V) = 10 A. |
+| `voltage_entity`      | nein (nur `controllable` + `ampere`)| Optionaler HA-Sensor für die aktuelle Phasenspannung in Volt. Plausibilitätsbereich 180 – 260 V; außerhalb dieses Bereichs oder bei fehlendem Wert wird automatisch 230 V als Fallback verwendet. |
+
+**Beispiel-Konfiguration:**
+
+```yaml
+devices:
+  - name: heizstab
+    label: "Heizstab"
+    class: controllable
+    actual_power_entity: sensor.elwa_modbus_istleistung
+    allowed_modes: "auto,nur_heizen"
+
+  - name: wallbox_1
+    label: "Wallbox"
+    class: controllable
+    actual_power_entity: sensor.wallbox_1_istleistung
+    entity_prefix: wallbox
+    allowed_modes: "auto,nur_laden"
+    output_unit: "ampere"
+    phases: "3"
+    voltage_entity: ""          # leer → Fallback 230 V
+
+  - name: heizlufter_1
+    label: "Heizlüfter 1"
+    class: binary
+    switch_entity: switch.heizlufter
+    allowed_modes: "auto,nur_heizen"
+```
+
+> **Hinweis:** Da das Schema eine Liste von Objekten enthält, zeigt HA die gesamte Konfiguration als YAML-Editor an – Feldbeschreibungen aus `translations/*.yaml` werden in diesem Modus nicht angezeigt. Diese README ist die maßgebliche Dokumentation aller Felder.
 
 ## Regelablauf eines Zyklus
 
@@ -93,11 +143,11 @@ Pro Zyklus führt `EMSController.run_cycle()` der Reihe nach aus:
 5. **Pool nach Priorität verteilen**:
    - Regelbare Geräte reservieren ihre Schutzleistung.
    - Binäre Geräte ermitteln ihre Hysterese-basierte Wunschvorgabe.
-6. **Kandidat** der binären Geräte unter Berücksichtigung von Mindestlaufzeit, Abschaltverzögerung und Mindestauszeit bestimmen.
+6. **Kandidat** der binären Geräte unter Berücksichtigung von Mindestlaufzeit, Abschaltverzögerung und Mindestauszeit bestimmen. Die Mindestlaufzeit gilt auch bei `binary_immediate_off`.
 7. **Prioritätskaskade** anwenden (Demotion / Promotion) und **One-Change-Limit** durchsetzen.
 8. **Allocation regelbarer Geräte** aus dem verbleibenden Pool.
 9. **Rampenbegrenzung** der regelbaren Sollwerte (oder sofortiger Run-down bei Defizit).
-10. **Write-Ops** sammeln und gegen die HA-REST-API ausführen; optional Post-Cycle-Skript triggern.
+10. **Write-Ops** sammeln: Sollwerte werden bei `output_unit=ampere` von Watt in ganze Ampere umgerechnet (Floor-Rounding), dann gegen die HA-REST-API ausgeführt. Optional Post-Cycle-Skript triggern.
 
 ## HA-Helper-Namenskonvention
 
@@ -110,10 +160,10 @@ Alle vom Add-on gelesenen oder geschriebenen Helfer-Entitäten folgen einem fest
 > ```
 >
 > - `<domain>` ist eine der HA-Domains `input_boolean`, `input_select`, `input_number`.
-> - `<prefix>` ist entweder leer/spezifisch (global) oder die Geräte-ID (gerätebezogen).
+> - `<prefix>` ist entweder leer/spezifisch (global) oder der Geräte-Prefix (gerätebezogen).
 > - `<suffix>` benennt den konkreten Parameter (siehe Tabellen unten).
 
-Per Default ist `<prefix>` gleich der `id` des Geräts in `controller._build_devices()`. Weicht das HA-Namensschema davon ab, kann es über das Argument `entity_prefix=` der Geräteklasse überschrieben werden (Beispiel: `id="wallbox_1"` → `entity_prefix="wallbox"`, damit der Helfer `input_boolean.ems_wallbox_freigabe` und nicht `…ems_wallbox_1_freigabe` heißt).
+Per Default entspricht `<prefix>` dem `name`-Feld des Geräts in der Konfiguration. Weicht das HA-Namensschema davon ab, kann es über das Feld `entity_prefix` in den Add-on-Optionen überschrieben werden (Beispiel: `name=wallbox_1` → `entity_prefix=wallbox`, damit der Helfer `input_boolean.ems_wallbox_freigabe` und nicht `…ems_wallbox_1_freigabe` heißt).
 
 ### Globale Helfer
 
@@ -127,7 +177,7 @@ Per Default ist `<prefix>` gleich der `id` des Geräts in `controller._build_dev
 
 ### Pro Gerät: gemeinsame Helfer
 
-Die folgenden Helfer existieren für *jedes* Gerät (regelbar **und** binär). `<prefix>` ist die Geräte-ID bzw. der überschriebene Prefix.
+Die folgenden Helfer existieren für *jedes* Gerät (regelbar **und** binär). `<prefix>` ist das `name`-Feld bzw. der überschriebene `entity_prefix`.
 
 | Entität                                       | Domain          | Werte                                                  | Funktion                                                                       |
 |-----------------------------------------------|-----------------|--------------------------------------------------------|--------------------------------------------------------------------------------|
@@ -149,11 +199,13 @@ Für stufenlos regelbare Verbraucher (Heizstab, Wallbox). Zusätzlich zu den gem
 | `runter_regelzeit_s`                      | s       | Mindestabstand zwischen Runter-Regelschritten (bei Defizit wird sofort heruntergeregelt).         |
 | `max_anderung_pro_schritt_w`              | W       | Maximale Änderung des Sollwerts in einem Zyklus.                                                  |
 | `min_anderung_pro_schritt_w`              | W       | Deadband – kleinere Änderungen werden nicht geschrieben.                                          |
-| `anforderung_leistung_w` **(Ausgabe)**    | W       | Vom EMS geschriebener Sollwert. Wird typischerweise von einer separaten Integration (Modbus o. Ä.) ans Gerät übertragen. |
+| `anforderung_leistung_w` **(Ausgabe)**    | W oder A | Vom EMS geschriebener Sollwert. Bei `output_unit=watt` in Watt, bei `output_unit=ampere` in ganzen Ampere (abgerundet). Wird typischerweise von einer separaten Integration (Modbus, OCPP o. Ä.) ans Gerät übertragen. |
 
-Außerdem benötigt jedes regelbare Gerät einen externen Ist-Leistungs-Sensor (`sensor.…`), der bei der Registrierung in `controller._build_devices()` als `entity_actual_w=` übergeben wird.
+> **Alle Config-Parameter (`min_technisch_w`, `max_technisch_w` usw.) werden immer in Watt angegeben** – unabhängig von `output_unit`. Die Konvertierung in Ampere erfolgt erst beim Schreiben des Ausgabewerts. Beispiel für eine 3-phasige Wallbox mit 6 – 16 A: `min_technisch_w = 4140` (= 6 × 3 × 230), `max_technisch_w = 11040` (= 16 × 3 × 230).
 
-**Beispiel Heizstab** (id `heizstab`, kein Prefix-Override):
+Außerdem benötigt jedes regelbare Gerät einen externen Ist-Leistungs-Sensor (`sensor.…`), der im Config-Feld `actual_power_entity` angegeben wird.
+
+**Beispiel Heizstab** (`name: heizstab`, kein `entity_prefix`):
 
 ```
 input_boolean.ems_heizstab_freigabe
@@ -167,25 +219,26 @@ input_number.ems_heizstab_hoch_regelzeit_s
 input_number.ems_heizstab_runter_regelzeit_s
 input_number.ems_heizstab_max_anderung_pro_schritt_w
 input_number.ems_heizstab_min_anderung_pro_schritt_w
-input_number.ems_heizstab_anforderung_leistung_w     ← Sollwert-Ausgabe
+input_number.ems_heizstab_anforderung_leistung_w     ← Sollwert-Ausgabe (Watt)
 sensor.elwa_modbus_istleistung                       ← Ist-Leistung (extern)
 ```
 
-**Beispiel Wallbox 1** (id `wallbox_1`, `entity_prefix="wallbox"`):
+**Beispiel Wallbox** (`name: wallbox_1`, `entity_prefix: wallbox`, `output_unit: ampere`, `phases: 3`):
 
 ```
 input_boolean.ems_wallbox_freigabe
 input_select.ems_wallbox_modus
 input_number.ems_wallbox_prioritat
-input_number.ems_wallbox_min_technisch_w
-input_number.ems_wallbox_max_technisch_w
+input_number.ems_wallbox_min_technisch_w             ← in Watt (z. B. 4140 für 6 A 3-phasig)
+input_number.ems_wallbox_max_technisch_w             ← in Watt (z. B. 11040 für 16 A 3-phasig)
 input_number.ems_wallbox_geschutzte_mindestleistung_w
 input_number.ems_wallbox_reserve_w
 input_number.ems_wallbox_hoch_regelzeit_s
 input_number.ems_wallbox_runter_regelzeit_s
 input_number.ems_wallbox_max_anderung_pro_schritt_w
-input_number.ems_wallbox_anforderung_leistung_w      ← Sollwert-Ausgabe
-sensor.wallbox_1_istleistung                         ← Ist-Leistung (extern)
+input_number.ems_wallbox_min_anderung_pro_schritt_w
+input_number.ems_wallbox_anforderung_leistung_w      ← Sollwert-Ausgabe (Ampere, z. B. 10)
+sensor.wallbox_1_istleistung                         ← Ist-Leistung (extern, in Watt)
 ```
 
 ### Binäre Geräte (`BinaryDevice`)
@@ -196,18 +249,18 @@ Für AN/AUS-Verbraucher mit Zeitschutz (z. B. Heizlüfter). Zusätzlich zu den g
 |-----------------------------------------------|---------|----------------------------------------------------------------------------------------------------------|
 | `leistung_w`                                  | W       | Angenommene Leistung des Geräts im EIN-Zustand (für Pool und Defizit).                                   |
 | `einschaltreserve_w`                          | W       | Pro-Gerät-Hysterese (zusätzlich zur globalen Einschaltreserve).                                          |
-| `mindestlaufzeit_s`                           | s       | Solange `actual_on` und das Gerät jünger als `mindestlaufzeit_s` ist, darf es nicht abschalten.          |
-| `mindestauszeit_s`                            | s       | Solange `actual_on=off` jünger als `mindestauszeit_s` ist, darf das Gerät nicht einschalten.             |
+| `mindestlaufzeit_s`                           | s       | Solange `actual_on=true` und das Gerät jünger als `mindestlaufzeit_s` ist, darf es nicht abschalten – auch nicht bei Notabschaltung (`binary_immediate_off`). |
+| `mindestauszeit_s`                            | s       | Solange `actual_on=false` jünger als `mindestauszeit_s` ist, darf das Gerät nicht einschalten.           |
 | `abschaltverzogerung_s`                       | s       | Verzögert das Ausschalten: erst nach Ablauf wird der Aus-Befehl freigegeben.                             |
 
 Ausgabe und externer Schalter:
 
 | Entität                                        | Domain          | Funktion                                                                                              |
 |-----------------------------------------------|-----------------|-------------------------------------------------------------------------------------------------------|
-| `input_boolean.ems_<prefix>_anforderung_an`   | `input_boolean` | Vom EMS geschriebenes Anforderungs-Flag. Eine HA-Automation o. Ä. übersetzt es in das Schalten des realen Geräts. |
-| `switch.<…>` (extern)                         | `switch`        | Tatsächlicher Schalter des Geräts; wird in `controller._build_devices()` als `entity_switch=` registriert und gelesen, um `actual_on` und `_switch_age_s` zu bestimmen. |
+| `input_boolean.ems_<prefix>_anforderung_an`   | `input_boolean` | Vom EMS geschriebenes Anforderungs-Flag. Eine HA-Automation übersetzt es in das Schalten des realen Geräts. |
+| `switch.<…>` (extern)                         | `switch`        | Tatsächlicher Schalter des Geräts; wird im Config-Feld `switch_entity` angegeben und gelesen, um `actual_on` und `_switch_age_s` zu bestimmen. |
 
-**Beispiel Heizlüfter 1** (id `heizlufter_1`):
+**Beispiel Heizlüfter 1** (`name: heizlufter_1`):
 
 ```
 input_boolean.ems_heizlufter_1_freigabe
@@ -229,34 +282,41 @@ Diese Entitäten werden vom EMS *gelesen*, aber nicht angelegt oder geschrieben:
 | Entität                                                       | Funktion                                                                                                                 |
 |---------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------|
 | `sensor.verfugbare_leistung_fur_uberschusverbraucher`         | **Pflicht.** Aktueller PV-Überschuss in Watt (positiv = Einspeisung). `unavailable` / `unknown` oder ≤ −50 000 W löst Hard-Lockout aus. |
-| `sensor.<gerät>_istleistung` (z. B. `sensor.elwa_modbus_istleistung`, `sensor.wallbox_1_istleistung`) | Ist-Leistung des jeweiligen regelbaren Geräts.                                                                            |
-| `switch.<gerät>` (z. B. `switch.heizlufter`, `switch.heizlufter2`) | Tatsächlicher Schaltzustand des jeweiligen binären Geräts.                                                               |
+| `sensor.<gerät>_istleistung` (konfiguriert via `actual_power_entity`) | Ist-Leistung des jeweiligen regelbaren Geräts in Watt.                                                         |
+| `switch.<gerät>` (konfiguriert via `switch_entity`)           | Tatsächlicher Schaltzustand des jeweiligen binären Geräts.                                                               |
+| `sensor.<…>` (konfiguriert via `voltage_entity`, optional)   | Phasenspannung in Volt für die W→A-Umrechnung bei Wallboxen o. Ä.                                                        |
 
 ## Geräte hinzufügen oder entfernen
 
-Die einzige Stelle, die für das Aktivieren / Deaktivieren oder Erweitern um Geräte angefasst werden muss, ist `app/ems/controller.py::_build_devices()`. Schritte:
+Geräte werden ausschließlich über die Add-on-Optionen verwaltet – kein Python-Code muss angefasst werden:
 
-1. In `_build_devices()` einen neuen `ControllableDevice(…)` oder `BinaryDevice(…)` eintragen (oder vorhandene auskommentierte Einträge aktivieren).
-2. Die in den Tabellen oben gelisteten HA-Helfer für den gewählten `id`/`entity_prefix` in Home Assistant anlegen.
+1. In den Add-on-Optionen einen neuen Eintrag in der `devices`-Liste hinzufügen (oder entfernen).
+2. Die in den Tabellen oben gelisteten HA-Helfer für den gewählten `name` / `entity_prefix` in Home Assistant anlegen.
 3. Add-on neu starten.
 
-Für einen komplett neuen Gerätetyp: eine neue Klasse von `Device` ableiten (`app/ems/devices.py`) und – wenn das Namensschema abweicht – `_device_eligible()` / `update_from_ha()` entsprechend überschreiben.
+Das Add-on leitet beim Start alle Entitätsnamen automatisch aus dem `name`-Feld und der Namenskonvention ab. Ungültige Einträge (fehlendes `name`, unbekannte `class`, leere Pflichtfelder) werden mit einer Fehlermeldung im Log übersprungen – der Rest der Geräte bleibt aktiv.
+
+Für einen komplett neuen Gerätetyp (jenseits von `controllable` und `binary`): eine neue Klasse von `Device` ableiten (`app/ems/devices.py`) und in `_build_devices()` registrieren.
 
 ## Web-UI
 
 Erreichbar über das Ingress-Panel **HEMS** in der HA-Seitenleiste (Port `8099`). Zwei Tabs:
 
-- **Status** – Live-Anzeige von EMS-Modus, Überschuss, Pool, Defizit, Notabschaltung und je Gerät: Eligibility, Ist-/Soll-Leistung, Allokation, Schutzleistung sowie für binäre Geräte `actual_on / desired_on / candidate_on / final_on`. Aktualisiert alle 5 s.
-- **Steuerung** – aufklappbare Karten pro Gerät (und „Global"), die alle relevanten Helfer-Entitäten als Toggle / Number / Select direkt editierbar machen (Schreiben über `POST /api/set`).
+- **Status** – Live-Anzeige von EMS-Modus, Überschuss, Pool, Defizit, Notabschaltung und je Gerät:
+  - *Regelbare Geräte*: Eligibility, Ist-Leistung, aktueller Sollwert, Allokation, Schutzleistung. Bei `output_unit=ampere` werden Anforderung und Sollwert in Ampere (+ Watt in Klammern) angezeigt sowie die verwendete Phasenspannung.
+  - *Binäre Geräte*: `actual_on / desired_on / candidate_on / final_on` sowie Timing-Status (verbleibende Mindestlaufzeit oder Mindestauszeit mit Fortschrittsanzeige).
+  - Aktualisiert alle 5 s.
+- **Steuerung** – aufklappbare Karten pro Gerät (und „Global"), die alle relevanten Helfer-Entitäten als Toggle / Number / Select direkt editierbar machen (Schreiben über `POST /api/set`). Das Steuerschema wird dynamisch aus der aktuellen Gerätekonfiguration geladen.
 
 ## REST-Endpunkte
 
-| Methode | Pfad             | Zweck                                                                                |
-|---------|------------------|--------------------------------------------------------------------------------------|
-| GET     | `/`              | Web-UI (Single-Page).                                                                |
-| GET     | `/api/status`    | Letzter Zyklus-Snapshot (Status pro Gerät, Pool, Defizit, Zyklenzähler, Fehler).     |
-| GET     | `/api/controls`  | Alle `input_boolean.ems_*`, `input_select.ems_*`, `input_number.ems_*` Entitäten.     |
-| POST    | `/api/set`       | Body `{"entity_id": "...", "value": ...}` – setzt einen Helfer (Toggle/Set/Select).  |
+| Methode | Pfad                         | Zweck                                                                                |
+|---------|------------------------------|--------------------------------------------------------------------------------------|
+| GET     | `/`                          | Web-UI (Single-Page).                                                                |
+| GET     | `/api/status`                | Letzter Zyklus-Snapshot (Status pro Gerät, Pool, Defizit, Zyklenzähler, Fehler).     |
+| GET     | `/api/controls`              | Alle `input_boolean.ems_*`, `input_select.ems_*`, `input_number.ems_*` Entitäten.    |
+| GET     | `/api/device_controls_schema`| Steuerschema (Gruppen + Entitäten) für den Steuerungs-Tab, abgeleitet aus der aktuellen Gerätekonfiguration. |
+| POST    | `/api/set`                   | Body `{"entity_id": "...", "value": ...}` – setzt einen Helfer (Toggle/Set/Select).  |
 
 ## Lokale Entwicklung
 
@@ -290,15 +350,18 @@ docker run --rm -p 8099:8099 \
 ├── Dockerfile                 Add-on-Image (Python 3.11 Alpine, aiohttp)
 ├── config.yaml                Add-on-Manifest (Version, Optionen, Ingress)
 ├── repository.yaml            Custom-Repository-Manifest
+├── translations/
+│   ├── de.yaml                Deutsche Feldbeschreibungen (HA Add-on Config)
+│   └── en.yaml                Englische Feldbeschreibungen (HA Add-on Config)
 ├── .github/workflows/
 │   └── bump-version.yaml      Patch-Version-Bump bei Push auf main
 └── app/
-    ├── main.py                Entry-Point: Scheduler + Webserver
+    ├── main.py                Entry-Point: Scheduler + Webserver + API-Routen
     ├── ha_client.py           HA-REST-Client
     ├── requirements.txt
     ├── ems/
     │   ├── __init__.py
-    │   ├── controller.py      EMSController + Geräte-Registry
+    │   ├── controller.py      EMSController + config-driven Geräte-Registry
     │   ├── devices.py         Device / ControllableDevice / BinaryDevice
     │   └── state.py           StateProxy, safe_float, parse_ts
     └── templates/
