@@ -298,6 +298,20 @@
   function renderBinary(d) {
     const cls = !d.eligible ? 'off' : d.final_on ? 'active' : 'idle';
     const changed = d.actual_on !== d.final_on;
+
+    let timingRow = '';
+    if (d.actual_on && d.min_runtime_s > 0) {
+      const rem = Math.max(0, d.min_runtime_s - d.switch_age_s);
+      timingRow = rem > 0
+        ? row('Mindestlaufzeit', 'noch ' + fmtDur(rem), 'dim')
+        : row('Mindestlaufzeit', '✓ erfüllt', 'on');
+    } else if (!d.actual_on && d.min_offtime_s > 0) {
+      const rem = Math.max(0, d.min_offtime_s - d.switch_age_s);
+      timingRow = rem > 0
+        ? row('Mindestauszeit', 'noch ' + fmtDur(rem), 'dim')
+        : row('Mindestauszeit', '✓ erfüllt', 'on');
+    }
+
     return `<div class="card ${cls}">
       <div class="card-title"><span class="card-name">${d.id}</span><span class="prio-badge">Prio ${d.priority}</span></div>
       ${row('Freigabe',   d.eligible  ? '✓ ja' : '✗ nein', d.eligible  ? 'on' : 'off-val')}
@@ -306,6 +320,7 @@
       ${row('Gewünscht',  d.desired_on ? '● AN' : '○ AUS', d.desired_on ? 'on' : 'dim')}
       ${row('Kandidat',   d.candidate_on ? '● AN' : '○ AUS', d.candidate_on ? 'on' : 'dim')}
       ${row('Final → HA', d.final_on ? '● AN' : '○ AUS', changed ? 'changed' : d.final_on ? 'on' : 'off-val')}
+      ${timingRow}
     </div>`;
   }
 
@@ -313,6 +328,7 @@
   function tile(v, l, vc='') { return `<div class="metric"><div class="val ${vc}">${v}</div><div class="lbl">${l}</div></div>`; }
   function row(k, v, c='') { return `<div class="row"><span class="k">${k}</span><span class="v ${c}">${v}</span></div>`; }
   function fmt(v) { return v == null ? '–' : Math.round(v).toLocaleString('de-DE'); }
+  function fmtDur(s) { return s >= 60 ? Math.floor(s/60) + 'm ' + Math.round(s%60) + 's' : Math.round(s) + 's'; }
   function showError(msg) {
     const el = document.getElementById('error-banner');
     el.style.display = msg ? 'block' : 'none';
