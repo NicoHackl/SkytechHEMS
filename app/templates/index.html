@@ -285,7 +285,7 @@
     const cls = !d.eligible ? 'off' : d.new_w > 0 ? 'active' : 'idle';
     const changed = Math.round(d.new_w) !== Math.round(d.anforderung_current_w);
     return `<div class="card ${cls}">
-      <div class="card-title"><span class="card-name">${d.id}</span><span class="prio-badge">Prio ${d.priority}</span></div>
+      <div class="card-title"><span class="card-name">${d.label || d.id}</span><span class="prio-badge">Prio ${d.priority}</span></div>
       ${row('Freigabe',     d.eligible ? '✓ ja' : '✗ nein', d.eligible ? 'on' : 'off-val')}
       ${row('Ist',          fmt(d.actual_w) + ' W')}
       ${row('Anforderung',  fmt(d.anforderung_current_w) + ' W')}
@@ -313,7 +313,7 @@
     }
 
     return `<div class="card ${cls}">
-      <div class="card-title"><span class="card-name">${d.id}</span><span class="prio-badge">Prio ${d.priority}</span></div>
+      <div class="card-title"><span class="card-name">${d.label || d.id}</span><span class="prio-badge">Prio ${d.priority}</span></div>
       ${row('Freigabe',   d.eligible  ? '✓ ja' : '✗ nein', d.eligible  ? 'on' : 'off-val')}
       ${row('Leistung',   fmt(d.power_w) + ' W')}
       ${row('Ist',        d.actual_on  ? '● AN' : '○ AUS', d.actual_on  ? 'on' : 'off-val')}

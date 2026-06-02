@@ -22,13 +22,14 @@ class Device(ABC):
     """Abstract base for all EMS-managed devices."""
 
     def __init__(self, id: str, allowed_modes: List[str],
-                 entity_prefix: Optional[str] = None):
+                 entity_prefix: Optional[str] = None,
+                 label: Optional[str] = None):
         self.id            = id
+        self.label         = label or id   # human-readable display name, falls back to id
         self.priority: int = 99
         self.eligible      = False
-        self._allowed_modes   = allowed_modes
-        # entity_prefix defaults to id; override when HA naming diverges (e.g. wallbox_1 → wallbox)
-        self._entity_prefix   = entity_prefix or id
+        self._allowed_modes  = allowed_modes
+        self._entity_prefix  = entity_prefix or id
 
     # ------------------------------------------------------------------
     # Eligibility (global + per-device freigabe/modus)
@@ -97,8 +98,9 @@ class ControllableDevice(Device):
 
     def __init__(self, id: str, allowed_modes: List[str],
                  entity_actual_w: str, entity_anforderung_w: str,
-                 entity_prefix: Optional[str] = None):
-        super().__init__(id, allowed_modes, entity_prefix)
+                 entity_prefix: Optional[str] = None,
+                 label: Optional[str] = None):
+        super().__init__(id, allowed_modes, entity_prefix, label)
         self.entity_actual_w       = entity_actual_w
         self.entity_anforderung_w  = entity_anforderung_w
 
@@ -236,6 +238,7 @@ class ControllableDevice(Device):
         return {
             "type":                  "controllable",
             "id":                    self.id,
+            "label":                 self.label,
             "priority":              self.priority,
             "eligible":              self.eligible,
             "actual_w":              self._actual_w,
@@ -255,8 +258,9 @@ class BinaryDevice(Device):
 
     def __init__(self, id: str, allowed_modes: List[str],
                  entity_switch: str, entity_anforderung_an: str,
-                 entity_prefix: Optional[str] = None):
-        super().__init__(id, allowed_modes, entity_prefix)
+                 entity_prefix: Optional[str] = None,
+                 label: Optional[str] = None):
+        super().__init__(id, allowed_modes, entity_prefix, label)
         self.entity_switch         = entity_switch
         self.entity_anforderung_an = entity_anforderung_an
         # NOTE: entity_off_since removed – the two input_datetime HA helpers are replaced
@@ -399,6 +403,7 @@ class BinaryDevice(Device):
         return {
             "type":           "binary",
             "id":             self.id,
+            "label":          self.label,
             "priority":       self.priority,
             "eligible":       self.eligible,
             "power_w":        self.power_w,
