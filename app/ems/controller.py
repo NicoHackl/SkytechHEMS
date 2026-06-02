@@ -30,73 +30,57 @@ HARD_LOCKOUT_THRESHOLD_W = -50000.0
 
 
 # ---------------------------------------------------------------------------
-# Device registry  ← only file that needs touching to add/remove devices
+# Device registry – built from add-on config at startup
 # ---------------------------------------------------------------------------
 
-def _build_devices() -> List[Device]:
-    return [
+def _build_devices(device_configs: List[dict]) -> List[Device]:
+    """Build device list from config.yaml options.devices entries."""
+    devices = []
+    for cfg in device_configs:
+        name = (cfg.get("name") or "").strip()
+        cls  = (cfg.get("class") or "").strip()
+        if not name:
+            log.error("Gerätekonfiguration ohne 'name' übersprungen: %s", cfg)
+            continue
 
-        # =====================================================================
-        # REGELBARE VERBRAUCHER
-        # =====================================================================
+        prefix = (cfg.get("entity_prefix") or "").strip() or name
+        modes  = [m.strip() for m in (cfg.get("allowed_modes") or "auto").split(",") if m.strip()]
 
-        ControllableDevice(
-            id="heizstab",
-            allowed_modes=["auto", "nur_heizen"],
-            entity_actual_w="sensor.elwa_modbus_istleistung",
-            entity_anforderung_w="input_number.ems_heizstab_anforderung_leistung_w",
-        ),
+        try:
+            if cls == "controllable":
+                actual_w = (cfg.get("actual_power_entity") or "").strip()
+                if not actual_w:
+                    raise ValueError("actual_power_entity ist leer")
+                devices.append(ControllableDevice(
+                    id=name,
+                    allowed_modes=modes,
+                    entity_actual_w=actual_w,
+                    entity_anforderung_w=f"input_number.ems_{prefix}_anforderung_leistung_w",
+                    entity_prefix=prefix,
+                ))
 
-        ControllableDevice(
-            id="wallbox_1",
-            allowed_modes=["auto", "nur_laden"],
-            entity_actual_w="sensor.wallbox_1_istleistung",
-            entity_anforderung_w="input_number.ems_wallbox_anforderung_leistung_w",
-            entity_prefix="wallbox",    # HA uses ems_wallbox_* not ems_wallbox_1_*
-        ),
+            elif cls == "binary":
+                switch = (cfg.get("switch_entity") or "").strip()
+                if not switch:
+                    raise ValueError("switch_entity ist leer")
+                devices.append(BinaryDevice(
+                    id=name,
+                    allowed_modes=modes,
+                    entity_switch=switch,
+                    entity_anforderung_an=f"input_boolean.ems_{prefix}_anforderung_an",
+                    entity_prefix=prefix,
+                ))
 
-        # Zweite Wallbox – auskommentieren + HA-Helfer anlegen zum Aktivieren:
-        # ControllableDevice(
-        #     id="wallbox_2",
-        #     allowed_modes=["auto", "nur_laden"],
-        #     entity_actual_w="sensor.wallbox_2_istleistung",
-        #     entity_anforderung_w="input_number.ems_wallbox_2_anforderung_leistung_w",
-        # ),
+            else:
+                raise ValueError(f"Unbekannte Klasse '{cls}' (erlaubt: controllable, binary)")
 
-        # =====================================================================
-        # BINÄRE VERBRAUCHER
-        # =====================================================================
+            log.info("Gerät registriert: '%s' (%s, prefix='%s', modi=%s)",
+                     name, cls, prefix, modes)
 
-        BinaryDevice(
-            id="heizlufter_1",
-            allowed_modes=["auto", "nur_heizen"],
-            entity_switch="switch.heizlufter",
-            entity_anforderung_an="input_boolean.ems_heizlufter_1_anforderung_an",
-        ),
+        except Exception as exc:
+            log.error("Gerät '%s' konnte nicht registriert werden: %s", name, exc)
 
-        BinaryDevice(
-            id="heizlufter_2",
-            allowed_modes=["auto", "nur_heizen"],
-            entity_switch="switch.heizlufter2",
-            entity_anforderung_an="input_boolean.ems_heizlufter_2_anforderung_an",
-        ),
-
-        # Heizlüfter 3 – auskommentieren + HA-Helfer anlegen zum Aktivieren:
-        # BinaryDevice(
-        #     id="heizlufter_3",
-        #     allowed_modes=["auto", "nur_heizen"],
-        #     entity_switch="switch.heizlufter3",
-        #     entity_anforderung_an="input_boolean.ems_heizlufter_3_anforderung_an",
-        # ),
-
-        # Heizlüfter 4:
-        # BinaryDevice(
-        #     id="heizlufter_4",
-        #     allowed_modes=["auto", "nur_heizen"],
-        #     entity_switch="switch.heizlufter4",
-        #     entity_anforderung_an="input_boolean.ems_heizlufter_4_anforderung_an",
-        # ),
-    ]
+    return devices
 
 
 # ---------------------------------------------------------------------------
@@ -109,8 +93,8 @@ class EMSController:
     and their internal state persist across all cycles.
     """
 
-    def __init__(self):
-        self._devices: List[Device] = _build_devices()
+    def __init__(self, device_configs: List[dict]):
+        self._devices: List[Device] = _build_devices(device_configs)
         log.info("EMSController ready – %d devices registered.", len(self._devices))
 
     # ------------------------------------------------------------------
