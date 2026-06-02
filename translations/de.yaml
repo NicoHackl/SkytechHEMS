@@ -33,6 +33,22 @@ configuration:
       • allowed_modes (optional, Standard „auto") – Kommagetrennte Liste der
       globalen Regelmodi, in denen das Gerät aktiv ist. Mögliche Werte: auto,
       nur_heizen, nur_laden. Beispiel: „auto,nur_heizen".
+
+      • output_unit (optional, nur controllable, Standard „watt") – Einheit
+      des Ausgabewerts. „watt" schreibt Watt in die Anforderungs-Entität.
+      „ampere" konvertiert intern berechnete Watt in Ampere (ganzzahlig,
+      immer abgerundet) – benötigt von Wallboxen und ähnlichen Geräten.
+
+      • phases (optional, nur controllable + ampere, Standard „1") –
+      Phasenanzahl: „1" (einphasig) oder „3" (dreiphasig). Bestimmt die
+      Umrechnung I = P ÷ (Phasen × Phasenspannung). Beispiel: 6900 W
+      ÷ (3 × 230 V) = 10 A.
+
+      • voltage_entity (optional, nur controllable + ampere) – HA-Sensor
+      für die aktuelle Phasenspannung in Volt (z. B.
+      sensor.wallbox_spannung_l1). Plausibilitätsbereich 180–260 V;
+      außerhalb oder bei fehlendem Wert wird automatisch 230 V verwendet.
+      Leer lassen wenn kein Sensor vorhanden.
   interval_s:
     name: Regelintervall (Sekunden)
     description: >-

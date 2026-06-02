@@ -33,6 +33,22 @@ configuration:
       • allowed_modes (optional, default "auto") – Comma-separated list of
       global EMS modes in which this device participates. Possible values:
       auto, nur_heizen, nur_laden. Example: "auto,nur_heizen".
+
+      • output_unit (optional, controllable only, default "watt") – Unit of
+      the output value. "watt" writes Watts to the setpoint entity. "ampere"
+      converts the internally calculated Watts to Ampere (integer, always
+      rounded down) — required for wallboxes and similar devices.
+
+      • phases (optional, controllable + ampere only, default "1") – Phase
+      count: "1" (single-phase) or "3" (three-phase). Determines the
+      conversion I = P ÷ (phases × phase voltage). Example: 6900 W
+      ÷ (3 × 230 V) = 10 A.
+
+      • voltage_entity (optional, controllable + ampere only) – HA sensor
+      for the current phase voltage in Volts (e.g.
+      sensor.wallbox_voltage_l1). Plausibility range 180–260 V; outside
+      this range or when unavailable, 230 V is used as fallback. Leave
+      empty if no voltage sensor is available.
   interval_s:
     name: Control interval (seconds)
     description: >-
