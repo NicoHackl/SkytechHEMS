@@ -1,6 +1,6 @@
 name: "Skytech HEMS"
 description: "PV-Überschuss Energiemanagementsystem – regelt Heizstab, Wallbox und Heizlüfter"
-version: "1.0.2"
+version: "1.0.3"
 slug: "skytech_hems"
 init: false
 arch:
