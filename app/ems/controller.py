@@ -44,6 +44,7 @@ def _build_devices(device_configs: List[dict]) -> List[Device]:
             continue
 
         prefix = (cfg.get("entity_prefix") or "").strip() or name
+        label  = (cfg.get("label")         or "").strip() or None
         modes  = [m.strip() for m in (cfg.get("allowed_modes") or "auto").split(",") if m.strip()]
 
         try:
@@ -57,6 +58,7 @@ def _build_devices(device_configs: List[dict]) -> List[Device]:
                     entity_actual_w=actual_w,
                     entity_anforderung_w=f"input_number.ems_{prefix}_anforderung_leistung_w",
                     entity_prefix=prefix,
+                    label=label,
                 ))
 
             elif cls == "binary":
@@ -69,6 +71,7 @@ def _build_devices(device_configs: List[dict]) -> List[Device]:
                     entity_switch=switch,
                     entity_anforderung_an=f"input_boolean.ems_{prefix}_anforderung_an",
                     entity_prefix=prefix,
+                    label=label,
                 ))
 
             else:

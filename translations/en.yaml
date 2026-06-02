@@ -2,11 +2,37 @@ configuration:
   devices:
     name: Device list
     description: >-
-      List of consumers managed by the EMS. Each entry needs a name, a class
-      (controllable or binary), and the device-specific entity. The name is used
-      as the HA helper entity prefix (e.g. name=heizstab →
-      input_boolean.ems_heizstab_freigabe). Use entity_prefix to override the
-      prefix when the HA naming diverges from the device name.
+      List of consumers managed by the EMS. Fields per entry:
+
+      • name (required) – Technical identifier, used directly as the prefix for
+      all HA helper entities. Example: name=heizstab →
+      input_boolean.ems_heizstab_freigabe, input_number.ems_heizstab_prioritat
+      etc. Use only lowercase letters, digits and underscores.
+
+      • label (optional) – Display name shown in the web UI and Steuerung tab.
+      May contain umlauts, spaces and special characters (e.g. "Fan Living
+      Room"). Has no effect on entity names.
+
+      • class (required) – Device class: "controllable" for continuously
+      variable consumers (heating rod, wallbox), "binary" for on/off devices
+      (fan heater, pump).
+
+      • actual_power_entity (controllable only, required) – Sensor entity that
+      provides the current actual power draw in watts, e.g.
+      sensor.elwa_modbus_istleistung.
+
+      • switch_entity (binary only, required) – Switch entity of the real
+      device, e.g. switch.heizlufter. The EMS reads the actual state and
+      switch age from this entity.
+
+      • entity_prefix (optional) – Overrides the HA entity prefix when it
+      differs from name. Needed if HA helpers were already created with a
+      different prefix. Example: name=wallbox_1 but helpers are named
+      ems_wallbox_* → entity_prefix=wallbox.
+
+      • allowed_modes (optional, default "auto") – Comma-separated list of
+      global EMS modes in which this device participates. Possible values:
+      auto, nur_heizen, nur_laden. Example: "auto,nur_heizen".
   interval_s:
     name: Control interval (seconds)
     description: >-

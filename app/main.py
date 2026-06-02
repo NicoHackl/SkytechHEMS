@@ -160,7 +160,7 @@ class HEMSApp:
             name   = (cfg.get("name")          or "").strip()
             cls    = (cfg.get("class")         or "").strip()
             prefix = (cfg.get("entity_prefix") or "").strip() or name
-            label  = name.replace("_", " ").title()
+            label  = (cfg.get("label")         or "").strip() or name.replace("_", " ").title()
             if cls == "controllable":
                 schema.append({"label": label, "items": _ctrl_items_controllable(prefix)})
             elif cls == "binary":

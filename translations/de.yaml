@@ -2,11 +2,37 @@ configuration:
   devices:
     name: Geräteliste
     description: >-
-      Liste der vom EMS geregelten Verbraucher. Jeder Eintrag besteht aus Name,
-      Klasse und den gerätespezifischen Entitäten. Der Name wird als Präfix für
-      alle HA-Helfer-Entitäten verwendet (z. B. name=heizstab →
-      input_boolean.ems_heizstab_freigabe). Mit entity_prefix kann ein
-      abweichender Präfix gesetzt werden.
+      Liste der vom EMS geregelten Verbraucher. Felder je Eintrag:
+
+      • name (Pflicht) – Technischer Bezeichner, wird direkt als Präfix für
+      alle HA-Helfer-Entitäten verwendet. Beispiel: name=heizstab →
+      input_boolean.ems_heizstab_freigabe, input_number.ems_heizstab_prioritat
+      usw. Nur Kleinbuchstaben, Ziffern und Unterstriche verwenden.
+
+      • label (optional) – Anzeigename in der Web-UI und im Steuerung-Tab.
+      Kann Umlaute, Leerzeichen und Sonderzeichen enthalten (z. B. „Heizlüfter
+      Wohnzimmer"). Hat keinen Einfluss auf die Entitätsnamen.
+
+      • class (Pflicht) – Geräteklasse: „controllable" für stufenlos regelbare
+      Verbraucher (Heizstab, Wallbox), „binary" für AN/AUS-Geräte (Heizlüfter,
+      Pumpe).
+
+      • actual_power_entity (nur controllable, Pflicht) – Sensor-Entität die
+      die aktuelle Ist-Leistung des Geräts in Watt liefert, z. B.
+      sensor.elwa_modbus_istleistung.
+
+      • switch_entity (nur binary, Pflicht) – Schalt-Entität des realen Geräts,
+      z. B. switch.heizlufter. Das EMS liest daraus den Ist-Zustand und die
+      Schaltdauer.
+
+      • entity_prefix (optional) – Überschreibt den HA-Entitätspräfix, wenn
+      dieser vom name abweicht. Nötig wenn die HA-Helfer bereits mit einem
+      anderen Präfix angelegt wurden. Beispiel: name=wallbox_1 aber Helfer
+      heißen ems_wallbox_* → entity_prefix=wallbox.
+
+      • allowed_modes (optional, Standard „auto") – Kommagetrennte Liste der
+      globalen Regelmodi, in denen das Gerät aktiv ist. Mögliche Werte: auto,
+      nur_heizen, nur_laden. Beispiel: „auto,nur_heizen".
   interval_s:
     name: Regelintervall (Sekunden)
     description: >-
