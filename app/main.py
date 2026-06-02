@@ -53,19 +53,20 @@ _GLOBAL_CTRL_ITEMS = [
 ]
 
 
-def _ctrl_items_controllable(p: str) -> list:
+def _ctrl_items_controllable(p: str, output_unit: str = 'watt') -> list:
+    suf = 'a' if output_unit == 'ampere' else 'w'
     return [
-        {"entity": f"input_boolean.ems_{p}_freigabe",                    "label": "Freigabe"},
-        {"entity": f"input_select.ems_{p}_modus",                        "label": "Modus"},
-        {"entity": f"input_number.ems_{p}_prioritat",                    "label": "Priorität"},
-        {"entity": f"input_number.ems_{p}_geschutzte_mindestleistung_w", "label": "Geschützte Mindestleistung"},
-        {"entity": f"input_number.ems_{p}_min_technisch_w",              "label": "Min. Leistung technisch"},
-        {"entity": f"input_number.ems_{p}_max_technisch_w",              "label": "Max. Leistung"},
-        {"entity": f"input_number.ems_{p}_reserve_w",                    "label": "Reserve"},
-        {"entity": f"input_number.ems_{p}_hoch_regelzeit_s",             "label": "Hoch-Regelzeit"},
-        {"entity": f"input_number.ems_{p}_runter_regelzeit_s",           "label": "Runter-Regelzeit"},
-        {"entity": f"input_number.ems_{p}_max_anderung_pro_schritt_w",   "label": "Max. Änderung/Schritt"},
-        {"entity": f"input_number.ems_{p}_min_anderung_pro_schritt_w",   "label": "Deadband"},
+        {"entity": f"input_boolean.ems_{p}_freigabe",                        "label": "Freigabe"},
+        {"entity": f"input_select.ems_{p}_modus",                            "label": "Modus"},
+        {"entity": f"input_number.ems_{p}_prioritat",                        "label": "Priorität"},
+        {"entity": f"input_number.ems_{p}_geschutzte_mindestleistung_{suf}", "label": "Geschützte Mindestleistung"},
+        {"entity": f"input_number.ems_{p}_min_technisch_{suf}",              "label": "Min. Leistung technisch"},
+        {"entity": f"input_number.ems_{p}_max_technisch_{suf}",              "label": "Max. Leistung"},
+        {"entity": f"input_number.ems_{p}_reserve_w",                        "label": "Reserve"},
+        {"entity": f"input_number.ems_{p}_hoch_regelzeit_s",                 "label": "Hoch-Regelzeit"},
+        {"entity": f"input_number.ems_{p}_runter_regelzeit_s",               "label": "Runter-Regelzeit"},
+        {"entity": f"input_number.ems_{p}_max_anderung_pro_schritt_{suf}",   "label": "Max. Änderung/Schritt"},
+        {"entity": f"input_number.ems_{p}_min_anderung_pro_schritt_{suf}",   "label": "Deadband"},
     ]
 
 
@@ -162,7 +163,8 @@ class HEMSApp:
             prefix = (cfg.get("entity_prefix") or "").strip() or name
             label  = (cfg.get("label")         or "").strip() or name.replace("_", " ").title()
             if cls == "controllable":
-                schema.append({"label": label, "items": _ctrl_items_controllable(prefix)})
+                output_unit = (cfg.get("output_unit") or "watt").strip()
+                schema.append({"label": label, "items": _ctrl_items_controllable(prefix, output_unit)})
             elif cls == "binary":
                 schema.append({"label": label, "items": _ctrl_items_binary(prefix)})
         return web.json_response(schema)

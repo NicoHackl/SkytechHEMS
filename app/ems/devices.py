@@ -11,6 +11,7 @@ Kein weiterer Code muss angefasst werden.
 
 import logging
 import math
+import time
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Tuple
 
@@ -26,7 +27,7 @@ class Device(ABC):
                  entity_prefix: Optional[str] = None,
                  label: Optional[str] = None):
         self.id            = id
-        self.label         = label or id   # human-readable display name, falls back to id
+        self.label         = label or id
         self.priority: int = 99
         self.eligible      = False
         self._allowed_modes  = allowed_modes
@@ -72,11 +73,11 @@ class Device(ABC):
     def consume_from_pool(self, remaining_w: float,
                           global_einschaltreserve_w: float) -> float:
         """Reserve / consume power from the prioritised pool. Returns updated remaining_w."""
-        return remaining_w  # default: pass through
+        return remaining_w
 
     def allocate(self, remaining_w: float) -> float:
         """Claim a slice of the remaining pool. Returns updated remaining_w."""
-        return remaining_w  # default: pass through
+        return remaining_w
 
     def calculate_ramp(self, current_deficit_w: float = 0.0) -> None:
         """Rate-limit the setpoint change. No-op for non-controllable devices."""
@@ -95,23 +96,32 @@ class Device(ABC):
 # =============================================================================
 
 class ControllableDevice(Device):
-    """Continuously variable setpoint device (e.g. Heizstab, Wallbox)."""
+    """Continuously variable setpoint device (e.g. Heizstab, Wallbox).
+
+    output_unit='watt':   HA helpers use _w suffix; all values in Watts.
+    output_unit='ampere': HA helpers use _a suffix for device-specific limits;
+                          values are converted W↔A using current phase count × voltage.
+                          Phase count is selected each cycle and written to
+                          input_number.ems_<prefix>_anzahl_phase.
+    """
 
     def __init__(self, id: str, allowed_modes: List[str],
                  entity_actual_w: str, entity_anforderung_w: str,
                  entity_prefix: Optional[str] = None,
                  label: Optional[str] = None,
                  output_unit: str = 'watt',
-                 phases: int = 1,
-                 voltage_entity: Optional[str] = None):
+                 allowed_phases: Optional[List[int]] = None,
+                 voltage_entity: Optional[str] = None,
+                 phase_switch_delay_s: float = 300.0):
         super().__init__(id, allowed_modes, entity_prefix, label)
-        self.entity_actual_w       = entity_actual_w
-        self.entity_anforderung_w  = entity_anforderung_w
-        self.output_unit           = output_unit if output_unit in ('watt', 'ampere') else 'watt'
-        self.phases                = max(1, int(phases))
-        self.voltage_entity        = voltage_entity  # optional HA sensor for phase voltage (V)
+        self.entity_actual_w      = entity_actual_w
+        self.entity_anforderung_w = entity_anforderung_w
+        self.output_unit          = output_unit if output_unit in ('watt', 'ampere') else 'watt'
+        self._allowed_phases      = sorted(set(allowed_phases or [1]))
+        self.voltage_entity       = voltage_entity
+        self.phase_switch_delay_s = float(phase_switch_delay_s)
 
-        # ---- Config params (refreshed from HA each cycle) ----
+        # ---- Config params (Watts; refreshed every cycle via _apply_raw_to_watt) ----
         self.min_technisch_w               = 0.0
         self.max_technisch_w               = 0.0
         self.geschuetzte_mindestleistung_w  = 0.0
@@ -121,19 +131,68 @@ class ControllableDevice(Device):
         self.max_anderung_pro_schritt_w    = 1000.0
         self.deadband_w                    = 0.0
 
-        # ---- Runtime state (read from HA each cycle) ----
-        # The setpoint entity stays in HA so external integrations (Modbus, etc.) can read it.
+        # ---- Raw values in native unit (A or W) read from HA; converted to W per cycle ----
+        self._raw_min        = 0.0
+        self._raw_max        = 0.0
+        self._raw_geschuetzt = 0.0
+        self._raw_max_change = 1000.0
+        self._raw_deadband   = 0.0
+
+        # ---- Runtime state ----
         self._actual_w              = 0.0
-        self._anforderung_current_w = 0.0  # always in Watts internally
-        self._voltage_v             = 230.0  # phase voltage; refreshed from HA each cycle
+        self._anforderung_current_w = 0.0  # always Watts internally
         self._anforderung_age_s     = 0.0
         self._schutz_w              = 0.0
+        self._voltage_v             = 230.0
+        self._global_puffer_w       = 0.0
+        self._current_phases        = self._allowed_phases[0]
+        self._ha_phases             = self._allowed_phases[0]  # phases last read from HA
+        self._last_phase_change_ts  = 0.0
 
         # ---- Per-cycle results ----
         self._alloc_w = 0.0
         self._new_w   = 0.0
 
-    # --- Exposed read-only state for controller logging ---
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _suf(self, base: str) -> str:
+        """Return HA helper suffix with correct unit: base_a (Ampere) or base_w (Watt)."""
+        return f"{base}_{'a' if self.output_unit == 'ampere' else 'w'}"
+
+    def _eff(self) -> float:
+        """Effective Watts-per-Ampere for current phase count and voltage."""
+        return self._current_phases * self._voltage_v if self.output_unit == 'ampere' else 1.0
+
+    def _apply_raw_to_watt(self) -> None:
+        """Convert raw native-unit values to Watts using _current_phases × _voltage_v.
+
+        Also recomputes _schutz_w so that consume_from_pool always uses a consistent value
+        even when called after a mid-cycle phase change via select_phases().
+        """
+        eff = self._eff()
+        if self.output_unit == 'ampere':
+            self.min_technisch_w              = self._raw_min        * eff
+            self.max_technisch_w              = self._raw_max        * eff
+            self.geschuetzte_mindestleistung_w = self._raw_geschuetzt * eff
+            self.max_anderung_pro_schritt_w   = self._raw_max_change * eff
+            self.deadband_w                   = self._raw_deadband   * eff
+        else:
+            self.min_technisch_w              = self._raw_min
+            self.max_technisch_w              = self._raw_max
+            self.geschuetzte_mindestleistung_w = self._raw_geschuetzt
+            self.max_anderung_pro_schritt_w   = self._raw_max_change
+            self.deadband_w                   = self._raw_deadband
+        self._schutz_w = min(
+            self.geschuetzte_mindestleistung_w + self.reserve_w + self._global_puffer_w,
+            self.max_technisch_w,
+        )
+
+    # ------------------------------------------------------------------
+    # Exposed read-only state for controller logging
+    # ------------------------------------------------------------------
+
     @property
     def anforderung_current_w(self) -> float:
         return self._anforderung_current_w
@@ -146,7 +205,9 @@ class ControllableDevice(Device):
     def alloc_w(self) -> float:
         return self._alloc_w
 
-    # --- Device interface ---
+    # ------------------------------------------------------------------
+    # Device interface
+    # ------------------------------------------------------------------
 
     @property
     def current_w(self) -> float:
@@ -159,44 +220,85 @@ class ControllableDevice(Device):
     def update_from_ha(self, st: StateProxy, now_ts: float,
                        global_puffer_w: float) -> None:
         pfx = self._entity_prefix
+        self._global_puffer_w = global_puffer_w
 
         def n(suffix: str, default: float = 0.0) -> float:
             return safe_float(st.get(f"input_number.ems_{pfx}_{suffix}"), default)
 
-        self.priority                      = int(n("prioritat", self.priority))
-        self.min_technisch_w               = n("min_technisch_w")
-        self.max_technisch_w               = n("max_technisch_w")
-        self.geschuetzte_mindestleistung_w  = n("geschutzte_mindestleistung_w")
-        self.reserve_w                     = n("reserve_w")
-        self.hoch_regelzeit_s              = n("hoch_regelzeit_s")
-        self.runter_regelzeit_s            = n("runter_regelzeit_s")
-        self.max_anderung_pro_schritt_w    = n("max_anderung_pro_schritt_w")
-        self.deadband_w                    = n("min_anderung_pro_schritt_w")
-
-        # Phase voltage: use sensor if available and plausible, else default 230 V
+        # Phase voltage (plausibility check 180–260 V, else 230 V fallback)
         if self.voltage_entity:
             v = safe_float(st.get(self.voltage_entity), 0.0)
             self._voltage_v = v if 180.0 < v < 260.0 else 230.0
         else:
             self._voltage_v = 230.0
 
+        # HA phase count written last cycle – used for correct anforderung read-back
+        if self.output_unit == 'ampere' and len(self._allowed_phases) > 1:
+            ha_ph = int(safe_float(
+                st.get(f"input_number.ems_{pfx}_anzahl_phase"), self._current_phases
+            ))
+            self._ha_phases = ha_ph if ha_ph in self._allowed_phases else self._current_phases
+        else:
+            self._ha_phases = self._current_phases
+
+        self.priority           = int(n("prioritat", self.priority))
+        self.reserve_w          = n("reserve_w")
+        self.hoch_regelzeit_s   = n("hoch_regelzeit_s")
+        self.runter_regelzeit_s = n("runter_regelzeit_s")
+
+        # Read raw values in native unit (_a or _w depending on output_unit)
+        self._raw_min        = n(self._suf("min_technisch"))
+        self._raw_max        = n(self._suf("max_technisch"))
+        self._raw_geschuetzt = n(self._suf("geschutzte_mindestleistung"))
+        self._raw_max_change = n(self._suf("max_anderung_pro_schritt"), 1000.0)
+        self._raw_deadband   = n(self._suf("min_anderung_pro_schritt"), 0.0)
+
+        # Convert to Watts using current phase count (may be updated by select_phases later)
+        self._apply_raw_to_watt()
+
         self._actual_w = max(safe_float(st.get(self.entity_actual_w)), 0.0)
 
-        # The setpoint entity holds Watts or Ampere depending on output_unit.
-        # Normalise to Watts for all internal calculations.
-        raw = safe_float(st.get(self.entity_anforderung_w))
+        # Read setpoint; convert from native unit to Watts using HA phase count for accuracy
+        raw_anf = safe_float(st.get(self.entity_anforderung_w))
         if self.output_unit == 'ampere':
-            self._anforderung_current_w = raw * self.phases * self._voltage_v
+            self._anforderung_current_w = raw_anf * self._ha_phases * self._voltage_v
         else:
-            self._anforderung_current_w = raw
+            self._anforderung_current_w = raw_anf
 
-        self._anforderung_age_s     = now_ts - parse_ts(
+        self._anforderung_age_s = now_ts - parse_ts(
             st.get(self.entity_anforderung_w + ".last_changed")
         )
-        self._schutz_w = min(
-            self.geschuetzte_mindestleistung_w + self.reserve_w + global_puffer_w,
-            self.max_technisch_w,
-        )
+
+    def select_phases(self, pool_w: float, now_ts: float) -> None:
+        """Select optimal phase count for this cycle.
+
+        Called by EMSController after pool calculation, before consume_from_pool.
+        Tries highest allowed phase count first; falls back to lower phases if pool
+        is insufficient to meet the minimum Ampere threshold.  Enforces a hysteresis
+        timer (phase_switch_delay_s) to prevent rapid oscillation.
+        """
+        if self.output_unit != 'ampere' or len(self._allowed_phases) == 1 or not self.eligible:
+            return
+
+        if (self._last_phase_change_ts > 0 and
+                now_ts - self._last_phase_change_ts < self.phase_switch_delay_s):
+            return  # hysteresis active
+
+        # Try highest phase count first (maximises PV yield)
+        selected = min(self._allowed_phases)  # safe fallback
+        for ph in sorted(self._allowed_phases, reverse=True):
+            eff = ph * self._voltage_v
+            if eff > 0 and self._raw_max > 0 and math.floor(pool_w / eff) >= self._raw_min:
+                selected = ph
+                break
+
+        if selected != self._current_phases:
+            log.info("EMS [%s] Phasenwechsel %d→%d  pool=%.0fW  U=%.1fV",
+                     self.id, self._current_phases, selected, pool_w, self._voltage_v)
+            self._current_phases = selected
+            self._last_phase_change_ts = now_ts
+            self._apply_raw_to_watt()  # recompute Watt limits for new phase count
+            self._anforderung_age_s = 0.0  # reset ramp timer after phase switch
 
     def consume_from_pool(self, remaining_w: float, _: float) -> float:
         """Reserve schutz_w so binary devices cannot consume it."""
@@ -230,7 +332,7 @@ class ControllableDevice(Device):
             )
         elif ideal_w < current_w:
             if current_deficit_w > 0:
-                new_w = ideal_w  # immediate ramp-down on deficit – no timing / step limit
+                new_w = ideal_w  # immediate ramp-down on deficit
             else:
                 new_w = (
                     max(ideal_w, current_w - self.max_anderung_pro_schritt_w)
@@ -249,21 +351,28 @@ class ControllableDevice(Device):
         is_on_off = (self._new_w == 0) != (self._anforderung_current_w == 0)
         write     = is_on_off or self.deadband_w <= 0 or delta >= self.deadband_w
 
+        ops: List[Tuple[str, str, Dict]] = []
+
+        # Write phase count only when it changed (keeps HA write count low)
+        if self.output_unit == 'ampere' and self._current_phases != self._ha_phases:
+            ops.append(("input_number", "set_value", {
+                "entity_id": f"input_number.ems_{self._entity_prefix}_anzahl_phase",
+                "value":     float(self._current_phases),
+            }))
+
         if write:
-            if self.output_unit == 'ampere':
-                eff = self.phases * self._voltage_v
-                value = math.floor(self._new_w / eff) if eff > 0 else 0
-            else:
-                value = self._new_w
-            return [("input_number", "set_value", {
+            eff   = self._eff()
+            value = math.floor(self._new_w / eff) if self.output_unit == 'ampere' and eff > 0 else self._new_w
+            ops.append(("input_number", "set_value", {
                 "entity_id": self.entity_anforderung_w,
                 "value":     value,
-            })]
-        self._new_w = self._anforderung_current_w  # deadband active – no write
-        return []
+            }))
+        else:
+            self._new_w = self._anforderung_current_w  # deadband active – no write
+
+        return ops
 
     def to_status_dict(self) -> Dict:
-        eff = self.phases * self._voltage_v
         d: Dict = {
             "type":                  "controllable",
             "id":                    self.id,
@@ -276,11 +385,16 @@ class ControllableDevice(Device):
             "new_w":                 self._new_w,
             "schutz_w":              self._schutz_w,
             "output_unit":           self.output_unit,
-            "phases":                self.phases,
-            "voltage_v":             round(self._voltage_v, 1),
         }
         if self.output_unit == 'ampere':
-            d["new_a"] = math.floor(self._new_w / eff) if eff > 0 else 0
+            eff = self._eff()
+            d["current_phases"]  = self._current_phases
+            d["allowed_phases"]  = self._allowed_phases
+            d["voltage_v"]       = round(self._voltage_v, 1)
+            d["new_a"]           = math.floor(self._new_w / eff) if eff > 0 else 0
+            if len(self._allowed_phases) > 1 and self._last_phase_change_ts > 0:
+                remaining = self.phase_switch_delay_s - (time.time() - self._last_phase_change_ts)
+                d["phase_lock_remaining_s"] = max(0.0, round(remaining))
         return d
 
 
@@ -298,8 +412,6 @@ class BinaryDevice(Device):
         super().__init__(id, allowed_modes, entity_prefix, label)
         self.entity_switch         = entity_switch
         self.entity_anforderung_an = entity_anforderung_an
-        # NOTE: entity_off_since removed – the two input_datetime HA helpers are replaced
-        #       by the internal _off_since_ts variable below.
 
         # ---- Config params (refreshed from HA each cycle) ----
         self.power_w       = 0.0
@@ -312,8 +424,8 @@ class BinaryDevice(Device):
         self._actual_on    = False
         self._switch_age_s = 0.0
 
-        # ---- Internal persistent state (survives across cycles, replaces input_datetime) ----
-        self._off_since_ts: float = 0.0  # 0.0 = timer not running
+        # ---- Internal persistent state (survives across cycles) ----
+        self._off_since_ts: float = 0.0
 
         # ---- Per-cycle computation ----
         self._desired_on   = False
@@ -411,7 +523,6 @@ class BinaryDevice(Device):
                 self._off_since_ts = 0.0
                 return
 
-            # Start or continue the off_delay timer
             if self._off_since_ts <= 0:
                 self._off_since_ts = now_ts
 
