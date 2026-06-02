@@ -13,7 +13,7 @@ from pathlib import Path
 from aiohttp import web
 
 from ha_client import HAClient
-from ems_logic import StateProxy, run_ems
+from ems import EMSController, StateProxy
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -54,7 +54,8 @@ class HEMSApp:
         log_level = cfg.get("log_level", "info").upper()
         logging.getLogger().setLevel(getattr(logging, log_level, logging.INFO))
 
-        self.ha = HAClient()
+        self.ha  = HAClient()
+        self.ems = EMSController()
 
         # Shared state – written by scheduler, read by web handler
         self._last_status: dict = {}
@@ -70,7 +71,7 @@ class HEMSApp:
         try:
             states = await self.ha.fetch_all_states()
             st     = StateProxy(states)
-            result = run_ems(st)
+            result = self.ems.run_cycle(st)
             await self.ha.execute_write_ops(result["write_ops"])
             if self.post_cycle_script:
                 await self.ha.call_service("script", "turn_on",
