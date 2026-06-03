@@ -377,12 +377,13 @@ class ControllableDevice(Device):
         return remaining_w - self._schutz_w if self.eligible else remaining_w
 
     def allocate_minimum(self, remaining_w: float) -> float:
-        """Pass 1: claim min_technisch_w so lower-priority devices can only start
-        after every higher-priority device has its technical minimum guaranteed."""
+        """Pass 1: claim the effective minimum so lower-priority devices can only
+        start after every higher-priority device has its minimum guaranteed.
+        Effective minimum = max(min_technisch_w, geschuetzte_mindestleistung_w)."""
         if not self.eligible or remaining_w <= 0:
             self._alloc_w = 0.0
             return remaining_w
-        min_w = self.min_technisch_w
+        min_w = max(self.min_technisch_w, self.geschuetzte_mindestleistung_w)
         if min_w <= 0:
             # No minimum defined – defer entirely to surplus pass
             self._alloc_w = 0.0
@@ -398,7 +399,8 @@ class ControllableDevice(Device):
         priority order (highest priority first) up to max_technisch_w."""
         if not self.eligible or remaining_w <= 0:
             return remaining_w
-        if self.min_technisch_w > 0 and self._alloc_w == 0:
+        eff_min = max(self.min_technisch_w, self.geschuetzte_mindestleistung_w)
+        if eff_min > 0 and self._alloc_w == 0:
             # Did not receive minimum in pass 1 → device stays off
             return remaining_w
         additional = min(remaining_w, self.max_technisch_w - self._alloc_w)
