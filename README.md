@@ -219,6 +219,7 @@ Für stufenlos regelbare Verbraucher (Heizstab, Wallbox). Zusätzlich zu den gem
 | `runter_regelzeit_s`                       | s       | Mindestabstand zwischen Runter-Regelschritten (bei Defizit wird sofort heruntergeregelt).         |
 | `max_anderung_pro_schritt_a`               | A       | Maximale Änderung der Stromstärke in einem Zyklus.                                                |
 | `min_anderung_pro_schritt_a`               | A       | Deadband – kleinere Änderungen werden nicht geschrieben.                                          |
+| `min_umschaltzeit_s` *(optional)*          | s       | Mindestwartezeit in Sekunden zwischen zwei Phasenwechseln (Hysterese). Überschreibt den Wert aus `phase_switch_delay_s` in der App-Config. Ist die Entität nicht vorhanden oder `unavailable`, gilt der Config-Wert; fehlt dieser ebenfalls, wird 30 s verwendet. Nur bei `phases="1,3"` relevant. |
 | `anforderung_leistung_a` **(Ausgabe)**     | A       | Vom EMS geschriebener Sollwert in ganzen Ampere (abgerundet).                                       |
 | `anzahl_phase` **(Ausgabe, `phases="1,3"`)** | 1 oder 3 | Vom EMS gewählte Phasenanzahl. Nur bei `phases="1,3"` vorhanden; wird jedes Mal aktualisiert wenn sich die Phasenauswahl ändert. |
 
@@ -256,6 +257,7 @@ input_number.ems_wallbox_hoch_regelzeit_s
 input_number.ems_wallbox_runter_regelzeit_s
 input_number.ems_wallbox_max_anderung_pro_schritt_a
 input_number.ems_wallbox_min_anderung_pro_schritt_a
+input_number.ems_wallbox_min_umschaltzeit_s          ← (optional) Phasenwechsel-Hysterese in s
 input_number.ems_wallbox_anforderung_leistung_a      ← Sollwert-Ausgabe (Ampere, z. B. 10)
 input_number.ems_wallbox_anzahl_phase                ← Phasenwahl-Ausgabe (1 oder 3)
 sensor.wallbox_1_istleistung                         ← Ist-Leistung (extern, in Watt)
