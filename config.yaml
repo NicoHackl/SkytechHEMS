@@ -16,7 +16,7 @@ description: >-
   output_unit (controllable: watt oder ampere, Standard: watt),
   phases (controllable + ampere: 1 oder 3, Standard: 1),
   voltage_entity (optional, HA-Sensor für Phasenspannung, Fallback 230 V).
-version: "1.0.15"
+version: "1.0.16"
 slug: "skytech_hems"
 init: false
 arch:
