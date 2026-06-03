@@ -60,11 +60,12 @@ def _build_devices(device_configs: List[dict]) -> List[Device]:
                     allowed_phases = [1]
                 phase_switch_delay_s = float(cfg.get("phase_switch_delay_s") or 300)
                 voltage_entity       = (cfg.get("voltage_entity") or "").strip() or None
+                anf_suf              = 'a' if output_unit == 'ampere' else 'w'
                 devices.append(ControllableDevice(
                     id=name,
                     allowed_modes=modes,
                     entity_actual_w=actual_w,
-                    entity_anforderung_w=f"input_number.ems_{prefix}_anforderung_leistung_w",
+                    entity_anforderung_w=f"input_number.ems_{prefix}_anforderung_leistung_{anf_suf}",
                     entity_prefix=prefix,
                     label=label,
                     output_unit=output_unit,

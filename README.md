@@ -205,7 +205,7 @@ Für stufenlos regelbare Verbraucher (Heizstab, Wallbox). Zusätzlich zu den gem
 | `runter_regelzeit_s`                       | s       | Mindestabstand zwischen Runter-Regelschritten (bei Defizit wird sofort heruntergeregelt).         |
 | `max_anderung_pro_schritt_w`               | W       | Maximale Änderung des Sollwerts in einem Zyklus.                                                  |
 | `min_anderung_pro_schritt_w`               | W       | Deadband – kleinere Änderungen werden nicht geschrieben.                                          |
-| `anforderung_leistung_w` **(Ausgabe)**     | W       | Vom EMS geschriebener Sollwert in Watt.                                                           |
+| `anforderung_leistung_w` **(Ausgabe)**     | W       | Vom EMS geschriebener Sollwert in Watt. Entität endet auf `_w` (Watt-Modus).                      |
 
 **`output_unit=ampere`** – Grenzwert-Entitäten verwenden `_a`-Suffix, Werte in Ampere:
 
@@ -219,7 +219,7 @@ Für stufenlos regelbare Verbraucher (Heizstab, Wallbox). Zusätzlich zu den gem
 | `runter_regelzeit_s`                       | s       | Mindestabstand zwischen Runter-Regelschritten (bei Defizit wird sofort heruntergeregelt).         |
 | `max_anderung_pro_schritt_a`               | A       | Maximale Änderung der Stromstärke in einem Zyklus.                                                |
 | `min_anderung_pro_schritt_a`               | A       | Deadband – kleinere Änderungen werden nicht geschrieben.                                          |
-| `anforderung_leistung_w` **(Ausgabe)**     | A       | Vom EMS geschriebener Sollwert in ganzen Ampere (abgerundet). Entitätsname endet weiterhin auf `_w`. |
+| `anforderung_leistung_a` **(Ausgabe)**     | A       | Vom EMS geschriebener Sollwert in ganzen Ampere (abgerundet).                                       |
 | `anzahl_phase` **(Ausgabe, `phases="1,3"`)** | 1 oder 3 | Vom EMS gewählte Phasenanzahl. Nur bei `phases="1,3"` vorhanden; wird jedes Mal aktualisiert wenn sich die Phasenauswahl ändert. |
 
 Außerdem benötigt jedes regelbare Gerät einen externen Ist-Leistungs-Sensor (`sensor.…`), der im Config-Feld `actual_power_entity` angegeben wird.
@@ -256,7 +256,7 @@ input_number.ems_wallbox_hoch_regelzeit_s
 input_number.ems_wallbox_runter_regelzeit_s
 input_number.ems_wallbox_max_anderung_pro_schritt_a
 input_number.ems_wallbox_min_anderung_pro_schritt_a
-input_number.ems_wallbox_anforderung_leistung_w      ← Sollwert-Ausgabe (Ampere, z. B. 10)
+input_number.ems_wallbox_anforderung_leistung_a      ← Sollwert-Ausgabe (Ampere, z. B. 10)
 input_number.ems_wallbox_anzahl_phase                ← Phasenwahl-Ausgabe (1 oder 3)
 sensor.wallbox_1_istleistung                         ← Ist-Leistung (extern, in Watt)
 ```
