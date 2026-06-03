@@ -51,11 +51,14 @@ configuration:
       Phasenwechseln. Verhindert schnelles Hin- und Herschalten bei
       Leistungsschwankungen. Empfehlung: 300 s (5 Minuten).
 
-      • voltage_entity (optional, nur controllable + ampere) – HA-Sensor
-      für die aktuelle Phasenspannung in Volt (z. B.
-      sensor.wallbox_spannung_l1). Plausibilitätsbereich 180–260 V;
-      außerhalb oder bei fehlendem Wert wird automatisch 230 V verwendet.
-      Leer lassen wenn kein Sensor vorhanden.
+      • voltage_l1_entity / voltage_l2_entity / voltage_l3_entity (optional,
+      nur controllable + ampere) – HA-Sensoren für die aktuellen
+      Phasenspannungen L1-N, L2-N und L3-N in Volt (z. B.
+      sensor.wallbox_spannung_l1). Plausibilitätsbereich 180–260 V je Phase;
+      außerhalb oder bei fehlendem Sensor wird automatisch 230 V verwendet.
+      Bei 1-phasigem Betrieb wird nur L1 herangezogen, bei 3-phasigem alle
+      drei (P = I × (U_L1 + U_L2 + U_L3)). Leer lassen wenn kein Sensor
+      vorhanden.
   interval_s:
     name: Regelintervall (Sekunden)
     description: >-

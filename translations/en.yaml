@@ -51,11 +51,14 @@ configuration:
       switches. Prevents rapid oscillation during power fluctuations.
       Recommendation: 300 s (5 minutes).
 
-      • voltage_entity (optional, controllable + ampere only) – HA sensor
-      for the current phase voltage in Volts (e.g.
-      sensor.wallbox_voltage_l1). Plausibility range 180–260 V; outside
-      this range or when unavailable, 230 V is used as fallback. Leave
-      empty if no voltage sensor is available.
+      • voltage_l1_entity / voltage_l2_entity / voltage_l3_entity (optional,
+      controllable + ampere only) – HA sensors for the current phase
+      voltages L1-N, L2-N and L3-N in Volts (e.g.
+      sensor.wallbox_voltage_l1). Plausibility range 180–260 V per phase;
+      outside this range or when unavailable, 230 V is used as fallback.
+      For single-phase operation only L1 is used; for three-phase all three
+      are used (P = I × (U_L1 + U_L2 + U_L3)). Leave empty if no voltage
+      sensors are available.
   interval_s:
     name: Control interval (seconds)
     description: >-
