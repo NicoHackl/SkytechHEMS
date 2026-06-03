@@ -111,14 +111,18 @@ class ControllableDevice(Device):
                  label: Optional[str] = None,
                  output_unit: str = 'watt',
                  allowed_phases: Optional[List[int]] = None,
-                 voltage_entity: Optional[str] = None,
+                 voltage_l1_entity: Optional[str] = None,
+                 voltage_l2_entity: Optional[str] = None,
+                 voltage_l3_entity: Optional[str] = None,
                  phase_switch_delay_s: float = 300.0):
         super().__init__(id, allowed_modes, entity_prefix, label)
         self.entity_actual_w      = entity_actual_w
         self.entity_anforderung_w = entity_anforderung_w
         self.output_unit          = output_unit if output_unit in ('watt', 'ampere') else 'watt'
         self._allowed_phases               = sorted(set(allowed_phases or [1]))
-        self.voltage_entity                = voltage_entity
+        self.voltage_l1_entity             = voltage_l1_entity
+        self.voltage_l2_entity             = voltage_l2_entity
+        self.voltage_l3_entity             = voltage_l3_entity
         # Config fallback for phase switch delay; HA entity overrides each cycle
         self._config_phase_switch_delay_s  = float(phase_switch_delay_s) if phase_switch_delay_s else 0.0
         self.phase_switch_delay_s          = self._config_phase_switch_delay_s or 30.0
@@ -145,7 +149,9 @@ class ControllableDevice(Device):
         self._anforderung_current_w = 0.0  # always Watts internally
         self._anforderung_age_s     = 0.0
         self._schutz_w              = 0.0
-        self._voltage_v             = 230.0
+        self._voltage_l1            = 230.0
+        self._voltage_l2            = 230.0
+        self._voltage_l3            = 230.0
         self._global_puffer_w       = 0.0
         self._current_phases        = self._allowed_phases[0]
         self._ha_phases             = self._allowed_phases[0]  # phases last read from HA
@@ -163,9 +169,21 @@ class ControllableDevice(Device):
         """Return HA helper suffix with correct unit: base_a (Ampere) or base_w (Watt)."""
         return f"{base}_{'a' if self.output_unit == 'ampere' else 'w'}"
 
+    def _eff_for(self, phases: int) -> float:
+        """Watts per Ampere for a given phase count using per-phase voltages.
+
+        1-phase: P = I × V_L1
+        3-phase: P = I × (V_L1 + V_L2 + V_L3)
+        """
+        if self.output_unit != 'ampere':
+            return 1.0
+        if phases == 1:
+            return self._voltage_l1
+        return self._voltage_l1 + self._voltage_l2 + self._voltage_l3
+
     def _eff(self) -> float:
-        """Effective Watts-per-Ampere for current phase count and voltage."""
-        return self._current_phases * self._voltage_v if self.output_unit == 'ampere' else 1.0
+        """Watts per Ampere for the currently selected phase count."""
+        return self._eff_for(self._current_phases)
 
     def _apply_raw_to_watt(self) -> None:
         """Convert raw native-unit values to Watts using _current_phases × _voltage_v.
@@ -227,12 +245,16 @@ class ControllableDevice(Device):
         def n(suffix: str, default: float = 0.0) -> float:
             return safe_float(st.get(f"input_number.ems_{pfx}_{suffix}"), default)
 
-        # Phase voltage (plausibility check 180–260 V, else 230 V fallback)
-        if self.voltage_entity:
-            v = safe_float(st.get(self.voltage_entity), 0.0)
-            self._voltage_v = v if 180.0 < v < 260.0 else 230.0
-        else:
-            self._voltage_v = 230.0
+        # Phase voltages – plausibility check 180–260 V each, fallback 230 V
+        def _read_v(entity: Optional[str]) -> float:
+            if not entity:
+                return 230.0
+            v = safe_float(st.get(entity), 0.0)
+            return v if 180.0 < v < 260.0 else 230.0
+
+        self._voltage_l1 = _read_v(self.voltage_l1_entity)
+        self._voltage_l2 = _read_v(self.voltage_l2_entity)
+        self._voltage_l3 = _read_v(self.voltage_l3_entity)
 
         # Phase switch delay: HA entity > config value > 30 s hard default
         if self.output_unit == 'ampere' and len(self._allowed_phases) > 1:
@@ -272,7 +294,7 @@ class ControllableDevice(Device):
         # Read setpoint; convert from native unit to Watts using HA phase count for accuracy
         raw_anf = safe_float(st.get(self.entity_anforderung_w))
         if self.output_unit == 'ampere':
-            self._anforderung_current_w = raw_anf * self._ha_phases * self._voltage_v
+            self._anforderung_current_w = raw_anf * self._eff_for(self._ha_phases)
         else:
             self._anforderung_current_w = raw_anf
 
@@ -305,14 +327,14 @@ class ControllableDevice(Device):
             # Greedy: highest phase count the pool can support at minimum threshold
             selected = min(self._allowed_phases)  # fallback to lowest
             for ph in sorted(self._allowed_phases, reverse=True):
-                eff = ph * self._voltage_v
+                eff = self._eff_for(ph)
                 if eff > 0 and math.floor(pool_w / eff) >= self._raw_min:
                     selected = ph
                     break
             reason = "Ladestart"
         else:
             # Reluctant: only switch when forced
-            eff_cur = self._current_phases * self._voltage_v
+            eff_cur = self._eff_for(self._current_phases)
             can_sustain = eff_cur > 0 and math.floor(pool_w / eff_cur) >= self._raw_min
 
             if can_sustain:
@@ -322,7 +344,7 @@ class ControllableDevice(Device):
                         and math.floor(pool_w / eff_cur) >= self._raw_max):
                     selected = self._current_phases  # stay unless a higher phase works
                     for ph in sorted(higher):
-                        eff = ph * self._voltage_v
+                        eff = self._eff_for(ph)
                         if eff > 0 and math.floor(pool_w / eff) >= self._raw_min:
                             selected = ph
                             break
@@ -335,15 +357,16 @@ class ControllableDevice(Device):
                 lower = [ph for ph in self._allowed_phases if ph < self._current_phases]
                 selected = min(self._allowed_phases)  # fallback
                 for ph in sorted(lower):
-                    eff = ph * self._voltage_v
+                    eff = self._eff_for(ph)
                     if eff > 0 and math.floor(pool_w / eff) >= self._raw_min:
                         selected = ph
                         break
                 reason = "Runterschalten (min unterschritten)"
 
         if selected != self._current_phases:
-            log.info("EMS [%s] Phasenwechsel %d→%d  pool=%.0fW  U=%.1fV  (%s)",
-                     self.id, self._current_phases, selected, pool_w, self._voltage_v, reason)
+            log.info("EMS [%s] Phasenwechsel %d→%d  pool=%.0fW  L1=%.1fV L2=%.1fV L3=%.1fV  (%s)",
+                     self.id, self._current_phases, selected, pool_w,
+                     self._voltage_l1, self._voltage_l2, self._voltage_l3, reason)
             self._current_phases = selected
             self._last_phase_change_ts = now_ts
             self._apply_raw_to_watt()
@@ -442,7 +465,9 @@ class ControllableDevice(Device):
             eff = self._eff()
             d["current_phases"]  = self._current_phases
             d["allowed_phases"]  = self._allowed_phases
-            d["voltage_v"]       = round(self._voltage_v, 1)
+            d["voltage_l1"]      = round(self._voltage_l1, 1)
+            d["voltage_l2"]      = round(self._voltage_l2, 1)
+            d["voltage_l3"]      = round(self._voltage_l3, 1)
             d["new_a"]           = math.floor(self._new_w / eff) if eff > 0 else 0
             if len(self._allowed_phases) > 1 and self._last_phase_change_ts > 0:
                 remaining = self.phase_switch_delay_s - (time.time() - self._last_phase_change_ts)

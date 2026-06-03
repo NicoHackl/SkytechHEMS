@@ -103,7 +103,9 @@ Die `devices`-Liste definiert alle vom EMS verwalteten Verbraucher. Das Add-on b
 | `output_unit`           | nein (Standard: `watt`, nur `controllable`) | `watt` schreibt Watt in die Anforderungs-Entität; Helfer-Entitäten verwenden `_w`-Suffix. `ampere` konvertiert den Sollwert in ganze Ampere (immer abgerundet); Helfer-Entitäten verwenden `_a`-Suffix. Intern rechnet das EMS immer in Watt. |
 | `phases`                | nein (Standard: `"1"`, nur `controllable` + `ampere`) | Kommagetrennte Phasenkonfiguration: `"1"` (einphasig), `"3"` (dreiphasig) oder `"1,3"` (automatische Phasenumschaltung). Bei `"1,3"` wählt das EMS die höchste mögliche Phasenanzahl, für die `floor(pool ÷ (phases × U)) ≥ min_technisch_a` gilt. Umrechnungsformel: `I = floor(P / (phases × U_phase))`. |
 | `phase_switch_delay_s`  | nein (Standard: `300`, nur `controllable` + `ampere` + `phases="1,3"`) | Hysterese-Sperrzeit in Sekunden zwischen zwei Phasenwechseln. Verhindert Oszillation bei Leistungsschwankungen. Empfehlung: 300 s. |
-| `voltage_entity`        | nein (nur `controllable` + `ampere`) | Optionaler HA-Sensor für die aktuelle Phasenspannung in Volt. Plausibilitätsbereich 180 – 260 V; außerhalb dieses Bereichs oder bei fehlendem Wert wird automatisch 230 V als Fallback verwendet. |
+| `voltage_l1_entity`     | nein (nur `controllable` + `ampere`) | Optionaler HA-Sensor für die Phasenspannung L1-N in Volt (z. B. `sensor.wallbox_spannung_l1`). Plausibilitätsbereich 180 – 260 V; außerhalb oder bei fehlendem Wert wird 230 V verwendet. Bei 1-phasigem Betrieb wird ausschließlich dieser Sensor herangezogen. |
+| `voltage_l2_entity`     | nein (nur `controllable` + `ampere`) | Optionaler HA-Sensor für die Phasenspannung L2-N. Fallback 230 V. Nur bei 3-phasigem Betrieb relevant. |
+| `voltage_l3_entity`     | nein (nur `controllable` + `ampere`) | Optionaler HA-Sensor für die Phasenspannung L3-N. Fallback 230 V. Nur bei 3-phasigem Betrieb relevant. |
 
 **Beispiel-Konfiguration:**
 
@@ -124,7 +126,9 @@ devices:
     output_unit: "ampere"
     phases: "1,3"               # automatische Phasenumschaltung
     phase_switch_delay_s: 300   # 5 min Hysterese zwischen Phasenwechseln
-    voltage_entity: ""          # leer → Fallback 230 V
+    voltage_l1_entity: ""       # leer → Fallback 230 V
+    voltage_l2_entity: ""
+    voltage_l3_entity: ""
 
   - name: heizlufter_1
     label: "Heizlüfter 1"
@@ -261,6 +265,9 @@ input_number.ems_wallbox_min_umschaltzeit_s          ← (optional) Phasenwechse
 input_number.ems_wallbox_anforderung_leistung_a      ← Sollwert-Ausgabe (Ampere, z. B. 10)
 input_number.ems_wallbox_anzahl_phase                ← Phasenwahl-Ausgabe (1 oder 3)
 sensor.wallbox_1_istleistung                         ← Ist-Leistung (extern, in Watt)
+sensor.wallbox_spannung_l1                           ← (optional) Spannung L1-N
+sensor.wallbox_spannung_l2                           ← (optional) Spannung L2-N
+sensor.wallbox_spannung_l3                           ← (optional) Spannung L3-N
 ```
 
 ### Binäre Geräte (`BinaryDevice`)

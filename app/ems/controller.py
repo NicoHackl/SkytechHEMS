@@ -8,7 +8,7 @@ needing HA helper entities.
 
 import datetime
 import logging
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from .state import StateProxy, safe_float
 from .devices import Device, ControllableDevice, BinaryDevice
@@ -59,7 +59,8 @@ def _build_devices(device_configs: List[dict]) -> List[Device]:
                 if not allowed_phases:
                     allowed_phases = [1]
                 phase_switch_delay_s = float(cfg.get("phase_switch_delay_s") or 300)
-                voltage_entity       = (cfg.get("voltage_entity") or "").strip() or None
+                def _ve(key: str) -> Optional[str]:
+                    return (cfg.get(key) or "").strip() or None
                 anf_suf              = 'a' if output_unit == 'ampere' else 'w'
                 devices.append(ControllableDevice(
                     id=name,
@@ -70,7 +71,9 @@ def _build_devices(device_configs: List[dict]) -> List[Device]:
                     label=label,
                     output_unit=output_unit,
                     allowed_phases=allowed_phases,
-                    voltage_entity=voltage_entity,
+                    voltage_l1_entity=_ve("voltage_l1_entity"),
+                    voltage_l2_entity=_ve("voltage_l2_entity"),
+                    voltage_l3_entity=_ve("voltage_l3_entity"),
                     phase_switch_delay_s=phase_switch_delay_s,
                 ))
 

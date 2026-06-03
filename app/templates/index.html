@@ -286,9 +286,12 @@
     const changed = Math.round(d.new_w) !== Math.round(d.anforderung_current_w);
     const isAmpere = d.output_unit === 'ampere';
     const ph = isAmpere ? (d.current_phases || 1) : 1;
-    const uv = isAmpere ? (d.voltage_v || 230) : 230;
+    const vl1 = d.voltage_l1 || 230;
+    const vl2 = d.voltage_l2 || 230;
+    const vl3 = d.voltage_l3 || 230;
+    const eff = isAmpere ? (ph === 1 ? vl1 : vl1 + vl2 + vl3) : 1;
     // Current setpoint converted to A for display (anforderung_current_w is always in W)
-    const anfA = isAmpere ? Math.floor(d.anforderung_current_w / (ph * uv)) : null;
+    const anfA = isAmpere ? Math.floor(d.anforderung_current_w / eff) : null;
     const anfDisplay = isAmpere
       ? (anfA + ' A  (' + fmt(d.anforderung_current_w) + ' W)')
       : fmt(d.anforderung_current_w) + ' W';
@@ -305,7 +308,7 @@
       ${row('Anforderung',  anfDisplay)}
       ${row('Ziel (alloc)', fmt(d.alloc_w) + ' W')}
       ${row('Schutz',       fmt(d.schutz_w) + ' W', 'dim')}
-      ${isAmpere ? row('Spannung', ph + '× ' + uv + ' V', 'dim') : ''}
+      ${isAmpere ? row('Spannung', ph === 1 ? `L1: ${vl1} V` : `L1/L2/L3: ${vl1}/${vl2}/${vl3} V`, 'dim') : ''}
       ${multiPhase ? row('Phasen', ph + '-phasig' + phaseLock, phaseLock ? 'dim' : '') : ''}
       ${row('Neu → HA',     neuDisplay, changed ? 'changed' : '')}
     </div>`;
