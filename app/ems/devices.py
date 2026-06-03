@@ -117,9 +117,11 @@ class ControllableDevice(Device):
         self.entity_actual_w      = entity_actual_w
         self.entity_anforderung_w = entity_anforderung_w
         self.output_unit          = output_unit if output_unit in ('watt', 'ampere') else 'watt'
-        self._allowed_phases      = sorted(set(allowed_phases or [1]))
-        self.voltage_entity       = voltage_entity
-        self.phase_switch_delay_s = float(phase_switch_delay_s)
+        self._allowed_phases               = sorted(set(allowed_phases or [1]))
+        self.voltage_entity                = voltage_entity
+        # Config fallback for phase switch delay; HA entity overrides each cycle
+        self._config_phase_switch_delay_s  = float(phase_switch_delay_s) if phase_switch_delay_s else 0.0
+        self.phase_switch_delay_s          = self._config_phase_switch_delay_s or 30.0
 
         # ---- Config params (Watts; refreshed every cycle via _apply_raw_to_watt) ----
         self.min_technisch_w               = 0.0
@@ -231,6 +233,15 @@ class ControllableDevice(Device):
             self._voltage_v = v if 180.0 < v < 260.0 else 230.0
         else:
             self._voltage_v = 230.0
+
+        # Phase switch delay: HA entity > config value > 30 s hard default
+        if self.output_unit == 'ampere' and len(self._allowed_phases) > 1:
+            raw_delay = st.get(f"input_number.ems_{pfx}_min_umschaltzeit_s")
+            if raw_delay not in (None, "unavailable", "unknown"):
+                ha_delay = safe_float(raw_delay, 0.0)
+                self.phase_switch_delay_s = ha_delay if ha_delay > 0 else (self._config_phase_switch_delay_s or 30.0)
+            else:
+                self.phase_switch_delay_s = self._config_phase_switch_delay_s or 30.0
 
         # HA phase count written last cycle – used for correct anforderung read-back
         if self.output_unit == 'ampere' and len(self._allowed_phases) > 1:

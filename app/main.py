@@ -55,7 +55,7 @@ _GLOBAL_CTRL_ITEMS = [
 
 def _ctrl_items_controllable(p: str, output_unit: str = 'watt') -> list:
     suf = 'a' if output_unit == 'ampere' else 'w'
-    return [
+    items = [
         {"entity": f"input_boolean.ems_{p}_freigabe",                        "label": "Freigabe"},
         {"entity": f"input_select.ems_{p}_modus",                            "label": "Modus"},
         {"entity": f"input_number.ems_{p}_prioritat",                        "label": "Priorität"},
@@ -68,6 +68,9 @@ def _ctrl_items_controllable(p: str, output_unit: str = 'watt') -> list:
         {"entity": f"input_number.ems_{p}_max_anderung_pro_schritt_{suf}",   "label": "Max. Änderung/Schritt"},
         {"entity": f"input_number.ems_{p}_min_anderung_pro_schritt_{suf}",   "label": "Deadband"},
     ]
+    if output_unit == 'ampere':
+        items.append({"entity": f"input_number.ems_{p}_min_umschaltzeit_s",  "label": "Phasenwechsel-Mindestzeit"})
+    return items
 
 
 def _ctrl_items_binary(p: str) -> list:
