@@ -398,7 +398,10 @@ class ControllableDevice(Device):
     def get_write_ops(self) -> List[Tuple[str, str, Dict]]:
         delta     = abs(self._new_w - self._anforderung_current_w)
         is_on_off = (self._new_w == 0) != (self._anforderung_current_w == 0)
-        write     = is_on_off or self.deadband_w <= 0 or delta >= self.deadband_w
+        # Only write when value actually changes – writing the same value every cycle
+        # would reset last_changed and prevent anforderung_age_s from aging correctly,
+        # which breaks hoch_regelzeit_s / runter_regelzeit_s ramp timing.
+        write = is_on_off or (delta > 0 and (self.deadband_w <= 0 or delta >= self.deadband_w))
 
         ops: List[Tuple[str, str, Dict]] = []
 
