@@ -376,16 +376,36 @@ class ControllableDevice(Device):
         """Reserve schutz_w so binary devices cannot consume it."""
         return remaining_w - self._schutz_w if self.eligible else remaining_w
 
-    def allocate(self, remaining_w: float) -> float:
-        """Claim up to max_technisch_w from the remaining pool."""
+    def allocate_minimum(self, remaining_w: float) -> float:
+        """Pass 1: claim min_technisch_w so lower-priority devices can only start
+        after every higher-priority device has its technical minimum guaranteed."""
         if not self.eligible or remaining_w <= 0:
             self._alloc_w = 0.0
             return remaining_w
-        if self.min_technisch_w == 0 or remaining_w >= self.min_technisch_w:
-            self._alloc_w = min(remaining_w, self.max_technisch_w)
-        else:
+        min_w = self.min_technisch_w
+        if min_w <= 0:
+            # No minimum defined – defer entirely to surplus pass
             self._alloc_w = 0.0
-        return remaining_w - self._alloc_w
+            return remaining_w
+        if remaining_w >= min_w:
+            self._alloc_w = min_w
+            return remaining_w - min_w
+        self._alloc_w = 0.0
+        return remaining_w
+
+    def allocate_surplus(self, remaining_w: float) -> float:
+        """Pass 2: after all devices have their minimum, distribute surplus in
+        priority order (highest priority first) up to max_technisch_w."""
+        if not self.eligible or remaining_w <= 0:
+            return remaining_w
+        if self.min_technisch_w > 0 and self._alloc_w == 0:
+            # Did not receive minimum in pass 1 → device stays off
+            return remaining_w
+        additional = min(remaining_w, self.max_technisch_w - self._alloc_w)
+        if additional > 0:
+            self._alloc_w += additional
+            return remaining_w - additional
+        return remaining_w
 
     def calculate_ramp(self, current_deficit_w: float = 0.0) -> None:
         """Apply ramp-rate limiting; result stored in _new_w."""
