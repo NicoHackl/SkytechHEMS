@@ -281,35 +281,73 @@ class ControllableDevice(Device):
         )
 
     def select_phases(self, pool_w: float, now_ts: float) -> None:
-        """Select optimal phase count for this cycle.
+        """Select phase count for this cycle using reluctant-switching strategy.
 
-        Called by EMSController after pool calculation, before consume_from_pool.
-        Tries highest allowed phase count first; falls back to lower phases if pool
-        is insufficient to meet the minimum Ampere threshold.  Enforces a hysteresis
-        timer (phase_switch_delay_s) to prevent rapid oscillation.
+        Initial start (setpoint == 0): greedy – pick highest phase count the pool supports.
+        Active charging (setpoint > 0):
+          - Stay on current phases while they can still meet the minimum.
+          - Switch UP only when current phases are fully maxed out (pool exceeds max_a).
+          - Switch DOWN only when current phases can no longer meet min_a.
+        Hysteresis timer applies only during active charging, not on initial start.
         """
         if self.output_unit != 'ampere' or len(self._allowed_phases) == 1 or not self.eligible:
             return
 
-        if (self._last_phase_change_ts > 0 and
-                now_ts - self._last_phase_change_ts < self.phase_switch_delay_s):
-            return  # hysteresis active
+        is_initial_start = self._anforderung_current_w == 0
 
-        # Try highest phase count first (maximises PV yield)
-        selected = min(self._allowed_phases)  # safe fallback
-        for ph in sorted(self._allowed_phases, reverse=True):
-            eff = ph * self._voltage_v
-            if eff > 0 and self._raw_max > 0 and math.floor(pool_w / eff) >= self._raw_min:
-                selected = ph
-                break
+        # Hysteresis only applies during active charging
+        if not is_initial_start:
+            if (self._last_phase_change_ts > 0 and
+                    now_ts - self._last_phase_change_ts < self.phase_switch_delay_s):
+                return
+
+        if is_initial_start:
+            # Greedy: highest phase count the pool can support at minimum threshold
+            selected = min(self._allowed_phases)  # fallback to lowest
+            for ph in sorted(self._allowed_phases, reverse=True):
+                eff = ph * self._voltage_v
+                if eff > 0 and math.floor(pool_w / eff) >= self._raw_min:
+                    selected = ph
+                    break
+            reason = "Ladestart"
+        else:
+            # Reluctant: only switch when forced
+            eff_cur = self._current_phases * self._voltage_v
+            can_sustain = eff_cur > 0 and math.floor(pool_w / eff_cur) >= self._raw_min
+
+            if can_sustain:
+                # Switch UP only if current phases are at maximum capacity
+                higher = [ph for ph in self._allowed_phases if ph > self._current_phases]
+                if (higher and self._raw_max > 0 and eff_cur > 0
+                        and math.floor(pool_w / eff_cur) >= self._raw_max):
+                    selected = self._current_phases  # stay unless a higher phase works
+                    for ph in sorted(higher):
+                        eff = ph * self._voltage_v
+                        if eff > 0 and math.floor(pool_w / eff) >= self._raw_min:
+                            selected = ph
+                            break
+                    reason = "Hochschalten (max erreicht)"
+                else:
+                    selected = self._current_phases  # stay – no reason to switch
+                    reason = ""
+            else:
+                # Switch DOWN: current phases can no longer meet minimum
+                lower = [ph for ph in self._allowed_phases if ph < self._current_phases]
+                selected = min(self._allowed_phases)  # fallback
+                for ph in sorted(lower):
+                    eff = ph * self._voltage_v
+                    if eff > 0 and math.floor(pool_w / eff) >= self._raw_min:
+                        selected = ph
+                        break
+                reason = "Runterschalten (min unterschritten)"
 
         if selected != self._current_phases:
-            log.info("EMS [%s] Phasenwechsel %d→%d  pool=%.0fW  U=%.1fV",
-                     self.id, self._current_phases, selected, pool_w, self._voltage_v)
+            log.info("EMS [%s] Phasenwechsel %d→%d  pool=%.0fW  U=%.1fV  (%s)",
+                     self.id, self._current_phases, selected, pool_w, self._voltage_v, reason)
             self._current_phases = selected
             self._last_phase_change_ts = now_ts
-            self._apply_raw_to_watt()  # recompute Watt limits for new phase count
-            self._anforderung_age_s = 0.0  # reset ramp timer after phase switch
+            self._apply_raw_to_watt()
+            self._anforderung_age_s = 0.0
 
     def consume_from_pool(self, remaining_w: float, _: float) -> float:
         """Reserve schutz_w so binary devices cannot consume it."""
