@@ -163,12 +163,7 @@ class EMSController:
         # ── 3. Pool ─────────────────────────────────────────────────────
         pool_w = self._calc_pool(residual_w, ems_enabled, global_mode, hard_lockout)
 
-        # ── 4. Phase selection (multi-phase controllable devices) ────────
-        for device in self._devices:
-            if isinstance(device, ControllableDevice) and device.eligible:
-                device.select_phases(pool_w, now_ts)
-
-        # ── 5. Deficit ──────────────────────────────────────────────────
+        # ── 4. Deficit ──────────────────────────────────────────────────
         current_deficit_w    = max(-residual_w, 0.0)
         controllable_relief  = sum(d.max_relief_w for d in self._devices)
         binary_immediate_off = current_deficit_w > controllable_relief
@@ -177,17 +172,17 @@ class EMSController:
             log.warning("EMS DEFIZIT: %.0fW  sofort_aus=%s",
                         current_deficit_w, binary_immediate_off)
 
-        # ── 6. Binary desired state (pool consumed in priority order) ───
+        # ── 5. Binary desired state (pool consumed in priority order) ───
         remaining_w = pool_w
         for device in sorted(self._devices, key=lambda d: d.priority):
             remaining_w = device.consume_from_pool(remaining_w, global_einschaltreserve)
 
-        # ── 7. Binary candidate (timing guards, off_delay) ──────────────
+        # ── 6. Binary candidate (timing guards, off_delay) ──────────────
         binary_devices = [d for d in self._devices if isinstance(d, BinaryDevice)]
         for device in binary_devices:
             device.calculate_candidate(now_ts, binary_immediate_off)
 
-        # ── 8. Copy candidate → final, then apply cascade + one-change ──
+        # ── 7. Copy candidate → final, then apply cascade + one-change ──
         for device in binary_devices:
             device.final_on = device.candidate_on
 
@@ -199,24 +194,36 @@ class EMSController:
             if not device.final_on:
                 device.reset_off_timer()
 
-        # ── 9. Allocate controllable devices ────────────────────────────
+        # ── 8. Allocate controllable devices (2-pass: minimum-first) ────
+        # Rule: 1. Priority order  2. Every device gets its min_technisch_w
+        #          before any lower-priority device activates.
+        #       3. Surplus then goes to the highest-priority device first.
         binary_total_w = sum(d.power_w for d in binary_devices if d.final_on)
         remaining_w    = max(pool_w - binary_total_w, 0.0)
-        for device in sorted(self._devices, key=lambda d: d.priority):
-            remaining_w = device.allocate(remaining_w)
+        sorted_ctrl    = [d for d in sorted(self._devices, key=lambda d: d.priority)
+                          if isinstance(d, ControllableDevice)]
 
-        # ── 10. Ramp-rate limiting ───────────────────────────────────────
+        # Phase selection + pass 1: guarantee technical minimum per device
+        for device in sorted_ctrl:
+            device.select_phases(remaining_w, now_ts)
+            remaining_w = device.allocate_minimum(remaining_w)
+
+        # Pass 2: distribute surplus in priority order up to max
+        for device in sorted_ctrl:
+            remaining_w = device.allocate_surplus(remaining_w)
+
+        # ── 9. Ramp-rate limiting ────────────────────────────────────────
         for device in self._devices:
             device.calculate_ramp(current_deficit_w)
 
-        # ── 11. Debug logging ────────────────────────────────────────────
+        # ── 10. Debug logging ────────────────────────────────────────────
         if debug_output:
             self._log_cycle(binary_devices, pool_w, binary_immediate_off)
 
-        # ── 12. Collect HA write operations ─────────────────────────────
+        # ── 11. Collect HA write operations ──────────────────────────────
         write_ops = [op for d in self._devices for op in d.get_write_ops()]
 
-        # ── 13. Build status snapshot for web UI ────────────────────────
+        # ── 12. Build status snapshot for web UI ─────────────────────────
         status = {
             "ems_enabled":           ems_enabled,
             "global_mode":           global_mode,
