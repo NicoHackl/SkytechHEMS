@@ -645,19 +645,26 @@ class BinaryDevice(Device):
         return [("input_boolean", svc, {"entity_id": self.entity_anforderung_an})]
 
     def to_status_dict(self) -> Dict:
+        off_delay_remaining: Optional[float] = None
+        if (self._actual_on and not self._desired_on
+                and self._off_since_ts > 0 and self.off_delay_s > 0):
+            off_delay_remaining = round(
+                max(0.0, self.off_delay_s - (time.time() - self._off_since_ts))
+            )
         return {
-            "type":           "binary",
-            "id":             self.id,
-            "label":          self.label,
-            "priority":       self.priority,
-            "eligible":       self.eligible,
-            "power_w":        self.power_w,
-            "actual_on":      self._actual_on,
-            "desired_on":     self._desired_on,
-            "candidate_on":   self._candidate_on,
-            "final_on":       self._final_on,
-            "in_min_runtime": self.in_min_runtime,
-            "switch_age_s":   round(self._switch_age_s),
-            "min_runtime_s":  self.min_runtime_s,
-            "min_offtime_s":  self.min_offtime_s,
+            "type":                 "binary",
+            "id":                   self.id,
+            "label":                self.label,
+            "priority":             self.priority,
+            "eligible":             self.eligible,
+            "power_w":              self.power_w,
+            "actual_on":            self._actual_on,
+            "desired_on":           self._desired_on,
+            "candidate_on":         self._candidate_on,
+            "final_on":             self._final_on,
+            "in_min_runtime":       self.in_min_runtime,
+            "switch_age_s":         round(self._switch_age_s),
+            "min_runtime_s":        self.min_runtime_s,
+            "min_offtime_s":        self.min_offtime_s,
+            "off_delay_remaining_s": off_delay_remaining,
         }
