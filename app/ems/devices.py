@@ -594,9 +594,14 @@ class BinaryDevice(Device):
             self._desired_on = remaining_w >= on_threshold
         return remaining_w - self.power_w if self._desired_on else remaining_w
 
-    def calculate_candidate(self, now_ts: float,
-                             binary_immediate_off: bool) -> None:
-        """Apply timing guards (min_runtime, off_delay, min_offtime) to desired state."""
+    def calculate_candidate(self, now_ts: float) -> None:
+        """Apply timing guards (min_runtime, off_delay, min_offtime) to desired state.
+
+        Mindestlaufzeit UND Abschaltverzögerung gelten IMMER – auch bei einer
+        Notabschaltung (binary_immediate_off). Erst wenn das Gerät die
+        Mindestlaufzeit erfüllt hat *und* die Abschaltverzögerung abgelaufen
+        ist, wird der Aus-Befehl freigegeben.
+        """
         if not self.eligible:
             self._candidate_on = False
             self._off_since_ts = 0.0
@@ -606,15 +611,6 @@ class BinaryDevice(Device):
             if self._desired_on:
                 self._candidate_on = True
                 self._off_since_ts = 0.0
-                return
-
-            if binary_immediate_off:
-                # Mindestlaufzeit schützt auch bei Notabschaltung
-                if self._switch_age_s < self.min_runtime_s:
-                    self._candidate_on = True
-                    self._off_since_ts = 0.0
-                else:
-                    self._candidate_on = False
                 return
 
             if self._switch_age_s < self.min_runtime_s:

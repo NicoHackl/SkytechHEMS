@@ -180,7 +180,7 @@ class EMSController:
         # ── 6. Binary candidate (timing guards, off_delay) ──────────────
         binary_devices = [d for d in self._devices if isinstance(d, BinaryDevice)]
         for device in binary_devices:
-            device.calculate_candidate(now_ts, binary_immediate_off)
+            device.calculate_candidate(now_ts)
 
         # ── 7. Copy candidate → final, then apply cascade + one-change ──
         for device in binary_devices:
@@ -258,12 +258,14 @@ class EMSController:
     def _apply_priority_cascade(self, binary_devices: List[BinaryDevice]) -> None:
         sorted_b = sorted(binary_devices, key=lambda d: d.priority)
 
-        # Demotion: lower-priority device must go off first
-        for i, high in enumerate(sorted_b):
-            if not high.desired_on and high.final_on:
-                for low in sorted_b[i + 1:]:
-                    if not low.desired_on and low.final_on and not low.in_min_runtime:
-                        low.final_on = False
+        # NB: Eine prioritätsbasierte Demotion (niedriger-priore Geräte sofort
+        # abschalten, sobald ein höher-priores Gerät abschalten will) gibt es
+        # bewusst NICHT mehr. Sie hätte ein niedriger-priores Gerät nur dann
+        # zwangsweise ausgeschaltet, wenn es sich noch in seiner
+        # Abschaltverzögerung befindet – und genau die soll IMMER gelten.
+        # Das Abschalt-Timing wird daher ausschließlich von den Geräte-Guards
+        # (Mindestlaufzeit + Abschaltverzögerung) in calculate_candidate
+        # bestimmt.
 
         # Promotion: higher-priority must not be off while lower-priority is on
         for i, high in enumerate(sorted_b):

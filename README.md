@@ -280,7 +280,7 @@ Für AN/AUS-Verbraucher mit Zeitschutz (z. B. Heizlüfter). Zusätzlich zu den g
 | `einschaltreserve_w`                          | W       | Pro-Gerät-Hysterese (zusätzlich zur globalen Einschaltreserve).                                          |
 | `mindestlaufzeit_s`                           | s       | Solange `actual_on=true` und das Gerät jünger als `mindestlaufzeit_s` ist, darf es nicht abschalten – auch nicht bei Notabschaltung (`binary_immediate_off`). |
 | `mindestauszeit_s`                            | s       | Solange `actual_on=false` jünger als `mindestauszeit_s` ist, darf das Gerät nicht einschalten.           |
-| `abschaltverzogerung_s`                       | s       | Verzögert das Ausschalten: erst nach Ablauf wird der Aus-Befehl freigegeben.                             |
+| `abschaltverzogerung_s`                       | s       | Verzögert das Ausschalten: erst nach Ablauf wird der Aus-Befehl freigegeben. Gilt **immer** – auch bei Notabschaltung (`binary_immediate_off`) und unabhängig von der Prioritäts-Kaskade. |
 
 Ausgabe und externer Schalter:
 
