@@ -331,6 +331,13 @@
         : row('Mindestauszeit', '✓ erfüllt', 'on');
     }
 
+    let offDelayRow = '';
+    if (d.off_delay_remaining_s != null) {
+      offDelayRow = d.off_delay_remaining_s > 0
+        ? row('Abschaltverzögerung', 'noch ' + fmtDur(d.off_delay_remaining_s), 'dim')
+        : row('Abschaltverzögerung', '↓ abschalten', 'changed');
+    }
+
     return `<div class="card ${cls}">
       <div class="card-title"><span class="card-name">${d.label || d.id}</span><span class="prio-badge">Prio ${d.priority}</span></div>
       ${row('Freigabe',   d.eligible  ? '✓ ja' : '✗ nein', d.eligible  ? 'on' : 'off-val')}
@@ -340,6 +347,7 @@
       ${row('Kandidat',   d.candidate_on ? '● AN' : '○ AUS', d.candidate_on ? 'on' : 'dim')}
       ${row('Final → HA', d.final_on ? '● AN' : '○ AUS', changed ? 'changed' : d.final_on ? 'on' : 'off-val')}
       ${timingRow}
+      ${offDelayRow}
     </div>`;
   }
 
