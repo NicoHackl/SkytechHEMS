@@ -237,11 +237,20 @@
   // ================================================================
   // MONITOR
   // ================================================================
+  // Cached snapshot + receipt time so timers count down live between cycles.
+  // The control cycle only runs every interval_s (default 30s), so the
+  // server-side remaining values would otherwise stay frozen between polls.
+  let _lastData = null;
+  let _statusAt = 0;   // Date.now() when the last fresh snapshot arrived
+  let _elapsed  = 0;   // seconds since that snapshot (set per render)
+
   async function pollStatus() {
     try {
       const r = await fetch('api/status');
       if (!r.ok) throw new Error('HTTP ' + r.status);
-      render(await r.json());
+      _lastData = await r.json();
+      _statusAt = Date.now();
+      render(_lastData);
       document.getElementById('live-dot').className = 'dot';
     } catch(e) {
       document.getElementById('live-dot').className = 'dot error';
@@ -251,6 +260,7 @@
 
   function render(data) {
     const s = data.status || {};
+    _elapsed = _statusAt ? (Date.now() - _statusAt) / 1000 : 0;
     showError(data.error || '');
 
     const chips = [
@@ -299,8 +309,9 @@
       ? (d.new_a != null ? d.new_a + ' A  (' + fmt(d.new_w) + ' W)' : '–')
       : fmt(d.new_w) + ' W';
     const multiPhase = isAmpere && d.allowed_phases && d.allowed_phases.length > 1;
-    const phaseLock  = multiPhase && d.phase_lock_remaining_s > 0
-      ? ' (Lock: ' + fmtDur(d.phase_lock_remaining_s) + ')' : '';
+    const phaseLockRem = multiPhase ? Math.max(0, (d.phase_lock_remaining_s || 0) - _elapsed) : 0;
+    const phaseLock  = phaseLockRem > 0
+      ? ' (Lock: ' + fmtDur(phaseLockRem) + ')' : '';
     return `<div class="card ${cls}">
       <div class="card-title"><span class="card-name">${d.label || d.id}</span><span class="prio-badge">Prio ${d.priority}</span></div>
       ${row('Freigabe',     d.eligible ? '✓ ja' : '✗ nein', d.eligible ? 'on' : 'off-val')}
@@ -320,12 +331,12 @@
 
     let timingRow = '';
     if (d.actual_on && d.min_runtime_s > 0) {
-      const rem = Math.max(0, d.min_runtime_s - d.switch_age_s);
+      const rem = Math.max(0, d.min_runtime_s - d.switch_age_s - _elapsed);
       timingRow = rem > 0
         ? row('Mindestlaufzeit', 'noch ' + fmtDur(rem), 'dim')
         : row('Mindestlaufzeit', '✓ erfüllt', 'on');
     } else if (!d.actual_on && d.min_offtime_s > 0) {
-      const rem = Math.max(0, d.min_offtime_s - d.switch_age_s);
+      const rem = Math.max(0, d.min_offtime_s - d.switch_age_s - _elapsed);
       timingRow = rem > 0
         ? row('Mindestauszeit', 'noch ' + fmtDur(rem), 'dim')
         : row('Mindestauszeit', '✓ erfüllt', 'on');
@@ -333,8 +344,9 @@
 
     let offDelayRow = '';
     if (d.off_delay_remaining_s != null) {
-      offDelayRow = d.off_delay_remaining_s > 0
-        ? row('Abschaltverzögerung', 'noch ' + fmtDur(d.off_delay_remaining_s), 'dim')
+      const rem = Math.max(0, d.off_delay_remaining_s - _elapsed);
+      offDelayRow = rem > 0
+        ? row('Abschaltverzögerung', 'noch ' + fmtDur(rem), 'dim')
         : row('Abschaltverzögerung', '↓ abschalten', 'changed');
     }
 
@@ -364,6 +376,10 @@
 
   pollStatus();
   setInterval(pollStatus, 5000);
+  // Re-render once a second from the cached snapshot so countdown timers
+  // (Abschaltverzögerung, Mindestlauf-/auszeit, Phasen-Lock) tick live
+  // instead of staying frozen until the next control cycle.
+  setInterval(() => { if (_lastData) render(_lastData); }, 1000);
 
   // ================================================================
   // STEUERUNG
