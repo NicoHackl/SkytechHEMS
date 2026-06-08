@@ -1,0 +1,11 @@
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+# Es werden die Ruff-Standardregeln (E4/E7/E9, F) genutzt – sie fangen echte
+# Probleme wie ungenutzte Importe und undefinierte Namen, ohne die bewusste
+# Spaltenausrichtung im Code zu beanstanden.
+
+[tool.pytest.ini_options]
+pythonpath = ["app", "tests"]
+testpaths = ["tests"]

@@ -1,13 +1,14 @@
 """
-EMSController – orchestrates the full control cycle.
+EMSController – orchestriert den vollständigen Regelzyklus.
 
-Devices are created ONCE at startup and persist across cycles so that internal
-state (e.g. BinaryDevice._off_since_ts) survives between invocations without
-needing HA helper entities.
+Geräte werden EINMAL beim Start erzeugt und bleiben über alle Zyklen hinweg
+bestehen, damit interner Zustand (z. B. BinaryDevice._off_since_ts) zwischen
+Aufrufen erhalten bleibt, ohne HA-Helfer-Entitäten zu benötigen.
 """
 
 import datetime
 import logging
+import time
 from typing import Dict, List, Optional
 
 from .state import StateProxy, safe_float
@@ -16,25 +17,29 @@ from .devices import Device, ControllableDevice, BinaryDevice
 log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Global HA entity names
+# Globale HA-Entitätsnamen
 # ---------------------------------------------------------------------------
 
 HA_EMS_ENABLED               = "input_boolean.ems_pv_regelung_aktiv"
 HA_GLOBAL_MODE               = "input_select.ems_regelmodus"
-HA_RESIDUAL_W                = "sensor.verfugbare_leistung_fur_uberschusverbraucher"
 HA_GLOBAL_PUFFER_W           = "input_number.ems_globaler_puffer_w"
 HA_GLOBAL_EINSCHALTRESERVE_W = "input_number.ems_einschaltreserve_global_w"
 HA_DEBUG_OUTPUT              = "input_boolean.ems_pyems_debug_output"
+
+# Standard-Entität für den verfügbaren PV-Überschuss. Über die Add-on-Option
+# `residual_power_entity` überschreibbar. Home Assistant slugifiziert Umlaute
+# (ü→u, ö→o, ä→a, ß→ss), daher dieser ASCII-Name.
+DEFAULT_RESIDUAL_ENTITY = "sensor.verfugbare_leistung_fur_uberschussverbraucher"
 
 HARD_LOCKOUT_THRESHOLD_W = -50000.0
 
 
 # ---------------------------------------------------------------------------
-# Device registry – built from add-on config at startup
+# Geräte-Registry – beim Start aus der Add-on-Konfiguration aufgebaut
 # ---------------------------------------------------------------------------
 
 def _build_devices(device_configs: List[dict]) -> List[Device]:
-    """Build device list from config.yaml options.devices entries."""
+    """Baut die Geräteliste aus den config.yaml-Einträgen options.devices auf."""
     devices = []
     for cfg in device_configs:
         name = (cfg.get("name") or "").strip()
@@ -108,39 +113,44 @@ def _build_devices(device_configs: List[dict]) -> List[Device]:
 
 class EMSController:
     """
-    Stateful EMS controller.  Instantiated once in HEMSApp; device objects
-    and their internal state persist across all cycles.
+    Zustandsbehafteter EMS-Controller. Wird einmal in HEMSApp instanziiert;
+    Geräteobjekte und ihr interner Zustand bleiben über alle Zyklen erhalten.
     """
 
-    def __init__(self, device_configs: List[dict]):
+    def __init__(self, device_configs: List[dict],
+                 residual_power_entity: Optional[str] = None):
         self._devices: List[Device] = _build_devices(device_configs)
-        log.info("EMSController ready – %d devices registered.", len(self._devices))
+        self._residual_entity = (residual_power_entity or "").strip() or DEFAULT_RESIDUAL_ENTITY
+        log.info("EMSController bereit – %d Geräte registriert, Überschuss-Sensor='%s'.",
+                 len(self._devices), self._residual_entity)
 
     # ------------------------------------------------------------------
-    # Public entry point
+    # Öffentlicher Einstiegspunkt
     # ------------------------------------------------------------------
 
     def run_cycle(self, st: StateProxy) -> Dict:
         """
-        Execute one control cycle.
+        Führt einen Regelzyklus aus.
 
         Returns:
             {
-                "status":    { ... },              # web-UI snapshot
-                "write_ops": [(domain, svc, data)] # HA service calls to execute
+                "status":    { ... },              # Web-UI-Snapshot
+                "write_ops": [(domain, svc, data)] # auszuführende HA-Service-Aufrufe
             }
         """
-        now_ts = datetime.datetime.now().timestamp()
-        now_dt = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # Einheitliche Zeitquelle für den gesamten Zyklus: time.time() (Wanduhr-Epoch),
+        # konsistent mit parse_ts() der HA-last_changed-Zeitstempel.
+        now_ts = time.time()
+        now_dt = datetime.datetime.fromtimestamp(now_ts).strftime("%Y-%m-%d %H:%M:%S")
 
-        # ── 1. Global inputs ────────────────────────────────────────────
+        # ── 1. Globale Eingänge ─────────────────────────────────────────
         debug_output            = st.get(HA_DEBUG_OUTPUT) == "on"
         ems_enabled             = st.get(HA_EMS_ENABLED) == "on"
         global_mode             = st.get(HA_GLOBAL_MODE) or "aus"
         global_puffer           = safe_float(st.get(HA_GLOBAL_PUFFER_W))
         global_einschaltreserve = safe_float(st.get(HA_GLOBAL_EINSCHALTRESERVE_W))
 
-        residual_raw          = st.get(HA_RESIDUAL_W)
+        residual_raw          = st.get(self._residual_entity)
         residual_sensor_valid = residual_raw not in ("unavailable", "unknown", None)
         residual_w            = safe_float(residual_raw) if residual_sensor_valid else 0.0
         hard_lockout          = (not residual_sensor_valid
@@ -148,12 +158,12 @@ class EMSController:
 
         if not residual_sensor_valid:
             log.error("EMS SENSOR LOCKOUT: %s ist '%s' – alle Verbraucher abschalten",
-                      HA_RESIDUAL_W, residual_raw)
+                      self._residual_entity, residual_raw)
         elif hard_lockout and debug_output:
             log.warning("EMS LOCKOUT: residual=%.0fW <= %.0fW",
                         residual_w, HARD_LOCKOUT_THRESHOLD_W)
 
-        # ── 2. Update all devices from HA ───────────────────────────────
+        # ── 2. Alle Geräte aus HA aktualisieren ─────────────────────────
         for device in self._devices:
             device.eligible = device.check_eligible(
                 st, ems_enabled, global_mode, hard_lockout
@@ -163,67 +173,67 @@ class EMSController:
         # ── 3. Pool ─────────────────────────────────────────────────────
         pool_w = self._calc_pool(residual_w, ems_enabled, global_mode, hard_lockout)
 
-        # ── 4. Deficit ──────────────────────────────────────────────────
+        # ── 4. Defizit ──────────────────────────────────────────────────
         current_deficit_w    = max(-residual_w, 0.0)
-        controllable_relief  = sum(d.max_relief_w for d in self._devices)
-        binary_immediate_off = current_deficit_w > controllable_relief
+        total_relief_w       = sum(d.max_relief_w for d in self._devices)
+        binary_immediate_off = current_deficit_w > total_relief_w
 
         if current_deficit_w > 0 and debug_output:
             log.warning("EMS DEFIZIT: %.0fW  sofort_aus=%s",
                         current_deficit_w, binary_immediate_off)
 
-        # ── 5. Binary desired state (pool consumed in priority order) ───
+        # ── 5. Binärer Wunschzustand (Pool in Prioritätsreihenfolge verbraucht) ──
         remaining_w = pool_w
         for device in sorted(self._devices, key=lambda d: d.priority):
             remaining_w = device.consume_from_pool(remaining_w, global_einschaltreserve)
 
-        # ── 6. Binary candidate (timing guards, off_delay) ──────────────
+        # ── 6. Binärer Kandidat (Zeit-Guards, off_delay) ────────────────
         binary_devices = [d for d in self._devices if isinstance(d, BinaryDevice)]
         for device in binary_devices:
             device.calculate_candidate(now_ts)
 
-        # ── 7. Copy candidate → final, then apply cascade + one-change ──
+        # ── 7. Kandidat → final kopieren, dann Kaskade + One-Change anwenden ──
         for device in binary_devices:
             device.final_on = device.candidate_on
 
         self._apply_priority_cascade(binary_devices)
         self._limit_one_change(binary_devices, binary_immediate_off)
 
-        # Reset off_delay timer for devices finalised as OFF
+        # off_delay-Timer für final als AUS bestimmte Geräte zurücksetzen
         for device in binary_devices:
             if not device.final_on:
                 device.reset_off_timer()
 
-        # ── 8. Allocate controllable devices (2-pass: minimum-first) ────
-        # Rule: 1. Priority order  2. Every device gets its min_technisch_w
-        #          before any lower-priority device activates.
-        #       3. Surplus then goes to the highest-priority device first.
+        # ── 8. Regelbare Geräte zuteilen (2 Durchläufe: Minimum zuerst) ──
+        # Regel: 1. Prioritätsreihenfolge  2. Jedes Gerät erhält sein min_technisch_w,
+        #           bevor ein niedriger-priores Gerät aktiviert wird.
+        #        3. Der Überschuss geht dann zuerst an das höchst-priore Gerät.
         binary_total_w = sum(d.power_w for d in binary_devices if d.final_on)
         remaining_w    = max(pool_w - binary_total_w, 0.0)
         sorted_ctrl    = [d for d in sorted(self._devices, key=lambda d: d.priority)
                           if isinstance(d, ControllableDevice)]
 
-        # Phase selection + pass 1: guarantee technical minimum per device
+        # Phasenwahl + Durchlauf 1: technisches Minimum je Gerät garantieren
         for device in sorted_ctrl:
             device.select_phases(remaining_w, now_ts)
             remaining_w = device.allocate_minimum(remaining_w)
 
-        # Pass 2: distribute surplus in priority order up to max
+        # Durchlauf 2: Überschuss in Prioritätsreihenfolge bis max verteilen
         for device in sorted_ctrl:
             remaining_w = device.allocate_surplus(remaining_w)
 
-        # ── 9. Ramp-rate limiting ────────────────────────────────────────
+        # ── 9. Rampenbegrenzung ─────────────────────────────────────────
         for device in self._devices:
             device.calculate_ramp(current_deficit_w)
 
-        # ── 10. Debug logging ────────────────────────────────────────────
+        # ── 10. Debug-Logging ───────────────────────────────────────────
         if debug_output:
-            self._log_cycle(binary_devices, pool_w, binary_immediate_off)
+            self._log_cycle(binary_devices, pool_w, binary_immediate_off, now_ts)
 
-        # ── 11. Collect HA write operations ──────────────────────────────
+        # ── 11. HA-Schreiboperationen sammeln ───────────────────────────
         write_ops = [op for d in self._devices for op in d.get_write_ops()]
 
-        # ── 12. Build status snapshot for web UI ─────────────────────────
+        # ── 12. Status-Snapshot für die Web-UI aufbauen ─────────────────
         status = {
             "ems_enabled":           ems_enabled,
             "global_mode":           global_mode,
@@ -252,7 +262,7 @@ class EMSController:
         return max(residual_w + actual_used_w, 0.0)
 
     # ------------------------------------------------------------------
-    # Priority cascade
+    # Prioritätskaskade
     # ------------------------------------------------------------------
 
     def _apply_priority_cascade(self, binary_devices: List[BinaryDevice]) -> None:
@@ -267,7 +277,7 @@ class EMSController:
         # (Mindestlaufzeit + Abschaltverzögerung) in calculate_candidate
         # bestimmt.
 
-        # Promotion: higher-priority must not be off while lower-priority is on
+        # Promotion: höher-priore Geräte dürfen nicht aus sein, während niedriger-priore an sind
         for i, high in enumerate(sorted_b):
             for low in sorted_b[i + 1:]:
                 if low.final_on:
@@ -276,7 +286,7 @@ class EMSController:
                         high.reset_off_timer()
 
     # ------------------------------------------------------------------
-    # One-change limit
+    # One-Change-Limit
     # ------------------------------------------------------------------
 
     def _limit_one_change(self, binary_devices: List[BinaryDevice],
@@ -291,22 +301,22 @@ class EMSController:
             return
 
         if turn_offs:
-            # Least important (highest priority number) turns off first
+            # Unwichtigstes (höchste Prioritätszahl) schaltet zuerst ab
             for d in sorted(turn_offs, key=lambda d: d.priority, reverse=True)[1:]:
                 d.final_on = True
             for d in turn_ons:
                 d.final_on = False
         else:
-            # Only turn-ons: highest priority (lowest number) wins
+            # Nur Einschaltungen: höchste Priorität (niedrigste Zahl) gewinnt
             for d in sorted(turn_ons, key=lambda d: d.priority)[1:]:
                 d.final_on = False
 
     # ------------------------------------------------------------------
-    # Debug logging
+    # Debug-Logging
     # ------------------------------------------------------------------
 
     def _log_cycle(self, binary_devices: List[BinaryDevice],
-                   pool_w: float, binary_immediate_off: bool) -> None:
+                   pool_w: float, binary_immediate_off: bool, now_ts: float) -> None:
         for d in binary_devices:
             if d.actual_on != d.final_on:
                 direction = "AUS→AN" if d.final_on else "AN→AUS"
@@ -318,7 +328,7 @@ class EMSController:
                 if d.in_min_runtime:
                     log.info("EMS [%s] BLEIBT AN  min_runtime schützt", d.id)
                 elif d.candidate_on and d._off_since_ts > 0:
-                    elapsed = datetime.datetime.now().timestamp() - d._off_since_ts
+                    elapsed = now_ts - d._off_since_ts
                     log.info("EMS [%s] BLEIBT AN  off_delay läuft (%.0fs)", d.id, elapsed)
 
         for d in self._devices:

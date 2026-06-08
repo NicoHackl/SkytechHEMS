@@ -1,13 +1,13 @@
 """
-Skytech HEMS – main entry point.
-Runs an async control loop (EMS cycle) and serves the monitoring web UI.
+Skytech HEMS – Haupteinstiegspunkt.
+Führt einen asynchronen Regel-Loop (EMS-Zyklus) aus und stellt die Monitoring-Web-UI bereit.
 """
 
 import asyncio
 import datetime
 import json
 import logging
-import os
+import signal
 from pathlib import Path
 
 from aiohttp import web
@@ -27,7 +27,7 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Config
+# Konfiguration
 # ---------------------------------------------------------------------------
 
 def _load_config() -> dict:
@@ -42,7 +42,7 @@ def _load_config() -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Steuerung-Tab: Kontroll-Schema aus Device-Konfiguration erzeugen
+# Steuerung-Tab: Kontroll-Schema aus Geräte-Konfiguration erzeugen
 # ---------------------------------------------------------------------------
 
 _GLOBAL_CTRL_ITEMS = [
@@ -95,22 +95,23 @@ class HEMSApp:
         cfg = _load_config()
         self.interval_s: int = int(cfg.get("interval_s", 30))
         self.post_cycle_script: str = (cfg.get("post_cycle_script") or "").strip()
+        residual_entity: str = (cfg.get("residual_power_entity") or "").strip()
 
         log_level = cfg.get("log_level", "info").upper()
         logging.getLogger().setLevel(getattr(logging, log_level, logging.INFO))
 
         self._device_configs: list = cfg.get("devices", [])
         self.ha  = HAClient()
-        self.ems = EMSController(self._device_configs)
+        self.ems = EMSController(self._device_configs, residual_power_entity=residual_entity)
 
-        # Shared state – written by scheduler, read by web handler
+        # Gemeinsamer Zustand – vom Scheduler geschrieben, vom Web-Handler gelesen
         self._last_status: dict = {}
         self._last_cycle_at: str = ""
         self._last_error: str = ""
         self._cycle_count: int = 0
 
     # ------------------------------------------------------------------
-    # Control cycle
+    # Regelzyklus
     # ------------------------------------------------------------------
 
     async def _run_cycle(self) -> None:
@@ -141,7 +142,7 @@ class HEMSApp:
             await asyncio.sleep(self.interval_s)
 
     # ------------------------------------------------------------------
-    # Web handlers
+    # Web-Handler
     # ------------------------------------------------------------------
 
     async def _handle_index(self, request: web.Request) -> web.Response:
@@ -158,7 +159,7 @@ class HEMSApp:
         })
 
     async def _handle_device_controls_schema(self, request: web.Request) -> web.Response:
-        """Return the Steuerung-Tab control schema derived from configured devices."""
+        """Liefert das Steuerung-Tab-Kontrollschema, abgeleitet aus den konfigurierten Geräten."""
         schema = [{"label": "Global", "items": _GLOBAL_CTRL_ITEMS}]
         for cfg in self._device_configs:
             name   = (cfg.get("name")          or "").strip()
@@ -173,7 +174,7 @@ class HEMSApp:
         return web.json_response(schema)
 
     async def _handle_controls(self, request: web.Request) -> web.Response:
-        """Return fresh states for all EMS input_* helper entities."""
+        """Liefert frische Zustände aller EMS-input_*-Helfer-Entitäten."""
         try:
             states = await self.ha.fetch_all_states()
             ems = {
@@ -189,7 +190,7 @@ class HEMSApp:
             return web.json_response({"error": str(exc)}, status=500)
 
     async def _handle_set(self, request: web.Request) -> web.Response:
-        """Write a value to an HA input entity."""
+        """Schreibt einen Wert in eine HA-input-Entität."""
         try:
             body       = await request.json()
             entity_id: str = body["entity_id"]
@@ -214,7 +215,7 @@ class HEMSApp:
             return web.json_response({"error": str(exc)}, status=500)
 
     # ------------------------------------------------------------------
-    # Run
+    # Ausführung
     # ------------------------------------------------------------------
 
     async def run(self) -> None:
@@ -226,17 +227,42 @@ class HEMSApp:
         app.router.add_get("/api/device_controls_schema", self._handle_device_controls_schema)
         app.router.add_post("/api/set",                   self._handle_set)
 
+        # Statische Assets (CSS/JS) aus dem static-Verzeichnis ausliefern
+        static_dir = Path(__file__).parent / "static"
+        app.router.add_static("/static/", static_dir, name="static")
+
         runner = web.AppRunner(app)
         await runner.setup()
         site = web.TCPSite(runner, "0.0.0.0", 8099)
         await site.start()
         log.info("Web UI available on port 8099.")
 
-        await self._scheduler()
+        # Scheduler als Task starten und auf ein Stopp-Signal warten
+        stop_event = asyncio.Event()
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            try:
+                loop.add_signal_handler(sig, stop_event.set)
+            except NotImplementedError:
+                # Signal-Handler werden nicht auf allen Plattformen unterstützt
+                pass
+
+        scheduler_task = asyncio.create_task(self._scheduler())
+        try:
+            await stop_event.wait()
+        finally:
+            log.info("Herunterfahren – Scheduler stoppen und Ressourcen freigeben.")
+            scheduler_task.cancel()
+            try:
+                await scheduler_task
+            except asyncio.CancelledError:
+                pass
+            await self.ha.close()
+            await runner.cleanup()
 
 
 # ---------------------------------------------------------------------------
-# Entry point
+# Einstiegspunkt
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
