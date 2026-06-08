@@ -1,0 +1,13 @@
+.git
+.github
+.gitignore
+.dockerignore
+README.md
+Claude-Analyse.md
+icon.png
+tests/
+**/__pycache__/
+*.pyc
+*.pyo
+.ruff_cache/
+.pytest_cache/

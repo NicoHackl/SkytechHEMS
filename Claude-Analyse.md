@@ -48,6 +48,44 @@ laufen – aber sie betreffen Wartbarkeit und Erweiterbarkeit.
 
 ---
 
+## Umsetzungsstatus (Stand 2026-06-08)
+
+Die folgenden Punkte wurden auf dem Umsetzungs-Branch bearbeitet. Verifiziert
+über `ruff check` (sauber) und `pytest` (**42 Tests grün**) sowie einen
+Smoke-Test von `run_cycle`.
+
+| Punkt | Status | Umsetzung |
+|-------|--------|-----------|
+| **F1** | ✅ behoben | `voltage_entity` → `voltage_l1/l2/l3_entity` in `config.yaml`, README und Übersetzungen korrigiert. |
+| **F2** | ✅ behoben | Sensorname auf `…_uberschussverbraucher` (fehlendes „s") korrigiert; HA-Umlaut-Slugifizierung (ü→u, ö→o, ä→a, ß→ss) dokumentiert. |
+| **F3** | ✅ behoben | Neue Add-on-Option `residual_power_entity` (Schema + Default in `config.yaml`, `main.py`, `EMSController`); Überschuss-Sensor frei konfigurierbar. |
+| **A1** | ⏸️ unverändert | Bewusste Designentscheidung (Geräteschutz vor Netzschonung) – beibehalten. |
+| **A2** | ✅ behoben | README-Hinweis zur erwarteten Sensor-Semantik (Pool-Rückrechnung) ergänzt. |
+| **A3** | ✅ behoben/bestätigt | Ladestart wählt höchstmögliche Phase; bei geringem Überschuss Fallback auf einphasig mit entsprechender Ampere-Zahl. Verhalten per Test abgesichert. |
+| **A4** | ✅ behoben | Exakte Float-Vergleiche durch `EPS_W`-Schwelle ersetzt (`devices.py`). |
+| **A5** | ⏸️ unverändert | Magic Number nicht angefragt – belassen. |
+| **Q1** | ✅ behoben | Pytest-Suite (`tests/`, 42 Tests) für State, Binär-/Regelbar-Geräte und Controller. |
+| **Q2** | ✅ behoben | Langlebige `aiohttp.ClientSession` + `close()` statt Session pro Request. |
+| **Q3** | ✅ behoben | Ungenutzten `os`-Import in `main.py` entfernt. |
+| **Q4** | ✅ behoben | Tote Basis-Methode `Device.allocate` entfernt. |
+| **Q5** | ✅ behoben | `Optional[Dict[...]] = None` in `call_service`. |
+| **Q6** | ✅ behoben | `controllable_relief` → `total_relief_w`. |
+| **Q7** | ✅ behoben | Einheitliche Zeitquelle `time.time()` (Controller-`now_ts` durchgereicht, Geräte nutzen `_now_ts`). |
+| **Q8** | ✅ behoben | CI-Workflow `ci.yaml` (Ruff + Pytest) + `pyproject.toml`. |
+| **Q9** | ✅ behoben | Web-UI in `index.html` + `static/styles.css` + `static/app.js` aufgeteilt; Inline-Handler → Event-Delegation. |
+| **Q10** | ✅ behoben | Code-Kommentare durchgängig auf Deutsch. |
+| **S1** | ⏸️ unverändert | Auf Wunsch belassen (HEMS aktuell Single-User). |
+| **S2** | ⏸️ unverändert | Vorerst belassen. |
+| **S3** | ✅ behoben | `esc()`-HTML-Escaping aller dynamischen Werte in `app.js`. |
+| **S4** | ✅ behoben | `aiohttp` 3.9.5 → 3.11.11; Dependabot (`.github/dependabot.yml`). |
+| **Z1** | ✅ behoben | Dockerfile-Basis `python:3.11-slim`. |
+| **Z2** | ⏸️ unverändert | Versionsstrategie vorerst belassen. |
+| **Z3** | ⏸️ unverändert | State-Pull vorerst belassen. |
+| **Z4** | ✅ behoben | Graceful Shutdown (SIGTERM/SIGINT, Scheduler-Cancel, Session-/Runner-Cleanup). |
+| **Z5** | ✅ behoben | `.dockerignore` ergänzt. |
+
+---
+
 ## 🔴 Fehler / Bugs
 
 ### F1 – Dokumentations-Inkonsistenz: `voltage_entity` vs. `voltage_l1/l2/l3_entity`

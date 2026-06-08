@@ -84,6 +84,7 @@ In den Add-on-Optionen (YAML-Editor in HA):
 | `interval_s`        | int (5 – 300)                           | `30`    | Zyklusintervall in Sekunden.                                       |
 | `log_level`         | `debug` / `info` / `warning` / `error` | `info`  | Log-Level des Add-ons.                                             |
 | `post_cycle_script` | string?                                 | –       | Optional: `script.<name>`, wird nach jedem Zyklus aufgerufen.      |
+| `residual_power_entity` | string?                             | `sensor.verfugbare_leistung_fur_uberschussverbraucher` | HA-Sensor für den verfügbaren PV-Überschuss in Watt (wichtigster Eingangswert). Zur Semantik siehe [Externe Entitäten](#externe-entitäten). |
 
 Zusätzliches Debug-Logging zur Regelentscheidung wird über den HA-Helfer `input_boolean.ems_pyems_debug_output` aktiviert (Laufzeit-Schalter, kein Add-on-Neustart nötig).
 
@@ -310,10 +311,21 @@ Diese Entitäten werden vom EMS *gelesen*, aber nicht angelegt oder geschrieben:
 
 | Entität                                                       | Funktion                                                                                                                 |
 |---------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------|
-| `sensor.verfugbare_leistung_fur_uberschusverbraucher`         | **Pflicht.** Aktueller PV-Überschuss in Watt (positiv = Einspeisung). `unavailable` / `unknown` oder ≤ −50 000 W löst Hard-Lockout aus. |
+| Überschuss-Sensor (konfiguriert via `residual_power_entity`, Standard `sensor.verfugbare_leistung_fur_uberschussverbraucher`) | **Pflicht.** Aktueller PV-Überschuss in Watt. `unavailable` / `unknown` oder ≤ −50 000 W löst Hard-Lockout aus. Zur erwarteten Semantik siehe Hinweis unten. |
 | `sensor.<gerät>_istleistung` (konfiguriert via `actual_power_entity`) | Ist-Leistung des jeweiligen regelbaren Geräts in Watt.                                                         |
 | `switch.<gerät>` (konfiguriert via `switch_entity`)           | Tatsächlicher Schaltzustand des jeweiligen binären Geräts.                                                               |
-| `sensor.<…>` (konfiguriert via `voltage_entity`, optional)   | Phasenspannung in Volt für die W→A-Umrechnung bei Wallboxen o. Ä.                                                        |
+| `sensor.<…>` (konfiguriert via `voltage_l1_entity` / `voltage_l2_entity` / `voltage_l3_entity`, optional) | Phasenspannungen L1/L2/L3 in Volt für die W↔A-Umrechnung bei Wallboxen o. Ä. (Fallback je 230 V).        |
+
+> **Hinweis zur Semantik des Überschuss-Sensors (wichtig für korrekte Regelung):**
+> Der Pool wird als `residual_w + Σ current_w` der aktuell vom EMS geschalteten
+> Geräte berechnet (siehe Regelablauf). Der Sensor muss daher den **Netz-Überschuss
+> liefern, in dem die bereits vom EMS geschalteten Lasten noch enthalten (also
+> abgezogen) sind** – ein positiver Wert bedeutet Einspeisung, ein negativer
+> Netzbezug. Liefert der Sensor stattdessen bereits den um die EMS-Lasten
+> *bereinigten* freien Überschuss, käme es zu Doppelzählung und Aufschwingen.
+> Der Sensorname ist über die Add-on-Option `residual_power_entity` frei
+> konfigurierbar; der Standardname ist ASCII-slugifiziert, da Home Assistant
+> Umlaute umsetzt (ü→u, ö→o, ä→a, ß→ss).
 
 ## Geräte hinzufügen oder entfernen
 

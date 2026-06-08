@@ -15,7 +15,9 @@ description: >-
   überschreibt Entitätspräfix), allowed_modes (optional, Standard: auto),
   output_unit (controllable: watt oder ampere, Standard: watt),
   phases (controllable + ampere: 1 oder 3, Standard: 1),
-  voltage_entity (optional, HA-Sensor für Phasenspannung, Fallback 230 V).
+  voltage_l1_entity / voltage_l2_entity / voltage_l3_entity (optional,
+  HA-Sensoren für die Phasenspannungen L1/L2/L3, Fallback je 230 V).
+  Die globale Option residual_power_entity legt den Überschuss-Sensor fest.
 version: "1.0.23"
 slug: "skytech_hems"
 init: false
@@ -34,6 +36,7 @@ options:
   interval_s: 30
   log_level: "info"
   post_cycle_script: ""
+  residual_power_entity: "sensor.verfugbare_leistung_fur_uberschussverbraucher"
   devices:
     - name: heizstab
       label: "Heizstab"
@@ -66,6 +69,7 @@ schema:
   interval_s: int(5,300)
   log_level: list(debug|info|warning|error)
   post_cycle_script: str?
+  residual_power_entity: str?
   devices:
     - name: str
       label: str?
