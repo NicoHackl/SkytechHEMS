@@ -29,7 +29,7 @@ Die Konfiguration und Bedienung erfolgt vollständig über Home-Assistant-Helfer
 
 ## Funktionsumfang
 
-- **Zyklische Regelung** des PV-Überschusses in einstellbarem Intervall (5 – 300 s).
+- **Zyklische Regelung** des PV-Überschusses in einstellbarem Intervall (1 – 300 s).
 - **Pool-basierte Verteilung**: aus dem aktuellen Überschuss plus aktuell genutzter Leistung wird ein „Pool" berechnet, der nach Priorität auf die Geräte verteilt wird.
 - **Prioritätskaskade**: niedriger priorisierte Verbraucher werden zuerst abgeschaltet; höher priorisierte werden bei Bedarf zwangsweise gehalten.
 - **Globale und gerätespezifische Freigabe / Modi** (`auto`, `nur_heizen`, `nur_laden`, `aus`).
@@ -81,7 +81,7 @@ In den Add-on-Optionen (YAML-Editor in HA):
 
 | Option              | Typ                                     | Default | Beschreibung                                                       |
 |---------------------|-----------------------------------------|---------|--------------------------------------------------------------------|
-| `interval_s`        | int (5 – 300)                           | `30`    | Zyklusintervall in Sekunden.                                       |
+| `interval_s`        | int (1 – 300)                           | `30`    | Zyklusintervall in Sekunden.                                       |
 | `log_level`         | `debug` / `info` / `warning` / `error` | `info`  | Log-Level des Add-ons.                                             |
 | `post_cycle_script` | string?                                 | –       | Optional: `script.<name>`, wird nach jedem Zyklus aufgerufen.      |
 | `residual_power_entity` | string?                             | `sensor.verfugbare_leistung_fur_uberschussverbraucher` | HA-Sensor für den verfügbaren PV-Überschuss in Watt (wichtigster Eingangswert). Zur Semantik siehe [Externe Entitäten](#externe-entitäten). |
