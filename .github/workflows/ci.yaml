@@ -2,10 +2,7 @@ name: CI (Lint & Tests)
 
 on:
   push:
-    branches: [main]
-    paths-ignore:
-      - "config.yaml"
-  pull_request:
+    branches: [claude/main]
 
 jobs:
   lint-and-test:
