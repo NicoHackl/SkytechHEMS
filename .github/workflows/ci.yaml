@@ -2,10 +2,7 @@ name: CI (Lint & Tests)
 
 on:
   push:
-    branches: [main]
-    paths-ignore:
-      - "config.yaml"
-  pull_request:
+    branches: [claude/main]
 
 jobs:
   lint-and-test:
@@ -20,7 +17,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install ruff pytest
+          pip install -r requirements-dev.txt
           pip install -r app/requirements.txt
 
       - name: Ruff (Lint)

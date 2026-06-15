@@ -1,0 +1,5 @@
+# Dev-/Test-Abhängigkeiten (nicht im Add-on-Container, nur für CI und lokale Tests).
+# Laufzeit-Abhängigkeiten des Add-ons stehen in app/requirements.txt.
+ruff
+pytest
+hypothesis
