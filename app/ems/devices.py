@@ -388,16 +388,22 @@ class ControllableDevice(Device):
         return remaining_w - self._schutz_w if self.eligible else remaining_w
 
     def allocate_minimum(self, remaining_w: float) -> float:
-        """Durchlauf 1: das effektive Minimum beanspruchen, damit niedriger-priore
+        """Durchlauf 1: das technische Minimum beanspruchen, damit niedriger-priore
         Geräte erst starten können, nachdem jedes höher-priore Gerät sein Minimum
         garantiert hat.
-        Effektives Minimum = max(min_technisch_w, geschuetzte_mindestleistung_w)."""
+
+        Schwelle ist AUSSCHLIESSLICH min_technisch_w – die technische Untergrenze,
+        ab der das Gerät überhaupt laufen kann. geschuetzte_mindestleistung_w ist
+        bewusst NICHT Teil dieser Schwelle: Sie ist reine Reservierung gegen binäre
+        Verbraucher (via _schutz_w in consume_from_pool) und darf das Gerät nicht
+        ausschalten, wenn der Pool zwar min_technisch_w trägt, aber nicht die volle
+        geschützte Leistung."""
         if not self.eligible or remaining_w <= 0:
             self._alloc_w = 0.0
             return remaining_w
-        min_w = max(self.min_technisch_w, self.geschuetzte_mindestleistung_w)
+        min_w = self.min_technisch_w
         if min_w <= 0:
-            # Kein Minimum definiert – vollständig dem Überschuss-Durchlauf überlassen
+            # Keine technische Untergrenze – vollständig dem Überschuss-Durchlauf überlassen
             self._alloc_w = 0.0
             return remaining_w
         if remaining_w >= min_w:
@@ -407,13 +413,13 @@ class ControllableDevice(Device):
         return remaining_w
 
     def allocate_surplus(self, remaining_w: float) -> float:
-        """Durchlauf 2: nachdem alle Geräte ihr Minimum haben, den Überschuss in
-        Prioritätsreihenfolge (höchste Priorität zuerst) bis max_technisch_w verteilen."""
+        """Durchlauf 2: nachdem alle Geräte ihr technisches Minimum haben, den
+        Überschuss in Prioritätsreihenfolge (höchste Priorität zuerst) bis
+        max_technisch_w verteilen."""
         if not self.eligible or remaining_w <= 0:
             return remaining_w
-        eff_min = max(self.min_technisch_w, self.geschuetzte_mindestleistung_w)
-        if eff_min > 0 and self._alloc_w == 0:
-            # Hat in Durchlauf 1 kein Minimum erhalten → Gerät bleibt aus
+        if self.min_technisch_w > 0 and self._alloc_w == 0:
+            # Hat in Durchlauf 1 das technische Minimum nicht erhalten → Gerät bleibt aus
             return remaining_w
         additional = min(remaining_w, self.max_technisch_w - self._alloc_w)
         if additional > 0:
