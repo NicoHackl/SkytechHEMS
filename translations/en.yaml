@@ -64,7 +64,7 @@ configuration:
     description: >-
       How often the EMS control cycle runs. Shorter intervals (e.g. 10 s)
       react faster to PV power changes but generate more HA API requests.
-      Recommended: 30 s for normal operation. Allowed range: 5 – 300 s.
+      Recommended: 30 s for normal operation. Allowed range: 1 – 300 s.
   log_level:
     name: Log level
     description: >-

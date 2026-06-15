@@ -65,7 +65,7 @@ configuration:
       Wie oft der EMS-Regelzyklus ausgeführt wird. Kleinere Werte (z. B. 10 s)
       reagieren schneller auf Leistungsänderungen der PV-Anlage, erzeugen aber
       mehr HA-API-Anfragen. Empfehlung: 30 s für den normalen Betrieb.
-      Erlaubter Bereich: 5 – 300 s.
+      Erlaubter Bereich: 1 – 300 s.
   log_level:
     name: Log-Level
     description: >-
