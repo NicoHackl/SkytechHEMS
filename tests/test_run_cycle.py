@@ -35,6 +35,7 @@ def _controllable_w(prefix, *, prio=1, min_w=500, max_w=3000, geschuetzt=0,
     """Watt-Modus: alle Grenzwert-Helfer eines regelbaren Geräts."""
     return {
         f"input_boolean.ems_{prefix}_freigabe": "on",
+        f"input_boolean.ems_{prefix}_technische_freigabe": "on",
         f"input_select.ems_{prefix}_modus": "auto",
         f"input_number.ems_{prefix}_prioritat": prio,
         f"input_number.ems_{prefix}_min_technisch_w": min_w,
@@ -52,6 +53,7 @@ def _controllable_w(prefix, *, prio=1, min_w=500, max_w=3000, geschuetzt=0,
 def _binary(prefix, *, prio=2, power=1000, switch="off"):
     return {
         f"input_boolean.ems_{prefix}_freigabe": "on",
+        f"input_boolean.ems_{prefix}_technische_freigabe": "on",
         f"input_select.ems_{prefix}_modus": "auto",
         f"input_number.ems_{prefix}_prioritat": prio,
         f"input_number.ems_{prefix}_leistung_w": power,
@@ -90,6 +92,50 @@ def test_controllable_runs_at_min_technisch_when_geschuetzt_exceeds_pool():
     op = _op_for(res["write_ops"], "input_number.ems_heizstab_anforderung_leistung_w")
     assert op is not None, "Sollwert muss geschrieben werden (Gerät darf nicht aus bleiben)"
     assert op[2]["value"] == pytest.approx(1500)
+
+
+# ---------------------------------------------------------------------------
+# Doppelte Freigabe: _freigabe UND _technische_freigabe müssen aktiv sein
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("freigabe,technische_freigabe", [
+    ("off", "on"),   # nur technische Freigabe → nicht eligible
+    ("on",  "off"),  # nur Bedien-Freigabe     → nicht eligible
+    ("off", "off"),  # keine Freigabe          → nicht eligible
+])
+def test_device_not_eligible_without_both_freigaben(freigabe, technische_freigabe):
+    ctrl = EMSController(
+        [{"name": "heizstab", "class": "controllable",
+          "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto"}],
+        residual_power_entity="sensor.s",
+    )
+    states = {
+        **_global(),
+        **_controllable_w("heizstab", min_w=500, max_w=3000),
+        "input_boolean.ems_heizstab_freigabe": freigabe,
+        "input_boolean.ems_heizstab_technische_freigabe": technische_freigabe,
+        "sensor.s": 5000,
+        "sensor.heizstab_ist": 0,
+    }
+    res = ctrl.run_cycle(make_states(states))
+    assert res["status"]["devices"][0]["eligible"] is False
+
+
+def test_device_eligible_only_when_both_freigaben_on():
+    ctrl = EMSController(
+        [{"name": "heizstab", "class": "controllable",
+          "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto"}],
+        residual_power_entity="sensor.s",
+    )
+    states = {
+        **_global(),
+        # _controllable_w setzt beide Freigaben bereits auf "on"
+        **_controllable_w("heizstab", min_w=500, max_w=3000),
+        "sensor.s": 5000,
+        "sensor.heizstab_ist": 0,
+    }
+    res = ctrl.run_cycle(make_states(states))
+    assert res["status"]["devices"][0]["eligible"] is True
 
 
 def test_controllable_surplus_capped_at_max():
@@ -178,6 +224,7 @@ def test_ampere_device_writes_floored_ampere_and_phase():
     states = {
         **_global(),
         "input_boolean.ems_wallbox_freigabe": "on",
+        "input_boolean.ems_wallbox_technische_freigabe": "on",
         "input_select.ems_wallbox_modus": "auto",
         "input_number.ems_wallbox_prioritat": 1,
         "input_number.ems_wallbox_min_technisch_a": 6,

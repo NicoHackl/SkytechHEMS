@@ -32,7 +32,7 @@ Die Konfiguration und Bedienung erfolgt vollständig über Home-Assistant-Helfer
 - **Zyklische Regelung** des PV-Überschusses in einstellbarem Intervall (1 – 300 s).
 - **Pool-basierte Verteilung**: aus dem aktuellen Überschuss plus aktuell genutzter Leistung wird ein „Pool" berechnet, der nach Priorität auf die Geräte verteilt wird.
 - **Prioritätskaskade**: niedriger priorisierte Verbraucher werden zuerst abgeschaltet; höher priorisierte werden bei Bedarf zwangsweise gehalten.
-- **Globale und gerätespezifische Freigabe / Modi** (`auto`, `nur_heizen`, `nur_laden`, `aus`).
+- **Globale und gerätespezifische Freigabe / Modi** (`auto`, `nur_heizen`, `nur_laden`, `aus`). Jedes Gerät besitzt zusätzlich eine **technische Freigabe** – erst wenn Bedien-Freigabe **und** technische Freigabe aktiv sind, wirkt das Gerät am EMS mit.
 - **Hysterese** für binäre Verbraucher über `einschaltreserve_w` (global und pro Gerät).
 - **Zeitschutz** für binäre Verbraucher: Mindestlaufzeit, Mindestauszeit, Abschaltverzögerung. Die Mindestlaufzeit schützt das Gerät auch bei Notabschaltung.
 - **One-Change-Limit**: pro Zyklus wird höchstens ein binäres Gerät geschaltet (außer bei Notabschaltung).
@@ -145,7 +145,7 @@ devices:
 Pro Zyklus führt `EMSController.run_cycle()` der Reihe nach aus:
 
 1. **Globale Eingaben** aus HA lesen (Freigabe, Modus, Puffer, Einschaltreserve, Überschuss-Sensor, Debug-Schalter).
-2. **Eligibility** je Gerät bestimmen (globaler Modus muss in `allowed_modes` liegen und `freigabe`/`modus` des Geräts müssen aktiv sein).
+2. **Eligibility** je Gerät bestimmen (globaler Modus muss in `allowed_modes` liegen und `freigabe`, `technische_freigabe` sowie `modus` des Geräts müssen aktiv sein).
 3. **Pool** berechnen: `residual_w + Σ current_w` der Geräte, oder `0` bei Lockout/EMS aus.
 4. **Phasenauswahl** für regelbare Geräte mit `output_unit=ampere` und `phases="1,3"`: Das EMS wählt die höchste Phasenanzahl, für die `floor(pool_w / (phases × U)) ≥ min_technisch_a` gilt. Bei einem Phasenwechsel wird `anzahl_phase` in HA geschrieben und der Ramp-Timer zurückgesetzt. Die Hysterese `phase_switch_delay_s` verhindert Oszillation.
 5. **Defizit** ermitteln und prüfen, ob die regelbaren Geräte das Defizit allein abregeln können (`binary_immediate_off`).
@@ -190,7 +190,8 @@ Die folgenden Helfer existieren für *jedes* Gerät (regelbar **und** binär). `
 
 | Entität                                       | Domain          | Werte                                                  | Funktion                                                                       |
 |-----------------------------------------------|-----------------|--------------------------------------------------------|--------------------------------------------------------------------------------|
-| `input_boolean.ems_<prefix>_freigabe`         | `input_boolean` | `on` / `off`                                           | Gerätespezifische Freigabe. Ohne `on` ist das Gerät nicht eligible.            |
+| `input_boolean.ems_<prefix>_freigabe`         | `input_boolean` | `on` / `off`                                           | Gerätespezifische (Bedien-)Freigabe. Ohne `on` ist das Gerät nicht eligible.   |
+| `input_boolean.ems_<prefix>_technische_freigabe` | `input_boolean` | `on` / `off`                                        | Technische Freigabe (z. B. Gerät betriebsbereit). Ein Gerät ist **nur** eligible, wenn `freigabe` **und** `technische_freigabe` auf `on` stehen. |
 | `input_select.ems_<prefix>_modus`             | `input_select`  | mindestens `auto` (weitere Optionen werden ignoriert)  | Nur bei `auto` wirkt das Gerät am EMS mit. Andere Optionen = manuell/aus.      |
 | `input_number.ems_<prefix>_prioritat`         | `input_number`  | int (kleiner = höher priorisiert)                      | Sortierreihenfolge bei Pool-Verteilung und Kaskade.                            |
 
@@ -234,6 +235,7 @@ Außerdem benötigt jedes regelbare Gerät einen externen Ist-Leistungs-Sensor (
 
 ```
 input_boolean.ems_heizstab_freigabe
+input_boolean.ems_heizstab_technische_freigabe
 input_select.ems_heizstab_modus
 input_number.ems_heizstab_prioritat
 input_number.ems_heizstab_min_technisch_w
@@ -252,6 +254,7 @@ sensor.elwa_modbus_istleistung                       ← Ist-Leistung (extern)
 
 ```
 input_boolean.ems_wallbox_freigabe
+input_boolean.ems_wallbox_technische_freigabe
 input_select.ems_wallbox_modus
 input_number.ems_wallbox_prioritat
 input_number.ems_wallbox_min_technisch_a             ← Mindest-Ladestrom in A (z. B. 6)
@@ -294,6 +297,7 @@ Ausgabe und externer Schalter:
 
 ```
 input_boolean.ems_heizlufter_1_freigabe
+input_boolean.ems_heizlufter_1_technische_freigabe
 input_select.ems_heizlufter_1_modus
 input_number.ems_heizlufter_1_prioritat
 input_number.ems_heizlufter_1_leistung_w
