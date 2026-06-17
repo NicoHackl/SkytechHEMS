@@ -42,7 +42,7 @@ class Device(ABC):
         self._now_ts: float = 0.0
 
     # ------------------------------------------------------------------
-    # Freigabe (global + gerätespezifische Freigabe/Modus)
+    # Freigabe (global + gerätespezifische Freigabe + technische Freigabe + Modus)
     # ------------------------------------------------------------------
 
     def check_eligible(self, st: StateProxy,
@@ -54,10 +54,14 @@ class Device(ABC):
         return self._device_eligible(st)
 
     def _device_eligible(self, st: StateProxy) -> bool:
+        # Ein Gerät ist nur freigegeben, wenn BEIDE Freigabe-Schalter aktiv sind:
+        #   _freigabe            – Bedien-/Nutzungsfreigabe (z. B. Komfort/Anwesenheit)
+        #   _technische_freigabe – technische Freigabe (z. B. Gerät betriebsbereit)
         pfx = self._entity_prefix
         freigabe = st.get(f"input_boolean.ems_{pfx}_freigabe") == "on"
+        technische_freigabe = st.get(f"input_boolean.ems_{pfx}_technische_freigabe") == "on"
         modus    = st.get(f"input_select.ems_{pfx}_modus")    == "auto"
-        return freigabe and modus
+        return freigabe and technische_freigabe and modus
 
     # ------------------------------------------------------------------
     # Polymorphe Schnittstelle – von jeder Unterklasse implementiert

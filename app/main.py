@@ -57,6 +57,7 @@ def _ctrl_items_controllable(p: str, output_unit: str = 'watt') -> list:
     suf = 'a' if output_unit == 'ampere' else 'w'
     items = [
         {"entity": f"input_boolean.ems_{p}_freigabe",                        "label": "Freigabe"},
+        {"entity": f"input_boolean.ems_{p}_technische_freigabe",             "label": "Technische Freigabe"},
         {"entity": f"input_select.ems_{p}_modus",                            "label": "Modus"},
         {"entity": f"input_number.ems_{p}_prioritat",                        "label": "Priorität"},
         {"entity": f"input_number.ems_{p}_geschutzte_mindestleistung_{suf}", "label": "Geschützte Mindestleistung"},
@@ -76,6 +77,7 @@ def _ctrl_items_controllable(p: str, output_unit: str = 'watt') -> list:
 def _ctrl_items_binary(p: str) -> list:
     return [
         {"entity": f"input_boolean.ems_{p}_freigabe",             "label": "Freigabe"},
+        {"entity": f"input_boolean.ems_{p}_technische_freigabe",  "label": "Technische Freigabe"},
         {"entity": f"input_select.ems_{p}_modus",                 "label": "Modus"},
         {"entity": f"input_number.ems_{p}_prioritat",             "label": "Priorität"},
         {"entity": f"input_number.ems_{p}_leistung_w",            "label": "Leistung"},
