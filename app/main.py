@@ -168,11 +168,16 @@ class HEMSApp:
             cls    = (cfg.get("class")         or "").strip()
             prefix = (cfg.get("entity_prefix") or "").strip() or name
             label  = (cfg.get("label")         or "").strip() or name.replace("_", " ").title()
+            # `name` = technischer Bezeichner (stabile Geräte-ID, deckt sich mit der
+            # `id` in `/api/status`), `label` = reiner Anzeigename. Beide getrennt
+            # ausliefern, damit Konsumenten (Energy Pilot) die Identität am `name`
+            # festmachen und `label` nur anzeigen – ein Label-Rename bricht so keine
+            # Geräte-Zuordnung mehr.
             if cls == "controllable":
                 output_unit = (cfg.get("output_unit") or "watt").strip()
-                schema.append({"label": label, "items": _ctrl_items_controllable(prefix, output_unit)})
+                schema.append({"name": name, "label": label, "items": _ctrl_items_controllable(prefix, output_unit)})
             elif cls == "binary":
-                schema.append({"label": label, "items": _ctrl_items_binary(prefix)})
+                schema.append({"name": name, "label": label, "items": _ctrl_items_binary(prefix)})
         return web.json_response(schema)
 
     async def _handle_controls(self, request: web.Request) -> web.Response:
