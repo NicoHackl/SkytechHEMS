@@ -9,6 +9,13 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 ## [Unreleased]
 
 ### Geändert
+- **`/api/device_controls_schema` liefert je Gerät zusätzlich `name`.** Das Kontrollschema
+  gab bisher nur `label` (Anzeigename) + `items` aus. Konsumenten (Energy Pilot) mussten die
+  technische Geräteidentität aus dem `entity_prefix` erraten und hingen für die Zuordnung am
+  Label – ein Label-Rename in der Geräteverwaltung brach die Korrelation. Das Schema enthält
+  nun `name` (technischer Bezeichner, identisch mit der `id` in `/api/status`), sodass EP die
+  Identität am stabilen `name` festmacht und `label` nur noch anzeigt. Rein additiv,
+  abwärtskompatibel.
 - **Doppelte Geräte-Freigabe:** Ein Gerät wird für das HEMS nur noch dann
   freigegeben (eligible), wenn **beide** Freigabe-Schalter aktiv sind:
   `input_boolean.ems_<prefix>_freigabe` (Bedien-/Nutzungsfreigabe) **und** der
