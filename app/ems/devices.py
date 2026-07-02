@@ -514,6 +514,10 @@ class ControllableDevice(Device):
             d["voltage_l2"]      = round(self._voltage_l2, 1)
             d["voltage_l3"]      = round(self._voltage_l3, 1)
             d["new_a"]           = math.floor(self._new_w / eff) if eff > 0 else 0
+            # Effektiver Mindestleistungs-Schutz in Ampere (schutz_w über Phasen×Spannung
+            # zurückgerechnet), damit Ampere-Konsumenten (Energy Pilot) einheitengleich
+            # vergleichen können – analog zu new_a. Kein floor: Schutz nicht unterschätzen.
+            d["schutz_a"]        = round(self._schutz_w / eff, 2) if eff > 0 else 0.0
             if len(self._allowed_phases) > 1 and self._last_phase_change_ts > 0:
                 remaining = self.phase_switch_delay_s - (self._now_ts - self._last_phase_change_ts)
                 d["phase_lock_remaining_s"] = max(0.0, round(remaining))

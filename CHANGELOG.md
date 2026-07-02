@@ -8,6 +8,15 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Hinzugefügt
+- **`/api/status` liefert für Ampere-Geräte zusätzlich `schutz_a`.** Der effektive
+  Mindestleistungs-Schutz (`schutz_w`, Watt) wird über Phasenanzahl × Spannung nach Ampere
+  umgerechnet und im Gerätestatus mitgegeben – analog zum bestehenden `new_a`. Ohne dieses
+  Feld konnten Ampere-Konsumenten (Energy Pilot) den Schutz nicht einheitengleich mit ihrem
+  Ampere-Vorschlag (`geschutzte_mindestleistung_a_vorschlag`) vergleichen: Watt-Geräte hatten
+  `schutz_w`, Ampere-Geräte (Wallbox) gar kein Pendant, sodass die Plan-Rückkopplung dort
+  „unbekannt" statt eines Vergleichs zeigte.
+
 ### Geändert
 - **`/api/device_controls_schema` liefert je Gerät zusätzlich `name`.** Das Kontrollschema
   gab bisher nur `label` (Anzeigename) + `items` aus. Konsumenten (Energy Pilot) mussten die
