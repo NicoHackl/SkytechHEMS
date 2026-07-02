@@ -123,6 +123,19 @@ def test_allocation_uses_min_technisch_not_geschuetzte(min_w, geschuetzt, pool, 
     assert d.alloc_w == expected_alloc
 
 
+def test_status_dict_ampere_exposes_schutz_a():
+    # Ampere-Geräte geben schutz_a (= schutz_w / (Phasen×Spannung)) im Status aus, damit
+    # Ampere-Konsumenten (Energy Pilot) den Schutz einheitengleich vergleichen können.
+    d = make_ampere(allowed_phases=[1])
+    d._raw_geschuetzt = 6.0   # 6 A Mindestleistung (nativ)
+    d._raw_max = 16.0         # 16 A -> max_technisch_w = 3680 W, damit die Deckelung nicht greift
+    d._apply_raw_to_watt()    # eff = 230 V (1-phasig) -> geschuetzt_w = 1380 W, schutz_w = 1380 W
+    status = d.to_status_dict()
+    assert status["output_unit"] == "ampere"
+    assert status["schutz_w"] == 1380.0
+    assert status["schutz_a"] == 6.0   # 1380 / 230
+
+
 def test_schutz_w_combines_geschuetzt_reserve_puffer_and_caps_at_max():
     # geschuetzte_mindestleistung wirkt ausschließlich über schutz_w (Schutz gegen
     # binäre Verbraucher) – schutz_w = geschuetzt + reserve + globaler Puffer,
