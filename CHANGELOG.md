@@ -9,6 +9,11 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 ## [Unreleased]
 
 ### Hinzugefügt
+- **Responsive Darstellung (Handy/Tablet).** Die Ingress-Oberfläche passt sich an kleine
+  Bildschirme an – **kein horizontales Scrollen mehr, nur vertikal**: Gerät- und Steuerungs-
+  Kacheln werden am Handy (≤480 px) einspaltig (kein `minmax`-Überlauf schmaler Raster), die
+  Tab-Leiste bricht um statt seitlich zu scrollen, Werte/Namen brechen um, größere Touch-Ziele.
+  Tablet-Breakpoint (≤900 px). **Rein visuell/additiv** – Karten, IDs und `app.js` unverändert.
 - **`/api/status` liefert für Ampere-Geräte zusätzlich `schutz_a`.** Der effektive
   Mindestleistungs-Schutz (`schutz_w`, Watt) wird über Phasenanzahl × Spannung nach Ampere
   umgerechnet und im Gerätestatus mitgegeben – analog zum bestehenden `new_a`. Ohne dieses
