@@ -4,7 +4,361 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Skytech HEMS</title>
-  <link rel="stylesheet" href="static/styles.css">
+  <style>
+    /* ============================================================
+       Skytech HEMS – Weboberfläche im Home-Assistant-Design.
+       CSS ist bewusst inline (wie beim Energy Pilot), damit es
+       nicht separat geladen/gecacht werden muss und immer greift.
+       Alle von app.js erzeugten Klassennamen bleiben unverändert.
+       ============================================================ */
+
+    /* ---- HA-Designtokens (Standardtheme, hell) ---- */
+    :root {
+      color-scheme: light dark;
+      --ha-primary: #03a9f4;
+      --ha-primary-dark: #0288d1;
+      --ha-accent: #ff9800;
+      --ha-bg: #f5f5f5;
+      --ha-card-bg: #ffffff;
+      --ha-text: #212121;
+      --ha-text-secondary: #727272;
+      --ha-text-disabled: #bdbdbd;
+      --ha-divider: rgba(0, 0, 0, .12);
+      --ha-error: #db4437;
+      --ha-warning: #f57c00;
+      --ha-success: #43a047;
+      --ha-info: #039be5;
+      --ha-header-bg: #03a9f4;
+      --ha-header-text: #ffffff;
+      --ha-header-text-dim: rgba(255, 255, 255, .72);
+      --ha-radius: 12px;
+      --ha-radius-sm: 6px;
+      --ha-shadow: 0 2px 1px -1px rgba(0, 0, 0, .2),
+                   0 1px 1px 0 rgba(0, 0, 0, .14),
+                   0 1px 3px 0 rgba(0, 0, 0, .12);
+      --ha-chip-bg: rgba(0, 0, 0, .06);
+      --ha-hover: rgba(0, 0, 0, .04);
+      --ha-font: Roboto, "Helvetica Neue", -apple-system, BlinkMacSystemFont,
+                 "Segoe UI", sans-serif;
+    }
+
+    /* ---- HA-Designtokens (dunkel) ---- */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --ha-bg: #111111;
+        --ha-card-bg: #1c1c1c;
+        --ha-text: #e1e1e1;
+        --ha-text-secondary: #9b9b9b;
+        --ha-text-disabled: #6f6f6f;
+        --ha-divider: rgba(225, 225, 225, .12);
+        --ha-header-bg: #1c1c1c;
+        --ha-chip-bg: rgba(255, 255, 255, .08);
+        --ha-hover: rgba(255, 255, 255, .06);
+        --ha-shadow: 0 2px 1px -1px rgba(0, 0, 0, .4),
+                     0 1px 1px 0 rgba(0, 0, 0, .28),
+                     0 1px 3px 0 rgba(0, 0, 0, .24);
+      }
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--ha-bg);
+      color: var(--ha-text);
+      font-family: var(--ha-font);
+      font-size: 14px;
+      line-height: 1.5;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ============================================================
+       Kopfleiste (HA App-Bar) + Tabs
+       ============================================================ */
+    .ha-header {
+      background: var(--ha-header-bg);
+      color: var(--ha-header-text);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      box-shadow: var(--ha-shadow);
+    }
+    .ha-header-top {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      height: 56px;
+      padding: 0 16px;
+    }
+    .ha-logo {
+      width: 26px;
+      height: 26px;
+      flex-shrink: 0;
+      fill: currentColor;
+    }
+    .ha-title {
+      font-size: 1.25rem;
+      font-weight: 500;
+      letter-spacing: .1px;
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .ha-header-status {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: .82rem;
+      color: var(--ha-header-text-dim);
+    }
+    .dot {
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      background: #69f0ae;
+      animation: pulse 2s infinite;
+    }
+    .dot.error { background: #ff5252; animation: none; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+    /* Tabs (HA-View-Tabs: Unterstrich-Indikator in der Kopfleiste) */
+    .tabs {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      padding: 0 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .tabs::-webkit-scrollbar { display: none; }
+    .tab-btn {
+      appearance: none;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--ha-header-text-dim);
+      cursor: pointer;
+      font-family: inherit;
+      font-size: .875rem;
+      font-weight: 500;
+      letter-spacing: .4px;
+      text-transform: uppercase;
+      padding: 14px 16px;
+      white-space: nowrap;
+      transition: color .15s, border-color .15s, background .15s;
+    }
+    .tab-btn.active { color: var(--ha-header-text); border-bottom-color: var(--ha-header-text); }
+    .tab-btn:hover:not(.active) { color: var(--ha-header-text); background: rgba(255, 255, 255, .08); }
+
+    /* ============================================================
+       Inhaltsbereich
+       ============================================================ */
+    .ha-content { max-width: 1280px; margin: 0 auto; }
+    .tab-content { display: none; padding: 16px; }
+    .tab-content.active { display: block; }
+
+    /* ---- Abschnitts-Überschrift ---- */
+    .section {
+      font-size: .75rem;
+      color: var(--ha-text-secondary);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      font-weight: 500;
+      margin: 22px 4px 10px;
+    }
+
+    /* ---- Chips (HA-Statuschips) ---- */
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    .chip {
+      padding: 5px 12px;
+      border-radius: 16px;
+      font-size: .78rem;
+      font-weight: 500;
+      background: var(--ha-chip-bg);
+      color: var(--ha-text);
+      display: inline-flex;
+      align-items: center;
+    }
+    .chip-green  { background: rgba(67, 160, 71, .16);  color: var(--ha-success); }
+    .chip-red    { background: rgba(219, 68, 55, .16);  color: var(--ha-error); }
+    .chip-blue   { background: rgba(3, 169, 244, .16);  color: var(--ha-info); }
+    .chip-grey   { background: var(--ha-chip-bg);       color: var(--ha-text-secondary); }
+    .chip-orange { background: rgba(245, 124, 0, .16);  color: var(--ha-warning); }
+
+    /* ---- Kennzahlen-Kacheln (HA-Glance) ---- */
+    .metrics { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 8px; }
+    .metric {
+      background: var(--ha-card-bg);
+      border-radius: var(--ha-radius);
+      box-shadow: var(--ha-shadow);
+      padding: 16px 20px;
+      min-width: 140px;
+      flex: 1 1 140px;
+      text-align: center;
+    }
+    .metric .val { font-size: 1.7rem; font-weight: 400; color: var(--ha-primary); line-height: 1.2; }
+    .metric .val.warn { color: var(--ha-warning); }
+    .metric .val.ok   { color: var(--ha-success); }
+    .metric .lbl {
+      font-size: .72rem;
+      color: var(--ha-text-secondary);
+      margin-top: 6px;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+
+    /* ---- Gerätekarten (Monitor) ---- */
+    .devices { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+    .card {
+      background: var(--ha-card-bg);
+      border-radius: var(--ha-radius);
+      box-shadow: var(--ha-shadow);
+      border-left: 4px solid var(--ha-divider);
+      padding: 14px 16px;
+    }
+    .card.active { border-left-color: var(--ha-success); }
+    .card.idle   { border-left-color: var(--ha-primary); }
+    .card.off    { border-left-color: var(--ha-text-disabled); }
+    .card-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .card-name { font-weight: 500; font-size: 1rem; color: var(--ha-text); }
+    .prio-badge {
+      font-size: .72rem;
+      background: var(--ha-chip-bg);
+      color: var(--ha-text-secondary);
+      border-radius: 12px;
+      padding: 2px 9px;
+      font-weight: 500;
+    }
+    .row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--ha-divider); }
+    .row:last-child { border-bottom: none; }
+    .row .k { color: var(--ha-text-secondary); }
+    .row .v { font-weight: 500; color: var(--ha-text); text-align: right; }
+    .row .v.on      { color: var(--ha-success); }
+    .row .v.off-val { color: var(--ha-error); }
+    .row .v.changed { color: var(--ha-accent); }
+    .row .v.dim     { color: var(--ha-text-disabled); font-weight: 400; }
+
+    /* ---- Fußzeile ---- */
+    .footer {
+      margin-top: 20px;
+      font-size: .75rem;
+      color: var(--ha-text-secondary);
+      display: flex;
+      gap: 18px;
+      flex-wrap: wrap;
+      padding: 4px;
+    }
+
+    /* ---- Fehlerbanner ---- */
+    .error-banner {
+      background: rgba(219, 68, 55, .12);
+      border-left: 4px solid var(--ha-error);
+      border-radius: var(--ha-radius-sm);
+      padding: 12px 14px;
+      color: var(--ha-error);
+      font-size: .85rem;
+      margin-bottom: 14px;
+      display: none;
+    }
+
+    /* ============================================================
+       Steuerung-Tab
+       ============================================================ */
+    .ctrl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+
+    .ctrl-card {
+      background: var(--ha-card-bg);
+      border-radius: var(--ha-radius);
+      box-shadow: var(--ha-shadow);
+      overflow: hidden;
+    }
+    .ctrl-card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px;
+      cursor: pointer;
+      user-select: none;
+      transition: background .15s;
+    }
+    .ctrl-card-header:hover { background: var(--ha-hover); }
+    .ctrl-card-title { font-weight: 500; color: var(--ha-text); font-size: 1rem; }
+    .ctrl-card-arrow { color: var(--ha-text-secondary); font-size: .8rem; transition: transform .2s; }
+    .ctrl-card-arrow.open { transform: rotate(180deg); }
+    .ctrl-card-body { padding: 0; }
+    .ctrl-card-body.collapsed { display: none; }
+
+    .ctrl-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      border-top: 1px solid var(--ha-divider);
+      gap: 10px;
+      min-height: 44px;
+    }
+    .ctrl-row .k { color: var(--ha-text-secondary); flex: 1; min-width: 0; }
+    .ctrl-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+    /* Toggle (HA-Switch-Anmutung als Pille) */
+    .toggle-btn {
+      appearance: none;
+      padding: 5px 14px;
+      border-radius: 16px;
+      border: 1px solid var(--ha-divider);
+      background: var(--ha-chip-bg);
+      color: var(--ha-text-secondary);
+      cursor: pointer;
+      font-family: inherit;
+      font-size: .78rem;
+      font-weight: 600;
+      letter-spacing: .3px;
+      min-width: 52px;
+      transition: background .15s, color .15s, border-color .15s;
+    }
+    .toggle-btn.on { background: var(--ha-primary); color: #fff; border-color: var(--ha-primary); }
+    .toggle-btn:hover { filter: brightness(.97); }
+
+    /* Zahlenfeld (HA-Textfeld) */
+    .num-wrap { display: flex; align-items: center; gap: 5px; }
+    .num-input {
+      width: 82px;
+      padding: 6px 9px;
+      background: var(--ha-bg);
+      border: 1px solid var(--ha-divider);
+      border-radius: var(--ha-radius-sm);
+      color: var(--ha-text);
+      font-family: inherit;
+      font-size: .85rem;
+      text-align: right;
+      outline: none;
+      transition: border-color .15s;
+    }
+    .num-input:focus { border-color: var(--ha-primary); }
+    .unit { color: var(--ha-text-secondary); font-size: .78rem; min-width: 16px; }
+
+    /* Auswahl (HA-Select) */
+    .sel-input {
+      padding: 6px 10px;
+      background: var(--ha-bg);
+      border: 1px solid var(--ha-divider);
+      border-radius: var(--ha-radius-sm);
+      color: var(--ha-text);
+      font-family: inherit;
+      font-size: .85rem;
+      outline: none;
+      cursor: pointer;
+      transition: border-color .15s;
+    }
+    .sel-input:focus { border-color: var(--ha-primary); }
+
+    /* Speicher-Indikator */
+    .save-indicator { font-size: .9rem; width: 16px; text-align: center; }
+    .save-indicator.saving { color: var(--ha-text-secondary); }
+    .save-indicator.saved  { color: var(--ha-success); }
+    .save-indicator.err    { color: var(--ha-error); }
+
+    .ctrl-not-found { color: var(--ha-text-disabled); font-style: italic; font-size: .8rem; }
+    .ctrl-refresh { font-size: .75rem; color: var(--ha-text-secondary); margin-top: 14px; padding: 4px; }
+  </style>
 </head>
 <body>
 
@@ -12,7 +366,7 @@
   <header class="ha-header">
     <div class="ha-header-top">
       <svg class="ha-logo" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 3 4 9v12h16V9l-8-6Zm0 2.5 6 4.5v9h-4v-6H10v6H6v-9l6-4.5Z"/>
+        <path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/>
       </svg>
       <span class="ha-title">Skytech HEMS</span>
       <div class="ha-header-status">

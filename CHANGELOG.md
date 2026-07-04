@@ -27,8 +27,11 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
   - **Rein visuell – keine funktionale Änderung:** beide Tabs, alle API-Aufrufe (`/api/status`,
     `/api/controls`, `/api/device_controls_schema`, `/api/set`), sämtliche Element-IDs und das
     gesamte `app.js`-Verhalten (Polling, Countdown-Ticker, Auf-/Zuklappen, Speichern) bleiben
-    unverändert. Betrifft nur `static/styles.css` (kompletter Neuaufbau) und die Struktur von
-    `templates/index.html` (App-Bar + Inhalts-Container); die Klassennamen sind identisch.
+    unverändert. Die Klassennamen sind identisch.
+  - **CSS jetzt inline in `templates/index.html`** (wie beim Energy Pilot) statt in einer
+    separaten `static/styles.css` – letztere wurde entfernt. Damit greift das neue Design unter
+    HA-Ingress zuverlässig, ohne dass ein separat gecachtes Stylesheet veralten und die alte
+    Optik plus überdimensioniertes Kopf-Logo stehenlassen kann. `static/app.js` bleibt separat.
 - **`/api/device_controls_schema` liefert je Gerät zusätzlich `name`.** Das Kontrollschema
   gab bisher nur `label` (Anzeigename) + `items` aus. Konsumenten (Energy Pilot) mussten die
   technische Geräteidentität aus dem `entity_prefix` erraten und hingen für die Zuordnung am
