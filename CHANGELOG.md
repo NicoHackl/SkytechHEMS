@@ -18,6 +18,17 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
   „unbekannt" statt eines Vergleichs zeigte.
 
 ### Geändert
+- **Weboberfläche im Home-Assistant-Design neu gestaltet.** Layout, Farben und Aufbau des
+  Monitoring-/Steuerungs-UIs sind jetzt stark an das HA-Standardtheme (Material Design)
+  angelehnt: blaue App-Bar (Primärfarbe `#03a9f4`) mit den View-Tabs „Status"/„Steuerung" und
+  Unterstrich-Indikator, abgerundete `ha-card`-Karten (12 px, weiche Schatten) für Kennzahlen,
+  Geräte- und Steuerkarten, HA-typische Statuschips, `ha-switch`-artige Toggle-Pillen und
+  HA-Textfelder – inklusive hellem **und** dunklem Theme über `prefers-color-scheme`.
+  - **Rein visuell – keine funktionale Änderung:** beide Tabs, alle API-Aufrufe (`/api/status`,
+    `/api/controls`, `/api/device_controls_schema`, `/api/set`), sämtliche Element-IDs und das
+    gesamte `app.js`-Verhalten (Polling, Countdown-Ticker, Auf-/Zuklappen, Speichern) bleiben
+    unverändert. Betrifft nur `static/styles.css` (kompletter Neuaufbau) und die Struktur von
+    `templates/index.html` (App-Bar + Inhalts-Container); die Klassennamen sind identisch.
 - **`/api/device_controls_schema` liefert je Gerät zusätzlich `name`.** Das Kontrollschema
   gab bisher nur `label` (Anzeigename) + `items` aus. Konsumenten (Energy Pilot) mussten die
   technische Geräteidentität aus dem `entity_prefix` erraten und hingen für die Zuordnung am

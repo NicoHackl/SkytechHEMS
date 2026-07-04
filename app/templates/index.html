@@ -3,42 +3,54 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>HEMS Monitor</title>
+  <title>Skytech HEMS</title>
   <link rel="stylesheet" href="static/styles.css">
 </head>
 <body>
 
-  <div class="header">
-    <div class="dot" id="live-dot"></div>
-    <h1>HEMS</h1>
-  </div>
+  <!-- HA-App-Bar: Titel + Live-Indikator, darunter die View-Tabs -->
+  <header class="ha-header">
+    <div class="ha-header-top">
+      <svg class="ha-logo" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 3 4 9v12h16V9l-8-6Zm0 2.5 6 4.5v9h-4v-6H10v6H6v-9l6-4.5Z"/>
+      </svg>
+      <span class="ha-title">Skytech HEMS</span>
+      <div class="ha-header-status">
+        <span class="dot" id="live-dot"></span>
+        <span>Live</span>
+      </div>
+    </div>
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="monitor">Status</button>
+      <button class="tab-btn"        data-tab="steuerung">Steuerung</button>
+    </nav>
+  </header>
 
-  <div class="tabs">
-    <button class="tab-btn active" data-tab="monitor">Status</button>
-    <button class="tab-btn"        data-tab="steuerung">Steuerung</button>
-  </div>
+  <main class="ha-content">
 
-  <!-- ================================================================
-       TAB: STATUS / MONITOR
-       ================================================================ -->
-  <div id="tab-monitor" class="tab-content active">
-    <div class="error-banner" id="error-banner"></div>
-    <div class="chips"   id="chips"></div>
-    <div class="metrics" id="metrics"></div>
-    <div class="section">Regelbare Verbraucher</div>
-    <div class="devices" id="controllable"></div>
-    <div class="section">Binäre Verbraucher</div>
-    <div class="devices" id="binary"></div>
-    <div class="footer"  id="footer"></div>
-  </div>
+    <!-- ================================================================
+         TAB: STATUS / MONITOR
+         ================================================================ -->
+    <div id="tab-monitor" class="tab-content active">
+      <div class="error-banner" id="error-banner"></div>
+      <div class="chips"   id="chips"></div>
+      <div class="metrics" id="metrics"></div>
+      <div class="section">Regelbare Verbraucher</div>
+      <div class="devices" id="controllable"></div>
+      <div class="section">Binäre Verbraucher</div>
+      <div class="devices" id="binary"></div>
+      <div class="footer"  id="footer"></div>
+    </div>
 
-  <!-- ================================================================
-       TAB: STEUERUNG
-       ================================================================ -->
-  <div id="tab-steuerung" class="tab-content">
-    <div class="ctrl-grid" id="ctrl-grid"></div>
-    <div class="ctrl-refresh" id="ctrl-refresh">Warte auf Daten…</div>
-  </div>
+    <!-- ================================================================
+         TAB: STEUERUNG
+         ================================================================ -->
+    <div id="tab-steuerung" class="tab-content">
+      <div class="ctrl-grid" id="ctrl-grid"></div>
+      <div class="ctrl-refresh" id="ctrl-refresh">Warte auf Daten…</div>
+    </div>
+
+  </main>
 
   <script src="static/app.js"></script>
 </body>
