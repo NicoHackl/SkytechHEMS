@@ -67,7 +67,7 @@ def _ctrl_items_controllable(p: str, output_unit: str = 'watt') -> list:
         {"entity": f"input_number.ems_{p}_hoch_regelzeit_s",                 "label": "Hoch-Regelzeit"},
         {"entity": f"input_number.ems_{p}_runter_regelzeit_s",               "label": "Runter-Regelzeit"},
         {"entity": f"input_number.ems_{p}_max_anderung_pro_schritt_{suf}",   "label": "Max. Änderung/Schritt"},
-        {"entity": f"input_number.ems_{p}_min_anderung_pro_schritt_{suf}",   "label": "Deadband"},
+        {"entity": f"input_number.ems_{p}_min_anderung_pro_schritt_{suf}",   "label": "Totband (Deadband)"},
     ]
     if output_unit == 'ampere':
         items.append({"entity": f"input_number.ems_{p}_min_umschaltzeit_s",  "label": "Phasenwechsel-Mindestzeit"})

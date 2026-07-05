@@ -14,6 +14,9 @@ function chip(t, c) { return `<span class="chip chip-${c}">${esc(t)}</span>`; }
 function tile(v, l, vc = '') { return `<div class="metric"><div class="val ${vc}">${esc(v)}</div><div class="lbl">${esc(l)}</div></div>`; }
 function row(k, v, c = '') { return `<div class="row"><span class="k">${esc(k)}</span><span class="v ${c}">${esc(v)}</span></div>`; }
 function fmt(v) { return v == null ? '–' : Math.round(v).toLocaleString('de-DE'); }
+// Technischer Regelmodus-Wert (aus input_select.ems_regelmodus) als lesbare deutsche Anzeige.
+const MODE_LABELS = { aus: 'Aus', auto: 'Automatik', nur_heizen: 'Nur Heizen', nur_laden: 'Nur Laden' };
+function modeDe(m) { return MODE_LABELS[m] || m || '–'; }
 function fmtDur(s) { return s >= 60 ? Math.floor(s / 60) + 'm ' + Math.round(s % 60) + 's' : Math.round(s) + 's'; }
 function showError(msg) {
   const el = document.getElementById('error-banner');
@@ -64,9 +67,9 @@ function render(data) {
 
   const chips = [
     chip(s.ems_enabled ? 'EMS Aktiv' : 'EMS Inaktiv', s.ems_enabled ? 'green' : 'grey'),
-    chip('Modus: ' + (s.global_mode || '–'), 'blue'),
+    chip('Modus: ' + modeDe(s.global_mode), 'blue'),
   ];
-  if (s.hard_lockout)         chips.push(chip('⚠ LOCKOUT', 'red'));
+  if (s.hard_lockout)         chips.push(chip('⚠ SPERRE', 'red'));
   if (s.binary_immediate_off) chips.push(chip('Notabschaltung', 'red'));
   document.getElementById('chips').innerHTML = chips.join('');
 
@@ -116,7 +119,7 @@ function renderControllable(d) {
     ${row('Freigabe',     d.eligible ? '✓ ja' : '✗ nein', d.eligible ? 'on' : 'off-val')}
     ${row('Ist',          fmt(d.actual_w) + ' W')}
     ${row('Anforderung',  anfDisplay)}
-    ${row('Ziel (alloc)', fmt(d.alloc_w) + ' W')}
+    ${row('Ziel (Zuteilung)', fmt(d.alloc_w) + ' W')}
     ${row('Schutz',       fmt(d.schutz_w) + ' W', 'dim')}
     ${isAmpere ? row('Spannung', ph === 1 ? `L1: ${vl1} V` : `L1/L2/L3: ${vl1}/${vl2}/${vl3} V`, 'dim') : ''}
     ${multiPhase ? row('Phasen', ph + '-phasig' + phaseLock, phaseLock ? 'dim' : '') : ''}

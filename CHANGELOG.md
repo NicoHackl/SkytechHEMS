@@ -23,6 +23,12 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
   „unbekannt" statt eines Vergleichs zeigte.
 
 ### Geändert
+- **Lesbare deutsche Anzeigetexte (UI-Audit).** Verbliebene englische/technische Bezeichner
+  in der Oberfläche durch deutsche ersetzt: Status-Tab-Zeile `Ziel (alloc)` → `Ziel (Zuteilung)`;
+  Warn-Chip `⚠ LOCKOUT` → `⚠ SPERRE`;
+  Regelmodus-Chip zeigt den Wert lesbar (`nur_heizen` → „Nur Heizen", `auto` → „Automatik" …)
+  statt in snake_case; Steuerung-Tab-Label `Deadband` → `Totband (Deadband)` (im Kontrollschema,
+  `/api/device_controls_schema`). Rein anzeigeseitig – Entitäts-IDs unverändert.
 - **Weboberfläche im Home-Assistant-Design neu gestaltet.** Layout, Farben und Aufbau des
   Monitoring-/Steuerungs-UIs sind jetzt stark an das HA-Standardtheme (Material Design)
   angelehnt: blaue App-Bar (Primärfarbe `#03a9f4`) mit den View-Tabs „Status"/„Steuerung" und
