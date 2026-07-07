@@ -18,7 +18,7 @@ description: >-
   voltage_l1_entity / voltage_l2_entity / voltage_l3_entity (optional,
   HA-Sensoren für die Phasenspannungen L1/L2/L3, Fallback je 230 V).
   Die globale Option residual_power_entity legt den Überschuss-Sensor fest.
-version: "1.0.31"
+version: "1.0.32"
 slug: "skytech_hems"
 init: false
 arch:
