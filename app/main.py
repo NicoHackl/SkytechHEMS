@@ -196,6 +196,24 @@ class HEMSApp:
         except Exception as exc:
             return web.json_response({"error": str(exc)}, status=500)
 
+    async def _handle_ep(self, request: web.Request) -> web.Response:
+        """Liefert die vom Energy Pilot veröffentlichten `sensor.ep_*`-Entitäten.
+
+        Reine Anzeige: EP schreibt seine KI-Vorschläge (`sensor.ep_<gerät>_*_vorschlag`)
+        und Status-Sensoren (`sensor.ep_plan_status`, `sensor.ep_hems_verbindung`) als
+        HA-Entitäten; HEMS liest sie – wie den Rest – über die HA-REST-API und spiegelt
+        sie in der Weboberfläche. Kein direkter Add-on-zu-Add-on-Aufruf nötig.
+        """
+        try:
+            states = await self.ha.fetch_all_states()
+            ep = {
+                eid: data for eid, data in states.items()
+                if eid.startswith("sensor.ep_")
+            }
+            return web.json_response(ep)
+        except Exception as exc:
+            return web.json_response({"error": str(exc)}, status=500)
+
     async def _handle_set(self, request: web.Request) -> web.Response:
         """Schreibt einen Wert in eine HA-input-Entität."""
         try:
@@ -231,6 +249,7 @@ class HEMSApp:
         app.router.add_get("/index.html",    self._handle_index)
         app.router.add_get("/api/status",                  self._handle_status)
         app.router.add_get("/api/controls",               self._handle_controls)
+        app.router.add_get("/api/ep",                      self._handle_ep)
         app.router.add_get("/api/device_controls_schema", self._handle_device_controls_schema)
         app.router.add_post("/api/set",                   self._handle_set)
 

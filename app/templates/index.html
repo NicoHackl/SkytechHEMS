@@ -406,6 +406,7 @@
     <nav class="tabs">
       <button class="tab-btn active" data-tab="monitor">Status</button>
       <button class="tab-btn"        data-tab="steuerung">Steuerung</button>
+      <button class="tab-btn"        data-tab="ep">Energy Pilot</button>
     </nav>
   </header>
 
@@ -431,6 +432,20 @@
     <div id="tab-steuerung" class="tab-content">
       <div class="ctrl-grid" id="ctrl-grid"></div>
       <div class="ctrl-refresh" id="ctrl-refresh">Warte auf Daten…</div>
+    </div>
+
+    <!-- ================================================================
+         TAB: ENERGY PILOT (nur Anzeige der vom EP gelieferten Vorschläge)
+         ================================================================ -->
+    <div id="tab-ep" class="tab-content">
+      <div class="error-banner" id="ep-error"></div>
+      <div class="section">Plan-Status</div>
+      <div class="chips" id="ep-plan-chips"></div>
+      <div class="section">EP ↔ HEMS</div>
+      <div class="chips" id="ep-conn-chips"></div>
+      <div class="section">Vorschläge je Gerät</div>
+      <div class="devices" id="ep-devices"></div>
+      <div class="ctrl-refresh" id="ep-refresh">Warte auf Daten…</div>
     </div>
 
   </main>
