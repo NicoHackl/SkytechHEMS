@@ -413,23 +413,36 @@ function renderEP(states) {
   // ---- Vorschläge je Gerät ----
   // Gruppierung über den Anzeigenamen-Präfix ("Gerät – Feld (Vorschlag)"), damit
   // Geräte-/Feldbezeichnung ohne fragile entity_id-Zerlegung sauber getrennt sind.
-  const groups = {};
+  //
+  // Verwaiste Vorschläge: HEMS spiegelt nur, es löscht keine HA-Entitäten. Tauscht
+  // man in EP einen Quellsensor, schreibt EP eine NEUE entity_id; die alte bleibt mit
+  // eingefrorenem Wert in HA (gleicher Anzeigename → doppeltes Feld). Zwei Filter,
+  // ohne Kopplung an die Publish-Reihenfolge von sensor.ep_plan_status:
+  //   1) abgelaufene Vorschläge (valid_until in der Vergangenheit) ausblenden – die
+  //      verwaiste Entität friert ihr valid_until ein und läuft dauerhaft ab;
+  //   2) bei doppeltem Feld je Gerät nur den frischeren (späteres valid_until) behalten
+  //      → dedupt einen Sensor-Tausch sofort, ohne auf den Ablauf zu warten.
+  const now = Date.now();
+  const groups = {};   // dev -> { fieldLabel -> item } (dedupt je Feld)
   for (const [eid, data] of entries) {
     if (!eid.endsWith('_vorschlag')) continue;
     const a  = data.attributes || {};
+    const vu = Date.parse(a.valid_until || '');
+    if (!isNaN(vu) && vu < now) continue;          // (1) abgelaufen/verwaist
     const fn = a.friendly_name || eid;
     let dev = fn, field = fn;
     const sep = fn.indexOf(' – ');
     if (sep >= 0) { dev = fn.slice(0, sep); field = fn.slice(sep + 3); }
     field = field.replace(/\s*\(Vorschlag\)\s*$/, '');
-    (groups[dev] = groups[dev] || []).push({
-      label: field, state: data.state, unit: a.unit_of_measurement,
-    });
+    const item = { label: field, state: data.state, unit: a.unit_of_measurement,
+                   vu: isNaN(vu) ? 0 : vu };
+    const g = groups[dev] = groups[dev] || {};
+    if (!g[field] || item.vu >= g[field].vu) g[field] = item;   // (2) frischeren behalten
   }
 
   const names = Object.keys(groups).sort((x, y) => x.localeCompare(y, 'de'));
   const cards = names.map(dev => {
-    const items = groups[dev].sort((x, y) =>
+    const items = Object.values(groups[dev]).sort((x, y) =>
       epFieldWeight(x.label) - epFieldWeight(y.label) || x.label.localeCompare(y.label, 'de'));
     const freigabe = items.find(i => i.label.toLowerCase().includes('freigabe'));
     const cls = !freigabe ? 'idle' : (freigabe.state === 'on' ? 'active' : 'off');
