@@ -358,6 +358,35 @@
 
     .ctrl-not-found { color: var(--ha-text-disabled); font-style: italic; font-size: .8rem; }
     .ctrl-refresh { font-size: .75rem; color: var(--ha-text-secondary); margin-top: 14px; padding: 4px; }
+
+    /* ============================================================
+       Responsive – KEIN horizontales Scrollen (nur vertikal).
+       Tablet ≤900 px, Handy ≤480 px. Rein visuell/additiv.
+       ============================================================ */
+
+    /* Größere Touch-Ziele auf Finger-Geräten (kein feiner Zeiger). */
+    @media (hover: none) and (pointer: coarse) {
+      .tab-btn { padding-top: 16px; padding-bottom: 16px; }
+      .toggle-btn { padding-top: 8px; padding-bottom: 8px; }
+    }
+
+    /* Tablet: Tab-Leiste umbrechen statt seitlich scrollen. */
+    @media (max-width: 900px) {
+      .tabs { flex-wrap: wrap; overflow-x: visible; }
+    }
+
+    /* Handy: Raster einspaltig – verhindert den minmax-Überlauf (280/320 px)
+       auf schmalen Bildschirmen, damit nichts seitlich scrollt. */
+    @media (max-width: 480px) {
+      body { font-size: 13.5px; }
+      .ha-header-top { height: 52px; padding: 0 12px; }
+      .ha-title { font-size: 1.1rem; }
+      .tab-content { padding: 12px; }
+      .devices, .ctrl-grid { grid-template-columns: 1fr; }
+      .metric { padding: 14px 16px; }
+      .row .v, .card-name { word-break: break-word; }
+      .num-input { width: 72px; }
+    }
   </style>
 </head>
 <body>

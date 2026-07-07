@@ -34,6 +34,7 @@ class Device(ABC):
         self.label         = label or id
         self.priority: int = 99
         self.eligible      = False
+        self.source        = "aus"        # Steuerquelle: 'aus' | 'user' | 'ep'
         self._allowed_modes  = allowed_modes
         self._entity_prefix  = entity_prefix or id
         # Zeitstempel des aktuellen Zyklus (einheitliche Zeitquelle, vom
@@ -45,23 +46,75 @@ class Device(ABC):
     # Freigabe (global + gerätespezifische Freigabe + technische Freigabe + Modus)
     # ------------------------------------------------------------------
 
-    def check_eligible(self, st: StateProxy,
-                       ems_enabled: bool, global_mode: str, hard_lockout: bool) -> bool:
+    def resolve_source(self, st: StateProxy,
+                       ems_enabled: bool, global_mode: str, hard_lockout: bool) -> str:
+        """
+        Steuerquelle bestimmen: 'aus' | 'user' | 'ep'.
+
+        Überall gilt: auto = KI (Energy Pilot), manuell = normale Regeln, aus = aus.
+          - global "auto"        -> alle Geräte 'ep' (außer per-Gerät modus == aus)
+          - global manuell/nur_* -> per-Gerät modus entscheidet:
+              auto    -> 'ep' (überspringt das nur_heizen/nur_laden-Typ-Gate)
+              manuell -> 'user', sofern global im Typ-Gate self._allowed_modes liegt
+              aus     -> 'aus'
+        """
         if not ems_enabled or hard_lockout or global_mode == "aus":
-            return False
+            return "aus"
+        modus = st.get(f"input_select.ems_{self._entity_prefix}_modus")
+        # Per-Gerät-Kill gilt immer – auch bei global == "auto"
+        if modus == "aus":
+            return "aus"
+        if global_mode == "auto":
+            return "ep"
+        if modus == "auto":
+            return "ep"
         if global_mode not in self._allowed_modes:
+            return "aus"
+        return "user"
+
+    def check_eligible(self, st: StateProxy) -> bool:
+        """
+        Freigabe-Prüfung je Steuerquelle (self.source vom Controller gesetzt).
+        Die technische Freigabe bleibt IMMER hartes Gate, auch bei Quelle 'ep'.
+        """
+        if self.source == "aus":
             return False
         return self._device_eligible(st)
 
     def _device_eligible(self, st: StateProxy) -> bool:
-        # Ein Gerät ist nur freigegeben, wenn BEIDE Freigabe-Schalter aktiv sind:
-        #   _freigabe            – Bedien-/Nutzungsfreigabe (z. B. Komfort/Anwesenheit)
-        #   _technische_freigabe – technische Freigabe (z. B. Gerät betriebsbereit)
+        # _technische_freigabe (Gerät betriebsbereit) ist immer hartes Gate.
+        # Bedien-Freigabe:
+        #   Quelle 'user' -> Nutzer-Schalter _freigabe
+        #   Quelle 'ep'   -> EP-Vorschlag freigabe (Fallback: Nutzer _freigabe)
         pfx = self._entity_prefix
-        freigabe = st.get(f"input_boolean.ems_{pfx}_freigabe") == "on"
         technische_freigabe = st.get(f"input_boolean.ems_{pfx}_technische_freigabe") == "on"
-        modus    = st.get(f"input_select.ems_{pfx}_modus")    == "auto"
-        return freigabe and technische_freigabe and modus
+        if not technische_freigabe:
+            return False
+        user_freigabe = st.get(f"input_boolean.ems_{pfx}_freigabe") == "on"
+        if self.source == "ep":
+            return self._ep_bool(st, "freigabe", user_freigabe)
+        return user_freigabe
+
+    # ------------------------------------------------------------------
+    # EP-Vorschlagswerte (Energy Pilot) lesen – mit Fallback auf Nutzerwert.
+    # Fällt ein Vorschlagssensor aus, greift der Nutzerwert (KI-Ausfall darf die
+    # Anlage nie blockieren).
+    # ------------------------------------------------------------------
+
+    def _ep_entity(self, field: str) -> str:
+        return f"sensor.ep_{self._entity_prefix}_{field}_vorschlag"
+
+    def _ep_num(self, st: StateProxy, field: str, fallback: float) -> float:
+        raw = st.get(self._ep_entity(field))
+        if raw in ("unavailable", "unknown", None):
+            return fallback
+        return safe_float(raw, fallback)
+
+    def _ep_bool(self, st: StateProxy, field: str, fallback: bool) -> bool:
+        raw = st.get(self._ep_entity(field))
+        if raw in ("unavailable", "unknown", None):
+            return fallback
+        return str(raw).lower() in ("on", "true", "1")
 
     # ------------------------------------------------------------------
     # Polymorphe Schnittstelle – von jeder Unterklasse implementiert
@@ -297,6 +350,16 @@ class ControllableDevice(Device):
         self._raw_max_change = n(self._suf("max_anderung_pro_schritt"), 1000.0)
         self._raw_deadband   = n(self._suf("min_anderung_pro_schritt"), 0.0)
 
+        # EP-Übernahme: Priorität und geschützte Mindestleistung aus dem Vorschlag.
+        # EP liefert die Mindestleistung nur in Watt -> nur bei output_unit=watt
+        # übernehmen; im Ampere-Modus greift der Fallback (Nutzerwert bleibt).
+        if self.source == "ep":
+            self.priority = int(self._ep_num(st, "prio", self.priority))
+            if self.output_unit == "watt":
+                self._raw_geschuetzt = self._ep_num(
+                    st, "geschutzte_mindestleistung_w", self._raw_geschuetzt
+                )
+
         # Nach Watt umrechnen mit aktueller Phasenanzahl (kann später von select_phases angepasst werden)
         self._apply_raw_to_watt()
 
@@ -499,6 +562,7 @@ class ControllableDevice(Device):
             "label":                 self.label,
             "priority":              self.priority,
             "eligible":              self.eligible,
+            "source":                self.source,
             "actual_w":              self._actual_w,
             "anforderung_current_w": self._anforderung_current_w,
             "alloc_w":               self._alloc_w,
@@ -605,6 +669,10 @@ class BinaryDevice(Device):
         self.min_offtime_s = n("mindestauszeit_s")
         self.off_delay_s   = n("abschaltverzogerung_s")
 
+        # EP-Übernahme: Priorität aus dem Vorschlag (Fallback: Nutzerwert)
+        if self.source == "ep":
+            self.priority = int(self._ep_num(st, "prio", self.priority))
+
         self._actual_on    = st.get(self.entity_switch) == "on"
         self._switch_age_s = now_ts - parse_ts(
             st.get(self.entity_switch + ".last_changed")
@@ -681,6 +749,7 @@ class BinaryDevice(Device):
             "label":                self.label,
             "priority":             self.priority,
             "eligible":             self.eligible,
+            "source":               self.source,
             "power_w":              self.power_w,
             "actual_on":            self._actual_on,
             "desired_on":           self._desired_on,
