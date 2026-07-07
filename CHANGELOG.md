@@ -9,6 +9,27 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 ## [Unreleased]
 
 ### Hinzugefügt
+- **Steuermodus-abhängige Energy-Pilot-Übernahme (EP → HEMS, D-033).** Der
+  Regelmodus entscheidet pro Gerät, ob die Regelung die Nutzer-Helfer (`ems_*`)
+  oder die KI-Vorschläge (`sensor.ep_*_vorschlag`) verwendet. Neuer Wert
+  `manuell` in `input_select.ems_regelmodus`. Semantik überall: **auto = KI,
+  manuell = normale Regeln, aus = aus**.
+  - `regelmodus = auto` → alle Geräte folgen dem EP-Vorschlag.
+  - `regelmodus = manuell` / `nur_heizen` / `nur_laden` → normale Regeln; pro
+    Gerät über `input_select.ems_<gerät>_modus` verfeinerbar (`auto` = EP für
+    dieses Gerät und überspringt das Typ-Gate, `manuell` = normale Regeln,
+    `aus` = Gerät aus – gilt auch als Kill-Switch bei `regelmodus = auto`).
+  - Übernommen werden **Priorität** (`ep_<p>_prio_vorschlag` → `prioritat`),
+    **Freigabe** (`ep_<p>_freigabe_vorschlag` → `freigabe`) und **geschützte
+    Mindestleistung** (`ep_<p>_geschutzte_mindestleistung_w_vorschlag`, nur
+    Watt-Geräte). Die technische Freigabe (`ems_<p>_technische_freigabe`) bleibt
+    in jedem Modus hartes Gate; harte Grenzen (min/max, Lockout) gelten weiter.
+  - **Fallback:** Fehlt/stört ein `sensor.ep_*_vorschlag`, greift der Nutzerwert
+    (KI-Ausfall blockiert die Anlage nie). Gerätestatus (`/api/status`) enthält
+    neu das Feld `source` (`aus`/`user`/`ep`).
+  - **Migration:** Bestandskonfigurationen mit `allowed_modes: "auto"` werden auf
+    `manuell` abgebildet. Anlagen, die zuvor `regelmodus = auto` als normale
+    Regelung nutzten, müssen auf `manuell` wechseln.
 - **Responsive Darstellung (Handy/Tablet).** Die Ingress-Oberfläche passt sich an kleine
   Bildschirme an – **kein horizontales Scrollen mehr, nur vertikal**: Gerät- und Steuerungs-
   Kacheln werden am Handy (≤480 px) einspaltig (kein `minmax`-Überlauf schmaler Raster), die

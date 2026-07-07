@@ -50,7 +50,11 @@ def _build_devices(device_configs: List[dict]) -> List[Device]:
 
         prefix = (cfg.get("entity_prefix") or "").strip() or name
         label  = (cfg.get("label")         or "").strip() or None
-        modes  = [m.strip() for m in (cfg.get("allowed_modes") or "auto").split(",") if m.strip()]
+        # allowed_modes = Gerätetyp-Gate für Quelle 'user' (normale Regeln).
+        # "auto" ist kein User-Gate mehr (auto = KI-Übernahme für alle Geräte) ->
+        # Alt-Konfigurationen mit "auto" auf "manuell" abbilden (Rückwärtskompat).
+        modes  = [("manuell" if m.strip() == "auto" else m.strip())
+                  for m in (cfg.get("allowed_modes") or "manuell").split(",") if m.strip()]
 
         try:
             if cls == "controllable":
@@ -165,9 +169,10 @@ class EMSController:
 
         # ── 2. Alle Geräte aus HA aktualisieren ─────────────────────────
         for device in self._devices:
-            device.eligible = device.check_eligible(
+            device.source   = device.resolve_source(
                 st, ems_enabled, global_mode, hard_lockout
             )
+            device.eligible = device.check_eligible(st)
             device.update_from_ha(st, now_ts, global_puffer)
 
         # ── 3. Pool ─────────────────────────────────────────────────────
