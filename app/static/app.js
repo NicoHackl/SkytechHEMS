@@ -15,7 +15,7 @@ function tile(v, l, vc = '') { return `<div class="metric"><div class="val ${vc}
 function row(k, v, c = '') { return `<div class="row"><span class="k">${esc(k)}</span><span class="v ${c}">${esc(v)}</span></div>`; }
 function fmt(v) { return v == null ? '–' : Math.round(v).toLocaleString('de-DE'); }
 // Technischer Regelmodus-Wert (aus input_select.ems_regelmodus) als lesbare deutsche Anzeige.
-const MODE_LABELS = { aus: 'Aus', auto: 'Automatik', nur_heizen: 'Nur Heizen', nur_laden: 'Nur Laden' };
+const MODE_LABELS = { aus: 'Aus', auto: 'Automatik', manuell: 'Manuell', nur_heizen: 'Nur Heizen', nur_laden: 'Nur Laden' };
 function modeDe(m) { return MODE_LABELS[m] || m || '–'; }
 function fmtDur(s) { return s >= 60 ? Math.floor(s / 60) + 'm ' + Math.round(s % 60) + 's' : Math.round(s) + 's'; }
 function showError(msg) {
@@ -34,6 +34,7 @@ function switchTab(name) {
   const btn = document.querySelector(`.tab-btn[data-tab="${name}"]`);
   if (btn) btn.classList.add('active');
   if (name === 'steuerung') fetchControls();
+  if (name === 'ep')        fetchEP();
 }
 
 // ================================================================
@@ -310,6 +311,144 @@ async function saveEntity(entityId, value) {
 }
 
 // ================================================================
+// ENERGY PILOT (nur Anzeige)
+// ================================================================
+// EP schreibt seine KI-Vorschläge + Statuswerte als HA-`sensor.ep_*`-Entitäten;
+// HEMS liest sie über /api/ep (HA-REST-API) und spiegelt sie hier. Reine Anzeige –
+// die eigentliche Übernahme passiert im Regelzyklus (Regelmodus = auto).
+let _epStates = null;   // gecachte /api/ep-Antwort, damit Countdowns sekündlich ticken
+
+// Lesbare Anzeige je Plan-Gesamtstatus (Fallback: Rohwert).
+const EP_STATUS_LABELS = {
+  kein_plan: 'Kein Plan', unbekannt: 'Unbekannt',
+  beobachtet_konform: 'Beobachtet konform', beobachtet_abweichend: 'Beobachtet abweichend',
+};
+// Chip-Farbe je Status.
+function epStatusColor(s) {
+  if (s === 'beobachtet_konform') return 'green';
+  if (s === 'beobachtet_abweichend') return 'orange';
+  return 'grey';
+}
+
+// Restlaufzeit bis zu einem ISO-Zeitpunkt (Plan-Gültigkeit). Live-tickend.
+function epUntil(iso) {
+  const t = Date.parse(iso || '');
+  if (isNaN(t)) return '–';
+  const rem = (t - Date.now()) / 1000;
+  return rem <= 0 ? 'abgelaufen' : 'noch ' + fmtDur(rem);
+}
+
+async function fetchEP() {
+  try {
+    const r = await fetch('api/ep');
+    const data = await r.json();
+    if (!r.ok || data.error) throw new Error(data.error || ('HTTP ' + r.status));
+    _epStates = data;
+    renderEP(_epStates);
+    document.getElementById('ep-refresh').textContent =
+      'Aktualisiert: ' + new Date().toLocaleTimeString('de');
+  } catch (e) {
+    const el = document.getElementById('ep-error');
+    el.style.display = 'block';
+    el.textContent = '⚠ Energy Pilot: ' + e.message;
+    document.getElementById('ep-refresh').textContent = 'Fehler: ' + e.message;
+  }
+}
+
+// Ein Vorschlags-Sensor → {text, cls} für die Wertdarstellung.
+function epValue(state, unit) {
+  if (state == null || state === '' || state === 'unavailable' || state === 'unknown')
+    return { text: '–', cls: 'dim' };
+  if (state === 'on')  return { text: '✓ Ja',   cls: 'on' };
+  if (state === 'off') return { text: '✗ Nein', cls: 'off-val' };
+  return { text: unit ? state + ' ' + unit : state, cls: '' };
+}
+
+// Feld-Sortiergewicht: Freigabe zuerst, dann Priorität, dann Rest.
+function epFieldWeight(label) {
+  const l = label.toLowerCase();
+  if (l.includes('freigabe'))  return 0;
+  if (l.includes('priorität')) return 1;
+  return 2;
+}
+
+function renderEP(states) {
+  document.getElementById('ep-error').style.display = 'none';
+  const entries = Object.entries(states);
+
+  // ---- Plan-Status ----
+  const ps = states['sensor.ep_plan_status'];
+  const planChips = [];
+  if (ps) {
+    const a = ps.attributes || {};
+    const label = a.label || EP_STATUS_LABELS[ps.state] || ps.state || 'Unbekannt';
+    planChips.push(chip('Plan: ' + label, epStatusColor(ps.state)));
+    if (a.valid_until) planChips.push(chip('Gültig ' + epUntil(a.valid_until), 'blue'));
+    planChips.push(chip(a.in_window ? 'Im Zeitfenster' : 'Außerhalb Zeitfenster',
+                        a.in_window ? 'green' : 'grey'));
+    const abw = Array.isArray(a.abweichungen) ? a.abweichungen : [];
+    if (abw.length) abw.forEach(d => planChips.push(chip('≠ ' + d, 'orange')));
+    else planChips.push(chip('Keine Abweichungen', 'green'));
+  } else {
+    planChips.push(chip('Kein Plan-Status', 'grey'));
+  }
+  document.getElementById('ep-plan-chips').innerHTML = planChips.join('');
+
+  // ---- EP ↔ HEMS-Verbindung (EP-Sicht) ----
+  const conn = states['sensor.ep_hems_verbindung'];
+  const connChips = [];
+  if (conn) {
+    const a = conn.attributes || {};
+    const online = conn.state === 'online';
+    connChips.push(chip(online ? 'EP online' : 'EP offline', online ? 'green' : 'red'));
+    if (a.last_cycle_at) connChips.push(chip('Letzter Zyklus: ' + a.last_cycle_at, 'grey'));
+    if (a.cycle_count != null) connChips.push(chip('Zyklen: ' + a.cycle_count, 'grey'));
+    if (a.global_mode) connChips.push(chip('Modus: ' + modeDe(a.global_mode), 'blue'));
+    if (a.error) connChips.push(chip('Fehler: ' + a.error, 'red'));
+  } else {
+    connChips.push(chip('Keine Verbindungsdaten', 'grey'));
+  }
+  document.getElementById('ep-conn-chips').innerHTML = connChips.join('');
+
+  // ---- Vorschläge je Gerät ----
+  // Gruppierung über den Anzeigenamen-Präfix ("Gerät – Feld (Vorschlag)"), damit
+  // Geräte-/Feldbezeichnung ohne fragile entity_id-Zerlegung sauber getrennt sind.
+  const groups = {};
+  for (const [eid, data] of entries) {
+    if (!eid.endsWith('_vorschlag')) continue;
+    const a  = data.attributes || {};
+    const fn = a.friendly_name || eid;
+    let dev = fn, field = fn;
+    const sep = fn.indexOf(' – ');
+    if (sep >= 0) { dev = fn.slice(0, sep); field = fn.slice(sep + 3); }
+    field = field.replace(/\s*\(Vorschlag\)\s*$/, '');
+    (groups[dev] = groups[dev] || []).push({
+      label: field, state: data.state, unit: a.unit_of_measurement,
+    });
+  }
+
+  const names = Object.keys(groups).sort((x, y) => x.localeCompare(y, 'de'));
+  const cards = names.map(dev => {
+    const items = groups[dev].sort((x, y) =>
+      epFieldWeight(x.label) - epFieldWeight(y.label) || x.label.localeCompare(y.label, 'de'));
+    const freigabe = items.find(i => i.label.toLowerCase().includes('freigabe'));
+    const cls = !freigabe ? 'idle' : (freigabe.state === 'on' ? 'active' : 'off');
+    const rows = items.map(i => {
+      const v = epValue(i.state, i.unit);
+      return row(i.label, v.text, v.cls);
+    }).join('');
+    return `<div class="card ${cls}">
+      <div class="card-title"><span class="card-name">${esc(dev)}</span></div>
+      ${rows}
+    </div>`;
+  });
+
+  document.getElementById('ep-devices').innerHTML = cards.length
+    ? cards.join('')
+    : `<div class="ctrl-not-found">Keine Energy-Pilot-Vorschläge gefunden.</div>`;
+}
+
+// ================================================================
 // EVENT-DELEGATION & INITIALISIERUNG
 // ================================================================
 document.addEventListener('DOMContentLoaded', () => {
@@ -357,4 +496,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (document.getElementById('tab-steuerung').classList.contains('active'))
       fetchControls();
   }, 15000);
+
+  // Energy-Pilot-Tab: alle 10 s neu laden, wenn aktiv …
+  setInterval(() => {
+    if (document.getElementById('tab-ep').classList.contains('active'))
+      fetchEP();
+  }, 10000);
+  // … und sekündlich aus dem Cache neu rendern, damit die Plan-Gültigkeit tickt.
+  setInterval(() => {
+    if (_epStates && document.getElementById('tab-ep').classList.contains('active'))
+      renderEP(_epStates);
+  }, 1000);
 });

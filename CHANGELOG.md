@@ -9,6 +9,16 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 ## [Unreleased]
 
 ### Hinzugefügt
+- **Energy-Pilot-Tab in der Weboberfläche (Anzeige der EP-Daten).** Neuer Tab
+  „Energy Pilot" spiegelt die vom Energy Pilot gelieferten Daten – EP schreibt
+  seine KI-Vorschläge und Statuswerte als HA-`sensor.ep_*`-Entitäten, HEMS liest
+  sie wie den Rest über die HA-REST-API (neuer Endpunkt `GET /api/ep`, filtert
+  `sensor.ep_*`) und stellt sie dar: Plan-Status (Label, Gültigkeits-Countdown,
+  Zeitfenster, Abweichungen aus `sensor.ep_plan_status`), EP↔HEMS-Verbindung
+  (online/offline, letzter Zyklus, Modus aus `sensor.ep_hems_verbindung`) sowie
+  die Vorschläge je Gerät (Freigabe/Priorität/geschützte Mindestleistung/Extras,
+  aus `sensor.ep_<gerät>_*_vorschlag`). **Rein additiv/Anzeige** – kein direkter
+  Add-on-zu-Add-on-Aufruf, keine Änderung am Regelzyklus.
 - **Steuermodus-abhängige Energy-Pilot-Übernahme (EP → HEMS, D-033).** Der
   Regelmodus entscheidet pro Gerät, ob die Regelung die Nutzer-Helfer (`ems_*`)
   oder die KI-Vorschläge (`sensor.ep_*_vorschlag`) verwendet. Neuer Wert
