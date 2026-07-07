@@ -19,6 +19,13 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
   die Vorschläge je Gerät (Freigabe/Priorität/geschützte Mindestleistung/Extras,
   aus `sensor.ep_<gerät>_*_vorschlag`). **Rein additiv/Anzeige** – kein direkter
   Add-on-zu-Add-on-Aufruf, keine Änderung am Regelzyklus.
+  - **Verwaiste Vorschläge werden ausgeblendet.** HEMS spiegelt nur und löscht keine
+    HA-Entitäten; tauscht man in EP einen Quellsensor, schreibt EP eine neue
+    `entity_id`, während die alte mit eingefrorenem Wert in HA verbleibt. Der EP-Tab
+    blendet solche Altwerte aus: (1) abgelaufene Vorschläge (`valid_until` in der
+    Vergangenheit) werden nicht angezeigt, (2) bei doppeltem Feld je Gerät wird nur
+    der frischere (späteres `valid_until`) behalten – ohne Kopplung an die
+    Publish-Reihenfolge von `sensor.ep_plan_status`.
 - **Steuermodus-abhängige Energy-Pilot-Übernahme (EP → HEMS, D-033).** Der
   Regelmodus entscheidet pro Gerät, ob die Regelung die Nutzer-Helfer (`ems_*`)
   oder die KI-Vorschläge (`sensor.ep_*_vorschlag`) verwendet. Neuer Wert
