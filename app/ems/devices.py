@@ -568,6 +568,11 @@ class ControllableDevice(Device):
             "alloc_w":               self._alloc_w,
             "new_w":                 self._new_w,
             "schutz_w":              self._schutz_w,
+            # Roher, vom User gepflegter Schutz-Sockel (ohne Reserve/Puffer). schutz_w ist
+            # der effektive Schutz (Sockel + reserve_w + global_puffer_w, geklemmt) und darf
+            # NICHT als "geschützte Mindestleistung" verglichen/angezeigt werden – dafür ist
+            # dieser Rohwert da (Energy-Pilot Plan-Rückkopplung).
+            "geschuetzte_mindestleistung_w": self.geschuetzte_mindestleistung_w,
             "output_unit":           self.output_unit,
         }
         if self.output_unit == 'ampere':
@@ -582,6 +587,9 @@ class ControllableDevice(Device):
             # zurückgerechnet), damit Ampere-Konsumenten (Energy Pilot) einheitengleich
             # vergleichen können – analog zu new_a. Kein floor: Schutz nicht unterschätzen.
             d["schutz_a"]        = round(self._schutz_w / eff, 2) if eff > 0 else 0.0
+            # Roher Schutz-Sockel in Ampere (nativer Nutzerwert, ohne Reserve/Puffer) –
+            # Pendant zu geschuetzte_mindestleistung_w für den einheitengleichen EP-Vergleich.
+            d["geschuetzte_mindestleistung_a"] = round(self._raw_geschuetzt, 2)
             if len(self._allowed_phases) > 1 and self._last_phase_change_ts > 0:
                 remaining = self.phase_switch_delay_s - (self._now_ts - self._last_phase_change_ts)
                 d["phase_lock_remaining_s"] = max(0.0, round(remaining))

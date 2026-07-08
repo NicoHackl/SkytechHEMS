@@ -9,6 +9,15 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 ## [Unreleased]
 
 ### Hinzugefügt
+- **Roher Schutz-Sockel im Gerätestatus (`geschuetzte_mindestleistung_w`/`_a`).**
+  `ControllableDevice.to_status_dict` liefert jetzt zusätzlich zum effektiven Schutz
+  `schutz_w`/`schutz_a` auch den **rohen**, vom User gepflegten Sockel
+  `geschuetzte_mindestleistung_w` (Watt) bzw. `geschuetzte_mindestleistung_a` (Ampere).
+  Hintergrund: `schutz_w = geschützte Mindestleistung + reserve_w + global_puffer_w`
+  (geklemmt) ist der effektive Schutz und NICHT die vom User eingetragene geschützte
+  Mindestleistung. Der Energy-Pilot verglich in der Plan-Rückkopplung fälschlich gegen
+  `schutz_w` und zeigte so z.B. 900 W statt der eingetragenen 600 W. Rein additiv –
+  `schutz_w`/`schutz_a` bleiben unverändert erhalten (weiter für die Regelung genutzt).
 - **Energy-Pilot-Tab in der Weboberfläche (Anzeige der EP-Daten).** Neuer Tab
   „Energy Pilot" spiegelt die vom Energy Pilot gelieferten Daten – EP schreibt
   seine KI-Vorschläge und Statuswerte als HA-`sensor.ep_*`-Entitäten, HEMS liest
