@@ -147,6 +147,10 @@ Pro Zyklus führt `EMSController.run_cycle()` der Reihe nach aus:
 1. **Globale Eingaben** aus HA lesen (Freigabe, Modus, Puffer, Einschaltreserve, Überschuss-Sensor, Debug-Schalter).
 2. **Eligibility** je Gerät bestimmen (globaler Modus muss in `allowed_modes` liegen und `freigabe`, `technische_freigabe` sowie `modus` des Geräts müssen aktiv sein).
 3. **Pool** berechnen: `residual_w + Σ current_w` der Geräte, oder `0` bei Lockout/EMS aus.
+   `current_w` zählt dabei nur die **vom EMS angeforderte** Leistung: bei binären Geräten
+   `leistung_w` nur, wenn Schalter AN *und* `anforderung_an` aktiv ist; bei regelbaren Geräten
+   `min(Istwert, Anforderung)`. Extern erzwungene Last („Force-Modus" außerhalb des EMS) wird
+   damit nicht als abschaltbarer Überschuss gutgeschrieben – sie steckt bereits in `residual_w`.
 4. **Phasenauswahl** für regelbare Geräte mit `output_unit=ampere` und `phases="1,3"`: Das EMS wählt die höchste Phasenanzahl, für die `floor(pool_w / (phases × U)) ≥ min_technisch_a` gilt. Bei einem Phasenwechsel wird `anzahl_phase` in HA geschrieben und der Ramp-Timer zurückgesetzt. Die Hysterese `phase_switch_delay_s` verhindert Oszillation.
 5. **Defizit** ermitteln und prüfen, ob die regelbaren Geräte das Defizit allein abregeln können (`binary_immediate_off`).
 6. **Pool nach Priorität verteilen**:
@@ -321,7 +325,7 @@ Diese Entitäten werden vom EMS *gelesen*, aber nicht angelegt oder geschrieben:
 | `sensor.<…>` (konfiguriert via `voltage_l1_entity` / `voltage_l2_entity` / `voltage_l3_entity`, optional) | Phasenspannungen L1/L2/L3 in Volt für die W↔A-Umrechnung bei Wallboxen o. Ä. (Fallback je 230 V).        |
 
 > **Hinweis zur Semantik des Überschuss-Sensors (wichtig für korrekte Regelung):**
-> Der Pool wird als `residual_w + Σ current_w` der aktuell vom EMS geschalteten
+> Der Pool wird als `residual_w + Σ current_w` der aktuell vom EMS **angeforderten**
 > Geräte berechnet (siehe Regelablauf). Der Sensor muss daher den **Netz-Überschuss
 > liefern, in dem die bereits vom EMS geschalteten Lasten noch enthalten (also
 > abgezogen) sind** – ein positiver Wert bedeutet Einspeisung, ein negativer

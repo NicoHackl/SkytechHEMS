@@ -24,10 +24,19 @@ def test_max_relief_is_zero():
 
 def test_current_w_depends_on_actual_state():
     b = make_binary(power=1500.0)
+    b._anforderung_an = True
     b._actual_on = False
     assert b.current_w == 0.0
     b._actual_on = True
     assert b.current_w == 1500.0
+
+
+def test_current_w_ignoriert_extern_erzwungenen_schalter():
+    """Force-Modus: Schalter an, aber HEMS hat nicht angefordert -> nicht in den Pool."""
+    b = make_binary(power=1500.0)
+    b._actual_on = True
+    b._anforderung_an = False
+    assert b.current_w == 0.0
 
 
 def test_consume_off_requires_power_plus_reserves():

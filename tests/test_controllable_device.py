@@ -34,6 +34,38 @@ def make_ampere(allowed_phases):
     return d
 
 
+# ---- Pool-Rückrechnung / Entlastung ----
+
+def test_current_w_capped_at_anforderung():
+    """Extern erzwungenes Laden über dem Sollwert zählt nicht in den Pool."""
+    d = make_watt(min_w=1000.0, max_w=11000.0)
+    d._actual_w = 11000.0
+    d._anforderung_current_w = 0.0
+    assert d.current_w == 0.0
+    d._anforderung_current_w = 3000.0
+    assert d.current_w == 3000.0
+    # Gerät zieht weniger als angefordert -> Istwert zählt
+    d._actual_w = 2000.0
+    assert d.current_w == 2000.0
+
+
+def test_current_w_zero_when_not_eligible():
+    d = make_watt()
+    d.eligible = False
+    d._actual_w = 3000.0
+    d._anforderung_current_w = 3000.0
+    assert d.current_w == 0.0
+
+
+def test_max_relief_capped_at_anforderung():
+    d = make_watt(min_w=1000.0, max_w=11000.0)
+    d._actual_w = 11000.0
+    d._anforderung_current_w = 0.0
+    assert d.max_relief_w == 0.0
+    d._anforderung_current_w = 3000.0
+    assert d.max_relief_w == 2000.0
+
+
 # ---- Zuteilung (2-Pass) ----
 
 def test_allocate_minimum_then_surplus():
