@@ -50,8 +50,9 @@ def _controllable_w(prefix, *, prio=1, min_w=500, max_w=3000, geschuetzt=0,
     }
 
 
-def _binary(prefix, *, prio=2, power=1000, switch="off"):
+def _binary(prefix, *, prio=2, power=1000, switch="off", anforderung=None):
     return {
+        f"input_boolean.ems_{prefix}_anforderung_an": anforderung if anforderung else switch,
         f"input_boolean.ems_{prefix}_freigabe": "on",
         f"input_boolean.ems_{prefix}_technische_freigabe": "on",
         f"input_select.ems_{prefix}_modus": "auto",
@@ -206,6 +207,54 @@ def test_geschuetzt_protects_power_from_lower_priority_binary():
 
     assert run(0)[1] == "turn_on"       # ohne Schutz: Binär bekommt den Pool
     assert run(2000)[1] == "turn_off"   # mit Schutz: Leistung reserviert → Binär aus
+
+
+# ---------------------------------------------------------------------------
+# Fremdsteuerung ("Force-Modus"): Leistung darf nicht in den Pool zurückfließen
+# ---------------------------------------------------------------------------
+
+def test_extern_erzwungener_binaerverbraucher_blaeht_pool_nicht_auf():
+    # luft (Prio 9, 2000 W) ist extern eingeschaltet: switch.luft = on, aber die
+    # HEMS-Anforderung ist aus. Deren Last steckt bereits in residual (= 0) und darf
+    # nicht als eigener Überschuss gutgeschrieben werden – sonst startet boiler.
+    cfg = [
+        {"name": "boiler", "class": "binary",
+         "switch_entity": "switch.boiler", "allowed_modes": "auto"},
+        {"name": "luft", "class": "binary",
+         "switch_entity": "switch.luft", "allowed_modes": "auto"},
+    ]
+    ctrl = EMSController(cfg, residual_power_entity="sensor.s")
+    states = {
+        **_global(),
+        **_binary("boiler", prio=1, power=1000, switch="off"),
+        **_binary("luft", prio=9, power=2000, switch="on", anforderung="off"),
+        "switch.boiler": "off",
+        "switch.luft": "on",
+        "sensor.s": 0,
+    }
+    res = ctrl.run_cycle(make_states(states))
+    assert res["status"]["pool_w"] == pytest.approx(0.0)
+    assert _op_for(res["write_ops"], "input_boolean.ems_boiler_anforderung_an")[1] == "turn_off"
+
+
+def test_extern_erzwungenes_regelbares_geraet_blaeht_pool_nicht_auf():
+    # Wallbox/Heizstab lädt extern mit 3000 W, HEMS-Anforderung = 0. Der Istwert
+    # darf nicht in den Pool zurückgerechnet werden.
+    ctrl = EMSController(
+        [{"name": "heizstab", "class": "controllable",
+          "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto"}],
+        residual_power_entity="sensor.s",
+    )
+    states = {
+        **_global(),
+        **_controllable_w("heizstab", min_w=500, max_w=3000, setpoint=0),
+        "sensor.s": 0,
+        "sensor.heizstab_ist": 3000,
+    }
+    res = ctrl.run_cycle(make_states(states))
+    assert res["status"]["pool_w"] == pytest.approx(0.0)
+    op = _op_for(res["write_ops"], "input_number.ems_heizstab_anforderung_leistung_w")
+    assert op is None   # Sollwert bleibt 0 – keine Anforderung wegen Fremdlast
 
 
 # ---------------------------------------------------------------------------

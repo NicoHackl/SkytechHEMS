@@ -69,6 +69,27 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
   `schutz_w`, Ampere-Geräte (Wallbox) gar kein Pendant, sodass die Plan-Rückkopplung dort
   „unbekannt" statt eines Vergleichs zeigte.
 
+### Behoben
+- **Fremdgesteuerte Verbraucher blähen den Pool nicht mehr auf.** Der Pool wird als
+  `residual_w + Summe(current_w)` gebildet – diese Rückrechnung ist nur zulässig, wenn HEMS
+  die Leistung selbst angefordert hat und sie daher auch wieder freigeben kann. Wurde ein
+  Gerät extern („Force-Modus" außerhalb HEMS) eingeschaltet, rechnete HEMS diese Fremdlast
+  als eigenen, abschaltbaren Überschuss gut, verteilte sie an weitere Verbraucher und erzeugte
+  Netzbezug. Jetzt gilt:
+  - `BinaryDevice.current_w` liefert `power_w` nur, wenn der Schalter AN **und** die
+    HEMS-Anforderung (`input_boolean.ems_<prefix>_anforderung_an`) aktiv ist. Der
+    Anforderungszustand wird dazu neu aus HA gelesen und als `anforderung_an` im
+    Gerätestatus (`/api/status`) ausgegeben; die Oberfläche zeigt bei Fremdsteuerung
+    den Hinweis „⚠ extern AN – zählt nicht zum Pool".
+  - `ControllableDevice.current_w` wird auf den HEMS-Sollwert gedeckelt
+    (`min(actual_w, anforderung_current_w)`, 0 wenn nicht freigegeben). Damit zählt auch
+    ein Teil-Fremdbezug (HEMS fordert 3 kW an, extern laufen 11 kW) nur mit 3 kW.
+    `max_relief_w` nutzt dieselbe gedeckelte Größe, sonst überschätzte die
+    Defizit-Notabschaltung die tatsächlich abregelbare Leistung.
+
+  Die Fremdlast bleibt implizit über `residual_w` berücksichtigt (dort ist sie bereits
+  abgezogen); HEMS regelt konservativ um sie herum. Der Normalbetrieb ist unverändert.
+
 ### Geändert
 - **Lesbare deutsche Anzeigetexte (UI-Audit).** Verbliebene englische/technische Bezeichner
   in der Oberfläche durch deutsche ersetzt: Status-Tab-Zeile `Ziel (alloc)` → `Ziel (Zuteilung)`;

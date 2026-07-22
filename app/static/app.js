@@ -131,6 +131,8 @@ function renderControllable(d) {
 function renderBinary(d) {
   const cls = !d.eligible ? 'off' : d.final_on ? 'active' : 'idle';
   const changed = d.actual_on !== d.final_on;
+  // Schalter extern an, ohne HEMS-Anforderung -> Fremdsteuerung ("Force-Modus")
+  const extern  = d.actual_on && d.anforderung_an === false;
 
   let timingRow = '';
   if (d.actual_on && d.min_runtime_s > 0) {
@@ -158,6 +160,7 @@ function renderBinary(d) {
     ${row('Freigabe',   d.eligible  ? '✓ ja' : '✗ nein', d.eligible  ? 'on' : 'off-val')}
     ${row('Leistung',   fmt(d.power_w) + ' W')}
     ${row('Ist',        d.actual_on  ? '● AN' : '○ AUS', d.actual_on  ? 'on' : 'off-val')}
+    ${extern ? row('Fremdsteuerung', '⚠ extern AN – zählt nicht zum Pool', 'changed') : ''}
     ${row('Gewünscht',  d.desired_on ? '● AN' : '○ AUS', d.desired_on ? 'on' : 'dim')}
     ${row('Kandidat',   d.candidate_on ? '● AN' : '○ AUS', d.candidate_on ? 'on' : 'dim')}
     ${row('Final → HA', d.final_on ? '● AN' : '○ AUS', changed ? 'changed' : d.final_on ? 'on' : 'off-val')}

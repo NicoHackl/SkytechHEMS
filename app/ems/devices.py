@@ -292,13 +292,25 @@ class ControllableDevice(Device):
     # Device-Schnittstelle
     # ------------------------------------------------------------------
 
+    def _hems_power_w(self) -> float:
+        """Tatsächliche Leistung, soweit sie vom HEMS angefordert wurde.
+
+        Wird das Gerät extern angesteuert (Force-Modus außerhalb des HEMS), liegt
+        _actual_w über der Anforderung. Dieser Anteil ist für das HEMS nicht
+        freigebbar und darf daher weder in den Pool zurückgerechnet noch als
+        abregelbare Entlastung gezählt werden.
+        """
+        if not self.eligible:
+            return 0.0
+        return min(self._actual_w, self._anforderung_current_w)
+
     @property
     def current_w(self) -> float:
-        return self._actual_w
+        return self._hems_power_w()
 
     @property
     def max_relief_w(self) -> float:
-        return max(self._actual_w - self.min_technisch_w, 0.0) if self.eligible else 0.0
+        return max(self._hems_power_w() - self.min_technisch_w, 0.0)
 
     def update_from_ha(self, st: StateProxy, now_ts: float,
                        global_puffer_w: float) -> None:
@@ -619,8 +631,9 @@ class BinaryDevice(Device):
         self.off_delay_s   = 0.0
 
         # ---- Laufzeitzustand (je Zyklus aus HA gelesen) ----
-        self._actual_on    = False
-        self._switch_age_s = 0.0
+        self._actual_on       = False
+        self._anforderung_an  = False
+        self._switch_age_s    = 0.0
 
         # ---- Interner persistenter Zustand (überlebt über Zyklen hinweg) ----
         self._off_since_ts: float = 0.0
@@ -659,8 +672,15 @@ class BinaryDevice(Device):
     # --- Device-Schnittstelle ---
 
     @property
+    def anforderung_an(self) -> bool:
+        return self._anforderung_an
+
+    @property
     def current_w(self) -> float:
-        return self.power_w if self._actual_on else 0.0
+        # Nur Leistung zurückrechnen, die das HEMS selbst angefordert hat. Ein extern
+        # (Force-Modus) eingeschalteter Schalter ist für das HEMS nicht freigebbar; seine
+        # Last steckt bereits in residual_w und darf den Pool nicht zusätzlich aufblähen.
+        return self.power_w if (self._actual_on and self._anforderung_an) else 0.0
 
     def update_from_ha(self, st: StateProxy, now_ts: float,
                        global_puffer_w: float) -> None:
@@ -681,7 +701,8 @@ class BinaryDevice(Device):
         if self.source == "ep":
             self.priority = int(self._ep_num(st, "prio", self.priority))
 
-        self._actual_on    = st.get(self.entity_switch) == "on"
+        self._actual_on       = st.get(self.entity_switch) == "on"
+        self._anforderung_an  = st.get(self.entity_anforderung_an) == "on"
         self._switch_age_s = now_ts - parse_ts(
             st.get(self.entity_switch + ".last_changed")
         )
@@ -760,6 +781,7 @@ class BinaryDevice(Device):
             "source":               self.source,
             "power_w":              self.power_w,
             "actual_on":            self._actual_on,
+            "anforderung_an":       self._anforderung_an,
             "desired_on":           self._desired_on,
             "candidate_on":         self._candidate_on,
             "final_on":             self._final_on,
