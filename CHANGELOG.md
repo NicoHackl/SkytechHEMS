@@ -8,6 +8,28 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Geändert
+- **Neue Weboberfläche (React + TypeScript + Vite).** Die Bedienung ist dieselbe
+  geblieben, nur besser: Aus den drei Tabs sind drei Seiten mit eigener Adresse
+  geworden (Status, Steuerung, Energy Pilot), die Navigation sitzt links und
+  fährt auf schmalen Bildschirmen als Menü aus. **Neu ist ein sichtbarer
+  Schalter zwischen Hell- und Dunkel-Modus**; die Wahl bleibt über das Neuladen
+  hinweg erhalten, voreingestellt ist die Systemvorgabe. Es gibt keine
+  Funktionseinbuße: Live-Zähler für Mindestlauf-/Mindestauszeit,
+  Abschaltverzögerung und Phasenwechsel-Sperre laufen weiterhin sekündlich
+  herunter, Zahlenfelder speichern wie bisher verzögert (700 ms) und beim
+  Verlassen des Felds, die Vorschläge des Energy Pilot werden weiterhin um
+  verwaiste Altwerte bereinigt. Neu ist außerdem, dass ein fehlgeschlagenes
+  Speichern als Meldung erscheint statt nur als Zeichen in der Zeile.
+- **Rückmeldung zum letzten Zyklus in deutschem Zeitformat.**
+  `/api/status.last_cycle_at` liefert jetzt `TT.MM.JJJJ hh:mm:ss` in Berliner
+  Zeit. Das bisherige Maschinenformat bleibt zusätzlich erhalten und steht neu
+  in `last_cycle_at_iso` — bestehende Auswertungen lesen unverändert weiter.
+- **Beschreibung des Log-Levels korrigiert.** Der Helfer
+  `input_boolean.ems_pyems_debug_output` schaltet das zusätzliche
+  Regelentscheidungs-Logging, nicht den Log-Level. Die Add-on-Optionen sagten
+  bisher etwas anderes.
+
 ### Hinzugefügt
 - **Roher Schutz-Sockel im Gerätestatus (`geschuetzte_mindestleistung_w`/`_a`).**
   `ControllableDevice.to_status_dict` liefert jetzt zusätzlich zum effektiven Schutz

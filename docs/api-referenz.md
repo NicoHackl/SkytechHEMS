@@ -46,6 +46,7 @@ Scheduler.
     "devices": [ { "id": "heizstab", "type": "controllable" } ]
   },
   "last_cycle_at": "13.08.2026 20:14:03",
+  "last_cycle_at_iso": "2026-08-13T20:14:03+02:00",
   "cycle_count": 412,
   "error": "",
   "interval_s": 30

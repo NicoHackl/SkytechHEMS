@@ -9,11 +9,21 @@ import json
 import logging
 import signal
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from aiohttp import web
 
 from ha_client import HAClient
 from ems import EMSController, StateProxy
+
+# Alle für Menschen lesbaren Zeitangaben laufen über diese Zone und dieses
+# Format – Datum TT.MM.JJJJ, Uhrzeit Berliner Zeit ohne Offset oder Kürzel.
+BERLIN = ZoneInfo("Europe/Berlin")
+DISPLAY_TIME_FORMAT = "%d.%m.%Y %H:%M:%S"
+
+# Gebaute Oberfläche. Die Quellen liegen in web/ und werden mit `npm run build`
+# hierher geschrieben; das Ergebnis ist eingecheckt (D-035).
+_STATIC_DIR = Path(__file__).parent / "static"
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -108,7 +118,8 @@ class HEMSApp:
 
         # Gemeinsamer Zustand – vom Scheduler geschrieben, vom Web-Handler gelesen
         self._last_status: dict = {}
-        self._last_cycle_at: str = ""
+        self._last_cycle_at: str = ""      # Anzeigeformat: TT.MM.JJJJ hh:mm:ss (Berliner Zeit)
+        self._last_cycle_at_iso: str = ""  # Maschinenformat, unverändert für Bestandskonsumenten
         self._last_error: str = ""
         self._cycle_count: int = 0
 
@@ -128,10 +139,12 @@ class HEMSApp:
                                                {"entity_id": self.post_cycle_script})
                 except Exception as exc:
                     log.warning("Post-cycle script '%s' failed: %s", self.post_cycle_script, exc)
-            self._last_status   = result["status"]
-            self._last_error    = ""
-            self._cycle_count  += 1
-            self._last_cycle_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            now = datetime.datetime.now(BERLIN)
+            self._last_status       = result["status"]
+            self._last_error        = ""
+            self._cycle_count      += 1
+            self._last_cycle_at     = now.strftime(DISPLAY_TIME_FORMAT)
+            self._last_cycle_at_iso = now.replace(microsecond=0).isoformat()
             log.debug("Cycle %d completed.", self._cycle_count)
         except Exception as exc:
             self._last_error = str(exc)
@@ -148,16 +161,19 @@ class HEMSApp:
     # ------------------------------------------------------------------
 
     async def _handle_index(self, request: web.Request) -> web.Response:
-        tmpl = Path(__file__).parent / "templates" / "index.html"
-        return web.FileResponse(tmpl)
+        """Liefert die gebaute Oberfläche aus app/static (Quellen: web/, siehe D-035)."""
+        return web.FileResponse(_STATIC_DIR / "index.html")
 
     async def _handle_status(self, request: web.Request) -> web.Response:
         return web.json_response({
-            "status":        self._last_status,
-            "last_cycle_at": self._last_cycle_at,
-            "cycle_count":   self._cycle_count,
-            "error":         self._last_error,
-            "interval_s":    self.interval_s,
+            "status":            self._last_status,
+            # Anzeigeformat nach eiserner Regel 9; das Maschinenformat bleibt
+            # zusätzlich erhalten, damit Bestandskonsumenten weiterlesen können (D-037).
+            "last_cycle_at":     self._last_cycle_at,
+            "last_cycle_at_iso": self._last_cycle_at_iso,
+            "cycle_count":       self._cycle_count,
+            "error":             self._last_error,
+            "interval_s":        self.interval_s,
         })
 
     async def _handle_device_controls_schema(self, request: web.Request) -> web.Response:
@@ -253,9 +269,10 @@ class HEMSApp:
         app.router.add_get("/api/device_controls_schema", self._handle_device_controls_schema)
         app.router.add_post("/api/set",                   self._handle_set)
 
-        # Statische Assets (CSS/JS) aus dem static-Verzeichnis ausliefern
-        static_dir = Path(__file__).parent / "static"
-        app.router.add_static("/static/", static_dir, name="static")
+        # Gebündelte Assets der Oberfläche. Vite legt sie unter assets/ ab; die
+        # Pfade in index.html sind relativ, damit sie auch unter dem
+        # Ingress-Präfix auflösen (D-036).
+        app.router.add_static("/assets/", _STATIC_DIR / "assets", name="assets")
 
         runner = web.AppRunner(app)
         await runner.setup()

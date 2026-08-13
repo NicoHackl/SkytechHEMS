@@ -41,6 +41,7 @@ web/
     ├── styles.css          # das gesamte Design-System
     ├── api.ts              # typisierter API-Client (einziger fetch-Ort)
     ├── types.ts            # Datenverträge zum Backend
+    ├── format.ts           # Anzeigeformate (Leistung, Dauer, Modus-Labels)
     ├── components/         # wiederverwendbar: Layout, Theme, Toast, Icon, DeviceCard, …
     └── pages/              # eine Datei je Route
 ```

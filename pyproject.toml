@@ -2,9 +2,13 @@
 line-length = 120
 target-version = "py311"
 
-# Es werden die Ruff-Standardregeln (E4/E7/E9, F) genutzt – sie fangen echte
-# Probleme wie ungenutzte Importe und undefinierte Namen, ohne die bewusste
-# Spaltenausrichtung im Code zu beanstanden.
+[tool.ruff.lint]
+# Bewusst genau dieser Satz: E4/E7/E9 und F fangen echte Probleme wie ungenutzte
+# Importe und undefinierte Namen, ohne die bewusste Spaltenausrichtung im Code zu
+# beanstanden. Explizit aufgeführt statt auf die Ruff-Voreinstellung zu vertrauen –
+# die hat sich zwischen Ruff-Versionen schon erweitert und ließ die CI an Regeln
+# scheitern, die für dieses Projekt nie gelten sollten.
+select = ["E4", "E7", "E9", "F"]
 
 [tool.pytest.ini_options]
 pythonpath = ["app", "tests"]
