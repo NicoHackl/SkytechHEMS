@@ -72,9 +72,11 @@ configuration:
       Detaillierungsgrad der Add-on-Protokolle. „info" ist für den
       Normalbetrieb ausreichend. „debug" gibt zusätzlich alle
       Regelentscheidungen (Pool, Defizit, Geräte-Kandidaten) aus –
-      nützlich zur Fehlersuche. Der Log-Level kann auch zur Laufzeit über
-      den HA-Helfer „input_boolean.ems_pyems_debug_output" umgeschaltet
-      werden, ohne das Add-on neu zu starten.
+      nützlich zur Fehlersuche. Unabhängig davon lässt sich das
+      zusätzliche Regelentscheidungs-Logging zur Laufzeit über den
+      HA-Helfer „input_boolean.ems_pyems_debug_output" ein- und
+      ausschalten, ohne das Add-on neu zu starten; der hier eingestellte
+      Log-Level bleibt davon unberührt.
   post_cycle_script:
     name: Post-Cycle-Skript (optional)
     description: >-

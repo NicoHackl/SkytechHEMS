@@ -1,3 +1,19 @@
 __pycache__/
 *.pyc
 *.pyo
+
+# Werkzeug-Caches
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
+
+# Python-Umgebungen und lokale Werte
+.venv/
+.env
+
+# Frontend: Quellen liegen in web/, das Bundle in app/static/ ist bewusst
+# eingecheckt (D-035) und darf hier NICHT ausgeschlossen werden.
+node_modules/
+
+# Betriebssystem
+.DS_Store
