@@ -71,8 +71,10 @@ configuration:
       Verbosity of the add-on logs. „info" is sufficient for normal
       operation. „debug" additionally logs all control decisions (pool,
       deficit, device candidates) and is useful for troubleshooting.
-      The log level can also be toggled at runtime via the HA helper
-      „input_boolean.ems_pyems_debug_output" without restarting the add-on.
+      Independently of this setting, the additional control-decision
+      logging can be toggled at runtime via the HA helper
+      „input_boolean.ems_pyems_debug_output" without restarting the
+      add-on; the log level configured here is not affected.
   post_cycle_script:
     name: Post-cycle script (optional)
     description: >-
