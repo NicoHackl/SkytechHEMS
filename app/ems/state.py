@@ -1,11 +1,11 @@
-"""StateProxy and shared helper utilities."""
+"""StateProxy und gemeinsam genutzte Hilfsfunktionen."""
 
 import datetime
 from typing import Any, Dict, Optional
 
 
 class StateProxy:
-    """Wraps a HA states dict snapshot; mimics pyscript's state.get() / state.getattr()."""
+    """Kapselt einen HA-State-Snapshot; bildet pyscripts state.get() / state.getattr() nach."""
 
     def __init__(self, states: Dict[str, Dict]):
         self._states = states
@@ -25,6 +25,7 @@ class StateProxy:
 
 
 def safe_float(val: Any, default: float = 0.0) -> float:
+    """Wandelt einen Wert robust in float um; bei Fehlern wird der Default geliefert."""
     try:
         return float(val)
     except (TypeError, ValueError):
@@ -32,7 +33,7 @@ def safe_float(val: Any, default: float = 0.0) -> float:
 
 
 def parse_ts(last_changed: Any) -> float:
-    """Parse an ISO timestamp string (or numeric) to a Unix float."""
+    """Wandelt einen ISO-Zeitstempel (oder numerischen Wert) in einen Unix-Float um."""
     if last_changed is None:
         return 0.0
     try:

@@ -64,7 +64,7 @@ configuration:
     description: >-
       How often the EMS control cycle runs. Shorter intervals (e.g. 10 s)
       react faster to PV power changes but generate more HA API requests.
-      Recommended: 30 s for normal operation. Allowed range: 5 – 300 s.
+      Recommended: 30 s for normal operation. Allowed range: 1 – 300 s.
   log_level:
     name: Log level
     description: >-
@@ -79,3 +79,14 @@ configuration:
       HA script entity ID (e.g. „script.hems_notification") that is called
       after each completed EMS cycle. Can be used for notifications or
       writing values to an external store. Leave empty if not needed.
+  residual_power_entity:
+    name: Surplus sensor (available power)
+    description: >-
+      HA sensor entity providing the PV surplus currently available for
+      surplus consumers, in watts. This is the EMS's most important input.
+      Expected semantics: positive = export surplus, negative = grid import;
+      loads already switched by the EMS must still be included (i.e. already
+      subtracted) in the value, because the EMS adds them back for the pool
+      calculation. Default:
+      sensor.verfugbare_leistung_fur_uberschussverbraucher (Home Assistant
+      slugifies umlauts: ü→u, ö→o, ä→a, ß→ss).

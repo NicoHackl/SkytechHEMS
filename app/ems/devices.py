@@ -1,17 +1,16 @@
 """
-EMS device hierarchy.
+EMS-Gerätehierarchie.
 
 Device (ABC)
 ├── ControllableDevice  – stufenlose Leistungsregelung (Heizstab, Wallbox)
 └── BinaryDevice        – AN/AUS mit Zeitschutz (Heizlüfter)
 
-Für einen neuen Gerätetyp: Klasse von Device ableiten, in controller._build_devices() eintragen.
-Kein weiterer Code muss angefasst werden.
+Für einen neuen Gerätetyp: Klasse von Device ableiten und in
+controller._build_devices() eintragen. Kein weiterer Code muss angefasst werden.
 """
 
 import logging
 import math
-import time
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Tuple
 
@@ -19,9 +18,14 @@ from .state import StateProxy, safe_float, parse_ts
 
 log = logging.getLogger(__name__)
 
+# Schwelle (in Watt), unterhalb derer ein Leistungswert als „null" gilt.
+# Vermeidet fragile exakte Float-Vergleiche (x == 0) bei aus Umrechnungen
+# stammenden Werten.
+EPS_W = 1.0
+
 
 class Device(ABC):
-    """Abstract base for all EMS-managed devices."""
+    """Abstrakte Basis für alle vom EMS verwalteten Geräte."""
 
     def __init__(self, id: str, allowed_modes: List[str],
                  entity_prefix: Optional[str] = None,
@@ -30,65 +34,122 @@ class Device(ABC):
         self.label         = label or id
         self.priority: int = 99
         self.eligible      = False
+        self.source        = "aus"        # Steuerquelle: 'aus' | 'user' | 'ep'
         self._allowed_modes  = allowed_modes
         self._entity_prefix  = entity_prefix or id
+        # Zeitstempel des aktuellen Zyklus (einheitliche Zeitquelle, vom
+        # Controller gesetzt). Wird auch von to_status_dict verwendet, damit
+        # alle Zeitberechnungen denselben Bezugspunkt nutzen.
+        self._now_ts: float = 0.0
 
     # ------------------------------------------------------------------
-    # Eligibility (global + per-device freigabe/modus)
+    # Freigabe (global + gerätespezifische Freigabe + technische Freigabe + Modus)
     # ------------------------------------------------------------------
 
-    def check_eligible(self, st: StateProxy,
-                       ems_enabled: bool, global_mode: str, hard_lockout: bool) -> bool:
+    def resolve_source(self, st: StateProxy,
+                       ems_enabled: bool, global_mode: str, hard_lockout: bool) -> str:
+        """
+        Steuerquelle bestimmen: 'aus' | 'user' | 'ep'.
+
+        Überall gilt: auto = KI (Energy Pilot), manuell = normale Regeln, aus = aus.
+          - global "auto"        -> alle Geräte 'ep' (außer per-Gerät modus == aus)
+          - global manuell/nur_* -> per-Gerät modus entscheidet:
+              auto    -> 'ep' (überspringt das nur_heizen/nur_laden-Typ-Gate)
+              manuell -> 'user', sofern global im Typ-Gate self._allowed_modes liegt
+              aus     -> 'aus'
+        """
         if not ems_enabled or hard_lockout or global_mode == "aus":
-            return False
+            return "aus"
+        modus = st.get(f"input_select.ems_{self._entity_prefix}_modus")
+        # Per-Gerät-Kill gilt immer – auch bei global == "auto"
+        if modus == "aus":
+            return "aus"
+        if global_mode == "auto":
+            return "ep"
+        if modus == "auto":
+            return "ep"
         if global_mode not in self._allowed_modes:
+            return "aus"
+        return "user"
+
+    def check_eligible(self, st: StateProxy) -> bool:
+        """
+        Freigabe-Prüfung je Steuerquelle (self.source vom Controller gesetzt).
+        Die technische Freigabe bleibt IMMER hartes Gate, auch bei Quelle 'ep'.
+        """
+        if self.source == "aus":
             return False
         return self._device_eligible(st)
 
     def _device_eligible(self, st: StateProxy) -> bool:
+        # _technische_freigabe (Gerät betriebsbereit) ist immer hartes Gate.
+        # Bedien-Freigabe:
+        #   Quelle 'user' -> Nutzer-Schalter _freigabe
+        #   Quelle 'ep'   -> EP-Vorschlag freigabe (Fallback: Nutzer _freigabe)
         pfx = self._entity_prefix
-        freigabe = st.get(f"input_boolean.ems_{pfx}_freigabe") == "on"
-        modus    = st.get(f"input_select.ems_{pfx}_modus")    == "auto"
-        return freigabe and modus
+        technische_freigabe = st.get(f"input_boolean.ems_{pfx}_technische_freigabe") == "on"
+        if not technische_freigabe:
+            return False
+        user_freigabe = st.get(f"input_boolean.ems_{pfx}_freigabe") == "on"
+        if self.source == "ep":
+            return self._ep_bool(st, "freigabe", user_freigabe)
+        return user_freigabe
 
     # ------------------------------------------------------------------
-    # Polymorphic interface – implemented by each subclass
+    # EP-Vorschlagswerte (Energy Pilot) lesen – mit Fallback auf Nutzerwert.
+    # Fällt ein Vorschlagssensor aus, greift der Nutzerwert (KI-Ausfall darf die
+    # Anlage nie blockieren).
+    # ------------------------------------------------------------------
+
+    def _ep_entity(self, field: str) -> str:
+        return f"sensor.ep_{self._entity_prefix}_{field}_vorschlag"
+
+    def _ep_num(self, st: StateProxy, field: str, fallback: float) -> float:
+        raw = st.get(self._ep_entity(field))
+        if raw in ("unavailable", "unknown", None):
+            return fallback
+        return safe_float(raw, fallback)
+
+    def _ep_bool(self, st: StateProxy, field: str, fallback: bool) -> bool:
+        raw = st.get(self._ep_entity(field))
+        if raw in ("unavailable", "unknown", None):
+            return fallback
+        return str(raw).lower() in ("on", "true", "1")
+
+    # ------------------------------------------------------------------
+    # Polymorphe Schnittstelle – von jeder Unterklasse implementiert
     # ------------------------------------------------------------------
 
     @property
     @abstractmethod
     def current_w(self) -> float:
-        """Actual power draw used for pool back-calculation."""
+        """Tatsächliche Leistungsaufnahme zur Pool-Rückrechnung."""
 
     @property
     def max_relief_w(self) -> float:
-        """Max power that can be shed immediately (for binary_immediate_off check)."""
+        """Maximal sofort abregelbare Leistung (für binary_immediate_off-Prüfung)."""
         return 0.0
 
     @abstractmethod
     def update_from_ha(self, st: StateProxy, now_ts: float,
                        global_puffer_w: float) -> None:
-        """Refresh config params and runtime sensor values from the HA state snapshot."""
+        """Aktualisiert Konfigurationsparameter und Sensorwerte aus dem HA-Snapshot."""
 
     def consume_from_pool(self, remaining_w: float,
                           global_einschaltreserve_w: float) -> float:
-        """Reserve / consume power from the prioritised pool. Returns updated remaining_w."""
-        return remaining_w
-
-    def allocate(self, remaining_w: float) -> float:
-        """Claim a slice of the remaining pool. Returns updated remaining_w."""
+        """Reserviert/verbraucht Leistung aus dem priorisierten Pool. Gibt aktualisiertes remaining_w zurück."""
         return remaining_w
 
     def calculate_ramp(self, current_deficit_w: float = 0.0) -> None:
-        """Rate-limit the setpoint change. No-op for non-controllable devices."""
+        """Begrenzt die Sollwertänderung. Bei nicht regelbaren Geräten ein No-Op."""
 
     @abstractmethod
     def get_write_ops(self) -> List[Tuple[str, str, Dict]]:
-        """Return HA service calls: [(domain, service, data), ...]"""
+        """Liefert HA-Service-Aufrufe: [(domain, service, data), ...]"""
 
     @abstractmethod
     def to_status_dict(self) -> Dict:
-        """Snapshot for the web-UI /api/status endpoint."""
+        """Snapshot für den /api/status-Endpunkt der Web-UI."""
 
 
 # =============================================================================
@@ -96,13 +157,14 @@ class Device(ABC):
 # =============================================================================
 
 class ControllableDevice(Device):
-    """Continuously variable setpoint device (e.g. Heizstab, Wallbox).
+    """Stufenlos regelbares Gerät (z. B. Heizstab, Wallbox).
 
-    output_unit='watt':   HA helpers use _w suffix; all values in Watts.
-    output_unit='ampere': HA helpers use _a suffix for device-specific limits;
-                          values are converted W↔A using current phase count × voltage.
-                          Phase count is selected each cycle and written to
-                          input_number.ems_<prefix>_anzahl_phase.
+    output_unit='watt':   HA-Helfer nutzen das _w-Suffix; alle Werte in Watt.
+    output_unit='ampere': HA-Helfer nutzen das _a-Suffix für gerätespezifische
+                          Grenzwerte; Werte werden über Phasenanzahl × Spannung
+                          zwischen W und A umgerechnet. Die Phasenanzahl wird je
+                          Zyklus gewählt und nach input_number.ems_<prefix>_anzahl_phase
+                          geschrieben.
     """
 
     def __init__(self, id: str, allowed_modes: List[str],
@@ -123,11 +185,11 @@ class ControllableDevice(Device):
         self.voltage_l1_entity             = voltage_l1_entity
         self.voltage_l2_entity             = voltage_l2_entity
         self.voltage_l3_entity             = voltage_l3_entity
-        # Config fallback for phase switch delay; HA entity overrides each cycle
+        # Konfig-Fallback für die Phasenwechsel-Sperrzeit; HA-Entität überschreibt je Zyklus
         self._config_phase_switch_delay_s  = float(phase_switch_delay_s) if phase_switch_delay_s else 0.0
         self.phase_switch_delay_s          = self._config_phase_switch_delay_s or 30.0
 
-        # ---- Config params (Watts; refreshed every cycle via _apply_raw_to_watt) ----
+        # ---- Konfig-Parameter (Watt; je Zyklus via _apply_raw_to_watt aktualisiert) ----
         self.min_technisch_w               = 0.0
         self.max_technisch_w               = 0.0
         self.geschuetzte_mindestleistung_w  = 0.0
@@ -137,16 +199,16 @@ class ControllableDevice(Device):
         self.max_anderung_pro_schritt_w    = 1000.0
         self.deadband_w                    = 0.0
 
-        # ---- Raw values in native unit (A or W) read from HA; converted to W per cycle ----
+        # ---- Rohwerte in nativer Einheit (A oder W) aus HA; je Zyklus nach W umgerechnet ----
         self._raw_min        = 0.0
         self._raw_max        = 0.0
         self._raw_geschuetzt = 0.0
         self._raw_max_change = 1000.0
         self._raw_deadband   = 0.0
 
-        # ---- Runtime state ----
+        # ---- Laufzeitzustand ----
         self._actual_w              = 0.0
-        self._anforderung_current_w = 0.0  # always Watts internally
+        self._anforderung_current_w = 0.0  # intern immer Watt
         self._anforderung_age_s     = 0.0
         self._schutz_w              = 0.0
         self._voltage_l1            = 230.0
@@ -154,26 +216,26 @@ class ControllableDevice(Device):
         self._voltage_l3            = 230.0
         self._global_puffer_w       = 0.0
         self._current_phases        = self._allowed_phases[0]
-        self._ha_phases             = self._allowed_phases[0]  # phases last read from HA
+        self._ha_phases             = self._allowed_phases[0]  # zuletzt aus HA gelesene Phasen
         self._last_phase_change_ts  = 0.0
 
-        # ---- Per-cycle results ----
+        # ---- Ergebnisse pro Zyklus ----
         self._alloc_w = 0.0
         self._new_w   = 0.0
 
     # ------------------------------------------------------------------
-    # Internal helpers
+    # Interne Hilfsfunktionen
     # ------------------------------------------------------------------
 
     def _suf(self, base: str) -> str:
-        """Return HA helper suffix with correct unit: base_a (Ampere) or base_w (Watt)."""
+        """Liefert das HA-Helfer-Suffix mit korrekter Einheit: base_a (Ampere) oder base_w (Watt)."""
         return f"{base}_{'a' if self.output_unit == 'ampere' else 'w'}"
 
     def _eff_for(self, phases: int) -> float:
-        """Watts per Ampere for a given phase count using per-phase voltages.
+        """Watt pro Ampere für eine gegebene Phasenanzahl anhand der Phasenspannungen.
 
-        1-phase: P = I × V_L1
-        3-phase: P = I × (V_L1 + V_L2 + V_L3)
+        1-phasig: P = I × V_L1
+        3-phasig: P = I × (V_L1 + V_L2 + V_L3)
         """
         if self.output_unit != 'ampere':
             return 1.0
@@ -182,14 +244,15 @@ class ControllableDevice(Device):
         return self._voltage_l1 + self._voltage_l2 + self._voltage_l3
 
     def _eff(self) -> float:
-        """Watts per Ampere for the currently selected phase count."""
+        """Watt pro Ampere für die aktuell gewählte Phasenanzahl."""
         return self._eff_for(self._current_phases)
 
     def _apply_raw_to_watt(self) -> None:
-        """Convert raw native-unit values to Watts using _current_phases × _voltage_v.
+        """Rechnet Rohwerte aus nativer Einheit nach Watt um (über _current_phases × Spannung).
 
-        Also recomputes _schutz_w so that consume_from_pool always uses a consistent value
-        even when called after a mid-cycle phase change via select_phases().
+        Berechnet außerdem _schutz_w neu, damit consume_from_pool stets einen
+        konsistenten Wert nutzt – auch nach einem Phasenwechsel innerhalb des
+        Zyklus via select_phases().
         """
         eff = self._eff()
         if self.output_unit == 'ampere':
@@ -210,7 +273,7 @@ class ControllableDevice(Device):
         )
 
     # ------------------------------------------------------------------
-    # Exposed read-only state for controller logging
+    # Nur-Lese-Zustand für das Controller-Logging
     # ------------------------------------------------------------------
 
     @property
@@ -226,26 +289,39 @@ class ControllableDevice(Device):
         return self._alloc_w
 
     # ------------------------------------------------------------------
-    # Device interface
+    # Device-Schnittstelle
     # ------------------------------------------------------------------
+
+    def _hems_power_w(self) -> float:
+        """Tatsächliche Leistung, soweit sie vom HEMS angefordert wurde.
+
+        Wird das Gerät extern angesteuert (Force-Modus außerhalb des HEMS), liegt
+        _actual_w über der Anforderung. Dieser Anteil ist für das HEMS nicht
+        freigebbar und darf daher weder in den Pool zurückgerechnet noch als
+        abregelbare Entlastung gezählt werden.
+        """
+        if not self.eligible:
+            return 0.0
+        return min(self._actual_w, self._anforderung_current_w)
 
     @property
     def current_w(self) -> float:
-        return self._actual_w
+        return self._hems_power_w()
 
     @property
     def max_relief_w(self) -> float:
-        return max(self._actual_w - self.min_technisch_w, 0.0) if self.eligible else 0.0
+        return max(self._hems_power_w() - self.min_technisch_w, 0.0)
 
     def update_from_ha(self, st: StateProxy, now_ts: float,
                        global_puffer_w: float) -> None:
+        self._now_ts = now_ts
         pfx = self._entity_prefix
         self._global_puffer_w = global_puffer_w
 
         def n(suffix: str, default: float = 0.0) -> float:
             return safe_float(st.get(f"input_number.ems_{pfx}_{suffix}"), default)
 
-        # Phase voltages – plausibility check 180–260 V each, fallback 230 V
+        # Phasenspannungen – Plausibilitätsprüfung 180–260 V je Phase, Fallback 230 V
         def _read_v(entity: Optional[str]) -> float:
             if not entity:
                 return 230.0
@@ -256,7 +332,7 @@ class ControllableDevice(Device):
         self._voltage_l2 = _read_v(self.voltage_l2_entity)
         self._voltage_l3 = _read_v(self.voltage_l3_entity)
 
-        # Phase switch delay: HA entity > config value > 30 s hard default
+        # Phasenwechsel-Sperrzeit: HA-Entität > Konfig-Wert > 30 s harter Default
         if self.output_unit == 'ampere' and len(self._allowed_phases) > 1:
             raw_delay = st.get(f"input_number.ems_{pfx}_min_umschaltzeit_s")
             if raw_delay not in (None, "unavailable", "unknown"):
@@ -265,7 +341,7 @@ class ControllableDevice(Device):
             else:
                 self.phase_switch_delay_s = self._config_phase_switch_delay_s or 30.0
 
-        # HA phase count written last cycle – used for correct anforderung read-back
+        # Im letzten Zyklus geschriebene Phasenanzahl – für korrektes Rücklesen der Anforderung
         if self.output_unit == 'ampere' and len(self._allowed_phases) > 1:
             ha_ph = int(safe_float(
                 st.get(f"input_number.ems_{pfx}_anzahl_phase"), self._current_phases
@@ -279,19 +355,29 @@ class ControllableDevice(Device):
         self.hoch_regelzeit_s   = n("hoch_regelzeit_s")
         self.runter_regelzeit_s = n("runter_regelzeit_s")
 
-        # Read raw values in native unit (_a or _w depending on output_unit)
+        # Rohwerte in nativer Einheit lesen (_a oder _w je nach output_unit)
         self._raw_min        = n(self._suf("min_technisch"))
         self._raw_max        = n(self._suf("max_technisch"))
         self._raw_geschuetzt = n(self._suf("geschutzte_mindestleistung"))
         self._raw_max_change = n(self._suf("max_anderung_pro_schritt"), 1000.0)
         self._raw_deadband   = n(self._suf("min_anderung_pro_schritt"), 0.0)
 
-        # Convert to Watts using current phase count (may be updated by select_phases later)
+        # EP-Übernahme: Priorität und geschützte Mindestleistung aus dem Vorschlag.
+        # EP liefert die Mindestleistung nur in Watt -> nur bei output_unit=watt
+        # übernehmen; im Ampere-Modus greift der Fallback (Nutzerwert bleibt).
+        if self.source == "ep":
+            self.priority = int(self._ep_num(st, "prio", self.priority))
+            if self.output_unit == "watt":
+                self._raw_geschuetzt = self._ep_num(
+                    st, "geschutzte_mindestleistung_w", self._raw_geschuetzt
+                )
+
+        # Nach Watt umrechnen mit aktueller Phasenanzahl (kann später von select_phases angepasst werden)
         self._apply_raw_to_watt()
 
         self._actual_w = max(safe_float(st.get(self.entity_actual_w)), 0.0)
 
-        # Read setpoint; convert from native unit to Watts using HA phase count for accuracy
+        # Sollwert lesen; aus nativer Einheit nach Watt mit HA-Phasenanzahl umrechnen (für Genauigkeit)
         raw_anf = safe_float(st.get(self.entity_anforderung_w))
         if self.output_unit == 'ampere':
             self._anforderung_current_w = raw_anf * self._eff_for(self._ha_phases)
@@ -303,29 +389,33 @@ class ControllableDevice(Device):
         )
 
     def select_phases(self, pool_w: float, now_ts: float) -> None:
-        """Select phase count for this cycle using reluctant-switching strategy.
+        """Wählt die Phasenanzahl für diesen Zyklus (zurückhaltende Umschaltstrategie).
 
-        Initial start (setpoint == 0): greedy – pick highest phase count the pool supports.
-        Active charging (setpoint > 0):
-          - Stay on current phases while they can still meet the minimum.
-          - Switch UP only when current phases are fully maxed out (pool exceeds max_a).
-          - Switch DOWN only when current phases can no longer meet min_a.
-        Hysteresis timer applies only during active charging, not on initial start.
+        Ladestart (Sollwert == 0): die höchstmögliche Phasenanzahl wählen, für die
+          der Pool das Minimum trägt. Reicht der Überschuss nur einphasig (z. B.
+          2 kW), wird einphasig mit der daraus resultierenden Ampere-Zahl geladen.
+        Aktives Laden (Sollwert > 0):
+          - Bei der aktuellen Phasenanzahl bleiben, solange sie das Minimum noch trägt.
+          - Nur HOCH schalten, wenn die aktuelle Phasenanzahl voll ausgereizt ist
+            (Pool übersteigt max_a).
+          - Nur RUNTER schalten, wenn die aktuelle Phasenanzahl das min_a nicht mehr trägt.
+        Die Hysterese-Sperrzeit gilt nur im aktiven Laden, nicht beim Ladestart.
         """
         if self.output_unit != 'ampere' or len(self._allowed_phases) == 1 or not self.eligible:
             return
 
-        is_initial_start = self._anforderung_current_w == 0
+        is_initial_start = self._anforderung_current_w < EPS_W
 
-        # Hysteresis only applies during active charging
+        # Hysterese gilt nur während des aktiven Ladens
         if not is_initial_start:
             if (self._last_phase_change_ts > 0 and
                     now_ts - self._last_phase_change_ts < self.phase_switch_delay_s):
                 return
 
         if is_initial_start:
-            # Greedy: highest phase count the pool can support at minimum threshold
-            selected = min(self._allowed_phases)  # fallback to lowest
+            # Höchstmögliche Phasenanzahl, die der Pool am Minimum-Schwellwert trägt;
+            # andernfalls Fallback auf die niedrigste Phasenanzahl (einphasig).
+            selected = min(self._allowed_phases)  # Fallback: niedrigste
             for ph in sorted(self._allowed_phases, reverse=True):
                 eff = self._eff_for(ph)
                 if eff > 0 and math.floor(pool_w / eff) >= self._raw_min:
@@ -333,16 +423,16 @@ class ControllableDevice(Device):
                     break
             reason = "Ladestart"
         else:
-            # Reluctant: only switch when forced
+            # Zurückhaltend: nur umschalten, wenn erzwungen
             eff_cur = self._eff_for(self._current_phases)
             can_sustain = eff_cur > 0 and math.floor(pool_w / eff_cur) >= self._raw_min
 
             if can_sustain:
-                # Switch UP only if current phases are at maximum capacity
+                # HOCH nur, wenn die aktuelle Phasenanzahl an der Maximalkapazität ist
                 higher = [ph for ph in self._allowed_phases if ph > self._current_phases]
                 if (higher and self._raw_max > 0 and eff_cur > 0
                         and math.floor(pool_w / eff_cur) >= self._raw_max):
-                    selected = self._current_phases  # stay unless a higher phase works
+                    selected = self._current_phases  # bleiben, sofern keine höhere Phase passt
                     for ph in sorted(higher):
                         eff = self._eff_for(ph)
                         if eff > 0 and math.floor(pool_w / eff) >= self._raw_min:
@@ -350,12 +440,12 @@ class ControllableDevice(Device):
                             break
                     reason = "Hochschalten (max erreicht)"
                 else:
-                    selected = self._current_phases  # stay – no reason to switch
+                    selected = self._current_phases  # bleiben – kein Grund zu schalten
                     reason = ""
             else:
-                # Switch DOWN: current phases can no longer meet minimum
+                # RUNTER: aktuelle Phasenanzahl trägt das Minimum nicht mehr
                 lower = [ph for ph in self._allowed_phases if ph < self._current_phases]
-                selected = min(self._allowed_phases)  # fallback
+                selected = min(self._allowed_phases)  # Fallback
                 for ph in sorted(lower):
                     eff = self._eff_for(ph)
                     if eff > 0 and math.floor(pool_w / eff) >= self._raw_min:
@@ -373,19 +463,26 @@ class ControllableDevice(Device):
             self._anforderung_age_s = 0.0
 
     def consume_from_pool(self, remaining_w: float, _: float) -> float:
-        """Reserve schutz_w so binary devices cannot consume it."""
+        """Reserviert schutz_w, damit binäre Geräte diese Leistung nicht verbrauchen."""
         return remaining_w - self._schutz_w if self.eligible else remaining_w
 
     def allocate_minimum(self, remaining_w: float) -> float:
-        """Pass 1: claim the effective minimum so lower-priority devices can only
-        start after every higher-priority device has its minimum guaranteed.
-        Effective minimum = max(min_technisch_w, geschuetzte_mindestleistung_w)."""
+        """Durchlauf 1: das technische Minimum beanspruchen, damit niedriger-priore
+        Geräte erst starten können, nachdem jedes höher-priore Gerät sein Minimum
+        garantiert hat.
+
+        Schwelle ist AUSSCHLIESSLICH min_technisch_w – die technische Untergrenze,
+        ab der das Gerät überhaupt laufen kann. geschuetzte_mindestleistung_w ist
+        bewusst NICHT Teil dieser Schwelle: Sie ist reine Reservierung gegen binäre
+        Verbraucher (via _schutz_w in consume_from_pool) und darf das Gerät nicht
+        ausschalten, wenn der Pool zwar min_technisch_w trägt, aber nicht die volle
+        geschützte Leistung."""
         if not self.eligible or remaining_w <= 0:
             self._alloc_w = 0.0
             return remaining_w
-        min_w = max(self.min_technisch_w, self.geschuetzte_mindestleistung_w)
+        min_w = self.min_technisch_w
         if min_w <= 0:
-            # No minimum defined – defer entirely to surplus pass
+            # Keine technische Untergrenze – vollständig dem Überschuss-Durchlauf überlassen
             self._alloc_w = 0.0
             return remaining_w
         if remaining_w >= min_w:
@@ -395,13 +492,13 @@ class ControllableDevice(Device):
         return remaining_w
 
     def allocate_surplus(self, remaining_w: float) -> float:
-        """Pass 2: after all devices have their minimum, distribute surplus in
-        priority order (highest priority first) up to max_technisch_w."""
+        """Durchlauf 2: nachdem alle Geräte ihr technisches Minimum haben, den
+        Überschuss in Prioritätsreihenfolge (höchste Priorität zuerst) bis
+        max_technisch_w verteilen."""
         if not self.eligible or remaining_w <= 0:
             return remaining_w
-        eff_min = max(self.min_technisch_w, self.geschuetzte_mindestleistung_w)
-        if eff_min > 0 and self._alloc_w == 0:
-            # Did not receive minimum in pass 1 → device stays off
+        if self.min_technisch_w > 0 and self._alloc_w == 0:
+            # Hat in Durchlauf 1 das technische Minimum nicht erhalten → Gerät bleibt aus
             return remaining_w
         additional = min(remaining_w, self.max_technisch_w - self._alloc_w)
         if additional > 0:
@@ -410,7 +507,7 @@ class ControllableDevice(Device):
         return remaining_w
 
     def calculate_ramp(self, current_deficit_w: float = 0.0) -> None:
-        """Apply ramp-rate limiting; result stored in _new_w."""
+        """Wendet die Rampenbegrenzung an; Ergebnis in _new_w."""
         if not self.eligible:
             self._new_w = 0.0
             return
@@ -426,7 +523,7 @@ class ControllableDevice(Device):
             )
         elif ideal_w < current_w:
             if current_deficit_w > 0:
-                new_w = ideal_w  # immediate ramp-down on deficit
+                new_w = ideal_w  # sofortiges Abregeln bei Defizit
             else:
                 new_w = (
                     max(ideal_w, current_w - self.max_anderung_pro_schritt_w)
@@ -442,15 +539,16 @@ class ControllableDevice(Device):
 
     def get_write_ops(self) -> List[Tuple[str, str, Dict]]:
         delta     = abs(self._new_w - self._anforderung_current_w)
-        is_on_off = (self._new_w == 0) != (self._anforderung_current_w == 0)
-        # Only write when value actually changes – writing the same value every cycle
-        # would reset last_changed and prevent anforderung_age_s from aging correctly,
-        # which breaks hoch_regelzeit_s / runter_regelzeit_s ramp timing.
+        is_on_off = (self._new_w < EPS_W) != (self._anforderung_current_w < EPS_W)
+        # Nur schreiben, wenn sich der Wert tatsächlich ändert – würde man jeden
+        # Zyklus denselben Wert schreiben, setzte das last_changed zurück und
+        # anforderung_age_s könnte nicht korrekt altern, was das Rampen-Timing
+        # (hoch_regelzeit_s / runter_regelzeit_s) zerstört.
         write = is_on_off or (delta > 0 and (self.deadband_w <= 0 or delta >= self.deadband_w))
 
         ops: List[Tuple[str, str, Dict]] = []
 
-        # Write phase count only when it changed (keeps HA write count low)
+        # Phasenanzahl nur schreiben, wenn sie sich geändert hat (hält die HA-Schreibanzahl niedrig)
         if self.output_unit == 'ampere' and self._current_phases != self._ha_phases:
             ops.append(("input_number", "set_value", {
                 "entity_id": f"input_number.ems_{self._entity_prefix}_anzahl_phase",
@@ -465,7 +563,7 @@ class ControllableDevice(Device):
                 "value":     value,
             }))
         else:
-            self._new_w = self._anforderung_current_w  # deadband active – no write
+            self._new_w = self._anforderung_current_w  # Deadband aktiv – kein Schreibvorgang
 
         return ops
 
@@ -476,11 +574,17 @@ class ControllableDevice(Device):
             "label":                 self.label,
             "priority":              self.priority,
             "eligible":              self.eligible,
+            "source":                self.source,
             "actual_w":              self._actual_w,
             "anforderung_current_w": self._anforderung_current_w,
             "alloc_w":               self._alloc_w,
             "new_w":                 self._new_w,
             "schutz_w":              self._schutz_w,
+            # Roher, vom User gepflegter Schutz-Sockel (ohne Reserve/Puffer). schutz_w ist
+            # der effektive Schutz (Sockel + reserve_w + global_puffer_w, geklemmt) und darf
+            # NICHT als "geschützte Mindestleistung" verglichen/angezeigt werden – dafür ist
+            # dieser Rohwert da (Energy-Pilot Plan-Rückkopplung).
+            "geschuetzte_mindestleistung_w": self.geschuetzte_mindestleistung_w,
             "output_unit":           self.output_unit,
         }
         if self.output_unit == 'ampere':
@@ -491,8 +595,15 @@ class ControllableDevice(Device):
             d["voltage_l2"]      = round(self._voltage_l2, 1)
             d["voltage_l3"]      = round(self._voltage_l3, 1)
             d["new_a"]           = math.floor(self._new_w / eff) if eff > 0 else 0
+            # Effektiver Mindestleistungs-Schutz in Ampere (schutz_w über Phasen×Spannung
+            # zurückgerechnet), damit Ampere-Konsumenten (Energy Pilot) einheitengleich
+            # vergleichen können – analog zu new_a. Kein floor: Schutz nicht unterschätzen.
+            d["schutz_a"]        = round(self._schutz_w / eff, 2) if eff > 0 else 0.0
+            # Roher Schutz-Sockel in Ampere (nativer Nutzerwert, ohne Reserve/Puffer) –
+            # Pendant zu geschuetzte_mindestleistung_w für den einheitengleichen EP-Vergleich.
+            d["geschuetzte_mindestleistung_a"] = round(self._raw_geschuetzt, 2)
             if len(self._allowed_phases) > 1 and self._last_phase_change_ts > 0:
-                remaining = self.phase_switch_delay_s - (time.time() - self._last_phase_change_ts)
+                remaining = self.phase_switch_delay_s - (self._now_ts - self._last_phase_change_ts)
                 d["phase_lock_remaining_s"] = max(0.0, round(remaining))
         return d
 
@@ -502,7 +613,7 @@ class ControllableDevice(Device):
 # =============================================================================
 
 class BinaryDevice(Device):
-    """On/off device with min_runtime, min_offtime, and off_delay guards."""
+    """AN/AUS-Gerät mit Zeitschutz: Mindestlaufzeit, Mindestauszeit, Abschaltverzögerung."""
 
     def __init__(self, id: str, allowed_modes: List[str],
                  entity_switch: str, entity_anforderung_an: str,
@@ -512,26 +623,27 @@ class BinaryDevice(Device):
         self.entity_switch         = entity_switch
         self.entity_anforderung_an = entity_anforderung_an
 
-        # ---- Config params (refreshed from HA each cycle) ----
+        # ---- Konfig-Parameter (je Zyklus aus HA aktualisiert) ----
         self.power_w       = 0.0
         self.on_reserve_w  = 0.0
         self.min_runtime_s = 0.0
         self.min_offtime_s = 0.0
         self.off_delay_s   = 0.0
 
-        # ---- Runtime state (read from HA each cycle) ----
-        self._actual_on    = False
-        self._switch_age_s = 0.0
+        # ---- Laufzeitzustand (je Zyklus aus HA gelesen) ----
+        self._actual_on       = False
+        self._anforderung_an  = False
+        self._switch_age_s    = 0.0
 
-        # ---- Internal persistent state (survives across cycles) ----
+        # ---- Interner persistenter Zustand (überlebt über Zyklen hinweg) ----
         self._off_since_ts: float = 0.0
 
-        # ---- Per-cycle computation ----
+        # ---- Berechnung pro Zyklus ----
         self._desired_on   = False
         self._candidate_on = False
         self._final_on     = False
 
-    # --- Exposed state for controller ---
+    # --- Zustand für den Controller ---
 
     @property
     def actual_on(self) -> bool:
@@ -557,14 +669,22 @@ class BinaryDevice(Device):
     def in_min_runtime(self) -> bool:
         return self._actual_on and self._switch_age_s < self.min_runtime_s
 
-    # --- Device interface ---
+    # --- Device-Schnittstelle ---
+
+    @property
+    def anforderung_an(self) -> bool:
+        return self._anforderung_an
 
     @property
     def current_w(self) -> float:
-        return self.power_w if self._actual_on else 0.0
+        # Nur Leistung zurückrechnen, die das HEMS selbst angefordert hat. Ein extern
+        # (Force-Modus) eingeschalteter Schalter ist für das HEMS nicht freigebbar; seine
+        # Last steckt bereits in residual_w und darf den Pool nicht zusätzlich aufblähen.
+        return self.power_w if (self._actual_on and self._anforderung_an) else 0.0
 
     def update_from_ha(self, st: StateProxy, now_ts: float,
                        global_puffer_w: float) -> None:
+        self._now_ts = now_ts
         pfx = self._entity_prefix
 
         def n(suffix: str, default: float = 0.0) -> float:
@@ -577,14 +697,19 @@ class BinaryDevice(Device):
         self.min_offtime_s = n("mindestauszeit_s")
         self.off_delay_s   = n("abschaltverzogerung_s")
 
-        self._actual_on    = st.get(self.entity_switch) == "on"
+        # EP-Übernahme: Priorität aus dem Vorschlag (Fallback: Nutzerwert)
+        if self.source == "ep":
+            self.priority = int(self._ep_num(st, "prio", self.priority))
+
+        self._actual_on       = st.get(self.entity_switch) == "on"
+        self._anforderung_an  = st.get(self.entity_anforderung_an) == "on"
         self._switch_age_s = now_ts - parse_ts(
             st.get(self.entity_switch + ".last_changed")
         )
 
     def consume_from_pool(self, remaining_w: float,
                           global_einschaltreserve_w: float) -> float:
-        """Determine desired state via hysteresis; consume power_w if desired on."""
+        """Bestimmt den Wunschzustand per Hysterese; verbraucht power_w wenn gewünscht an."""
         if not self.eligible:
             return remaining_w
         on_threshold = self.power_w + self.on_reserve_w + global_einschaltreserve_w
@@ -594,9 +719,14 @@ class BinaryDevice(Device):
             self._desired_on = remaining_w >= on_threshold
         return remaining_w - self.power_w if self._desired_on else remaining_w
 
-    def calculate_candidate(self, now_ts: float,
-                             binary_immediate_off: bool) -> None:
-        """Apply timing guards (min_runtime, off_delay, min_offtime) to desired state."""
+    def calculate_candidate(self, now_ts: float) -> None:
+        """Wendet die Zeit-Guards (Mindestlaufzeit, Abschaltverzögerung, Mindestauszeit) auf den Wunschzustand an.
+
+        Mindestlaufzeit UND Abschaltverzögerung gelten IMMER – auch bei einer
+        Notabschaltung (binary_immediate_off). Erst wenn das Gerät die
+        Mindestlaufzeit erfüllt hat *und* die Abschaltverzögerung abgelaufen
+        ist, wird der Aus-Befehl freigegeben.
+        """
         if not self.eligible:
             self._candidate_on = False
             self._off_since_ts = 0.0
@@ -606,15 +736,6 @@ class BinaryDevice(Device):
             if self._desired_on:
                 self._candidate_on = True
                 self._off_since_ts = 0.0
-                return
-
-            if binary_immediate_off:
-                # Mindestlaufzeit schützt auch bei Notabschaltung
-                if self._switch_age_s < self.min_runtime_s:
-                    self._candidate_on = True
-                    self._off_since_ts = 0.0
-                else:
-                    self._candidate_on = False
                 return
 
             if self._switch_age_s < self.min_runtime_s:
@@ -637,7 +758,7 @@ class BinaryDevice(Device):
             )
 
     def reset_off_timer(self) -> None:
-        """Reset the off_delay timer. Called after priority cascade when device goes OFF."""
+        """Setzt den Abschaltverzögerungs-Timer zurück. Wird nach der Prioritätskaskade aufgerufen, wenn das Gerät AUS geht."""
         self._off_since_ts = 0.0
 
     def get_write_ops(self) -> List[Tuple[str, str, Dict]]:
@@ -645,19 +766,28 @@ class BinaryDevice(Device):
         return [("input_boolean", svc, {"entity_id": self.entity_anforderung_an})]
 
     def to_status_dict(self) -> Dict:
+        off_delay_remaining: Optional[float] = None
+        if (self._actual_on and not self._desired_on
+                and self._off_since_ts > 0 and self.off_delay_s > 0):
+            off_delay_remaining = round(
+                max(0.0, self.off_delay_s - (self._now_ts - self._off_since_ts))
+            )
         return {
-            "type":           "binary",
-            "id":             self.id,
-            "label":          self.label,
-            "priority":       self.priority,
-            "eligible":       self.eligible,
-            "power_w":        self.power_w,
-            "actual_on":      self._actual_on,
-            "desired_on":     self._desired_on,
-            "candidate_on":   self._candidate_on,
-            "final_on":       self._final_on,
-            "in_min_runtime": self.in_min_runtime,
-            "switch_age_s":   round(self._switch_age_s),
-            "min_runtime_s":  self.min_runtime_s,
-            "min_offtime_s":  self.min_offtime_s,
+            "type":                 "binary",
+            "id":                   self.id,
+            "label":                self.label,
+            "priority":             self.priority,
+            "eligible":             self.eligible,
+            "source":               self.source,
+            "power_w":              self.power_w,
+            "actual_on":            self._actual_on,
+            "anforderung_an":       self._anforderung_an,
+            "desired_on":           self._desired_on,
+            "candidate_on":         self._candidate_on,
+            "final_on":             self._final_on,
+            "in_min_runtime":       self.in_min_runtime,
+            "switch_age_s":         round(self._switch_age_s),
+            "min_runtime_s":        self.min_runtime_s,
+            "min_offtime_s":        self.min_offtime_s,
+            "off_delay_remaining_s": off_delay_remaining,
         }

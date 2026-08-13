@@ -65,7 +65,7 @@ configuration:
       Wie oft der EMS-Regelzyklus ausgeführt wird. Kleinere Werte (z. B. 10 s)
       reagieren schneller auf Leistungsänderungen der PV-Anlage, erzeugen aber
       mehr HA-API-Anfragen. Empfehlung: 30 s für den normalen Betrieb.
-      Erlaubter Bereich: 5 – 300 s.
+      Erlaubter Bereich: 1 – 300 s.
   log_level:
     name: Log-Level
     description: >-
@@ -82,3 +82,14 @@ configuration:
       jedem abgeschlossenen EMS-Zyklus aufgerufen wird. Kann z. B. für
       Benachrichtigungen oder das Schreiben von Messwerten in einen externen
       Speicher genutzt werden. Leer lassen, wenn nicht benötigt.
+  residual_power_entity:
+    name: Überschuss-Sensor (verfügbare Leistung)
+    description: >-
+      HA-Sensor-Entität, die den aktuell für Überschussverbraucher verfügbaren
+      PV-Überschuss in Watt liefert. Dies ist der wichtigste Eingangswert des
+      EMS. Erwartete Semantik: positiver Wert = Einspeise-Überschuss, negativer
+      Wert = Netzbezug; die bereits vom EMS geschalteten Lasten müssen im Wert
+      noch enthalten (also abgezogen) sein, da das EMS sie zur Pool-Berechnung
+      zurückrechnet. Standard:
+      sensor.verfugbare_leistung_fur_uberschussverbraucher (Home Assistant
+      slugifiziert Umlaute: ü→u, ö→o, ä→a, ß→ss).

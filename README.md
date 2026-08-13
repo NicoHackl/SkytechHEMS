@@ -29,10 +29,10 @@ Die Konfiguration und Bedienung erfolgt vollständig über Home-Assistant-Helfer
 
 ## Funktionsumfang
 
-- **Zyklische Regelung** des PV-Überschusses in einstellbarem Intervall (5 – 300 s).
+- **Zyklische Regelung** des PV-Überschusses in einstellbarem Intervall (1 – 300 s).
 - **Pool-basierte Verteilung**: aus dem aktuellen Überschuss plus aktuell genutzter Leistung wird ein „Pool" berechnet, der nach Priorität auf die Geräte verteilt wird.
 - **Prioritätskaskade**: niedriger priorisierte Verbraucher werden zuerst abgeschaltet; höher priorisierte werden bei Bedarf zwangsweise gehalten.
-- **Globale und gerätespezifische Freigabe / Modi** (`auto`, `nur_heizen`, `nur_laden`, `aus`).
+- **Globale und gerätespezifische Freigabe / Modi** (`auto`, `nur_heizen`, `nur_laden`, `aus`). Jedes Gerät besitzt zusätzlich eine **technische Freigabe** – erst wenn Bedien-Freigabe **und** technische Freigabe aktiv sind, wirkt das Gerät am EMS mit.
 - **Hysterese** für binäre Verbraucher über `einschaltreserve_w` (global und pro Gerät).
 - **Zeitschutz** für binäre Verbraucher: Mindestlaufzeit, Mindestauszeit, Abschaltverzögerung. Die Mindestlaufzeit schützt das Gerät auch bei Notabschaltung.
 - **One-Change-Limit**: pro Zyklus wird höchstens ein binäres Gerät geschaltet (außer bei Notabschaltung).
@@ -81,9 +81,10 @@ In den Add-on-Optionen (YAML-Editor in HA):
 
 | Option              | Typ                                     | Default | Beschreibung                                                       |
 |---------------------|-----------------------------------------|---------|--------------------------------------------------------------------|
-| `interval_s`        | int (5 – 300)                           | `30`    | Zyklusintervall in Sekunden.                                       |
+| `interval_s`        | int (1 – 300)                           | `30`    | Zyklusintervall in Sekunden.                                       |
 | `log_level`         | `debug` / `info` / `warning` / `error` | `info`  | Log-Level des Add-ons.                                             |
 | `post_cycle_script` | string?                                 | –       | Optional: `script.<name>`, wird nach jedem Zyklus aufgerufen.      |
+| `residual_power_entity` | string?                             | `sensor.verfugbare_leistung_fur_uberschussverbraucher` | HA-Sensor für den verfügbaren PV-Überschuss in Watt (wichtigster Eingangswert). Zur Semantik siehe [Externe Entitäten](#externe-entitäten). |
 
 Zusätzliches Debug-Logging zur Regelentscheidung wird über den HA-Helfer `input_boolean.ems_pyems_debug_output` aktiviert (Laufzeit-Schalter, kein Add-on-Neustart nötig).
 
@@ -144,8 +145,12 @@ devices:
 Pro Zyklus führt `EMSController.run_cycle()` der Reihe nach aus:
 
 1. **Globale Eingaben** aus HA lesen (Freigabe, Modus, Puffer, Einschaltreserve, Überschuss-Sensor, Debug-Schalter).
-2. **Eligibility** je Gerät bestimmen (globaler Modus muss in `allowed_modes` liegen und `freigabe`/`modus` des Geräts müssen aktiv sein).
+2. **Eligibility** je Gerät bestimmen (globaler Modus muss in `allowed_modes` liegen und `freigabe`, `technische_freigabe` sowie `modus` des Geräts müssen aktiv sein).
 3. **Pool** berechnen: `residual_w + Σ current_w` der Geräte, oder `0` bei Lockout/EMS aus.
+   `current_w` zählt dabei nur die **vom EMS angeforderte** Leistung: bei binären Geräten
+   `leistung_w` nur, wenn Schalter AN *und* `anforderung_an` aktiv ist; bei regelbaren Geräten
+   `min(Istwert, Anforderung)`. Extern erzwungene Last („Force-Modus" außerhalb des EMS) wird
+   damit nicht als abschaltbarer Überschuss gutgeschrieben – sie steckt bereits in `residual_w`.
 4. **Phasenauswahl** für regelbare Geräte mit `output_unit=ampere` und `phases="1,3"`: Das EMS wählt die höchste Phasenanzahl, für die `floor(pool_w / (phases × U)) ≥ min_technisch_a` gilt. Bei einem Phasenwechsel wird `anzahl_phase` in HA geschrieben und der Ramp-Timer zurückgesetzt. Die Hysterese `phase_switch_delay_s` verhindert Oszillation.
 5. **Defizit** ermitteln und prüfen, ob die regelbaren Geräte das Defizit allein abregeln können (`binary_immediate_off`).
 6. **Pool nach Priorität verteilen**:
@@ -189,7 +194,8 @@ Die folgenden Helfer existieren für *jedes* Gerät (regelbar **und** binär). `
 
 | Entität                                       | Domain          | Werte                                                  | Funktion                                                                       |
 |-----------------------------------------------|-----------------|--------------------------------------------------------|--------------------------------------------------------------------------------|
-| `input_boolean.ems_<prefix>_freigabe`         | `input_boolean` | `on` / `off`                                           | Gerätespezifische Freigabe. Ohne `on` ist das Gerät nicht eligible.            |
+| `input_boolean.ems_<prefix>_freigabe`         | `input_boolean` | `on` / `off`                                           | Gerätespezifische (Bedien-)Freigabe. Ohne `on` ist das Gerät nicht eligible.   |
+| `input_boolean.ems_<prefix>_technische_freigabe` | `input_boolean` | `on` / `off`                                        | Technische Freigabe (z. B. Gerät betriebsbereit). Ein Gerät ist **nur** eligible, wenn `freigabe` **und** `technische_freigabe` auf `on` stehen. |
 | `input_select.ems_<prefix>_modus`             | `input_select`  | mindestens `auto` (weitere Optionen werden ignoriert)  | Nur bei `auto` wirkt das Gerät am EMS mit. Andere Optionen = manuell/aus.      |
 | `input_number.ems_<prefix>_prioritat`         | `input_number`  | int (kleiner = höher priorisiert)                      | Sortierreihenfolge bei Pool-Verteilung und Kaskade.                            |
 
@@ -233,6 +239,7 @@ Außerdem benötigt jedes regelbare Gerät einen externen Ist-Leistungs-Sensor (
 
 ```
 input_boolean.ems_heizstab_freigabe
+input_boolean.ems_heizstab_technische_freigabe
 input_select.ems_heizstab_modus
 input_number.ems_heizstab_prioritat
 input_number.ems_heizstab_min_technisch_w
@@ -251,6 +258,7 @@ sensor.elwa_modbus_istleistung                       ← Ist-Leistung (extern)
 
 ```
 input_boolean.ems_wallbox_freigabe
+input_boolean.ems_wallbox_technische_freigabe
 input_select.ems_wallbox_modus
 input_number.ems_wallbox_prioritat
 input_number.ems_wallbox_min_technisch_a             ← Mindest-Ladestrom in A (z. B. 6)
@@ -280,7 +288,7 @@ Für AN/AUS-Verbraucher mit Zeitschutz (z. B. Heizlüfter). Zusätzlich zu den g
 | `einschaltreserve_w`                          | W       | Pro-Gerät-Hysterese (zusätzlich zur globalen Einschaltreserve).                                          |
 | `mindestlaufzeit_s`                           | s       | Solange `actual_on=true` und das Gerät jünger als `mindestlaufzeit_s` ist, darf es nicht abschalten – auch nicht bei Notabschaltung (`binary_immediate_off`). |
 | `mindestauszeit_s`                            | s       | Solange `actual_on=false` jünger als `mindestauszeit_s` ist, darf das Gerät nicht einschalten.           |
-| `abschaltverzogerung_s`                       | s       | Verzögert das Ausschalten: erst nach Ablauf wird der Aus-Befehl freigegeben.                             |
+| `abschaltverzogerung_s`                       | s       | Verzögert das Ausschalten: erst nach Ablauf wird der Aus-Befehl freigegeben. Gilt **immer** – auch bei Notabschaltung (`binary_immediate_off`) und unabhängig von der Prioritäts-Kaskade. |
 
 Ausgabe und externer Schalter:
 
@@ -293,6 +301,7 @@ Ausgabe und externer Schalter:
 
 ```
 input_boolean.ems_heizlufter_1_freigabe
+input_boolean.ems_heizlufter_1_technische_freigabe
 input_select.ems_heizlufter_1_modus
 input_number.ems_heizlufter_1_prioritat
 input_number.ems_heizlufter_1_leistung_w
@@ -310,10 +319,21 @@ Diese Entitäten werden vom EMS *gelesen*, aber nicht angelegt oder geschrieben:
 
 | Entität                                                       | Funktion                                                                                                                 |
 |---------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------|
-| `sensor.verfugbare_leistung_fur_uberschusverbraucher`         | **Pflicht.** Aktueller PV-Überschuss in Watt (positiv = Einspeisung). `unavailable` / `unknown` oder ≤ −50 000 W löst Hard-Lockout aus. |
+| Überschuss-Sensor (konfiguriert via `residual_power_entity`, Standard `sensor.verfugbare_leistung_fur_uberschussverbraucher`) | **Pflicht.** Aktueller PV-Überschuss in Watt. `unavailable` / `unknown` oder ≤ −50 000 W löst Hard-Lockout aus. Zur erwarteten Semantik siehe Hinweis unten. |
 | `sensor.<gerät>_istleistung` (konfiguriert via `actual_power_entity`) | Ist-Leistung des jeweiligen regelbaren Geräts in Watt.                                                         |
 | `switch.<gerät>` (konfiguriert via `switch_entity`)           | Tatsächlicher Schaltzustand des jeweiligen binären Geräts.                                                               |
-| `sensor.<…>` (konfiguriert via `voltage_entity`, optional)   | Phasenspannung in Volt für die W→A-Umrechnung bei Wallboxen o. Ä.                                                        |
+| `sensor.<…>` (konfiguriert via `voltage_l1_entity` / `voltage_l2_entity` / `voltage_l3_entity`, optional) | Phasenspannungen L1/L2/L3 in Volt für die W↔A-Umrechnung bei Wallboxen o. Ä. (Fallback je 230 V).        |
+
+> **Hinweis zur Semantik des Überschuss-Sensors (wichtig für korrekte Regelung):**
+> Der Pool wird als `residual_w + Σ current_w` der aktuell vom EMS **angeforderten**
+> Geräte berechnet (siehe Regelablauf). Der Sensor muss daher den **Netz-Überschuss
+> liefern, in dem die bereits vom EMS geschalteten Lasten noch enthalten (also
+> abgezogen) sind** – ein positiver Wert bedeutet Einspeisung, ein negativer
+> Netzbezug. Liefert der Sensor stattdessen bereits den um die EMS-Lasten
+> *bereinigten* freien Überschuss, käme es zu Doppelzählung und Aufschwingen.
+> Der Sensorname ist über die Add-on-Option `residual_power_entity` frei
+> konfigurierbar; der Standardname ist ASCII-slugifiziert, da Home Assistant
+> Umlaute umsetzt (ü→u, ö→o, ä→a, ß→ss).
 
 ## Geräte hinzufügen oder entfernen
 

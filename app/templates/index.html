@@ -3,509 +3,453 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>HEMS Monitor</title>
+  <title>Skytech HEMS</title>
   <style>
+    /* ============================================================
+       Skytech HEMS – Weboberfläche im Home-Assistant-Design.
+       CSS ist bewusst inline (wie beim Energy Pilot), damit es
+       nicht separat geladen/gecacht werden muss und immer greift.
+       Alle von app.js erzeugten Klassennamen bleiben unverändert.
+       ============================================================ */
+
+    /* ---- HA-Designtokens (Standardtheme, hell) ---- */
+    :root {
+      color-scheme: light dark;
+      --ha-primary: #03a9f4;
+      --ha-primary-dark: #0288d1;
+      --ha-accent: #ff9800;
+      --ha-bg: #f5f5f5;
+      --ha-card-bg: #ffffff;
+      --ha-text: #212121;
+      --ha-text-secondary: #727272;
+      --ha-text-disabled: #bdbdbd;
+      --ha-divider: rgba(0, 0, 0, .12);
+      --ha-error: #db4437;
+      --ha-warning: #f57c00;
+      --ha-success: #43a047;
+      --ha-info: #039be5;
+      --ha-header-bg: #03a9f4;
+      --ha-header-text: #ffffff;
+      --ha-header-text-dim: rgba(255, 255, 255, .72);
+      --ha-radius: 12px;
+      --ha-radius-sm: 6px;
+      --ha-shadow: 0 2px 1px -1px rgba(0, 0, 0, .2),
+                   0 1px 1px 0 rgba(0, 0, 0, .14),
+                   0 1px 3px 0 rgba(0, 0, 0, .12);
+      --ha-chip-bg: rgba(0, 0, 0, .06);
+      --ha-hover: rgba(0, 0, 0, .04);
+      --ha-font: Roboto, "Helvetica Neue", -apple-system, BlinkMacSystemFont,
+                 "Segoe UI", sans-serif;
+    }
+
+    /* ---- HA-Designtokens (dunkel) ---- */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --ha-bg: #111111;
+        --ha-card-bg: #1c1c1c;
+        --ha-text: #e1e1e1;
+        --ha-text-secondary: #9b9b9b;
+        --ha-text-disabled: #6f6f6f;
+        --ha-divider: rgba(225, 225, 225, .12);
+        --ha-header-bg: #1c1c1c;
+        --ha-chip-bg: rgba(255, 255, 255, .08);
+        --ha-hover: rgba(255, 255, 255, .06);
+        --ha-shadow: 0 2px 1px -1px rgba(0, 0, 0, .4),
+                     0 1px 1px 0 rgba(0, 0, 0, .28),
+                     0 1px 3px 0 rgba(0, 0, 0, .24);
+      }
+    }
+
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      background: #0f1117;
-      color: #c9d1d9;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--ha-bg);
+      color: var(--ha-text);
+      font-family: var(--ha-font);
       font-size: 14px;
+      line-height: 1.5;
       min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
     }
 
-    /* ---- Header ---- */
-    .header {
+    /* ============================================================
+       Kopfleiste (HA App-Bar) + Tabs
+       ============================================================ */
+    .ha-header {
+      background: var(--ha-header-bg);
+      color: var(--ha-header-text);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      box-shadow: var(--ha-shadow);
+    }
+    .ha-header-top {
       display: flex;
       align-items: center;
-      gap: 10px;
-      padding: 14px 16px 0;
+      gap: 12px;
+      height: 56px;
+      padding: 0 16px;
     }
-    .header h1 { font-size: 1.2rem; font-weight: 600; color: #e6edf3; }
-    .dot { width: 9px; height: 9px; border-radius: 50%; background: #3fb950; animation: pulse 2s infinite; }
-    .dot.error { background: #f85149; animation: none; }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    .ha-logo {
+      width: 26px;
+      height: 26px;
+      flex-shrink: 0;
+      fill: currentColor;
+    }
+    .ha-title {
+      font-size: 1.25rem;
+      font-weight: 500;
+      letter-spacing: .1px;
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .ha-header-status {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: .82rem;
+      color: var(--ha-header-text-dim);
+    }
+    .dot {
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      background: #69f0ae;
+      animation: pulse 2s infinite;
+    }
+    .dot.error { background: #ff5252; animation: none; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
 
-    /* ---- Tabs ---- */
+    /* Tabs (HA-View-Tabs: Unterstrich-Indikator in der Kopfleiste) */
     .tabs {
       display: flex;
-      gap: 2px;
-      padding: 10px 16px 0;
-      border-bottom: 1px solid #21262d;
+      align-items: stretch;
+      gap: 0;
+      padding: 0 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
     }
+    .tabs::-webkit-scrollbar { display: none; }
     .tab-btn {
-      padding: 7px 18px;
+      appearance: none;
       background: none;
       border: none;
       border-bottom: 2px solid transparent;
-      color: #8b949e;
+      color: var(--ha-header-text-dim);
       cursor: pointer;
-      font-size: 0.9rem;
+      font-family: inherit;
+      font-size: .875rem;
       font-weight: 500;
-      transition: color .15s, border-color .15s;
-      margin-bottom: -1px;
+      letter-spacing: .4px;
+      text-transform: uppercase;
+      padding: 14px 16px;
+      white-space: nowrap;
+      transition: color .15s, border-color .15s, background .15s;
     }
-    .tab-btn.active { color: #e6edf3; border-bottom-color: #1f6feb; }
-    .tab-btn:hover:not(.active) { color: #c9d1d9; }
+    .tab-btn.active { color: var(--ha-header-text); border-bottom-color: var(--ha-header-text); }
+    .tab-btn:hover:not(.active) { color: var(--ha-header-text); background: rgba(255, 255, 255, .08); }
 
-    /* ---- Content area ---- */
+    /* ============================================================
+       Inhaltsbereich
+       ============================================================ */
+    .ha-content { max-width: 1280px; margin: 0 auto; }
     .tab-content { display: none; padding: 16px; }
     .tab-content.active { display: block; }
 
-    /* ---- Chips ---- */
+    /* ---- Abschnitts-Überschrift ---- */
+    .section {
+      font-size: .75rem;
+      color: var(--ha-text-secondary);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      font-weight: 500;
+      margin: 22px 4px 10px;
+    }
+
+    /* ---- Chips (HA-Statuschips) ---- */
     .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
-    .chip { padding: 3px 10px; border-radius: 12px; font-size: .78rem; font-weight: 500; border: 1px solid transparent; }
-    .chip-green  { background: #1a2d1a; color: #56d364; border-color: #2ea043; }
-    .chip-red    { background: #2d1a1a; color: #f85149; border-color: #da3633; }
-    .chip-blue   { background: #1a1f2d; color: #79c0ff; border-color: #1f6feb; }
-    .chip-grey   { background: #21262d; color: #8b949e; border-color: #30363d; }
-    .chip-orange { background: #2d1f10; color: #d29922; border-color: #9e6a03; }
+    .chip {
+      padding: 5px 12px;
+      border-radius: 16px;
+      font-size: .78rem;
+      font-weight: 500;
+      background: var(--ha-chip-bg);
+      color: var(--ha-text);
+      display: inline-flex;
+      align-items: center;
+    }
+    .chip-green  { background: rgba(67, 160, 71, .16);  color: var(--ha-success); }
+    .chip-red    { background: rgba(219, 68, 55, .16);  color: var(--ha-error); }
+    .chip-blue   { background: rgba(3, 169, 244, .16);  color: var(--ha-info); }
+    .chip-grey   { background: var(--ha-chip-bg);       color: var(--ha-text-secondary); }
+    .chip-orange { background: rgba(245, 124, 0, .16);  color: var(--ha-warning); }
 
-    /* ---- Metrics ---- */
-    .metrics { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
-    .metric { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 10px 16px; min-width: 130px; text-align: center; }
-    .metric .val { font-size: 1.5rem; font-weight: 700; color: #79c0ff; line-height: 1.2; }
-    .metric .val.warn { color: #f0883e; }
-    .metric .val.ok   { color: #56d364; }
-    .metric .lbl { font-size: .72rem; color: #8b949e; margin-top: 3px; text-transform: uppercase; letter-spacing: .04em; }
+    /* ---- Kennzahlen-Kacheln (HA-Glance) ---- */
+    .metrics { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 8px; }
+    .metric {
+      background: var(--ha-card-bg);
+      border-radius: var(--ha-radius);
+      box-shadow: var(--ha-shadow);
+      padding: 16px 20px;
+      min-width: 140px;
+      flex: 1 1 140px;
+      text-align: center;
+    }
+    .metric .val { font-size: 1.7rem; font-weight: 400; color: var(--ha-primary); line-height: 1.2; }
+    .metric .val.warn { color: var(--ha-warning); }
+    .metric .val.ok   { color: var(--ha-success); }
+    .metric .lbl {
+      font-size: .72rem;
+      color: var(--ha-text-secondary);
+      margin-top: 6px;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
 
-    /* ---- Section label ---- */
-    .section { font-size: .75rem; color: #8b949e; text-transform: uppercase; letter-spacing: .06em; margin: 16px 0 8px; }
+    /* ---- Gerätekarten (Monitor) ---- */
+    .devices { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+    .card {
+      background: var(--ha-card-bg);
+      border-radius: var(--ha-radius);
+      box-shadow: var(--ha-shadow);
+      border-left: 4px solid var(--ha-divider);
+      padding: 14px 16px;
+    }
+    .card.active { border-left-color: var(--ha-success); }
+    .card.idle   { border-left-color: var(--ha-primary); }
+    .card.off    { border-left-color: var(--ha-text-disabled); }
+    .card-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .card-name { font-weight: 500; font-size: 1rem; color: var(--ha-text); }
+    .prio-badge {
+      font-size: .72rem;
+      background: var(--ha-chip-bg);
+      color: var(--ha-text-secondary);
+      border-radius: 12px;
+      padding: 2px 9px;
+      font-weight: 500;
+    }
+    .row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--ha-divider); }
+    .row:last-child { border-bottom: none; }
+    .row .k { color: var(--ha-text-secondary); }
+    .row .v { font-weight: 500; color: var(--ha-text); text-align: right; }
+    .row .v.on      { color: var(--ha-success); }
+    .row .v.off-val { color: var(--ha-error); }
+    .row .v.changed { color: var(--ha-accent); }
+    .row .v.dim     { color: var(--ha-text-disabled); font-weight: 400; }
 
-    /* ---- Monitor device cards ---- */
-    .devices { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
-    .card { background: #161b22; border: 1px solid #30363d; border-left: 3px solid #30363d; border-radius: 8px; padding: 12px 14px; }
-    .card.active  { border-left-color: #2ea043; }
-    .card.idle    { border-left-color: #1f6feb; }
-    .card.off     { border-left-color: #30363d; }
-    .card-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-    .card-name { font-weight: 600; color: #e6edf3; }
-    .prio-badge { font-size: .72rem; background: #21262d; color: #8b949e; border-radius: 4px; padding: 1px 6px; }
-    .row { display: flex; justify-content: space-between; padding: 2px 0; }
-    .row .k { color: #8b949e; }
-    .row .v { font-weight: 500; }
-    .row .v.on      { color: #56d364; }
-    .row .v.off-val { color: #f85149; }
-    .row .v.changed { color: #f0883e; }
-    .row .v.dim     { color: #6e7681; }
+    /* ---- Fußzeile ---- */
+    .footer {
+      margin-top: 20px;
+      font-size: .75rem;
+      color: var(--ha-text-secondary);
+      display: flex;
+      gap: 18px;
+      flex-wrap: wrap;
+      padding: 4px;
+    }
 
-    /* ---- Footer ---- */
-    .footer { margin-top: 16px; font-size: .72rem; color: #484f58; display: flex; gap: 16px; flex-wrap: wrap; }
-
-    /* ---- Error banner ---- */
-    .error-banner { background: #2d1a1a; border: 1px solid #da3633; border-radius: 6px; padding: 8px 12px; color: #f85149; font-size: .85rem; margin-bottom: 12px; display: none; }
+    /* ---- Fehlerbanner ---- */
+    .error-banner {
+      background: rgba(219, 68, 55, .12);
+      border-left: 4px solid var(--ha-error);
+      border-radius: var(--ha-radius-sm);
+      padding: 12px 14px;
+      color: var(--ha-error);
+      font-size: .85rem;
+      margin-bottom: 14px;
+      display: none;
+    }
 
     /* ============================================================
-       STEUERUNG TAB
+       Steuerung-Tab
        ============================================================ */
+    .ctrl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
 
-    .ctrl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
-
-    .ctrl-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; overflow: hidden; }
+    .ctrl-card {
+      background: var(--ha-card-bg);
+      border-radius: var(--ha-radius);
+      box-shadow: var(--ha-shadow);
+      overflow: hidden;
+    }
     .ctrl-card-header {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 10px 14px;
-      background: #1c2129;
-      border-bottom: 1px solid #30363d;
+      padding: 14px 16px;
       cursor: pointer;
       user-select: none;
+      transition: background .15s;
     }
-    .ctrl-card-header:hover { background: #21262d; }
-    .ctrl-card-title { font-weight: 600; color: #e6edf3; font-size: .95rem; }
-    .ctrl-card-arrow { color: #8b949e; font-size: .8rem; transition: transform .2s; }
+    .ctrl-card-header:hover { background: var(--ha-hover); }
+    .ctrl-card-title { font-weight: 500; color: var(--ha-text); font-size: 1rem; }
+    .ctrl-card-arrow { color: var(--ha-text-secondary); font-size: .8rem; transition: transform .2s; }
     .ctrl-card-arrow.open { transform: rotate(180deg); }
-    .ctrl-card-body { padding: 4px 0; }
+    .ctrl-card-body { padding: 0; }
     .ctrl-card-body.collapsed { display: none; }
 
     .ctrl-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 7px 14px;
-      border-bottom: 1px solid #21262d;
-      gap: 8px;
-      min-height: 38px;
+      padding: 10px 16px;
+      border-top: 1px solid var(--ha-divider);
+      gap: 10px;
+      min-height: 44px;
     }
-    .ctrl-row:last-child { border-bottom: none; }
-    .ctrl-row .k { color: #8b949e; flex: 1; min-width: 0; }
-    .ctrl-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+    .ctrl-row .k { color: var(--ha-text-secondary); flex: 1; min-width: 0; }
+    .ctrl-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 
-    /* Toggle button */
+    /* Toggle (HA-Switch-Anmutung als Pille) */
     .toggle-btn {
-      padding: 3px 12px;
-      border-radius: 12px;
-      border: 1px solid #30363d;
-      background: #21262d;
-      color: #8b949e;
+      appearance: none;
+      padding: 5px 14px;
+      border-radius: 16px;
+      border: 1px solid var(--ha-divider);
+      background: var(--ha-chip-bg);
+      color: var(--ha-text-secondary);
       cursor: pointer;
-      font-size: .8rem;
+      font-family: inherit;
+      font-size: .78rem;
       font-weight: 600;
-      min-width: 46px;
+      letter-spacing: .3px;
+      min-width: 52px;
       transition: background .15s, color .15s, border-color .15s;
     }
-    .toggle-btn.on { background: #1a2d1a; color: #56d364; border-color: #2ea043; }
-    .toggle-btn:hover { opacity: .85; }
+    .toggle-btn.on { background: var(--ha-primary); color: #fff; border-color: var(--ha-primary); }
+    .toggle-btn:hover { filter: brightness(.97); }
 
-    /* Number input */
-    .num-wrap { display: flex; align-items: center; gap: 4px; }
+    /* Zahlenfeld (HA-Textfeld) */
+    .num-wrap { display: flex; align-items: center; gap: 5px; }
     .num-input {
-      width: 80px;
-      padding: 3px 7px;
-      background: #0d1117;
-      border: 1px solid #30363d;
-      border-radius: 6px;
-      color: #e6edf3;
+      width: 82px;
+      padding: 6px 9px;
+      background: var(--ha-bg);
+      border: 1px solid var(--ha-divider);
+      border-radius: var(--ha-radius-sm);
+      color: var(--ha-text);
+      font-family: inherit;
       font-size: .85rem;
       text-align: right;
       outline: none;
+      transition: border-color .15s;
     }
-    .num-input:focus { border-color: #1f6feb; }
-    .unit { color: #6e7681; font-size: .78rem; min-width: 16px; }
+    .num-input:focus { border-color: var(--ha-primary); }
+    .unit { color: var(--ha-text-secondary); font-size: .78rem; min-width: 16px; }
 
-    /* Select */
+    /* Auswahl (HA-Select) */
     .sel-input {
-      padding: 3px 8px;
-      background: #0d1117;
-      border: 1px solid #30363d;
-      border-radius: 6px;
-      color: #e6edf3;
+      padding: 6px 10px;
+      background: var(--ha-bg);
+      border: 1px solid var(--ha-divider);
+      border-radius: var(--ha-radius-sm);
+      color: var(--ha-text);
+      font-family: inherit;
       font-size: .85rem;
       outline: none;
       cursor: pointer;
+      transition: border-color .15s;
     }
-    .sel-input:focus { border-color: #1f6feb; }
+    .sel-input:focus { border-color: var(--ha-primary); }
 
-    /* Save indicator */
-    .save-indicator { font-size: .85rem; width: 16px; text-align: center; }
-    .save-indicator.saving { color: #8b949e; }
-    .save-indicator.saved  { color: #56d364; }
-    .save-indicator.err    { color: #f85149; }
+    /* Speicher-Indikator */
+    .save-indicator { font-size: .9rem; width: 16px; text-align: center; }
+    .save-indicator.saving { color: var(--ha-text-secondary); }
+    .save-indicator.saved  { color: var(--ha-success); }
+    .save-indicator.err    { color: var(--ha-error); }
 
-    .ctrl-not-found { color: #484f58; font-style: italic; font-size: .8rem; }
+    .ctrl-not-found { color: var(--ha-text-disabled); font-style: italic; font-size: .8rem; }
+    .ctrl-refresh { font-size: .75rem; color: var(--ha-text-secondary); margin-top: 14px; padding: 4px; }
 
-    .ctrl-refresh { font-size: .72rem; color: #484f58; margin-top: 10px; }
+    /* ============================================================
+       Responsive – KEIN horizontales Scrollen (nur vertikal).
+       Tablet ≤900 px, Handy ≤480 px. Rein visuell/additiv.
+       ============================================================ */
+
+    /* Größere Touch-Ziele auf Finger-Geräten (kein feiner Zeiger). */
+    @media (hover: none) and (pointer: coarse) {
+      .tab-btn { padding-top: 16px; padding-bottom: 16px; }
+      .toggle-btn { padding-top: 8px; padding-bottom: 8px; }
+    }
+
+    /* Tablet: Tab-Leiste umbrechen statt seitlich scrollen. */
+    @media (max-width: 900px) {
+      .tabs { flex-wrap: wrap; overflow-x: visible; }
+    }
+
+    /* Handy: Raster einspaltig – verhindert den minmax-Überlauf (280/320 px)
+       auf schmalen Bildschirmen, damit nichts seitlich scrollt. */
+    @media (max-width: 480px) {
+      body { font-size: 13.5px; }
+      .ha-header-top { height: 52px; padding: 0 12px; }
+      .ha-title { font-size: 1.1rem; }
+      .tab-content { padding: 12px; }
+      .devices, .ctrl-grid { grid-template-columns: 1fr; }
+      .metric { padding: 14px 16px; }
+      .row .v, .card-name { word-break: break-word; }
+      .num-input { width: 72px; }
+    }
   </style>
 </head>
 <body>
 
-  <div class="header">
-    <div class="dot" id="live-dot"></div>
-    <h1>HEMS</h1>
-  </div>
+  <!-- HA-App-Bar: Titel + Live-Indikator, darunter die View-Tabs -->
+  <header class="ha-header">
+    <div class="ha-header-top">
+      <svg class="ha-logo" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/>
+      </svg>
+      <span class="ha-title">Skytech HEMS</span>
+      <div class="ha-header-status">
+        <span class="dot" id="live-dot"></span>
+        <span>Live</span>
+      </div>
+    </div>
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="monitor">Status</button>
+      <button class="tab-btn"        data-tab="steuerung">Steuerung</button>
+      <button class="tab-btn"        data-tab="ep">Energy Pilot</button>
+    </nav>
+  </header>
 
-  <div class="tabs">
-    <button class="tab-btn active" onclick="switchTab('monitor', this)">Status</button>
-    <button class="tab-btn"        onclick="switchTab('steuerung', this)">Steuerung</button>
-  </div>
+  <main class="ha-content">
 
-  <!-- ================================================================
-       TAB: STATUS / MONITOR
-       ================================================================ -->
-  <div id="tab-monitor" class="tab-content active">
-    <div class="error-banner" id="error-banner"></div>
-    <div class="chips"   id="chips"></div>
-    <div class="metrics" id="metrics"></div>
-    <div class="section">Regelbare Verbraucher</div>
-    <div class="devices" id="controllable"></div>
-    <div class="section">Binäre Verbraucher</div>
-    <div class="devices" id="binary"></div>
-    <div class="footer"  id="footer"></div>
-  </div>
+    <!-- ================================================================
+         TAB: STATUS / MONITOR
+         ================================================================ -->
+    <div id="tab-monitor" class="tab-content active">
+      <div class="error-banner" id="error-banner"></div>
+      <div class="chips"   id="chips"></div>
+      <div class="metrics" id="metrics"></div>
+      <div class="section">Regelbare Verbraucher</div>
+      <div class="devices" id="controllable"></div>
+      <div class="section">Binäre Verbraucher</div>
+      <div class="devices" id="binary"></div>
+      <div class="footer"  id="footer"></div>
+    </div>
 
-  <!-- ================================================================
-       TAB: STEUERUNG
-       ================================================================ -->
-  <div id="tab-steuerung" class="tab-content">
-    <div class="ctrl-grid" id="ctrl-grid"></div>
-    <div class="ctrl-refresh" id="ctrl-refresh">Warte auf Daten…</div>
-  </div>
+    <!-- ================================================================
+         TAB: STEUERUNG
+         ================================================================ -->
+    <div id="tab-steuerung" class="tab-content">
+      <div class="ctrl-grid" id="ctrl-grid"></div>
+      <div class="ctrl-refresh" id="ctrl-refresh">Warte auf Daten…</div>
+    </div>
 
+    <!-- ================================================================
+         TAB: ENERGY PILOT (nur Anzeige der vom EP gelieferten Vorschläge)
+         ================================================================ -->
+    <div id="tab-ep" class="tab-content">
+      <div class="error-banner" id="ep-error"></div>
+      <div class="section">Plan-Status</div>
+      <div class="chips" id="ep-plan-chips"></div>
+      <div class="section">EP ↔ HEMS</div>
+      <div class="chips" id="ep-conn-chips"></div>
+      <div class="section">Vorschläge je Gerät</div>
+      <div class="devices" id="ep-devices"></div>
+      <div class="ctrl-refresh" id="ep-refresh">Warte auf Daten…</div>
+    </div>
 
-  <script>
-  // ================================================================
-  // TAB NAVIGATION
-  // ================================================================
-  function switchTab(name, btn) {
-    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-    document.getElementById('tab-' + name).classList.add('active');
-    btn.classList.add('active');
-    if (name === 'steuerung') fetchControls();
-  }
+  </main>
 
-  // ================================================================
-  // MONITOR
-  // ================================================================
-  async function pollStatus() {
-    try {
-      const r = await fetch('api/status');
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      render(await r.json());
-      document.getElementById('live-dot').className = 'dot';
-    } catch(e) {
-      document.getElementById('live-dot').className = 'dot error';
-      showError('Verbindungsfehler: ' + e.message);
-    }
-  }
-
-  function render(data) {
-    const s = data.status || {};
-    showError(data.error || '');
-
-    const chips = [
-      chip(s.ems_enabled ? 'EMS Aktiv' : 'EMS Inaktiv', s.ems_enabled ? 'green' : 'grey'),
-      chip('Modus: ' + (s.global_mode || '–'), 'blue'),
-    ];
-    if (s.hard_lockout)         chips.push(chip('⚠ LOCKOUT', 'red'));
-    if (s.binary_immediate_off) chips.push(chip('Notabschaltung', 'red'));
-    document.getElementById('chips').innerHTML = chips.join('');
-
-    const tiles = [
-      tile(fmt(s.residual_w) + ' W', 'Überschuss', s.residual_w < 0 ? 'warn' : 'ok'),
-      tile(fmt(s.pool_w)     + ' W', 'EMS Pool'),
-    ];
-    if (s.current_deficit_w > 0) tiles.push(tile(fmt(s.current_deficit_w) + ' W', 'Defizit', 'warn'));
-    tiles.push(tile(fmt(s.binary_total_w) + ' W', 'Binär gesamt'));
-    document.getElementById('metrics').innerHTML = tiles.join('');
-
-    const devices = s.devices || [];
-    document.getElementById('controllable').innerHTML =
-      devices.filter(d => d.type === 'controllable').map(renderControllable).join('');
-    document.getElementById('binary').innerHTML =
-      devices.filter(d => d.type === 'binary').map(renderBinary).join('');
-
-    document.getElementById('footer').innerHTML =
-      `<span>Letzter Zyklus: ${data.last_cycle_at || '–'}</span>` +
-      `<span>Zyklen: ${data.cycle_count || 0}</span>` +
-      `<span>Intervall: ${data.interval_s}s</span>`;
-  }
-
-  function renderControllable(d) {
-    const cls = !d.eligible ? 'off' : d.new_w > 0 ? 'active' : 'idle';
-    const changed = Math.round(d.new_w) !== Math.round(d.anforderung_current_w);
-    const isAmpere = d.output_unit === 'ampere';
-    const ph = isAmpere ? (d.current_phases || 1) : 1;
-    const vl1 = d.voltage_l1 || 230;
-    const vl2 = d.voltage_l2 || 230;
-    const vl3 = d.voltage_l3 || 230;
-    const eff = isAmpere ? (ph === 1 ? vl1 : vl1 + vl2 + vl3) : 1;
-    // Current setpoint converted to A for display (anforderung_current_w is always in W)
-    const anfA = isAmpere ? Math.floor(d.anforderung_current_w / eff) : null;
-    const anfDisplay = isAmpere
-      ? (anfA + ' A  (' + fmt(d.anforderung_current_w) + ' W)')
-      : fmt(d.anforderung_current_w) + ' W';
-    const neuDisplay = isAmpere
-      ? (d.new_a != null ? d.new_a + ' A  (' + fmt(d.new_w) + ' W)' : '–')
-      : fmt(d.new_w) + ' W';
-    const multiPhase = isAmpere && d.allowed_phases && d.allowed_phases.length > 1;
-    const phaseLock  = multiPhase && d.phase_lock_remaining_s > 0
-      ? ' (Lock: ' + fmtDur(d.phase_lock_remaining_s) + ')' : '';
-    return `<div class="card ${cls}">
-      <div class="card-title"><span class="card-name">${d.label || d.id}</span><span class="prio-badge">Prio ${d.priority}</span></div>
-      ${row('Freigabe',     d.eligible ? '✓ ja' : '✗ nein', d.eligible ? 'on' : 'off-val')}
-      ${row('Ist',          fmt(d.actual_w) + ' W')}
-      ${row('Anforderung',  anfDisplay)}
-      ${row('Ziel (alloc)', fmt(d.alloc_w) + ' W')}
-      ${row('Schutz',       fmt(d.schutz_w) + ' W', 'dim')}
-      ${isAmpere ? row('Spannung', ph === 1 ? `L1: ${vl1} V` : `L1/L2/L3: ${vl1}/${vl2}/${vl3} V`, 'dim') : ''}
-      ${multiPhase ? row('Phasen', ph + '-phasig' + phaseLock, phaseLock ? 'dim' : '') : ''}
-      ${row('Neu → HA',     neuDisplay, changed ? 'changed' : '')}
-    </div>`;
-  }
-
-  function renderBinary(d) {
-    const cls = !d.eligible ? 'off' : d.final_on ? 'active' : 'idle';
-    const changed = d.actual_on !== d.final_on;
-
-    let timingRow = '';
-    if (d.actual_on && d.min_runtime_s > 0) {
-      const rem = Math.max(0, d.min_runtime_s - d.switch_age_s);
-      timingRow = rem > 0
-        ? row('Mindestlaufzeit', 'noch ' + fmtDur(rem), 'dim')
-        : row('Mindestlaufzeit', '✓ erfüllt', 'on');
-    } else if (!d.actual_on && d.min_offtime_s > 0) {
-      const rem = Math.max(0, d.min_offtime_s - d.switch_age_s);
-      timingRow = rem > 0
-        ? row('Mindestauszeit', 'noch ' + fmtDur(rem), 'dim')
-        : row('Mindestauszeit', '✓ erfüllt', 'on');
-    }
-
-    return `<div class="card ${cls}">
-      <div class="card-title"><span class="card-name">${d.label || d.id}</span><span class="prio-badge">Prio ${d.priority}</span></div>
-      ${row('Freigabe',   d.eligible  ? '✓ ja' : '✗ nein', d.eligible  ? 'on' : 'off-val')}
-      ${row('Leistung',   fmt(d.power_w) + ' W')}
-      ${row('Ist',        d.actual_on  ? '● AN' : '○ AUS', d.actual_on  ? 'on' : 'off-val')}
-      ${row('Gewünscht',  d.desired_on ? '● AN' : '○ AUS', d.desired_on ? 'on' : 'dim')}
-      ${row('Kandidat',   d.candidate_on ? '● AN' : '○ AUS', d.candidate_on ? 'on' : 'dim')}
-      ${row('Final → HA', d.final_on ? '● AN' : '○ AUS', changed ? 'changed' : d.final_on ? 'on' : 'off-val')}
-      ${timingRow}
-    </div>`;
-  }
-
-  function chip(t, c) { return `<span class="chip chip-${c}">${t}</span>`; }
-  function tile(v, l, vc='') { return `<div class="metric"><div class="val ${vc}">${v}</div><div class="lbl">${l}</div></div>`; }
-  function row(k, v, c='') { return `<div class="row"><span class="k">${k}</span><span class="v ${c}">${v}</span></div>`; }
-  function fmt(v) { return v == null ? '–' : Math.round(v).toLocaleString('de-DE'); }
-  function fmtDur(s) { return s >= 60 ? Math.floor(s/60) + 'm ' + Math.round(s%60) + 's' : Math.round(s) + 's'; }
-  function showError(msg) {
-    const el = document.getElementById('error-banner');
-    el.style.display = msg ? 'block' : 'none';
-    if (msg) el.textContent = '⚠ ' + msg;
-  }
-
-  pollStatus();
-  setInterval(pollStatus, 5000);
-
-  // ================================================================
-  // STEUERUNG
-  // ================================================================
-  let _saveTimers = {};
-  let _ctrlOpen   = {};
-  let _ctrlSchema  = null;   // loaded once from /api/device_controls_schema
-
-  async function fetchControls() {
-    try {
-      if (!_ctrlSchema) {
-        const rs = await fetch('api/device_controls_schema');
-        _ctrlSchema = await rs.json();
-      }
-      const r = await fetch('api/controls');
-      const states = await r.json();
-      renderControls(_ctrlSchema, states);
-      document.getElementById('ctrl-refresh').textContent =
-        'Aktualisiert: ' + new Date().toLocaleTimeString('de');
-    } catch(e) {
-      document.getElementById('ctrl-refresh').textContent = 'Fehler: ' + e.message;
-    }
-  }
-
-  function renderControls(schema, states) {
-    document.getElementById('ctrl-grid').innerHTML = schema.map(group => {
-      const key  = group.label;
-      const open = _ctrlOpen[key] !== false;    // default: open
-      const rows = group.items.map(item => renderCtrlRow(item, states[item.entity])).join('');
-      return `<div class="ctrl-card">
-        <div class="ctrl-card-header" onclick="toggleCard('${key}', this)">
-          <span class="ctrl-card-title">${group.label}</span>
-          <span class="ctrl-card-arrow ${open ? 'open' : ''}">▼</span>
-        </div>
-        <div class="ctrl-card-body ${open ? '' : 'collapsed'}" id="ctrlbody-${key}">
-          ${rows}
-        </div>
-      </div>`;
-    }).join('');
-  }
-
-  function toggleCard(key, header) {
-    const body  = document.getElementById('ctrlbody-' + key);
-    const arrow = header.querySelector('.ctrl-card-arrow');
-    const isOpen = !body.classList.contains('collapsed');
-    body.classList.toggle('collapsed', isOpen);
-    arrow.classList.toggle('open', !isOpen);
-    _ctrlOpen[key] = !isOpen;
-  }
-
-  function renderCtrlRow(item, state) {
-    const siId = 'si-' + item.entity.replace(/\./g, '-');
-    let input;
-
-    if (!state) {
-      input = `<span class="ctrl-not-found">nicht gefunden</span>`;
-    } else {
-      const domain = item.entity.split('.')[0];
-      const attrs  = state.attributes || {};
-
-      if (domain === 'input_boolean') {
-        const on = state.state === 'on';
-        input = `<button class="toggle-btn ${on ? 'on' : ''}"
-          data-entity="${item.entity}"
-          onclick="ctrlToggle(this)">${on ? 'AN' : 'AUS'}</button>`;
-
-      } else if (domain === 'input_number') {
-        const val  = parseFloat(state.state) || 0;
-        const unit = attrs.unit_of_measurement || '';
-        const min  = attrs.min  != null ? `min="${attrs.min}"`  : '';
-        const max  = attrs.max  != null ? `max="${attrs.max}"`  : '';
-        const step = attrs.step != null ? `step="${attrs.step}"` : 'step="1"';
-        input = `<div class="num-wrap">
-          <input type="number" class="num-input"
-            value="${val}" ${min} ${max} ${step}
-            data-entity="${item.entity}"
-            onchange="scheduleSet(this)"
-            onblur="immediateSet(this)">
-          ${unit ? `<span class="unit">${unit}</span>` : ''}
-        </div>`;
-
-      } else if (domain === 'input_select') {
-        const opts = (attrs.options || []).map(o =>
-          `<option value="${o}" ${o === state.state ? 'selected' : ''}>${o}</option>`
-        ).join('');
-        input = `<select class="sel-input" data-entity="${item.entity}" onchange="ctrlSelect(this)">
-          ${opts}
-        </select>`;
-      } else {
-        input = `<span class="ctrl-not-found">${state.state}</span>`;
-      }
-    }
-
-    return `<div class="ctrl-row">
-      <span class="k">${item.label}</span>
-      <div class="ctrl-right">${input}<span class="save-indicator" id="${siId}"></span></div>
-    </div>`;
-  }
-
-  // ---- Control event handlers ----
-
-  function ctrlToggle(btn) {
-    const isOn = btn.classList.contains('on');
-    btn.classList.toggle('on', !isOn);
-    btn.textContent = !isOn ? 'AN' : 'AUS';
-    saveEntity(btn.dataset.entity, !isOn);
-  }
-
-  function scheduleSet(input) {
-    const id = input.dataset.entity;
-    clearTimeout(_saveTimers[id]);
-    _saveTimers[id] = setTimeout(() => immediateSet(input), 700);
-  }
-
-  function immediateSet(input) {
-    clearTimeout(_saveTimers[input.dataset.entity]);
-    saveEntity(input.dataset.entity, parseFloat(input.value));
-  }
-
-  function ctrlSelect(sel) {
-    saveEntity(sel.dataset.entity, sel.value);
-  }
-
-  async function saveEntity(entityId, value) {
-    const siId = 'si-' + entityId.replace(/\./g, '-');
-    const si   = document.getElementById(siId);
-    if (si) { si.textContent = '↑'; si.className = 'save-indicator saving'; }
-
-    try {
-      const r = await fetch('api/set', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({entity_id: entityId, value}),
-      });
-      const ok = (await r.json()).ok === true;
-      if (si) {
-        si.textContent = ok ? '✓' : '✗';
-        si.className   = 'save-indicator ' + (ok ? 'saved' : 'err');
-        setTimeout(() => { if (si) { si.textContent = ''; si.className = 'save-indicator'; } }, 2500);
-      }
-    } catch(e) {
-      if (si) { si.textContent = '✗'; si.className = 'save-indicator err'; }
-    }
-  }
-
-  // Auto-refresh controls every 15s when tab is active
-  setInterval(() => {
-    if (document.getElementById('tab-steuerung').classList.contains('active'))
-      fetchControls();
-  }, 15000);
-  </script>
+  <script src="static/app.js"></script>
 </body>
 </html>
