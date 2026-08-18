@@ -128,6 +128,11 @@ class EMSController:
         log.info("EMSController bereit – %d Geräte registriert, Überschuss-Sensor='%s'.",
                  len(self._devices), self._residual_entity)
 
+    @property
+    def residual_power_entity(self) -> str:
+        """Öffentliche, aufgelöste Entität des Überschusssensors für den API-Vertrag."""
+        return self._residual_entity
+
     # ------------------------------------------------------------------
     # Öffentlicher Einstiegspunkt
     # ------------------------------------------------------------------
@@ -169,6 +174,7 @@ class EMSController:
 
         # ── 2. Alle Geräte aus HA aktualisieren ─────────────────────────
         for device in self._devices:
+            device.begin_cycle(now_ts)
             device.source   = device.resolve_source(
                 st, ems_enabled, global_mode, hard_lockout
             )

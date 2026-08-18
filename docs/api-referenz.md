@@ -70,12 +70,27 @@ Liefert die frischen Zustände aller EMS-Helfer, gefiltert auf die Präfixe
 ### `GET /api/device_controls_schema`
 
 Das Steuerschema der Oberfläche, abgeleitet aus der aktuellen Gerätekonfiguration. Eine Liste von
-Gruppen: zuerst `{"label": "Global", "items": […]}`, danach je Gerät
-`{"name": "<technische ID>", "label": "<Anzeigename>", "items": […]}`.
-Jedes Item ist `{"entity": "<entity_id>", "label": "<deutscher Text>"}`.
+Gruppen: zuerst `{"name": "global", "label": "Global", "schema_version": 2, "items": […]}`,
+danach je Gerät `{"name": "<technische ID>", "label": "<Anzeigename>", "items": […]}`.
+Die bisherige Form bleibt additiv kompatibel. Geräte ergänzen `class`, `entity_prefix`,
+`output_unit`, `allowed_modes`, `control_policy`, `request_entity` sowie je nach Klasse
+`actual_power_entity` oder `switch_entity`. Jedes Item trägt weiterhin `entity` und `label` und
+zusätzlich `key`, `kind`, `unit` (falls vorhanden), `role` und `planning_relevant`.
 
 `name` und `label` sind bewusst getrennt: Konsumenten machen die Identität am `name` fest, `label`
 ist nur Anzeige. Ein Umbenennen des Labels bricht damit keine Zuordnung.
+
+`control_policy = "pv_surplus_only"` bedeutet: HEMS begrenzt die tatsächliche Verbraucherleistung
+bereits auf verfügbaren PV-Überschuss. Ein Planer darf Netzbezug deshalb nicht als kausalen
+Abschaltgrund für diese Verbraucher verwenden.
+
+### EP-Plan-Commit
+
+Vorschläge unter `sensor.ep_<gerät>_<feld>_vorschlag` werden nur übernommen, wenn ihre Attribute
+`plan_id` und `valid_until` zu `sensor.ep_plan_commit` passen. Der Commit-State ist die `plan_id`;
+seine Attribute enthalten `valid_from` und `valid_until`. Fehlt der Commit, stimmen IDs oder
+Gültigkeit nicht überein oder ist das Zeitfenster abgelaufen, nutzt HEMS für das betreffende Feld
+den Nutzerwert. `ep_proposal_status` im Gerätestatus nennt die Ursache.
 
 ### `GET /api/ep`
 

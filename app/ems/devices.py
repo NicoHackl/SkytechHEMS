@@ -22,6 +22,7 @@ log = logging.getLogger(__name__)
 # Vermeidet fragile exakte Float-Vergleiche (x == 0) bei aus Umrechnungen
 # stammenden Werten.
 EPS_W = 1.0
+EP_COMMIT_ENTITY = "sensor.ep_plan_commit"
 
 
 class Device(ABC):
@@ -41,6 +42,12 @@ class Device(ABC):
         # Controller gesetzt). Wird auch von to_status_dict verwendet, damit
         # alle Zeitberechnungen denselben Bezugspunkt nutzen.
         self._now_ts: float = 0.0
+        self._ep_proposal_status = "not_requested"
+
+    def begin_cycle(self, now_ts: float) -> None:
+        """Setzt die gemeinsame Zykluszeit und leert den EP-Diagnosestatus."""
+        self._now_ts = now_ts
+        self._ep_proposal_status = "not_requested"
 
     # ------------------------------------------------------------------
     # Freigabe (global + gerätespezifische Freigabe + technische Freigabe + Modus)
@@ -104,15 +111,58 @@ class Device(ABC):
     def _ep_entity(self, field: str) -> str:
         return f"sensor.ep_{self._entity_prefix}_{field}_vorschlag"
 
-    def _ep_num(self, st: StateProxy, field: str, fallback: float) -> float:
-        raw = st.get(self._ep_entity(field))
+    def _mark_ep_failure(self, status: str) -> None:
+        """Bewahrt den ersten Vorschlagsfehler eines Zyklus für die Diagnose."""
+        if self._ep_proposal_status in ("not_requested", "valid"):
+            self._ep_proposal_status = status
+
+    def _ep_raw(self, st: StateProxy, field: str) -> object:
+        """Liest nur einen vollständig publizierten und aktuell gültigen EP-Vorschlag."""
+        entity_id = self._ep_entity(field)
+        raw = st.get(entity_id)
         if raw in ("unavailable", "unknown", None):
+            self._mark_ep_failure("missing_value")
+            return None
+
+        commit_plan_id = st.get(EP_COMMIT_ENTITY)
+        commit_attrs = st.getattr(EP_COMMIT_ENTITY) or {}
+        if commit_plan_id in ("unavailable", "unknown", None):
+            self._mark_ep_failure("missing_commit")
+            return None
+
+        valid_from = parse_ts(commit_attrs.get("valid_from"))
+        valid_until = parse_ts(commit_attrs.get("valid_until"))
+        if valid_from <= 0 or valid_until <= valid_from:
+            self._mark_ep_failure("invalid_commit")
+            return None
+        if self._now_ts < valid_from or self._now_ts >= valid_until:
+            self._mark_ep_failure("expired_commit")
+            return None
+
+        proposal_attrs = st.getattr(entity_id) or {}
+        proposal_from = parse_ts(proposal_attrs.get("valid_from"))
+        proposal_until = parse_ts(proposal_attrs.get("valid_until"))
+        if (
+            str(proposal_attrs.get("plan_id") or "") != str(commit_plan_id)
+            or proposal_from != valid_from
+            or proposal_until != valid_until
+        ):
+            self._mark_ep_failure("mismatched_plan")
+            return None
+
+        if self._ep_proposal_status == "not_requested":
+            self._ep_proposal_status = "valid"
+        return raw
+
+    def _ep_num(self, st: StateProxy, field: str, fallback: float) -> float:
+        raw = self._ep_raw(st, field)
+        if raw is None:
             return fallback
         return safe_float(raw, fallback)
 
     def _ep_bool(self, st: StateProxy, field: str, fallback: bool) -> bool:
-        raw = st.get(self._ep_entity(field))
-        if raw in ("unavailable", "unknown", None):
+        raw = self._ep_raw(st, field)
+        if raw is None:
             return fallback
         return str(raw).lower() in ("on", "true", "1")
 
@@ -575,6 +625,7 @@ class ControllableDevice(Device):
             "priority":              self.priority,
             "eligible":              self.eligible,
             "source":                self.source,
+            "ep_proposal_status":    self._ep_proposal_status,
             "actual_w":              self._actual_w,
             "anforderung_current_w": self._anforderung_current_w,
             "alloc_w":               self._alloc_w,
@@ -779,6 +830,7 @@ class BinaryDevice(Device):
             "priority":             self.priority,
             "eligible":             self.eligible,
             "source":               self.source,
+            "ep_proposal_status":   self._ep_proposal_status,
             "power_w":              self.power_w,
             "actual_on":            self._actual_on,
             "anforderung_an":       self._anforderung_an,

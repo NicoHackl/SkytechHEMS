@@ -8,6 +8,20 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Hinzugefügt
+- **Versionierter Gerätevertrag für den Energy Pilot (D-039, 1.0.25 → 1.1.0).**
+  `/api/device_controls_schema` bleibt in seiner bisherigen Listen-/Gruppenform kompatibel und
+  ergänzt Geräteklasse, Entitätspräfix, Einheit, erlaubte Modi, Überschuss-Regelprinzip,
+  Istleistungs- beziehungsweise Schaltentität und HEMS-Anforderung. Jedes `ems_*`-Item trägt nun
+  einen stabilen Schlüssel, Datentyp, Einheit, semantische Rolle und die Angabe, ob es für die
+  Planung relevant ist. Damit muss Energy Pilot keine Entity-Suffixe mehr erraten und kann
+  Regelparameter aus dem KI-Kontext heraushalten.
+- **Atomare, ablaufende EP-Vorschläge.** HEMS akzeptiert einen `sensor.ep_*_vorschlag` nur noch,
+  wenn `sensor.ep_plan_commit` dieselbe `plan_id` und ein aktuelles Zeitfenster bestätigt.
+  Fehlende, fehlerhafte, teilweise geschriebene oder abgelaufene Vorschläge fallen feldweise
+  auf den Nutzerwert zurück. `/api/status` zeigt je Gerät den Diagnosewert
+  `ep_proposal_status`; die bestehende Moduslogik bleibt unverändert.
+
 ### Geändert
 - **Neue Weboberfläche (React + TypeScript + Vite).** Die Bedienung ist dieselbe
   geblieben, nur besser: Aus den drei Tabs sind drei Seiten mit eigener Adresse

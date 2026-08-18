@@ -10,7 +10,6 @@ Stand: 13.08.2026.
 
 | Thema | Doku sagt | Code macht | Folge für die Arbeit |
 |---|---|---|---|
-| Debug-Schalter in der Oberfläche | `input_boolean.ems_pyems_debug_output` ist ein Laufzeit-Schalter, und die Steuerung zeigt „alle relevanten Helfer" | `_GLOBAL_CTRL_ITEMS` in [`app/main.py`](../app/main.py) führt ihn nicht — er ist nur direkt in Home Assistant schaltbar | Wer ihn in der Oberfläche erwartet, sucht vergeblich. Nachrüsten heißt: eine Zeile im Steuerschema, kein Frontend-Eingriff |
 | Sprache der Bezeichner | Eiserne Regel 2 verlangt englische Namen | HA-Helfer und die davon abgeleiteten Statusfelder sind deutsch | Bewusst so, D-034. Neuer Code ist englisch; bestehende Felder werden erweitert, nie umbenannt |
 
 ## Stolpersteine

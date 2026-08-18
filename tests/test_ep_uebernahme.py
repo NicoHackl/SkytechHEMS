@@ -28,6 +28,23 @@ def _dev0(res):
     return res["status"]["devices"][0]
 
 
+def _committed(mapping: dict, *, commit_plan_id: str = "plan-1", valid: bool = True):
+    """Baut einen vollständig publizierten EP-Plan einschließlich Commit-Marker."""
+    valid_from = "2020-01-01T00:00:00+00:00"
+    valid_until = "2100-01-01T00:00:00+00:00" if valid else "2020-01-02T00:00:00+00:00"
+    states = {**mapping, "sensor.ep_plan_commit": commit_plan_id}
+    attributes = {
+        entity_id: {"plan_id": "plan-1", "valid_from": valid_from, "valid_until": valid_until}
+        for entity_id in states
+        if entity_id.startswith("sensor.ep_") and entity_id != "sensor.ep_plan_commit"
+    }
+    attributes["sensor.ep_plan_commit"] = {
+        "valid_from": valid_from,
+        "valid_until": valid_until,
+    }
+    return make_states(states, attributes=attributes)
+
+
 # ---------------------------------------------------------------------------
 # Global "auto": alle Geräte übernehmen EP-Werte
 # ---------------------------------------------------------------------------
@@ -45,7 +62,7 @@ def test_ep_prio_and_geschuetzt_override_at_global_auto():
         "sensor.s": 5000,
         "sensor.heizstab_ist": 0,
     }
-    dev = _dev0(ctrl.run_cycle(make_states(states)))
+    dev = _dev0(ctrl.run_cycle(_committed(states)))
     assert dev["source"] == "ep"
     assert dev["priority"] == 5                    # EP-Priorität übernommen
     assert dev["schutz_w"] == pytest.approx(1500)  # EP-geschützte Mindestleistung übernommen
@@ -59,7 +76,7 @@ def test_ep_freigabe_vorschlag_off_disables_device():
         "sensor.ep_heizstab_freigabe_vorschlag": "off",   # EP will es aus
         "sensor.s": 5000, "sensor.heizstab_ist": 0,
     }
-    dev = _dev0(ctrl.run_cycle(make_states(states)))
+    dev = _dev0(ctrl.run_cycle(_committed(states)))
     assert dev["source"] == "ep"
     assert dev["eligible"] is False
 
@@ -73,7 +90,7 @@ def test_ep_freigabe_replaces_user_freigabe():
         "sensor.ep_heizstab_freigabe_vorschlag": "on",    # EP-Freigabe AN -> ersetzt
         "sensor.s": 5000, "sensor.heizstab_ist": 0,
     }
-    dev = _dev0(ctrl.run_cycle(make_states(states)))
+    dev = _dev0(ctrl.run_cycle(_committed(states)))
     assert dev["eligible"] is True
 
 
@@ -86,7 +103,7 @@ def test_technische_freigabe_stays_hard_gate_in_ep():
         "sensor.ep_heizstab_freigabe_vorschlag": "on",
         "sensor.s": 5000, "sensor.heizstab_ist": 0,
     }
-    dev = _dev0(ctrl.run_cycle(make_states(states)))
+    dev = _dev0(ctrl.run_cycle(_committed(states)))
     assert dev["eligible"] is False   # technische Freigabe blockt trotz EP-Freigabe
 
 
@@ -97,7 +114,7 @@ def test_ep_prio_fallback_when_sensor_absent():
         **_controllable_w("heizstab", prio=7),   # kein EP-prio-Sensor gesetzt
         "sensor.s": 5000, "sensor.heizstab_ist": 0,
     }
-    dev = _dev0(ctrl.run_cycle(make_states(states)))
+    dev = _dev0(ctrl.run_cycle(_committed(states)))
     assert dev["source"] == "ep"
     assert dev["priority"] == 7   # Fallback auf Nutzerwert
 
@@ -111,7 +128,7 @@ def test_device_modus_aus_kills_at_global_auto():
         "sensor.ep_heizstab_freigabe_vorschlag": "on",
         "sensor.s": 5000, "sensor.heizstab_ist": 0,
     }
-    dev = _dev0(ctrl.run_cycle(make_states(states)))
+    dev = _dev0(ctrl.run_cycle(_committed(states)))
     assert dev["source"] == "aus"
     assert dev["eligible"] is False
 
@@ -129,7 +146,7 @@ def test_per_device_modus_manuell_uses_user_values():
         "sensor.ep_heizstab_prio_vorschlag": 5,   # muss ignoriert werden
         "sensor.s": 5000, "sensor.heizstab_ist": 0,
     }
-    dev = _dev0(ctrl.run_cycle(make_states(states)))
+    dev = _dev0(ctrl.run_cycle(_committed(states)))
     assert dev["source"] == "user"
     assert dev["priority"] == 1     # Nutzerwert, nicht EP
 
@@ -144,7 +161,7 @@ def test_per_device_modus_auto_uses_ep():
         "sensor.ep_heizstab_freigabe_vorschlag": "on",
         "sensor.s": 5000, "sensor.heizstab_ist": 0,
     }
-    dev = _dev0(ctrl.run_cycle(make_states(states)))
+    dev = _dev0(ctrl.run_cycle(_committed(states)))
     assert dev["source"] == "ep"
     assert dev["priority"] == 5
 
@@ -178,13 +195,61 @@ def test_manuell_respects_type_gate():
         "sensor.wb": 0, "sensor.s": 5000,
     }
     # modus manuell -> Typ-Gate greift -> aus
-    dev = _dev0(ctrl.run_cycle(make_states({
+    dev = _dev0(ctrl.run_cycle(_committed({
         **base, "input_select.ems_wallbox_modus": "manuell"})))
     assert dev["source"] == "aus"
 
     # modus auto -> EP überspringt Typ-Gate -> ep + eligible (EP-Freigabe on)
-    dev = _dev0(ctrl.run_cycle(make_states({
+    dev = _dev0(ctrl.run_cycle(_committed({
         **base, "input_select.ems_wallbox_modus": "auto",
         "sensor.ep_wallbox_freigabe_vorschlag": "on"})))
     assert dev["source"] == "ep"
     assert dev["eligible"] is True
+
+
+def test_missing_commit_falls_back_to_user_values():
+    ctrl = _ctrl_heizstab()
+    states = {
+        **_global(**{"input_select.ems_regelmodus": "auto"}),
+        **_controllable_w("heizstab", prio=7),
+        "sensor.ep_heizstab_prio_vorschlag": 2,
+        "sensor.ep_heizstab_freigabe_vorschlag": "off",
+        "sensor.s": 5000,
+        "sensor.heizstab_ist": 0,
+    }
+    dev = _dev0(ctrl.run_cycle(make_states(states)))
+    assert dev["priority"] == 7
+    assert dev["eligible"] is True
+    assert dev["ep_proposal_status"] == "missing_commit"
+
+
+def test_expired_commit_falls_back_to_user_values():
+    ctrl = _ctrl_heizstab()
+    states = {
+        **_global(**{"input_select.ems_regelmodus": "auto"}),
+        **_controllable_w("heizstab", prio=7),
+        "sensor.ep_heizstab_prio_vorschlag": 2,
+        "sensor.ep_heizstab_freigabe_vorschlag": "off",
+        "sensor.s": 5000,
+        "sensor.heizstab_ist": 0,
+    }
+    dev = _dev0(ctrl.run_cycle(_committed(states, valid=False)))
+    assert dev["priority"] == 7
+    assert dev["eligible"] is True
+    assert dev["ep_proposal_status"] == "expired_commit"
+
+
+def test_mismatched_plan_id_falls_back_to_user_values():
+    ctrl = _ctrl_heizstab()
+    states = {
+        **_global(**{"input_select.ems_regelmodus": "auto"}),
+        **_controllable_w("heizstab", prio=7),
+        "sensor.ep_heizstab_prio_vorschlag": 2,
+        "sensor.ep_heizstab_freigabe_vorschlag": "off",
+        "sensor.s": 5000,
+        "sensor.heizstab_ist": 0,
+    }
+    dev = _dev0(ctrl.run_cycle(_committed(states, commit_plan_id="plan-2")))
+    assert dev["priority"] == 7
+    assert dev["eligible"] is True
+    assert dev["ep_proposal_status"] == "mismatched_plan"

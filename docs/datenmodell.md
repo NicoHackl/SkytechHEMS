@@ -142,7 +142,8 @@ Austausch läuft ausschließlich über HA-Entitäten:
 |---|---|---|
 | `sensor.ep_plan_status` | EP → HEMS | Gesamtstatus des Plans, Attribute `label`, `valid_until`, `in_window`, `abweichungen` |
 | `sensor.ep_hems_verbindung` | EP → HEMS | `online`/`offline`, Attribute `last_cycle_at`, `cycle_count`, `global_mode`, `error` |
-| `sensor.ep_<prefix>_<feld>_vorschlag` | EP → HEMS | Vorschlag je Gerät und Feld, Attribute `friendly_name` (`"<Gerät> – <Feld> (Vorschlag)"`), `valid_until`, `unit_of_measurement` |
+| `sensor.ep_<prefix>_<feld>_vorschlag` | EP → HEMS | Vorschlag je Gerät und Feld, Attribute `plan_id`, `valid_from`, `valid_until`, `friendly_name` (`"<Gerät> – <Feld> (Vorschlag)"`) und optional `unit_of_measurement` |
+| `sensor.ep_plan_commit` | EP → HEMS | Atomarer Commit-Marker; State = `plan_id`, Attribute `valid_from` und `valid_until`. Nur exakt passende Vorschläge werden übernommen |
 
 Übernommen werden **Priorität**, **Freigabe** und die **geschützte Mindestleistung** (nur
 Watt-Geräte), abhängig vom Regelmodus: `auto` → alle Geräte folgen dem Vorschlag; `manuell`,
