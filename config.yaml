@@ -10,15 +10,20 @@ description: >-
   Konfiguration als YAML-Editor an. Alle Felder und deren Bedeutung sind in
   der README des Repositories dokumentiert. Felder je Gerät: name (Pflicht,
   technischer Bezeichner für Entitätsnamen), label (optional, Anzeigename),
-  class (Pflicht: controllable oder binary), actual_power_entity (nur
+  class (Pflicht: controllable, binary oder battery), actual_power_entity (nur
   controllable), switch_entity (nur binary), entity_prefix (optional,
   überschreibt Entitätspräfix), allowed_modes (optional, Standard: auto),
   output_unit (controllable: watt oder ampere, Standard: watt),
   phases (controllable + ampere: 1 oder 3, Standard: 1),
   voltage_l1_entity / voltage_l2_entity / voltage_l3_entity (optional,
   HA-Sensoren für die Phasenspannungen L1/L2/L3, Fallback je 230 V).
-  Die globale Option residual_power_entity legt den Überschuss-Sensor fest.
-version: "1.1.0"
+  Nur battery: soc_entity (Pflicht), charge_power_entity und
+  discharge_power_entity ODER power_entity mit power_sign,
+  available_charge_power_entity / available_discharge_power_entity (optional,
+  momentanes Geräte-Limit), capacity_kwh (optional, nur für die Anzeige).
+  Die globale Option residual_power_entity legt den Überschuss-Sensor fest,
+  speicher_in_residual_enthalten sagt, ob die Speicherleistung darin steckt.
+version: "1.2.0"
 slug: "skytech_hems"
 init: false
 arch:
@@ -37,6 +42,7 @@ options:
   log_level: "info"
   post_cycle_script: ""
   residual_power_entity: "sensor.verfugbare_leistung_fur_uberschussverbraucher"
+  speicher_in_residual_enthalten: true
   devices:
     - name: heizstab
       label: "Heizstab"
@@ -70,10 +76,11 @@ schema:
   log_level: list(debug|info|warning|error)
   post_cycle_script: str?
   residual_power_entity: str?
+  speicher_in_residual_enthalten: bool?
   devices:
     - name: str
       label: str?
-      class: list(controllable|binary)
+      class: list(controllable|binary|battery)
       actual_power_entity: str?
       switch_entity: str?
       entity_prefix: str?
@@ -84,3 +91,11 @@ schema:
       voltage_l1_entity: str?
       voltage_l2_entity: str?
       voltage_l3_entity: str?
+      soc_entity: str?
+      charge_power_entity: str?
+      discharge_power_entity: str?
+      power_entity: str?
+      power_sign: list(positiv_laden|positiv_entladen)?
+      available_charge_power_entity: str?
+      available_discharge_power_entity: str?
+      capacity_kwh: float?

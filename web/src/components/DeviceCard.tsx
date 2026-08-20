@@ -4,7 +4,10 @@ import type { ReactNode } from 'react'
    zeigen dieselbe Form: Titel, optionaler Prioritäts-Pill, darunter
    Kennzahlzeilen. Die Farbe des linken Rands sagt, ob das Gerät läuft. */
 
-export type CardState = 'active' | 'idle' | 'off'
+/* 'charge' und 'discharge' gibt es nur beim Speicher: er ist das einzige
+   Gerät, das Leistung auch abgeben kann, und die Richtung ist beim
+   Debuggen die erste Frage. */
+export type CardState = 'active' | 'idle' | 'off' | 'charge' | 'discharge'
 export type ValueTone = 'ok' | 'warn' | 'err' | 'muted' | 'plain'
 
 /** Eine Kennzahlzeile: Bezeichnung links, Wert rechts. */

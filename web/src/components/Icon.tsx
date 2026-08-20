@@ -32,6 +32,8 @@ const paths: Record<string, JSX.Element> = {
   spark: <path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" />,
   /* Stecker — binäre Verbraucher. */
   plug: <><path d="M9 2v6M15 2v6" /><path d="M6 8h12v3a6 6 0 0 1-6 6 6 6 0 0 1-6-6V8Z" /><path d="M12 17v5" /></>,
+  /* Batterie — AC-Speicher. */
+  battery: <><rect x="2" y="7" width="17" height="10" rx="2" /><path d="M22 10v4" /><path d="M11 9.5 8.5 13H12l-2 3.5" /></>,
   /* Warndreieck — Defizit, Sperre. */
   warning: <><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" /><path d="M12 9v4M12 17h.01" /></>,
 }

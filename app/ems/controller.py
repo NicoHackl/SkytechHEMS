@@ -12,7 +12,7 @@ import time
 from typing import Dict, List, Optional
 
 from .state import StateProxy, safe_float
-from .devices import Device, ControllableDevice, BinaryDevice
+from .devices import Device, ControllableDevice, BinaryDevice, BatteryDevice
 
 log = logging.getLogger(__name__)
 
@@ -25,6 +25,11 @@ HA_GLOBAL_MODE               = "input_select.ems_regelmodus"
 HA_GLOBAL_PUFFER_W           = "input_number.ems_globaler_puffer_w"
 HA_GLOBAL_EINSCHALTRESERVE_W = "input_number.ems_einschaltreserve_global_w"
 HA_DEBUG_OUTPUT              = "input_boolean.ems_pyems_debug_output"
+# Der Entlade-Abschlag ist eine SYSTEMgrösse und wird genau einmal auf das
+# Hausdefizit angewandt – je Speicher wäre er bei n Speichern n-fach wirksam.
+# Namensraum ems_ac_speicher_*, weil ems_speicher_* der bestehenden
+# E3DC-Regelung in Home Assistant gehört.
+HA_AC_SPEICHER_ENTLADE_ABSCHLAG_W = "input_number.ems_ac_speicher_entlade_abschlag_w"
 
 # Standard-Entität für den verfügbaren PV-Überschuss. Über die Add-on-Option
 # `residual_power_entity` überschreibbar. Home Assistant slugifiziert Umlaute
@@ -99,8 +104,41 @@ def _build_devices(device_configs: List[dict]) -> List[Device]:
                     label=label,
                 ))
 
+            elif cls == "battery":
+                soc_entity = (cfg.get("soc_entity") or "").strip()
+                if not soc_entity:
+                    raise ValueError("soc_entity ist leer")
+                charge_w    = (cfg.get("charge_power_entity")    or "").strip() or None
+                discharge_w = (cfg.get("discharge_power_entity") or "").strip() or None
+                power_w     = (cfg.get("power_entity")           or "").strip() or None
+                # Entweder zwei vorzeichenlose Sensoren oder ein signierter –
+                # ohne Ist-Leistung ist die Pool-Bereinigung blind (H-1).
+                if not power_w and not (charge_w and discharge_w):
+                    raise ValueError(
+                        "entweder charge_power_entity und discharge_power_entity "
+                        "oder power_entity nötig"
+                    )
+                devices.append(BatteryDevice(
+                    id=name,
+                    allowed_modes=modes,
+                    soc_entity=soc_entity,
+                    charge_power_entity=charge_w,
+                    discharge_power_entity=discharge_w,
+                    power_entity=power_w,
+                    power_sign=(cfg.get("power_sign") or "positiv_laden").strip(),
+                    available_charge_power_entity=(
+                        cfg.get("available_charge_power_entity") or "").strip() or None,
+                    available_discharge_power_entity=(
+                        cfg.get("available_discharge_power_entity") or "").strip() or None,
+                    capacity_kwh=float(cfg.get("capacity_kwh") or 0.0),
+                    entity_prefix=prefix,
+                    label=label,
+                ))
+
             else:
-                raise ValueError(f"Unbekannte Klasse '{cls}' (erlaubt: controllable, binary)")
+                raise ValueError(
+                    f"Unbekannte Klasse '{cls}' (erlaubt: controllable, binary, battery)"
+                )
 
             log.info("Gerät registriert: '%s' (%s, prefix='%s', modi=%s)",
                      name, cls, prefix, modes)
@@ -122,11 +160,17 @@ class EMSController:
     """
 
     def __init__(self, device_configs: List[dict],
-                 residual_power_entity: Optional[str] = None):
+                 residual_power_entity: Optional[str] = None,
+                 speicher_in_residual_enthalten: bool = True):
         self._devices: List[Device] = _build_devices(device_configs)
         self._residual_entity = (residual_power_entity or "").strip() or DEFAULT_RESIDUAL_ENTITY
-        log.info("EMSController bereit – %d Geräte registriert, Überschuss-Sensor='%s'.",
-                 len(self._devices), self._residual_entity)
+        # Ist die Speicherleistung im Überschuss-Sensor enthalten (Messpunkt an
+        # der Netzübergabe, Normalfall bei AC-Kopplung), muss sie herausgerechnet
+        # werden – sonst liest das EMS die eigene Entladung als PV-Überschuss.
+        self._speicher_in_residual = bool(speicher_in_residual_enthalten)
+        log.info("EMSController bereit – %d Geräte registriert, Überschuss-Sensor='%s', "
+                 "Speicher im Überschuss-Sensor=%s.",
+                 len(self._devices), self._residual_entity, self._speicher_in_residual)
 
     @property
     def residual_power_entity(self) -> str:
@@ -181,29 +225,65 @@ class EMSController:
             device.eligible = device.check_eligible(st)
             device.update_from_ha(st, now_ts, global_puffer)
 
-        # ── 3. Pool ─────────────────────────────────────────────────────
-        pool_w = self._calc_pool(residual_w, ems_enabled, global_mode, hard_lockout)
+        # ── 3. Netz-Bereinigung ─────────────────────────────────────────
+        # Ein Speicher ist kein Verbraucher mit Vorzeichen: seine Entladung
+        # erhöht residual_w, ist aber kein PV-Überschuss. Erst bereinigen,
+        # dann regeln – sonst schaukelt sich der Pool auf (H-1).
+        netz_support_w = sum(d.netz_support_w for d in self._devices)
+        residual_bereinigt_w = (residual_w - netz_support_w
+                                if self._speicher_in_residual else residual_w)
 
-        # ── 4. Defizit ──────────────────────────────────────────────────
-        current_deficit_w    = max(-residual_w, 0.0)
+        # ── 4. Pool und Hausdefizit ─────────────────────────────────────
+        # Zwei Summen, weil "was kann ich freigeben?" und "was soll der
+        # Speicher decken?" zwei verschiedene Fragen sind:
+        #   current_w        filtert den Force-Modus heraus  -> Pool
+        #   gemessene_last_w filtert nichts                  -> Entladung
+        # Eine von Hand eingeschaltete HEMS-Last ist weiterhin ein
+        # Überschussverbraucher und wird vom Speicher nicht gedeckt.
+        hems_last_w          = sum(d.current_w        for d in self._devices)
+        hems_last_gemessen_w = sum(d.gemessene_last_w for d in self._devices)
+
+        pool_roh_w      = residual_bereinigt_w + hems_last_w
+        entlade_basis_w = residual_bereinigt_w + hems_last_gemessen_w
+
+        # Bewusst nicht max(x, 0.0): das liefert bei x == -0.0 ein negatives Null
+        # zurueck, und die Oberflaeche zeigte dann "-0 W".
+        if not ems_enabled or global_mode == "aus" or hard_lockout:
+            pool_w = hausdefizit_w = 0.0
+        else:
+            pool_w        = pool_roh_w if pool_roh_w > 0 else 0.0
+            hausdefizit_w = -entlade_basis_w if entlade_basis_w < 0 else 0.0
+
+        # ── 5. Defizit ──────────────────────────────────────────────────
+        current_deficit_w    = (-residual_bereinigt_w
+                                if residual_bereinigt_w < 0 else 0.0)
         total_relief_w       = sum(d.max_relief_w for d in self._devices)
         binary_immediate_off = current_deficit_w > total_relief_w
 
         if current_deficit_w > 0 and debug_output:
-            log.warning("EMS DEFIZIT: %.0fW  sofort_aus=%s",
-                        current_deficit_w, binary_immediate_off)
+            log.warning("EMS DEFIZIT: %.0fW  hausdefizit=%.0fW  sofort_aus=%s",
+                        current_deficit_w, hausdefizit_w, binary_immediate_off)
 
-        # ── 5. Binärer Wunschzustand (Pool in Prioritätsreihenfolge verbraucht) ──
+        # Ein Speicher, der entlädt, während nennenswerter Überschuss verteilt
+        # wird, ist physikalisch fast immer ein Konfigurationsfehler. Bewusst
+        # ohne debug_output-Bedingung – das ist keine Debug-Information.
+        if netz_support_w > 200 and pool_w > 200:
+            log.warning("EMS Speicher: Entladung %.0fW UND Pool %.0fW gleichzeitig – "
+                        "Speicher entlädt in den PV-Überschuss hinein. Prüfen: "
+                        "speicher_in_residual_enthalten, Summensensor doppelt gezählt, "
+                        "Umschaltsperre zu lang.", netz_support_w, pool_w)
+
+        # ── 6. Binärer Wunschzustand (Pool in Prioritätsreihenfolge verbraucht) ──
         remaining_w = pool_w
         for device in sorted(self._devices, key=lambda d: d.priority):
             remaining_w = device.consume_from_pool(remaining_w, global_einschaltreserve)
 
-        # ── 6. Binärer Kandidat (Zeit-Guards, off_delay) ────────────────
+        # ── 7. Binärer Kandidat (Zeit-Guards, off_delay) ────────────────
         binary_devices = [d for d in self._devices if isinstance(d, BinaryDevice)]
         for device in binary_devices:
             device.calculate_candidate(now_ts)
 
-        # ── 7. Kandidat → final kopieren, dann Kaskade + One-Change anwenden ──
+        # ── 8. Kandidat → final kopieren, dann Kaskade + One-Change anwenden ──
         for device in binary_devices:
             device.final_on = device.candidate_on
 
@@ -215,7 +295,7 @@ class EMSController:
             if not device.final_on:
                 device.reset_off_timer()
 
-        # ── 8. Regelbare Geräte zuteilen (2 Durchläufe: Minimum zuerst) ──
+        # ── 9. Regelbare Geräte zuteilen (2 Durchläufe: Minimum zuerst) ──
         # Regel: 1. Prioritätsreihenfolge  2. Jedes Gerät erhält sein min_technisch_w,
         #           bevor ein niedriger-priores Gerät aktiviert wird.
         #        3. Der Überschuss geht dann zuerst an das höchst-priore Gerät.
@@ -233,25 +313,39 @@ class EMSController:
         for device in sorted_ctrl:
             remaining_w = device.allocate_surplus(remaining_w)
 
-        # ── 9. Rampenbegrenzung ─────────────────────────────────────────
+        # ── 10. Entladeplanung ──────────────────────────────────────────
+        # MUSS nach der Verbraucher-Allokation und vor calculate_ramp laufen:
+        # der Speicher löst dort seine Richtung auf (D-B07).
+        batteries = [d for d in self._devices if isinstance(d, BatteryDevice)]
+        entlade_abschlag_w = safe_float(st.get(HA_AC_SPEICHER_ENTLADE_ABSCHLAG_W))
+        self._allocate_discharge(batteries, hausdefizit_w, entlade_abschlag_w)
+
+        # ── 11. Rampenbegrenzung ─────────────────────────────────────────
         for device in self._devices:
             device.calculate_ramp(current_deficit_w)
 
-        # ── 10. Debug-Logging ───────────────────────────────────────────
+        # ── 12. Debug-Logging ───────────────────────────────────────────
         if debug_output:
             self._log_cycle(binary_devices, pool_w, binary_immediate_off, now_ts)
 
-        # ── 11. HA-Schreiboperationen sammeln ───────────────────────────
+        # ── 13. HA-Schreiboperationen sammeln ───────────────────────────
         write_ops = [op for d in self._devices for op in d.get_write_ops()]
 
-        # ── 12. Status-Snapshot für die Web-UI aufbauen ─────────────────
+        # ── 14. Status-Snapshot für die Web-UI aufbauen ─────────────────
         status = {
             "ems_enabled":           ems_enabled,
             "global_mode":           global_mode,
             "hard_lockout":          hard_lockout,
             "residual_sensor_valid": residual_sensor_valid,
             "residual_w":            residual_w,
+            "residual_bereinigt_w":  residual_bereinigt_w,
+            "netz_support_w":        netz_support_w,
+            "hems_last_w":           hems_last_w,
+            "hems_last_gemessen_w":  hems_last_gemessen_w,
+            "pool_roh_w":            pool_roh_w,
             "pool_w":                pool_w,
+            "entlade_basis_w":       entlade_basis_w,
+            "hausdefizit_w":         hausdefizit_w,
             "current_deficit_w":     current_deficit_w,
             "binary_immediate_off":  binary_immediate_off,
             "binary_total_w":        binary_total_w,
@@ -262,15 +356,62 @@ class EMSController:
         return {"status": status, "write_ops": write_ops}
 
     # ------------------------------------------------------------------
-    # Pool
+    # Entlade-Koordination (D-B15)
     # ------------------------------------------------------------------
 
-    def _calc_pool(self, residual_w: float, ems_enabled: bool,
-                   global_mode: str, hard_lockout: bool) -> float:
-        if not ems_enabled or global_mode == "aus" or hard_lockout:
-            return 0.0
-        actual_used_w = sum(d.current_w for d in self._devices)
-        return max(residual_w + actual_used_w, 0.0)
+    def _allocate_discharge(self, batteries: List[BatteryDevice],
+                            hausdefizit_w: float, entlade_abschlag_w: float) -> None:
+        """Verteilt den Hausverbrauchs-Fehlbetrag auf die entladebereiten Speicher.
+
+        Rechnet jeder Speicher unabhängig "ich decke das Defizit", entladen bei
+        drei Speichern und 2 kW Defizit alle drei mit 2 kW und 4 kW gehen ins
+        Netz (H-3). Die Aufteilung gehört deshalb genau einmal hierher.
+
+        hausdefizit_w enthält per Konstruktion KEINE HEMS-Gerätelast, auch keine
+        fremdgesteuerte – die Abgrenzung "nicht für Überschussverbraucher" ist
+        damit bereits erledigt und braucht hier keine Sonderbehandlung.
+        """
+        for battery in batteries:
+            battery.set_discharge_target(0.0)
+
+        if hausdefizit_w <= 0:
+            return
+
+        kandidaten = [b for b in batteries if b.entlade_kapazitaet_w() > 0]
+        if not kandidaten:
+            if hausdefizit_w > 100:
+                log.info("EMS Speicher: %.0fW Hausdefizit, kein Speicher entladebereit",
+                         hausdefizit_w)
+            return
+
+        # Der Abschlag ist eine Systemgrösse und wird EINMAL abgezogen, nicht je
+        # Speicher. Er sorgt dafür, dass im eingeschwungenen Zustand ein kleiner
+        # Restbezug bleibt statt eines Exports (H-5).
+        ziel_w = max(hausdefizit_w - max(entlade_abschlag_w, 0.0), 0.0)
+        if ziel_w <= 0:
+            return
+
+        rest_w = ziel_w
+        for battery in self._discharge_order(kandidaten):
+            anteil_w = min(rest_w, battery.entlade_kapazitaet_w())
+            battery.set_discharge_target(anteil_w)
+            rest_w -= anteil_w
+            if rest_w <= 0:
+                break
+
+        if rest_w > 100:
+            log.info("EMS Speicher: %.0fW Hausdefizit ungedeckt (alle Speicher am Limit)",
+                     rest_w)
+
+    @staticmethod
+    def _discharge_order(kandidaten: List[BatteryDevice]) -> List[BatteryDevice]:
+        """Strikt nach Entladepriorität (D-B17), klein = zuerst.
+
+        sorted() ist stabil, damit entscheidet bei Gleichstand die Reihenfolge in
+        der Add-on-Konfiguration. Der SoC spielt in der Reihenfolge bewusst keine
+        Rolle – ein leerer Speicher fällt über entlade_kapazitaet_w() heraus.
+        """
+        return sorted(kandidaten, key=lambda b: b.entlade_priority)
 
     # ------------------------------------------------------------------
     # Prioritätskaskade
@@ -343,7 +484,15 @@ class EMSController:
                     log.info("EMS [%s] BLEIBT AN  off_delay läuft (%.0fs)", d.id, elapsed)
 
         for d in self._devices:
-            if isinstance(d, ControllableDevice):
+            if isinstance(d, BatteryDevice):
+                netto_alt = d.lade_anforderung_w - d.entlade_anforderung_w
+                netto_neu = d.new_lade_w - d.new_entlade_w
+                if int(netto_neu) != int(netto_alt):
+                    log.info("EMS [%s] %.0fW→%.0fW  soc=%.0f%%  betriebsart=%s  "
+                             "ziel=%.0fW  pool=%.0fW",
+                             d.id, netto_alt, netto_neu, d.soc_prozent,
+                             d.new_betriebsart, d.entlade_ziel_w, pool_w)
+            elif isinstance(d, ControllableDevice):
                 if int(d.new_w) != int(d.anforderung_current_w):
                     log.info("EMS [%s] %.0fW→%.0fW  prio=%d  alloc=%.0fW  pool=%.0fW",
                              d.id, d.anforderung_current_w, d.new_w,

@@ -100,6 +100,10 @@ _GLOBAL_CTRL_ITEMS = [
         "einschaltreserve_global_w", "user_preference", unit="W",
     ),
     _control_item(
+        "input_number.ems_ac_speicher_entlade_abschlag_w", "Entlade-Abschlag Speicher",
+        "ac_speicher_entlade_abschlag_w", "control_tuning", unit="W",
+    ),
+    _control_item(
         "input_boolean.ems_pyems_debug_output", "Debug-Ausgabe", "debug_output",
         "diagnostic_control", planning_relevant=False,
     ),
@@ -197,6 +201,110 @@ def _ctrl_items_binary(p: str) -> list:
     ]
 
 
+def _ctrl_items_battery(p: str) -> list:
+    """Helfer eines AC-Speichers. Reihenfolge: Freigaben, Prioritäten,
+    Leistungsgrenzen, SoC, Regelverhalten – so wird die Karte lesbar."""
+    return [
+        _control_item(f"input_boolean.ems_{p}_freigabe", "Freigabe", "freigabe", "user_control"),
+        _control_item(
+            f"input_boolean.ems_{p}_technische_freigabe", "Technische Freigabe",
+            "technische_freigabe", "technical_gate",
+        ),
+        _control_item(f"input_select.ems_{p}_modus", "Modus", "modus", "user_control"),
+        _control_item(
+            f"input_select.ems_{p}_betriebsart", "Betriebsart", "betriebsart", "user_control"
+        ),
+        _control_item(
+            f"input_boolean.ems_{p}_laden_erlaubt", "Laden erlaubt", "laden_erlaubt",
+            "user_control",
+        ),
+        _control_item(
+            f"input_boolean.ems_{p}_entladen_erlaubt", "Entladen erlaubt", "entladen_erlaubt",
+            "user_control",
+        ),
+        _control_item(
+            f"input_number.ems_{p}_prioritat", "Priorität Laden", "prioritat", "user_preference"
+        ),
+        _control_item(
+            f"input_number.ems_{p}_entlade_prioritat", "Priorität Entladen",
+            "entlade_prioritat", "user_preference",
+        ),
+        _control_item(
+            f"input_number.ems_{p}_max_ladeleistung_w", "Max. Ladeleistung",
+            "max_ladeleistung_w", "technical_constraint", unit="W",
+        ),
+        _control_item(
+            f"input_number.ems_{p}_min_ladeleistung_w", "Min. Ladeleistung",
+            "min_ladeleistung_w", "technical_constraint", unit="W",
+        ),
+        _control_item(
+            f"input_number.ems_{p}_max_entladeleistung_w", "Max. Entladeleistung",
+            "max_entladeleistung_w", "technical_constraint", unit="W",
+        ),
+        _control_item(
+            f"input_number.ems_{p}_min_entladeleistung_w", "Min. Entladeleistung",
+            "min_entladeleistung_w", "technical_constraint", unit="W",
+        ),
+        _control_item(
+            f"input_number.ems_{p}_soc_min_prozent", "SoC Minimum", "soc_min_prozent",
+            "user_preference", unit="%",
+        ),
+        _control_item(
+            f"input_number.ems_{p}_soc_max_prozent", "SoC Maximum", "soc_max_prozent",
+            "user_preference", unit="%",
+        ),
+        _control_item(
+            f"input_number.ems_{p}_soc_reserve_prozent", "SoC Notstromreserve",
+            "soc_reserve_prozent", "user_preference", unit="%",
+        ),
+        _control_item(
+            f"input_number.ems_{p}_soc_taper_band_prozent", "SoC Drosselband",
+            "soc_taper_band_prozent", "control_tuning", unit="%", planning_relevant=False,
+        ),
+        _control_item(
+            f"input_number.ems_{p}_soc_max_hysterese_prozent", "SoC Wiedereinstieg",
+            "soc_max_hysterese_prozent", "control_tuning", unit="%", planning_relevant=False,
+        ),
+        _control_item(
+            f"input_number.ems_{p}_geschutzte_mindestleistung_w",
+            "Geschützte Mindestleistung", "geschutzte_mindestleistung", "user_preference",
+            unit="W",
+        ),
+        _control_item(
+            f"input_number.ems_{p}_reserve_w", "Reserve", "reserve_w", "user_preference",
+            unit="W",
+        ),
+        _control_item(
+            f"input_number.ems_{p}_entlade_sofort_schwelle_w", "Entladung sofort ab",
+            "entlade_sofort_schwelle_w", "control_tuning", unit="W", planning_relevant=False,
+        ),
+        _control_item(
+            f"input_number.ems_{p}_umschalt_totzone_w", "Totzone um Null",
+            "umschalt_totzone_w", "control_tuning", unit="W", planning_relevant=False,
+        ),
+        _control_item(
+            f"input_number.ems_{p}_min_umschaltzeit_s", "Umschaltsperre",
+            "min_umschaltzeit_s", "timing_guard", unit="s",
+        ),
+        _control_item(
+            f"input_number.ems_{p}_hoch_regelzeit_s", "Hoch-Regelzeit", "hoch_regelzeit_s",
+            "control_tuning", unit="s", planning_relevant=False,
+        ),
+        _control_item(
+            f"input_number.ems_{p}_runter_regelzeit_s", "Runter-Regelzeit",
+            "runter_regelzeit_s", "control_tuning", unit="s", planning_relevant=False,
+        ),
+        _control_item(
+            f"input_number.ems_{p}_max_anderung_pro_schritt_w", "Max. Änderung/Schritt",
+            "max_anderung_pro_schritt", "control_tuning", unit="W", planning_relevant=False,
+        ),
+        _control_item(
+            f"input_number.ems_{p}_min_anderung_pro_schritt_w", "Totband (Deadband)",
+            "min_anderung_pro_schritt", "control_tuning", unit="W", planning_relevant=False,
+        ),
+    ]
+
+
 def _normalized_modes(raw: object) -> list[str]:
     """Liefert dieselben erlaubten Modi wie der Controller, aber als API-Liste."""
     return [
@@ -261,6 +369,24 @@ def _build_device_controls_schema(
                 "items": _ctrl_items_binary(prefix),
             })
             schema.append(base)
+        elif cls == "battery":
+            # request_entity trägt EINEN signierten Wert: + laden, - entladen.
+            # Der HA-Helfer braucht deshalb ein negatives Minimum, sonst kommt
+            # nie eine Entladeanforderung an.
+            base.update({
+                "output_unit": "watt",
+                "soc_entity": (cfg.get("soc_entity") or "").strip(),
+                "charge_power_entity": (cfg.get("charge_power_entity") or "").strip(),
+                "discharge_power_entity": (cfg.get("discharge_power_entity") or "").strip(),
+                "power_entity": (cfg.get("power_entity") or "").strip(),
+                "power_sign": (cfg.get("power_sign") or "positiv_laden").strip(),
+                "capacity_kwh": float(cfg.get("capacity_kwh") or 0.0),
+                "request_entity": f"input_number.ems_{prefix}_anforderung_leistung_w",
+                "request_sign": "positiv_laden",
+                "mode_entity": f"input_select.ems_{prefix}_anforderung_betriebsart",
+                "items": _ctrl_items_battery(prefix),
+            })
+            schema.append(base)
     return schema
 
 
@@ -274,13 +400,18 @@ class HEMSApp:
         self.interval_s: int = int(cfg.get("interval_s", 30))
         self.post_cycle_script: str = (cfg.get("post_cycle_script") or "").strip()
         residual_entity: str = (cfg.get("residual_power_entity") or "").strip()
+        speicher_in_residual = bool(cfg.get("speicher_in_residual_enthalten", True))
 
         log_level = cfg.get("log_level", "info").upper()
         logging.getLogger().setLevel(getattr(logging, log_level, logging.INFO))
 
         self._device_configs: list = cfg.get("devices", [])
         self.ha  = HAClient()
-        self.ems = EMSController(self._device_configs, residual_power_entity=residual_entity)
+        self.ems = EMSController(
+            self._device_configs,
+            residual_power_entity=residual_entity,
+            speicher_in_residual_enthalten=speicher_in_residual,
+        )
 
         # Gemeinsamer Zustand – vom Scheduler geschrieben, vom Web-Handler gelesen
         self._last_status: dict = {}

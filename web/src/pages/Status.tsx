@@ -4,7 +4,7 @@ import { PageHeader } from '../components/Layout'
 import { DeviceCard, KeyValue, type CardState } from '../components/DeviceCard'
 import { Icon } from '../components/Icon'
 import { fmtDur, fmtW, modeLabel } from '../format'
-import type { BinaryDevice, ControllableDevice, CycleStatus, StatusResponse } from '../types'
+import type { BatteryDevice, BinaryDevice, ControllableDevice, CycleStatus, StatusResponse } from '../types'
 
 /* Live-Anzeige des letzten Regelzyklus.
 
@@ -64,6 +64,19 @@ export function Status() {
   const devices = cycle?.devices ?? []
   const controllable = devices.filter((d): d is ControllableDevice => d.type === 'controllable')
   const binary = devices.filter((d): d is BinaryDevice => d.type === 'binary')
+  const batteries = devices.filter((d): d is BatteryDevice => d.type === 'battery')
+
+  // Kapazitaetsgewichteter SoC-Schnitt. Ohne hinterlegte Kapazitaet zaehlt jeder
+  // Speicher gleich - besser als gar keine Anzeige.
+  const socGewicht = batteries.reduce((sum, b) => sum + (b.capacity_kwh || 1), 0)
+  const socMittel = socGewicht > 0
+    ? batteries.reduce((sum, b) => sum + b.soc_prozent * (b.capacity_kwh || 1), 0) / socGewicht
+    : 0
+  const speicherNettoW = batteries.reduce((sum, b) => sum + b.netto_w, 0)
+  // Weicht die gemessene von der angeforderten HEMS-Last ab, laeuft mindestens
+  // ein Geraet fremdgesteuert. Dann ist das Hausdefizit kleiner als der
+  // sichtbare Netzbezug - ohne Hinweis sieht das wie ein Regelfehler aus.
+  const fremdlastW = cycle ? cycle.hems_last_gemessen_w - cycle.hems_last_w : 0
 
   const subtitle = `Letzter Zyklus: ${data.last_cycle_at || '–'} · Zyklen: ${data.cycle_count} · Intervall: ${data.interval_s}s`
 
@@ -100,7 +113,11 @@ export function Status() {
                 <div className="tile-icon"><Icon name="sun" /></div>
                 <h3>Überschuss</h3>
                 <div className={cycle.residual_w < 0 ? 'num warn' : 'num ok'}>{fmtW(cycle.residual_w)}</div>
-                <p>Netzeinspeisung laut Sensor</p>
+                <p>
+                  {batteries.length
+                    ? `Netzeinspeisung laut Sensor · bereinigt ${fmtW(cycle.residual_bereinigt_w)}`
+                    : 'Netzeinspeisung laut Sensor'}
+                </p>
               </div>
               <div className="tile static">
                 <div className="tile-icon"><Icon name="spark" /></div>
@@ -122,6 +139,43 @@ export function Status() {
                 <div className="num">{fmtW(cycle.binary_total_w)}</div>
                 <p>Angeforderte Schaltlast</p>
               </div>
+              {batteries.length ? (
+                <>
+                  <div className="tile static">
+                    <div className="tile-icon"><Icon name="battery" /></div>
+                    <h3>Speicher netto</h3>
+                    <div className={speicherNettoW < 0 ? 'num ok' : 'num'}>{fmtW(speicherNettoW)}</div>
+                    <p>{speicherNettoW < 0 ? 'Speicher liefert' : speicherNettoW > 0 ? 'Speicher lädt' : 'Standby'}</p>
+                  </div>
+                  <div className="tile static">
+                    <div className="tile-icon"><Icon name="battery" /></div>
+                    <h3>SoC ⌀</h3>
+                    <div className="num">{Math.round(socMittel)} %</div>
+                    <p>Kapazitätsgewichtet</p>
+                  </div>
+                  <div className="tile static">
+                    <div className="tile-icon"><Icon name="warning" /></div>
+                    <h3>Hausdefizit</h3>
+                    <div className={cycle.hausdefizit_w > 0 ? 'num warn' : 'num'}>{fmtW(cycle.hausdefizit_w)}</div>
+                    <p>
+                      {fremdlastW > 50
+                        ? `Ohne ${fmtW(fremdlastW)} fremdgesteuerte HEMS-Last`
+                        : 'Hausverbrauch, den der Speicher deckt'}
+                    </p>
+                  </div>
+                </>
+              ) : null}
+            </div>
+          </>
+        ) : null}
+
+        {/* Der Speicher steht bewusst zuerst: er beeinflusst die Pool-Rechnung,
+            beim Debuggen will man ihn als Erstes sehen. */}
+        {batteries.length ? (
+          <>
+            <div className="section-title"><Icon name="battery" size={14} />Speicher</div>
+            <div className="device-grid">
+              {batteries.map((device) => <BatteryCard key={device.id} device={device} elapsed={elapsed} />)}
             </div>
           </>
         ) : null}
@@ -246,4 +300,135 @@ function remainingRow(label: string, remaining: number, doneLabel = 'erfüllt') 
   return remaining > 0
     ? <KeyValue label={label} value={`noch ${fmtDur(remaining)}`} tone="muted" />
     : <KeyValue label={label} value={doneLabel} tone="ok" />
+}
+
+/* Sperrgründe des Speichers als deutscher Klartext. Bei sechs Sperrmechanismen
+   ist „lädt gerade nicht" sonst nur über die Add-on-Logs erklärbar. */
+const BLOCK_LABELS: Record<string, string> = {
+  nicht_freigegeben: 'keine Freigabe',
+  sensor_ungueltig: 'Sensor liefert nichts',
+  betriebsart: 'Betriebsart',
+  laden_gesperrt: 'Laden gesperrt',
+  entladen_gesperrt: 'Entladen gesperrt',
+  soc_min: 'SoC-Minimum erreicht',
+  soc_max: 'SoC-Maximum erreicht',
+  soc_reserve: 'Notstromreserve',
+  wr_derating: 'Gerät drosselt',
+  netzladen: 'Netzladen aktiv',
+  hausdefizit: 'Hausdefizit – Laden gesperrt',
+  umschaltsperre: 'Umschaltsperre',
+  totzone: 'Totzone um Null',
+}
+
+function blockLabel(grund: string | null): string | null {
+  return grund ? BLOCK_LABELS[grund] ?? grund : null
+}
+
+const BETRIEBSART_LABELS: Record<string, string> = {
+  auto: 'Automatik',
+  nur_laden: 'Nur Laden',
+  nur_entladen: 'Nur Entladen',
+  standby: 'Standby',
+  laden: 'Laden',
+  entladen: 'Entladen',
+}
+
+function BatteryCard({ device, elapsed }: { device: BatteryDevice; elapsed: number }) {
+  const state: CardState = !device.eligible || !device.sensoren_gueltig
+    ? 'off'
+    : device.new_lade_w > 0
+      ? 'charge'
+      : device.new_entlade_w > 0
+        ? 'discharge'
+        : 'idle'
+
+  // Ein Sollwert, zwei Richtungen: verglichen wird die Nettogroesse.
+  const altNetto = device.lade_anforderung_w - device.entlade_anforderung_w
+  const changed = Math.round(device.netto_w) !== Math.round(altNetto)
+  const istNetto = device.lade_ist_w - device.entlade_ist_w
+  const sperre = Math.max(0, device.umschaltsperre_rest_s - elapsed)
+  const grund = blockLabel(device.blockiert_grund)
+    ?? (device.new_lade_w === 0 && device.new_entlade_w === 0
+      ? blockLabel(device.entlade_blockiert_grund) ?? blockLabel(device.lade_blockiert_grund)
+      : null)
+
+  return (
+    <DeviceCard
+      title={device.label || device.id}
+      badge={
+        <>
+          {device.source === 'ep' ? <span className="pill primary">Energy Pilot</span> : null}
+          <span className="pill">Laden {device.priority}</span>
+          <span className="pill">Entladen {device.entlade_prioritat}</span>
+          <span className={device.soc_prozent > device.soc_min_prozent ? 'pill ok' : 'pill warn'}>
+            {Math.round(device.soc_prozent)} %
+          </span>
+        </>
+      }
+      state={state}
+    >
+      <SocBar device={device} />
+      <KeyValue label="Freigabe" value={device.eligible ? 'ja' : 'nein'} tone={device.eligible ? 'ok' : 'err'} />
+      {!device.sensoren_gueltig ? (
+        <KeyValue label="Messwerte" value="unvollständig – aus der Regelung" tone="err" />
+      ) : null}
+      <KeyValue
+        label="Betriebsart"
+        value={`${BETRIEBSART_LABELS[device.betriebsart] ?? device.betriebsart} → ${
+          BETRIEBSART_LABELS[device.betriebsart_effektiv] ?? device.betriebsart_effektiv}`}
+      />
+      <KeyValue
+        label="Ist"
+        value={istNetto === 0 ? 'Standby' : `${fmtW(Math.abs(istNetto))} (${istNetto > 0 ? 'Laden' : 'Entladen'})`}
+        tone={istNetto < 0 ? 'ok' : 'plain'}
+      />
+      <KeyValue
+        label="Anforderung"
+        value={altNetto === 0 ? '0 W' : `${fmtW(Math.abs(altNetto))} (${altNetto > 0 ? 'Laden' : 'Entladen'})`}
+      />
+      {device.hausdefizit_anteil_w > 0 ? (
+        <KeyValue label="Anteil am Hausdefizit" value={fmtW(device.hausdefizit_anteil_w)} />
+      ) : null}
+      <KeyValue
+        label="Limits"
+        value={`Laden ≤ ${fmtW(device.lade_limit_w)} · Entladen ≤ ${fmtW(device.entlade_limit_w)}`}
+        tone="muted"
+      />
+      {device.energie_kwh != null ? (
+        <KeyValue
+          label="Energie"
+          value={`${device.energie_kwh.toLocaleString('de-DE')} von ${device.capacity_kwh.toLocaleString('de-DE')} kWh`}
+          tone="muted"
+        />
+      ) : null}
+      {sperre > 0 ? <KeyValue label="Umschaltsperre" value={`noch ${fmtDur(sperre)}`} tone="muted" /> : null}
+      {grund ? <KeyValue label="Grund" value={grund} tone="warn" /> : null}
+      <KeyValue
+        label="Neu an HA"
+        value={device.netto_w === 0
+          ? 'Standby'
+          : `${fmtW(Math.abs(device.netto_w))} (${device.netto_w > 0 ? 'Laden' : 'Entladen'})`}
+        tone={changed ? 'warn' : 'plain'}
+      />
+    </DeviceCard>
+  )
+}
+
+/** Ladezustand mit Markern für Minimum, Notstromreserve und Ladeschluss. */
+function SocBar({ device }: { device: BatteryDevice }) {
+  const clamp = (value: number) => Math.min(100, Math.max(0, value))
+  return (
+    <div
+      className="soc-bar"
+      role="img"
+      aria-label={`Ladezustand ${Math.round(device.soc_prozent)} Prozent`}
+    >
+      <span className="fill" style={{ width: `${clamp(device.soc_prozent)}%` }} />
+      <span className="mark limit" style={{ left: `${clamp(device.soc_min_prozent)}%` }} />
+      {device.soc_reserve_prozent > 0 ? (
+        <span className="mark limit" style={{ left: `${clamp(device.soc_reserve_prozent)}%` }} />
+      ) : null}
+      <span className="mark" style={{ left: `${clamp(device.soc_max_prozent)}%` }} />
+    </div>
+  )
 }

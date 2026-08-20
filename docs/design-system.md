@@ -224,6 +224,8 @@ erfindet keine Synonyme (`.button`, `.panel`, `.chip` gibt es nicht).
 | `.row-actions` | Aktionsgruppe am rechten Rand einer Zeile |
 | `.pill` + `.ok` / `.warn` / `.err` / `.muted` / `.primary` | Statusanzeige, nie klickbar |
 | `.switch` / `.track` / `.switch-label` | Schalter für boolesche Werte statt Checkbox |
+| `.device-card` + `.active` / `.idle` / `.off` / `.charge` / `.discharge` | Gerätekarte; der linke Rand trägt den Zustand. `charge` und `discharge` gibt es nur beim Speicher — er ist das einzige Gerät, das Leistung auch abgeben kann, und die Richtung ist beim Debuggen die erste Frage |
+| `.soc-bar` + `.fill` / `.mark` / `.mark.limit` | Ladezustandsbalken mit Markern für Minimum, Notstromreserve und Ladeschluss. Breite und Positionen sind dynamisch und deshalb Inline-Styles (siehe Regel 2) |
 | `.dropzone` / `.dropzone.drag` | Datei-Upload-Fläche |
 | `.toasts` / `.toast` / `.toast.ok` / `.toast.err` | Kurzrückmeldung unten rechts |
 

@@ -4,7 +4,7 @@
 etwas in [architektur.md](architektur.md), heißt das nicht, dass es implementiert ist — hier steht,
 wo nicht.
 
-Stand: 13.08.2026.
+Stand: 20.08.2026.
 
 ## Abweichungen Spec ↔ Code
 
@@ -30,6 +30,16 @@ Dinge, die schon einmal Zeit gekostet haben:
   Speicher. Nach einem Add-on-Neustart beginnt der Zeitschutz von vorn.
 - **Ampere-Modus rechnet intern in Watt.** Nur beim Schreiben wird abgerundet. Wer Ampere-Werte
   vergleicht, muss `new_a` bzw. `schutz_a` nehmen, nicht die Watt-Felder durch die Spannung teilen.
+- **Der Namensraum `ems_speicher_*` gehört nicht dem HEMS.** In dieser Anlage regelt eine eigene
+  HA-Automation den vorhandenen E3DC über `input_number.ems_speicher_mindesladeleistung_1/2`,
+  `ems_speicher_soc_mindestwert_1/2` und `input_boolean.ems_speicher_regelung_stufe_1_aktiv`. Der
+  AC-Speicher des HEMS benutzt deshalb `acspeicher1` als Präfix, sein globaler Helfer heißt
+  `input_number.ems_ac_speicher_entlade_abschlag_w`. Der E3DC ist **kein** HEMS-Gerät: er regelt
+  sich selbst und ist im Überschuss-Sensor bereits verrechnet.
+- **Der Sollwert des Speichers ist signiert.** `input_number.ems_<prefix>_anforderung_leistung_w`
+  trägt „+ laden / − entladen" in einer Entität. Der HA-Helfer braucht ein **negatives Minimum** —
+  steht dort `min: 0`, klemmt Home Assistant jede Entladeanforderung serverseitig auf 0 und der
+  Speicher entlädt nie.
 - **Add-on-Optionen erscheinen als YAML-Editor.** Weil das Schema eine Objektliste enthält, zeigt
   Home Assistant die Feldbeschreibungen aus `translations/` nicht an. Maßgeblich ist
   [konfiguration.md](konfiguration.md).
@@ -44,14 +54,14 @@ Dinge, die schon einmal Zeit gekostet haben:
 
 ## Offene Fachfragen der AC-Speicher-Erweiterung
 
-Aus [`erweiterungen/erweiterung_ac_speicher_1_antworten.md`](../erweiterungen/erweiterung_ac_speicher_1_antworten.md).
-Sie blockieren keine Planung, wohl aber die Inbetriebnahme des Schreibpfads:
+Aus [`erweiterungen/erweiterung_ac_speicher_1_antworten_2.md`](../erweiterungen/erweiterung_ac_speicher_1_antworten_2.md).
+Der Code ist gebaut und getestet; diese Fragen betreffen die **Inbetriebnahme am realen Gerät**:
 
 | # | Frage | Blockiert |
 |---|---|---|
-| F-2 | Wechselrichter-Anbindung: Register bzw. Services, Reihenfolge Modus ↔ Leistung, Übernahmezeit | Phase 2 und 3 der Erweiterung |
-| F-11 | Wie wird die Shelly-Nulleinspeisung an- und abgeschaltet (API, MQTT, Schalter)? Ist sie nicht abschaltbar, regeln HEMS und Shelly gegeneinander | Phase 3, Watchdog-Ebene 3 |
-| F-12 | Quelle von `residual_power_entity` — dieselbe wie beim Batterie-Leistungssensor? Bestimmt den Sensor-Versatz | Dimensionierung von `hoch_regelzeit_s` |
+| F-12 | Aus welcher Quelle kommt `residual_power_entity`, und wie weit läuft er dem Batterie-Leistungssensor nach? | Dimensionierung von `hoch_regelzeit_s` und `entlade_sofort_schwelle_w` |
+| F-13 | Welches Gerät wird der AC-Speicher? Liefert `soc_entity`, die Ist-Leistungssensoren und `capacity_kwh` | Inbetriebnahme, nicht den Code |
+| F-14 | Bringt das Gerät eine eigene Nulleinspeisung mit, und lässt sie sich abschalten? Nicht abschaltbar heißt: HEMS und Gerät regeln gegeneinander | Inbetriebnahme |
 
 ## Bewusst nicht umgesetzt
 

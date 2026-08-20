@@ -15,7 +15,7 @@ configuration:
 
       • class (Pflicht) – Geräteklasse: „controllable" für stufenlos regelbare
       Verbraucher (Heizstab, Wallbox), „binary" für AN/AUS-Geräte (Heizlüfter,
-      Pumpe).
+      Pumpe), „battery" für einen AC-gekoppelten Speicher.
 
       • actual_power_entity (nur controllable, Pflicht) – Sensor-Entität die
       die aktuelle Ist-Leistung des Geräts in Watt liefert, z. B.
@@ -59,6 +59,34 @@ configuration:
       Bei 1-phasigem Betrieb wird nur L1 herangezogen, bei 3-phasigem alle
       drei (P = I × (U_L1 + U_L2 + U_L3)). Leer lassen wenn kein Sensor
       vorhanden.
+      • soc_entity (nur battery, Pflicht) – Sensor-Entität mit dem Ladezustand
+      in Prozent. Liefert sie „unavailable", fällt dieser Speicher aus der
+      Regelung und geht auf Standby; die übrigen Geräte laufen weiter.
+
+      • charge_power_entity / discharge_power_entity (nur battery) – Ist-Lade-
+      und Ist-Entladeleistung in Watt, beide als positive Werte. Alternativ
+      power_entity mit power_sign, wenn das Gerät nur eine signierte Entität
+      liefert.
+
+      • power_sign (nur battery, Standard „positiv_laden") – Vorzeichen von
+      power_entity: „positiv_laden" oder „positiv_entladen".
+
+      • available_charge_power_entity / available_discharge_power_entity (nur
+      battery, optional) – momentanes Lade- bzw. Entladelimit des Geräts
+      (Temperatur- oder Zell-Derating). Hat Vorrang vor den konfigurierten
+      Maximalwerten.
+
+      • capacity_kwh (nur battery, optional) – nutzbare Kapazität in kWh. Wird
+      nur für die Anzeige verwendet (Energieinhalt, kapazitätsgewichteter
+      SoC-Durchschnitt).
+
+      Ein Speicher schreibt EINEN signierten Sollwert nach
+      input_number.ems_<präfix>_anforderung_leistung_w (positiv = laden,
+      negativ = entladen) und die Betriebsart nach
+      input_select.ems_<präfix>_anforderung_betriebsart. Der Zahlen-Helfer
+      braucht deshalb ein negatives Minimum, sonst klemmt Home Assistant jede
+      Entladeanforderung auf 0. Die Übersetzung in Modbus- oder MQTT-Aufrufe
+      übernimmt eine HA-Automation, nicht das Add-on.
   interval_s:
     name: Regelintervall (Sekunden)
     description: >-
@@ -95,3 +123,17 @@ configuration:
       zurückrechnet. Standard:
       sensor.verfugbare_leistung_fur_uberschussverbraucher (Home Assistant
       slugifiziert Umlaute: ü→u, ö→o, ä→a, ß→ss).
+  speicher_in_residual_enthalten:
+    name: Speicherleistung im Überschuss-Sensor enthalten
+    description: >-
+      Ob die Lade- und Entladeleistung der vom HEMS geregelten Speicher im
+      Überschuss-Sensor bereits enthalten ist. Bei AC-gekoppelten Speichern mit
+      Messpunkt an der Netzübergabe ist das der Normalfall („an"): das EMS
+      rechnet die gemessene Entladung heraus, bevor es den Pool bildet.
+      Andernfalls liest es die eigene Entladung als PV-Überschuss, schaltet
+      Verbraucher zu und der Speicher ist in einem Zyklus leer. Auf „aus"
+      stellen, wenn der Sensor den Speicher bereits herausrechnet. Prüfen:
+      EMS deaktivieren, Speicher von Hand auf 1 kW Entladung zwingen – steigt
+      der Sensorwert um 1 kW, gehört diese Option auf „an". Speicher, die das
+      HEMS nicht regelt (z. B. ein selbstregelnder Hybridspeicher), sind davon
+      nicht betroffen.

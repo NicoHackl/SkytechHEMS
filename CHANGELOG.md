@@ -9,6 +9,52 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 ## [Unreleased]
 
 ### Hinzugefügt
+- **AC-gekoppelte Speicher als eigene Geräteklasse (D-040, 1.1.0 → 1.2.0).** Mit
+  `class: battery` verwaltet das HEMS jetzt auch Batteriespeicher: geladen wird aus
+  PV-Überschuss und in derselben Prioritätsreihenfolge wie jeder andere Verbraucher, entladen
+  wird zur Deckung des **normalen Hausverbrauchs** — ausdrücklich nicht für Heizstab, Wallbox
+  oder Heizlüfter. Der Heizstab läuft damit nie aus der Batterie.
+  - **Der Pool wird bereinigt, bevor er verteilt wird.** Ein Speicher ist der erste Teilnehmer,
+    der den Messwert verfälscht, auf dem das HEMS aufbaut: seine Entladung erhöht den
+    Überschuss-Sensor, ist aber kein Überschuss. `residual_bereinigt_w` zieht die gemessene
+    Entladung ab; erst darauf laufen Pool und Defizit. Ohne das läse das HEMS die eigene
+    Entladung als Überschuss, schaltete Verbraucher zu — und der Speicher wäre in einem Zyklus
+    leer.
+  - **Die weggeworfene Hälfte des Pools ist der Entladebedarf.** Bisher klemmte
+    `max(residual + Σ current_w, 0)` alles Negative weg. Diese Hälfte heißt jetzt
+    `hausdefizit_w` und ist das Entladeziel. Die Überschussverbraucher sind per Konstruktion
+    draußen, weil ihre Leistung zurückaddiert wird — es braucht dafür keine Sonderregel.
+  - **Zwei Summen statt einer.** `current_w` filtert den Force-Modus heraus, `gemessene_last_w`
+    filtert nichts. Ein von Hand eingeschalteter Heizstab bleibt damit Überschussverbraucher und
+    wird vom Speicher nicht gedeckt. Weil je Gerät `gemessene_last_w ≥ current_w` gilt,
+    schließen Pool und Hausdefizit einander **strukturell** aus: „nie gleichzeitig laden und
+    entladen" ist eine Eigenschaft der Formeln, keine nachträgliche Prüfung.
+  - **Getrennte Lade- und Entladepriorität.** `prioritat` gilt fürs Laden,
+    `entlade_prioritat` fürs Entladen. „Lade mich zuletzt, entlade mich zuerst" ist damit
+    konfigurierbar — mit einer Zahl wäre es nicht ausdrückbar.
+  - **Ausgabe: ein signierter Sollwert plus Betriebsart.**
+    `input_number.ems_<prefix>_anforderung_leistung_w` trägt „+ laden / − entladen",
+    `input_select.ems_<prefix>_anforderung_betriebsart` die Betriebsart. Die Übersetzung nach
+    Modbus oder MQTT macht eine HA-Automation, nicht das Add-on. **Der Zahlen-Helfer braucht ein
+    negatives Minimum**, sonst klemmt Home Assistant jede Entladeanforderung auf 0.
+  - **SoC-Grenzen mit Drosselband und Hysterese**, Geräte-Derating über optionale
+    `available_*_power_entity` mit Vorrang, Totzone um Null, Sperrzeit nach Richtungswechsel und
+    eine asymmetrische Entladerampe: ein echter Lastabwurf wird sofort zurückgenommen, eine
+    kleine Abweichung gedämpft — sonst wird aus Sensor-Versatz ein Grenzzyklus.
+  - **Der sichere Zustand wird aktiv geschrieben.** Bei Lockout, fehlender Freigabe oder
+    unbrauchbaren Messwerten schreibt das HEMS `0 W` und `standby`, statt den letzten Sollwert
+    stehen zu lassen. Ein Speicher ohne gültigen Leistungsmesswert fällt aus der Regelung, die
+    übrigen laufen weiter.
+  - **Neue Statuskacheln und eine Speicherkarte** in der Oberfläche: Speicher netto,
+    kapazitätsgewichteter SoC-Schnitt und Hausdefizit, dazu ein Ladezustandsbalken mit Markern
+    für Minimum, Notstromreserve und Ladeschluss. Läuft ein HEMS-Gerät fremdgesteuert, benennt
+    die Hausdefizit-Kachel den ausgenommenen Betrag — sonst sähe das im Energiedashboard wie ein
+    Regelfehler aus.
+  - **Ohne konfigurierten Speicher bleibt das Verhalten unverändert.** `netz_support_w` ist
+    dann 0, die Bereinigung eine Identitätsoperation und die Entladeplanung läuft über eine
+    leere Liste. Abgesichert durch `test_pool_ohne_speicher_unveraendert` und die Property P7.
+  - Neue Add-on-Option `speicher_in_residual_enthalten` (Default `an`) und acht optionale
+    Gerätefelder. Bestehende Konfigurationen bleiben gültig.
 - **Versionierter Gerätevertrag für den Energy Pilot (D-039, 1.0.25 → 1.1.0).**
   `/api/device_controls_schema` bleibt in seiner bisherigen Listen-/Gruppenform kompatibel und
   ergänzt Geräteklasse, Entitätspräfix, Einheit, erlaubte Modi, Überschuss-Regelprinzip,
@@ -23,6 +69,14 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
   `ep_proposal_status`; die bestehende Moduslogik bleibt unverändert.
 
 ### Geändert
+- **`/api/status` liefert die Zwischengrößen der Pool-Rechnung mit.** Neu sind
+  `residual_bereinigt_w`, `netz_support_w`, `hems_last_w`, `hems_last_gemessen_w`, `pool_roh_w`,
+  `entlade_basis_w` und `hausdefizit_w`. Rein additiv — bestehende Felder ändern weder Namen noch
+  Bedeutung. Für Planer wichtig: Regelentscheidungen beziehen sich jetzt auf
+  `residual_bereinigt_w`, nicht mehr auf `residual_w`.
+- **`current_deficit_w` rechnet gegen den bereinigten Überschuss.** Ohne diese Änderung
+  verschwände das Defizit, sobald ein Speicher die Hauslast deckt — und die Verbraucher liefen
+  faktisch aus der Batterie. Ohne Speicher ist der Wert unverändert.
 - **Neue Weboberfläche (React + TypeScript + Vite).** Die Bedienung ist dieselbe
   geblieben, nur besser: Aus den drei Tabs sind drei Seiten mit eigener Adresse
   geworden (Status, Steuerung, Energy Pilot), die Navigation sitzt links und

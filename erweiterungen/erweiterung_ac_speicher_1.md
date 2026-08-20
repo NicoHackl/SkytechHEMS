@@ -1,8 +1,24 @@
 # Erweiterung: AC‑gekoppelte Speicher (1…n) im Skytech HEMS
 
-> **Status:** Entwurf v4 – Diskussionsgrundlage, noch keine Implementierung.
+> **Status:** Entwurf v5 – Grundlage der Umsetzung.
 >
-> **Änderung ggü. v3 – eingearbeitete Antworten aus
+> **Änderung ggü. v4 – eingearbeitete Antworten aus
+> [`erweiterung_ac_speicher_1_antworten_2.md`](erweiterung_ac_speicher_1_antworten_2.md):**
+>
+> | # | Antwort | Folge im Entwurf |
+> |---|---|---|
+> | **F‑2** | Das HEMS stellt nur HA‑Entitäten bereit, die Ansteuerung über MQTT/Modbus macht eine externe HA‑Automation | **erledigt.** `steuerprofil` ist entschieden, das Reihenfolge‑Gate im Phasenplan **entfällt** – Phase 2 und 3 sind nicht mehr blockiert |
+> | **F‑11** | Es gibt keinen Shelly 3EM | **entfällt ersatzlos.** `inverter`, `shelly_fallback` und Watchdog‑Ebene 3 gestrichen, sicherer Zustand ist immer `standby` (D‑B22) |
+> | **Speicher** | Gemeint ist ein **neuer, AC‑gekoppelter** Speicher. Der vorhandene E3DC regelt sich selbst und ist im Überschuss‑Sensor bereits verrechnet | neu **D‑B21**: der E3DC bekommt keine `BatteryDevice`‑Instanz und wird nicht bereinigt |
+> | **Ausgabe** | **Ein signierter Leistungswert plus Betriebsart** | neu **D‑B20**, D‑B11 auf zwei Entitäten gekürzt, `steuerprofil: signiert` |
+> | **D‑B03** | 0 W Entladung bei 500 W Bezug → Speicher regelt auf 500 W → Sensor 0 W | `speicher_in_residual_enthalten = true` **bestätigt**, H‑1 und H‑2 sind real |
+> | **Namensraum** | `ems_speicher_*` gehört der bestehenden E3DC‑Regelung | globaler Helfer heißt `ems_ac_speicher_entlade_abschlag_w`, Beispiel‑Präfix `acspeicher1` |
+>
+> Außerdem korrigiert: **15.3** (P3 und P4 gehören auf die Zuteilungsebene) und
+> **Abschnitt 14** (die Oberfläche ist seit `d5623b1` React + TypeScript unter
+> `web/src/`, nicht mehr `app/static/app.js`).
+>
+> **Änderung v3 → v4 – eingearbeitete Antworten aus
 > [`erweiterung_ac_speicher_1_antworten.md`](erweiterung_ac_speicher_1_antworten.md):**
 >
 > | # | Antwort | Folge im Entwurf |
@@ -15,8 +31,10 @@
 > | **F‑9** | Einspeisevergütung vorhanden, Batterieexport zulässig | 5.4‑Rechnung gilt unverändert, kein harter Export‑Stopp, `entlade_abschlag_w` klein |
 > | **F‑10** | **ein** Sensor an der Netzübergabe, gilt für alle Speicher | D‑B03 bestätigt (`speicher_in_residual_enthalten: true`) |
 >
-> **Weiterhin offen:** F‑2, F‑11, F‑12 – alle drei sind Phase‑0‑Themen und
-> blockieren keine Planung, wohl aber die Inbetriebnahme des Schreibpfads.
+> **Weiterhin offen:** F‑12 (Sensor‑Versatz), F‑13 (welches Gerät wird der
+> AC‑Speicher) und F‑14 (bringt es eine eigene Nulleinspeisung mit). Keine davon
+> blockiert die Umsetzung – F‑13 und F‑14 sind Beschaffungs‑ und
+> Inbetriebnahmethemen, F‑12 bestimmt nur die Dimensionierung der Rampe.
 >
 > **Änderung v2 → v3 (zwei Korrekturen):**
 > 1. **Die Empfehlung „Wechselrichter regelt selbst" (`wr_huelle`) ist zurückgezogen.**
@@ -51,7 +69,7 @@
 3. [Die sieben Gefahren](#3-die-sieben-gefahren)
 4. [Grundmodell: `pool_roh_w` und `hausdefizit_w`](#4-grundmodell-pool_roh_w-und-hausdefizit_w)
 5. [Regelgüte bei 3 s Takt](#5-regelgüte-bei-3-s-takt)
-6. [Architekturentscheidungen (D‑B01…D‑B18)](#6-architekturentscheidungen)
+6. [Architekturentscheidungen (D‑B01…D‑B22)](#6-architekturentscheidungen)
 7. [Neue Klasse `BatteryDevice`](#7-neue-klasse-batterydevice)
 8. [Entitäten und Konfiguration](#8-entitäten-und-konfiguration)
 9. [Änderungen am Regelzyklus](#9-änderungen-am-regelzyklus)
@@ -78,30 +96,27 @@
 | **Nicht entladen für** | Heizstab, Wallbox, Heizlüfter – also alles, was das HEMS selbst zuschaltet | – |
 | **Netzladen** | v2, Schnittstellen hier bereits fixiert | HEMS führt aus, Preislogik extern/EP |
 
-### Warum das HEMS regelt und nicht der Speicher
+### Warum das HEMS zentral regelt
 
-Der Speicher *könnte* über einen Shelly 3EM autonom auf Netzpunkt ±0 regeln.
-Diese Fähigkeit wird bewusst **nicht** als Primärregelung genutzt – aus zwei
-unabhängigen Gründen (ausführlich in [D‑B05](#d-b05--warum-hems-zentral-regelt-und-nicht-jeder-speicher-für-sich)):
-
-1. **Sie skaliert nicht auf n > 1.** Zwei autonome Regler am selben Netzpunkt
-   lösen `D₁ + D₂ = L` – eine Gleichung, zwei Unbekannte. Es gibt kein
-   eindeutiges Gleichgewicht; das Ergebnis ist ein Grenzzyklus.
-2. **Sie ist langsamer.** Shelly‑Regelung >5 s gegen HEMS‑Zyklus 3 s.
+Ein Speicher *könnte* über einen eigenen Netzsensor autonom auf Netzpunkt ±0
+regeln. Diese Fähigkeit wird bewusst **nicht** als Primärregelung genutzt, weil
+sie nicht auf n > 1 skaliert (ausführlich in
+[D‑B05](#d-b05--warum-hems-zentral-regelt-und-nicht-jeder-speicher-für-sich)):
+Zwei autonome Regler am selben Netzpunkt lösen `D₁ + D₂ = L` – eine Gleichung,
+zwei Unbekannte. Es gibt kein eindeutiges Gleichgewicht; das Ergebnis ist ein
+Grenzzyklus.
 
 Daraus folgt für den gesamten Entwurf:
 
 * Das HEMS trägt die volle Verantwortung für die Regelgüte am Netzpunkt –
   eine neue Aufgabenklasse für dieses Projekt, siehe
   [Abschnitt 5](#5-regelgüte-bei-3-s-takt).
-* Die Shelly‑Nulleinspeisung bleibt als **Rückfallebene** erhalten und wird
-  dort zum wertvollsten Teil des Watchdogs
-  ([Abschnitt 12.2](#122-watchdog--pflicht-nicht-empfehlung)).
-* Solange das HEMS regelt, **muss die Shelly‑Regelung deaktiviert sein** –
-  sonst regeln HEMS und Shelly gegeneinander, mit exakt demselben
-  Grenzzyklus wie in Punkt 1. Das ist ein Phase‑0‑Punkt.
+* Bringt das Gerät eine eigene Nulleinspeisung mit, **muss sie im Normalbetrieb
+  aus sein** – sonst regeln HEMS und Gerät gegeneinander, mit exakt demselben
+  Grenzzyklus. Das ist ein Punkt für die Inbetriebnahme (F‑14).
 * Ein **Watchdog ist Pflicht**, nicht Empfehlung. Der zuletzt geschriebene
-  Sollwert bleibt in HA stehen, wenn das Add‑on stirbt.
+  Sollwert bleibt in HA stehen, wenn das Add‑on stirbt – und es gibt **keine**
+  autonome Rückfallebene, die ihn auffängt (D‑B22).
 
 ### AC‑gekoppelt heißt
 
@@ -114,7 +129,30 @@ Entladeleistung erscheint am Netzübergabepunkt und damit im
 
 Das HEMS schreibt **niemals direkt in Wechselrichter‑Register**. Es schreibt –
 wie `BinaryDevice` heute schon – in HA‑Helfer; eine HA‑Automation übersetzt sie
-in Modbus/API‑Aufrufe. Das bleibt so und ist auch für den Watchdog wichtig.
+in Modbus‑ oder MQTT‑Aufrufe. Das bleibt so und ist auch für den Watchdog
+wichtig.
+
+> **Durch F‑2 bestätigt.** Damit sind Register, Reihenfolge am Gerät und
+> Übernahmezeit ausdrücklich **kein HEMS‑Thema**. Das HEMS liefert einen
+> signierten Sollwert und eine Betriebsart; alles danach gehört der Automation.
+
+### Der vorhandene E3DC gehört nicht dazu (D‑B21)
+
+Die Anlage hat bereits einen DC‑gekoppelten E3DC‑Hybrid, der sich selbst auf
+Eigenverbrauch regelt. Seine Lade‑ und Entladeleistung ist im Überschuss‑Sensor
+**bereits verrechnet**, bevor das HEMS ihn liest.
+
+Aus HEMS‑Sicht ist er deshalb Teil der Erzeugungsseite, nicht ein Gerät:
+
+* Er bekommt **keine** `BatteryDevice`‑Instanz.
+* Sein `netz_support_w` wird **nicht** herausgerechnet – das täte man zweimal.
+* Die bestehende Regelung (`automation.pye3dc_max_ladeleistung_speicher_setzen`,
+  die `input_number.ems_speicher_*`‑Helfer) bleibt vollständig unberührt.
+
+Konsequenz, die man kennen muss: `pool_roh_w` und `hausdefizit_w` beziehen sich
+auf das, was **nach** dem E3DC übrig bleibt. Lädt der E3DC gerade, sinkt der
+Überschuss und der AC‑Speicher bekommt weniger. Die Priorisierung zwischen
+beiden Speichern findet außerhalb des HEMS statt.
 
 ---
 
@@ -136,7 +174,9 @@ in Modbus/API‑Aufrufe. Das bleibt so und ist auch für den Watchdog wichtig.
 | [main.py:140-144](app/main.py#L140-L144) | `_scheduler()`, `interval_s: 30` | ggf. zweiter, schneller Task (D‑B06) |
 | [ha_client.py:41](app/ha_client.py#L41) | `fetch_all_states()` – holt **alle** States | für einen schnellen Subzyklus zu teuer → neue Methode nötig |
 | [main.py:56](app/main.py#L56) / [main.py:77](app/main.py#L77) | `_ctrl_items_*` | neu: `_ctrl_items_battery` |
-| [app.js:86-89](app/static/app.js#L86-L89) | Filter nach `d.type` | neuer Filter `'battery'` |
+| [web/src/types.ts](web/src/types.ts) | Datenvertrag `Device`‑Union | neues `BatteryDevice`‑Interface, neue `CycleStatus`‑Felder |
+| [web/src/pages/Status.tsx](web/src/pages/Status.tsx) | Filter nach `d.type` | neuer Filter `'battery'`, neue Karte, drei Kacheln |
+| [app/main.py](app/main.py) `_build_device_controls_schema` | Vertrag für UI und Energy Pilot | neuer Zweig `battery` – ohne ihn fehlt der Speicher im Steuerung‑Tab |
 | [config.yaml:76](config.yaml#L76) | `class: list(controllable\|binary)` | → `…\|battery)` |
 
 ---
@@ -262,17 +302,18 @@ Das ist **nicht instabil** (siehe H‑4), aber es macht die Rampenzeiten
 (`hoch_regelzeit_s`) unwirksam, weil `last_changed` schneller altert als der
 Messwert. → Phase 0: Update‑Intervall des Sensors messen.
 
-Kommt `residual_power_entity` von einem Shelly 3EM, ist die Rate typischerweise
-~1 s (lokal, Push) – dann passt 3 s gut. Über Cloud/Polling kann sie deutlich
-schlechter sein.
+In dieser Anlage ist `residual_power_entity` ein YAML‑Template‑Sensor
+(`sensor.verfugbare_leistung_fur_uberschusverbraucher`), gespeist aus den
+E3DC‑Modbus‑Werten. Seine Rate ist damit die des Modbus‑Pollings, nicht die
+eines lokalen Push‑Zählers. → F‑12.
 
 ### H‑7 · Sensor‑Versatz zwischen Zähler und Batteriemesswert (das echte Oszillationsrisiko)
 
 `residual_bereinigt_w = residual_w − netz_support_w` subtrahiert zwei Messwerte
 aus **verschiedenen Quellen mit verschiedener Latenz**:
 
-* `residual_w` – Netzzähler (Shelly 3EM)
-* `netz_support_w` – Batterie‑Leistungssensor (Wechselrichter, Modbus)
+* `residual_w` – Überschuss‑Sensor (Template über E3DC‑Modbus)
+* `netz_support_w` – Leistungssensor des AC‑Speichers (anderes Gerät, andere Latenz)
 
 Sind die nicht synchron, entsteht ein Fehler, der **direkt in den Sollwert
 durchschlägt**:
@@ -456,8 +497,7 @@ H‑4/H‑5, nicht ein Stabilitätsproblem der Formel.
 
 ## 5. Regelgüte bei 3 s Takt
 
-Mit `interval_s = 3` ist die Taktzeit **kein** limitierender Faktor mehr – der
-HEMS‑Zyklus ist schneller als jede Alternative (Shelly‑Eigenregelung >5 s).
+Mit `interval_s = 3` ist die Taktzeit **kein** limitierender Faktor mehr.
 Die verbleibenden Themen sind Sensor‑Versatz (H‑7), Asymmetrie und
 Schreiblast.
 
@@ -682,13 +722,10 @@ prüfen ob `residual_power_entity` um 1 kW steigt. Steigt es → `true`.
 | `nur_laden` | HEMS regelt | gesperrt | Speicher soll füllen |
 | `nur_entladen` | gesperrt | HEMS regelt | z. B. vor angekündigtem PV‑Überschuss |
 | `standby` | 0 | 0 | stillgelegt, Messwerte fließen weiter |
-| `inverter` | – | – | **Shelly‑Nulleinspeisung dieses Speichers aktivieren** – Rückfallebene, nicht Normalbetrieb |
 
-`inverter` ist im laufenden Betrieb **nie** der Zielzustand – solange das HEMS
-regelt, muss die Shelly‑Regelung aus sein (D‑B05). Er wird ausschließlich als
-sicherer Zustand des designierten Fallback‑Speichers geschrieben
-(`shelly_fallback: true`, siehe [12.1](#121-der-sichere-zustand-hängt-vom-wechselrichter-ab)).
-Bei allen anderen Speichern ist der sichere Zustand `standby`.
+> **Gegenüber v4 gestrichen:** die Betriebsart `inverter`. Sie hätte die
+> autonome Nulleinspeisung eines Shelly 3EM reaktiviert – den es in dieser
+> Anlage nicht gibt. Der sichere Zustand ist damit immer `standby` (D‑B22).
 
 ### D‑B05 · Warum HEMS zentral regelt und nicht jeder Speicher für sich
 
@@ -721,7 +758,7 @@ aufteilen. Funktioniert prinzipiell, aber:
 
 * kein SoC‑Bewusstsein → der volle Speicher wird nicht bevorzugt entladen
 * keine Prioritäten, keine Tarif‑Logik (Abschnitt 11) möglich
-* pro Shelly von Hand zu tunen, driftet bei jeder Konfig‑Änderung
+* pro Gerät von Hand zu tunen, driftet bei jeder Konfig‑Änderung
 * die Aufteilung hängt von Lastniveau und Bauteiltoleranzen ab, nicht von
   deiner Absicht
 
@@ -729,11 +766,12 @@ aufteilen. Funktioniert prinzipiell, aber:
 deterministisch aufteilt.** Genau das leistet
 [`_allocate_discharge`](#d-b15--entlade-koordination-im-controller-nicht-im-gerät).
 
-#### Einwand 2 – der Shelly ist langsamer als das HEMS
+#### Einwand 2 – kein Betriebspunkt spricht dafür
 
-Shelly‑Regelung >5 s gegen HEMS‑Zyklus 3 s. Damit fällt das Argument
-„bessere Regelgüte durch den WR" auch für **n = 1** weg. Es gibt keinen
-Betriebspunkt mehr, an dem `wr_huelle` besser wäre.
+Ein autonomer Regler kann den Speicher nur auf Netzpunkt ±0 fahren. Er kennt
+weder Prioritäten noch SoC‑Ziele noch Tariflogik (Abschnitt 11) und lässt sich
+nicht koordinieren. Selbst für **n = 1** gäbe es damit keinen Betriebspunkt, an
+dem er die zentrale Regelung schlägt.
 
 #### Konsequenz
 
@@ -745,31 +783,17 @@ input_select.ems_<p>_entlade_regelmodus  →  entfällt
 input_number.ems_<p>_huellen_aufschlag_w →  entfällt
 ```
 
-**Die Shelly‑Nulleinspeisung bleibt trotzdem installiert und konfiguriert** –
-aber deaktiviert, als Rückfallebene. Sie ist damit der wertvollste Teil des
-Watchdogs ([12.2](#122-watchdog--pflicht-nicht-empfehlung)): stirbt das HEMS,
-übernimmt genau **ein** designierter Speicher wieder seine Shelly‑Regelung,
-alle anderen gehen auf `standby`. Ein einzelner autonomer Regler hat das
-Aufteilungsproblem nicht – deshalb funktioniert der Fallback, obwohl die
-Dauerlösung nicht funktioniert.
-
-Neues Konfigfeld dafür:
-
-```yaml
-shelly_fallback: true      # dieser Speicher übernimmt bei HEMS-Ausfall
-                           # DARF BEI HÖCHSTENS EINEM SPEICHER true SEIN
-```
-
-`_build_devices` muss das validieren und bei mehr als einem `true` einen Fehler
-loggen und alle bis auf den ersten auf `false` zwingen – sonst baut man sich
-den Grenzzyklus als Fehlerfall wieder ein.
+> **Gegenüber v4 zusätzlich gestrichen (F‑11):** die Shelly‑Rückfallebene und
+> das Konfigfeld `shelly_fallback`. Es gibt in dieser Anlage keinen Shelly 3EM,
+> der die Nulleinspeisung übernehmen könnte. Was davon bleibt, steht in
+> [D‑B22](#d-b22--sicherer-zustand-ist-immer-standby).
 
 #### Wichtig im Normalbetrieb
 
-Solange das HEMS regelt, **muss die Shelly‑Regelung aus sein.** HEMS und Shelly
-gleichzeitig aktiv = zwei Regler auf einer Größe = derselbe Grenzzyklus wie in
-Einwand 1, nur mit einem Speicher. Das Umschalten gehört in die
-HA‑Automation, die auch die Sollwerte überträgt.
+Bringt der künftige Wechselrichter eine eigene Nulleinspeisung mit, **muss sie
+aus sein**, solange das HEMS regelt. Zwei Regler auf einer Größe ergeben
+denselben Grenzzyklus wie in Einwand 1, nur mit einem Speicher. Ob und wie sie
+sich abschalten lässt, ist beim Kauf zu klären (F‑14).
 
 ### D‑B06 · Kein separater Speicher‑Subzyklus
 
@@ -813,7 +837,7 @@ dort seine Richtung auflöst.
 
 Siehe [Abschnitt 5.2](#52-asymmetrie-ist-die-billigste-verbesserung). Dazu:
 
-* `entlade_abschlag_w` – bewusster Unterschuss, Default 50 W
+* `entlade_abschlag_w` – bewusster Unterschuss, global, Default 20 W (5.4)
 * `umschalt_totzone_w` – Netto‑Wunsch betragsmäßig darunter → `standby`,
   verhindert Mikrozyklen
 * `min_umschaltzeit_s` – Sperrzeit nach Richtungswechsel laden↔entladen,
@@ -867,20 +891,39 @@ gewählt, dass später **keine Config‑Migration** nötig ist.
 ### D‑B11 · Ausgabe über HA‑Helfer, feste Reihenfolge
 
 ```
-input_number.ems_<prefix>_anforderung_ladeleistung_w
-input_number.ems_<prefix>_anforderung_entladeleistung_w
-input_select.ems_<prefix>_anforderung_betriebsart      # laden|entladen|standby|inverter
+input_number.ems_<prefix>_anforderung_leistung_w    # + laden / - entladen
+input_select.ems_<prefix>_anforderung_betriebsart   # laden|entladen|standby
 ```
 
 `get_write_ops()` liefert in fester Reihenfolge: **Betriebsart zuerst, dann
 Leistung.** Viele Wechselrichter brauchen den Moduswechsel vor dem
 Leistungsregister. Beim *Abschalten* die umgekehrte Reihenfolge (erst Leistung
 auf 0, dann Modus) – sonst kann ein Modussprung bei stehender Leistung einen
-Stromstoß erzeugen.
+Stromstoß erzeugen. Ob die HA‑Automation die Reihenfolge durchreicht, ist ihre
+Sache; das HEMS liefert sie, weil es nichts kostet.
 
-> Konfigfeld `steuerprofil` reserviert für spätere Varianten
-> (`zwei_entitaeten` | `signiert` | `modus_und_leistung`). v1 baut nur
-> `zwei_entitaeten` + Betriebsart.
+### D‑B20 · Ein signierter Leistungswert
+
+**Entschieden.** Statt zweier Leistungsentitäten gibt es eine, das Vorzeichen
+trägt die Richtung – dieselbe Konvention wie `netto_w` in 4.1, es kommt also
+keine dritte Bedeutung ins Spiel. `steuerprofil` ist damit nicht mehr
+reserviert, sondern festgelegt: `signiert`.
+
+Zwei Punkte, die daraus folgen:
+
+1. **Der HA‑Helfer braucht ein negatives Minimum.** `input_number` klemmt
+   serverseitig; steht `min: 0`, kommt nie eine Entladeanforderung an. Gehört
+   in die Package‑Vorlage und in die README.
+2. **Ein `last_changed` für beide Richtungen.** In v4 hatten Laden und Entladen
+   getrennte Entitäten und damit getrennte Rampen‑Alterungen. Jetzt gibt es
+   eine – `_lade_age_s` und `_entlade_age_s` fallen zu `_anforderung_age_s`
+   zusammen. Das ist eine Vereinfachung, keine Einschränkung: ein
+   Richtungswechsel setzt die Alterung ohnehin zurück, und die Umschaltsperre
+   (Default 300 s) dominiert diesen Fall.
+
+Beim Totband gilt zusätzlich: **kein Totband bei Vorzeichenwechsel** und
+**kein Totband, wenn eine laufende Entladung zurückgenommen wird** – dort zählt
+Geschwindigkeit mehr als Schreibsparsamkeit (D‑B08).
 
 ### D‑B12 · Ist‑Leistung: zwei Sensoren oder einer signiert
 
@@ -907,8 +950,35 @@ if self.power_entity:
 
 ### D‑B13 · Sicherer Zustand ist `standby`, nicht „aus lassen"
 
-Ohne WR‑Eigenverbrauchsmodus gibt es kein Auffangnetz. Details und vollständige
-Matrix in [Abschnitt 12](#12-sicherheit-fehlerfälle-watchdog).
+Ohne Eigenverbrauchsmodus im Gerät gibt es kein Auffangnetz. Details und
+vollständige Matrix in [Abschnitt 12](#12-sicherheit-fehlerfälle-watchdog).
+
+### D‑B22 · Sicherer Zustand ist **immer** `standby`
+
+**Entschieden durch F‑11.** Es gibt keinen Shelly 3EM und damit keine autonome
+Rückfallregelung, auf die man umschalten könnte. Ersatzlos gestrichen:
+
+* die Betriebsart `inverter` – Eingang wie Ausgang
+* das Konfigfeld `shelly_fallback` samt der `_build_devices`‑Validierung
+  „höchstens einer"
+* der `blockiert_grund`‑Wert `inverter`
+* **Watchdog‑Ebene 3** aus 12.2
+
+```python
+def _sicherer_zustand(self) -> str:
+    """Zustand bei EMS-Ausfall, Lockout oder fehlender Freigabe.
+
+    Immer standby: es gibt keine autonome Rueckfallregelung, auf die man
+    umschalten koennte. Entscheidend ist deshalb, dass get_write_ops diesen
+    Zustand AKTIV schreibt - 'nichts tun' liesse den letzten Sollwert stehen.
+    """
+    return "standby"
+```
+
+**Der Preis, offen benannt:** Fällt das HEMS aus, geht der Speicher auf
+`standby` und das Haus zieht voll aus dem Netz, obwohl der Speicher geladen ist.
+Kein Sicherheitsproblem, aber Geld – und der Grund, warum die verbleibenden
+Watchdog‑Ebenen keine Empfehlung, sondern Pflicht sind.
 
 ### D‑B14 · Fremdgesteuerte HEMS‑Lasten deckt der Speicher **nicht**
 
@@ -1104,13 +1174,12 @@ class BatteryDevice(ControllableDevice):
                  available_charge_power_entity: Optional[str] = None,
                  available_discharge_power_entity: Optional[str] = None,
                  capacity_kwh: float = 0.0,
-                 shelly_fallback: bool = False,
                  entity_prefix=None, label=None):
         prefix = entity_prefix or id
         super().__init__(
             id, allowed_modes,
             entity_actual_w=charge_power_entity or power_entity or "",
-            entity_anforderung_w=f"input_number.ems_{prefix}_anforderung_ladeleistung_w",
+            entity_anforderung_w=f"input_number.ems_{prefix}_anforderung_leistung_w",
             entity_prefix=prefix, label=label,
             output_unit="watt",              # Speicher immer in Watt
         )
@@ -1121,7 +1190,7 @@ class BatteryDevice(ControllableDevice):
     #   max_entladeleistung_w, min_entladeleistung_w
     #   soc_min_prozent, soc_max_prozent, soc_reserve_prozent
     #   soc_taper_band_prozent, soc_max_hysterese_prozent
-    #   entlade_abschlag_w, entlade_sofort_schwelle_w
+    #   entlade_sofort_schwelle_w   (Abschlag ist global, nicht je Geraet)
     #   umschalt_totzone_w, min_umschaltzeit_s
     #   laden_erlaubt, entladen_erlaubt
     #   entlade_priority                          (D-B17, Default 50)
@@ -1129,13 +1198,14 @@ class BatteryDevice(ControllableDevice):
     #   netzladen_aktiv, netzlade_leistung_w      (v2, in v1 immer aus)
 
     # ---- Laufzeitzustand ----
-    #   _soc, _lade_ist_w, _entlade_ist_w
-    #   _lade_anf_w, _entlade_anf_w                (aus HA zurückgelesen)
-    #   _lade_age_s, _entlade_age_s
+    #   _soc, _soc_valid, _power_valid
+    #   _lade_ist_w, _entlade_ist_w
+    #   _lade_anf_w, _entlade_anf_w                (aus dem signierten Sollwert)
+    #   _anforderung_age_s                         (EINE Alterung, D-B20)
     #   _entlade_ziel_w                            (vom Controller gesetzt)
-    #   _last_direction_change_ts                  (überlebt Zyklen)
+    #   _last_direction_change_ts, _soc_max_latch  (überleben Zyklen)
     #   _new_lade_w, _new_entlade_w, _new_betriebsart
-    #   _blockiert_grund
+    #   _lade_block, _entlade_block, _blockiert_grund
 ```
 
 ### 7.3 Pool‑Semantik
@@ -1230,7 +1300,7 @@ def calculate_ramp(self, current_deficit_w: float = 0.0) -> None:
     Wird vom Controller für ALLE Geräte aufgerufen (controller.py:231) - die
     Entladeplanung muss also vorher gelaufen sein (D-B07).
     """
-    if not self.eligible or self.betriebsart in ("standby", "inverter"):
+    if not self.eligible or not self.sensoren_gueltig or self.betriebsart == "standby":
         self._new_lade_w = self._new_entlade_w = 0.0
         self._new_betriebsart = self._sicherer_zustand()
         return
@@ -1280,40 +1350,48 @@ def calculate_ramp(self, current_deficit_w: float = 0.0) -> None:
     self._new_entlade_w = self._raste(self._new_entlade_w, self.min_entladeleistung_w)
 
 
-def _ramp_entladen(self, ziel_w: float) -> float:
-    """RUNTER sofort, HOCH gerampt - Batterieexport ist teurer als Restbezug (H-5)."""
-    if ziel_w < self._entlade_anf_w:
-        return ziel_w                                    # sofort, ungerampt
-    if self._entlade_age_s < self.hoch_regelzeit_s:
-        return self._entlade_anf_w
-    return min(ziel_w, self._entlade_anf_w + self.max_anderung_pro_schritt_w)
+# _ramp_entladen: NICHT die vereinfachte Fassung aus v4, sondern die aus 5.3.
+# "Runter immer sofort" verstaerkt H-7 - gedaempft wird nach Sprunghoehe
+# unterschieden.
 ```
+
+> **Betriebsart‑Auflösung:** `_new_betriebsart` folgt dem *gerasteten* Ergebnis,
+> nicht dem Vorzeichen von `netto`. Rastet eine Zuteilung unter
+> `min_entladeleistung_w` auf 0, ist die Betriebsart `standby` und nicht
+> `entladen` mit 0 W.
 
 ### 7.7 Ausgabe
 
 ```python
 def get_write_ops(self):
-    ops = []
     ab = f"input_select.ems_{self._entity_prefix}_anforderung_betriebsart"
-    lw = f"input_number.ems_{self._entity_prefix}_anforderung_ladeleistung_w"
-    ew = f"input_number.ems_{self._entity_prefix}_anforderung_entladeleistung_w"
 
-    schaltet_ab = self._new_betriebsart in ("standby", "inverter")
+    neu = int(round(self._new_lade_w - self._new_entlade_w))     # + laden / - entladen
+    alt = int(round(self._lade_anf_w - self._entlade_anf_w))
+    delta = abs(neu - alt)
 
-    if schaltet_ab:
-        # Beim Abschalten: erst Leistung auf 0, dann Modus (D-B11)
-        ops += self._write(lw, 0.0, self._lade_anf_w,    deadband=True)
-        ops += self._write(ew, 0.0, self._entlade_anf_w, deadband=False)
-        ops += self._write_select(ab, self._new_betriebsart)
-    else:
-        # Beim Einschalten/Ändern: erst Modus, dann Leistung
-        ops += self._write_select(ab, self._new_betriebsart)
-        ops += self._write(lw, self._new_lade_w, self._lade_anf_w, deadband=True)
-        # Deadband beim SENKEN der Entladung bewusst aus (D-B08)
-        ops += self._write(ew, self._new_entlade_w, self._entlade_anf_w,
-                           deadband=self._new_entlade_w >= self._entlade_anf_w)
-    return ops
+    # Totband wie bei ControllableDevice - mit zwei Ausnahmen, in denen
+    # Geschwindigkeit vorgeht (D-B08/D-B20).
+    vorzeichenwechsel = (neu > 0) != (alt > 0) or (neu < 0) != (alt < 0)
+    entladung_zurueck = alt < 0 and neu > alt
+    schreibt_leistung = delta > 0 and (
+        vorzeichenwechsel or entladung_zurueck
+        or self.deadband_w <= 0 or delta >= self.deadband_w
+    )
+    schreibt_betriebsart = self._new_betriebsart != self._betriebsart_anf
+
+    if not schreibt_leistung:
+        # Totband aktiv - die Anzeige soll zeigen, was wirklich in HA steht.
+        self._new_lade_w, self._new_entlade_w = self._lade_anf_w, self._entlade_anf_w
+        neu = alt
+
+    # Abschalten: erst Leistung auf 0, dann Modus. Sonst umgekehrt (D-B11).
+    ...
 ```
+
+Der sichere Zustand (12.1) fällt hier ohne Sonderweg heraus: `calculate_ramp`
+setzt `0 / standby`, `delta > 0` erzwingt den Schreibvorgang, und sobald HA
+tatsächlich auf `0 / standby` steht, hört das Schreiben von selbst auf.
 
 ### 7.8 `to_status_dict()`
 
@@ -1327,7 +1405,7 @@ def get_write_ops(self):
   "energie_kwh":            7.25,          # nur wenn capacity_kwh > 0
   "betriebsart":            "auto",        # gewünscht (Nutzer/EP)
   "betriebsart_effektiv":   "entladen",    # was HEMS diesen Zyklus schreibt
-  "shelly_fallback":        false,         # ist dieser Speicher der Watchdog-Master?
+  "sensoren_gueltig":       true,          # SoC UND Ist-Leistung lesbar?
   "lade_ist_w":             0,
   "entlade_ist_w":          1840,
   "lade_anforderung_w":     0,
@@ -1345,15 +1423,24 @@ def get_write_ops(self):
   "soc_min_prozent":        10,
   "soc_max_prozent":        100,
   "umschaltsperre_rest_s":  0,
-  "blockiert_grund":        null           # siehe unten
+  "lade_blockiert_grund":    null,         # warum wird gerade nicht geladen?
+  "entlade_blockiert_grund": null,         # warum wird gerade nicht entladen?
+  "blockiert_grund":         null          # Auflösungsebene: umschaltsperre/totzone
 }
 ```
 
-`blockiert_grund` ∈ `null | "nicht_freigegeben" | "betriebsart" |
-"laden_gesperrt" | "entladen_gesperrt" | "soc_min" | "soc_max" |
-"soc_reserve" | "umschaltsperre" | "totzone" | "wr_derating" | "netzladen"`
+**Drei Felder statt einem – Korrektur gegenüber v4.** Ein einzelnes
+`blockiert_grund` wäre unterbestimmt: ein Speicher in `nur_entladen` hat einen
+gesperrten Ladepfad und trotzdem keinen Fehler. Die Sperrgründe gehören
+deshalb je Pfad:
 
-Ohne dieses Feld ist „warum lädt/entlädt der Speicher gerade nicht?" nur über
+| Feld | Werte |
+|---|---|
+| `lade_blockiert_grund` | `null \| nicht_freigegeben \| sensor_ungueltig \| betriebsart \| laden_gesperrt \| soc_max \| wr_derating \| hausdefizit` |
+| `entlade_blockiert_grund` | `null \| nicht_freigegeben \| sensor_ungueltig \| betriebsart \| entladen_gesperrt \| soc_min \| soc_reserve \| wr_derating \| netzladen` |
+| `blockiert_grund` | `null \| umschaltsperre \| totzone` |
+
+Ohne diese Felder ist „warum lädt/entlädt der Speicher gerade nicht?" nur über
 Debug‑Logs beantwortbar. Bei einem Regler mit sechs Sperrmechanismen ist das
 im Feld praktisch unbrauchbar.
 
@@ -1390,9 +1477,10 @@ Neue optionale Gerätefelder (alle `?`, bestehende Configs bleiben valide):
       available_charge_power_entity: str?
       available_discharge_power_entity: str?
       capacity_kwh: float?
-      shelly_fallback: bool?
-      steuerprofil: list(zwei_entitaeten|signiert|modus_und_leistung)?
 ```
+
+> `shelly_fallback` und `steuerprofil` aus v4 sind entfallen: der eine mangels
+> Shelly (D‑B22), der andere weil die Ausgabeform mit D‑B20 entschieden ist.
 
 > `capacity_kwh` bleibt bewusst in der **Add‑on‑Config**, nicht als HA‑Helfer
 > (F‑6): der Wert ist Hardware, ändert sich nie im Betrieb, und eine spätere
@@ -1402,22 +1490,24 @@ Neue optionale Gerätefelder (alle `?`, bestehende Configs bleiben valide):
 > `entladung_deckt_fremdgesteuerte_lasten` aus v3 ist durch F‑5 entfallen
 > (D‑B14) – das Verhalten ist jetzt fest verdrahtet.
 >
-> `steuerprofil` bleibt reserviert, solange **F‑2** offen ist. v1 baut nur
-> `zwei_entitaeten`.
+> **Pflichtfelder:** `soc_entity` immer, dazu entweder
+> `charge_power_entity` **und** `discharge_power_entity` oder `power_entity`.
+> Fehlt beides, wird der Eintrag mit einer Fehlermeldung übersprungen — ohne
+> Ist‑Leistung ist die Pool‑Bereinigung blind und H‑1 wieder offen.
 
 Beispiel:
 
 ```yaml
-    - name: speicher_1
-      label: "Hausspeicher"
+    - name: acspeicher1
+      label: "AC-Speicher"
       class: battery
-      entity_prefix: speicher1
+      entity_prefix: acspeicher1     # NICHT "speicher" - der Namensraum
+                                     # ems_speicher_* gehoert der E3DC-Regelung
       allowed_modes: "manuell,nur_heizen,nur_laden"
-      soc_entity: sensor.speicher_1_soc
-      charge_power_entity: sensor.speicher_1_ladeleistung
-      discharge_power_entity: sensor.speicher_1_entladeleistung
-      capacity_kwh: 10.0
-      shelly_fallback: true          # höchstens EIN Speicher darf true sein (D-B05)
+      soc_entity: sensor.acspeicher1_soc
+      charge_power_entity: sensor.acspeicher1_ladeleistung
+      discharge_power_entity: sensor.acspeicher1_entladeleistung
+      capacity_kwh: 12.8
 ```
 
 > **`allowed_modes`:** In [controller.py:56-57](app/ems/controller.py#L56-L57)
@@ -1444,7 +1534,6 @@ Beispiel:
 | `soc_reserve_prozent` | % | 0 | Notstromreserve; darunter keine HEMS‑Entladung |
 | `soc_taper_band_prozent` | % | 5 | Drosselband vor der Grenze (D‑B09) |
 | `soc_max_hysterese_prozent` | % | 2 | Wiedereinstiegsschwelle unter `soc_max` |
-| **`entlade_abschlag_w`** | W | **20** | bewusster Unterschuss (H‑5/5.4) – bei 3 s klein halten |
 | **`entlade_sofort_schwelle_w`** | W | **300** | ab dieser Absenkung ungerampt (5.3); **> Sensor‑Versatzfehler** |
 | `umschalt_totzone_w` | W | 100 | Totzone um 0 → Standby |
 | `min_umschaltzeit_s` | s | 300 | Sperrzeit nach Richtungswechsel |
@@ -1462,15 +1551,18 @@ Beispiel:
 | `input_boolean.ems_<p>_laden_erlaubt` | boolean | Ladepfad freigeben |
 | `input_boolean.ems_<p>_entladen_erlaubt` | boolean | Entladepfad freigeben |
 | `input_boolean.ems_<p>_netzladen_aktiv` | boolean | **v2**, Abschnitt 11 |
-| `input_select.ems_<p>_betriebsart` | select | `auto`/`nur_laden`/`nur_entladen`/`standby`/`inverter` |
+| `input_select.ems_<p>_betriebsart` | select | `auto`/`nur_laden`/`nur_entladen`/`standby` |
 
 ### 8.4 Helfer – Ausgang (vom HEMS geschrieben)
 
 | Entität | Domain | Funktion |
 |---|---|---|
-| `input_number.ems_<p>_anforderung_ladeleistung_w` | number | Sollwert Laden |
-| `input_number.ems_<p>_anforderung_entladeleistung_w` | number | Sollwert Entladen |
-| `input_select.ems_<p>_anforderung_betriebsart` | select | `laden`/`entladen`/`standby`/`inverter` |
+| `input_number.ems_<p>_anforderung_leistung_w` | number | **Ein signierter Sollwert: + laden / − entladen.** Der Helfer braucht ein **negatives Minimum**, sonst klemmt HA jede Entladeanforderung auf 0 |
+| `input_select.ems_<p>_anforderung_betriebsart` | select | `laden`/`entladen`/`standby` |
+
+> Die Übersetzung nach Modbus oder MQTT macht eine HA‑Automation, nicht das
+> Add‑on (F‑2). Sie ist der einzige Ort, an dem Register, Reihenfolge am Gerät
+> und Übernahmezeit eine Rolle spielen.
 
 ### 8.5 Externe Sensoren
 
@@ -1486,56 +1578,64 @@ Beispiel:
 ### 8.6 Vollständige Liste für `entity_prefix: speicher1`
 
 ```
+# Global (einmal, nicht je Speicher)
+input_number.ems_ac_speicher_entlade_abschlag_w          # Systemgroesse (10.3)
+
 # Eingang
-input_boolean.ems_speicher1_freigabe
-input_boolean.ems_speicher1_technische_freigabe
-input_boolean.ems_speicher1_laden_erlaubt
-input_boolean.ems_speicher1_entladen_erlaubt
-input_boolean.ems_speicher1_netzladen_aktiv              # v2
-input_select.ems_speicher1_modus                         # auto|manuell|aus
-input_select.ems_speicher1_betriebsart                   # auto|nur_laden|nur_entladen|standby|inverter
-input_number.ems_speicher1_prioritat                      # Laden
-input_number.ems_speicher1_entlade_prioritat             # Entladen (D-B17)
-input_number.ems_speicher1_max_ladeleistung_w
-input_number.ems_speicher1_min_ladeleistung_w
-input_number.ems_speicher1_max_entladeleistung_w
-input_number.ems_speicher1_min_entladeleistung_w
-input_number.ems_speicher1_soc_min_prozent
-input_number.ems_speicher1_soc_max_prozent
-input_number.ems_speicher1_soc_reserve_prozent
-input_number.ems_speicher1_soc_taper_band_prozent
-input_number.ems_speicher1_soc_max_hysterese_prozent
-input_number.ems_speicher1_entlade_abschlag_w
-input_number.ems_speicher1_entlade_sofort_schwelle_w
-input_number.ems_speicher1_umschalt_totzone_w
-input_number.ems_speicher1_min_umschaltzeit_s
-input_number.ems_speicher1_hoch_regelzeit_s
-input_number.ems_speicher1_runter_regelzeit_s
-input_number.ems_speicher1_max_anderung_pro_schritt_w
-input_number.ems_speicher1_min_anderung_pro_schritt_w
-input_number.ems_speicher1_geschutzte_mindestleistung_w
-input_number.ems_speicher1_reserve_w
-input_number.ems_speicher1_netzlade_leistung_w           # v2
-input_number.ems_speicher1_netzlade_soc_ziel_prozent     # v2
+input_boolean.ems_acspeicher1_freigabe
+input_boolean.ems_acspeicher1_technische_freigabe
+input_boolean.ems_acspeicher1_laden_erlaubt
+input_boolean.ems_acspeicher1_entladen_erlaubt
+input_boolean.ems_acspeicher1_netzladen_aktiv            # v2
+input_select.ems_acspeicher1_modus                       # auto|manuell|aus
+input_select.ems_acspeicher1_betriebsart                 # auto|nur_laden|nur_entladen|standby
+input_number.ems_acspeicher1_prioritat                   # Laden
+input_number.ems_acspeicher1_entlade_prioritat           # Entladen (D-B17)
+input_number.ems_acspeicher1_max_ladeleistung_w
+input_number.ems_acspeicher1_min_ladeleistung_w
+input_number.ems_acspeicher1_max_entladeleistung_w
+input_number.ems_acspeicher1_min_entladeleistung_w
+input_number.ems_acspeicher1_soc_min_prozent
+input_number.ems_acspeicher1_soc_max_prozent
+input_number.ems_acspeicher1_soc_reserve_prozent
+input_number.ems_acspeicher1_soc_taper_band_prozent
+input_number.ems_acspeicher1_soc_max_hysterese_prozent
+input_number.ems_acspeicher1_entlade_sofort_schwelle_w
+input_number.ems_acspeicher1_umschalt_totzone_w
+input_number.ems_acspeicher1_min_umschaltzeit_s
+input_number.ems_acspeicher1_hoch_regelzeit_s
+input_number.ems_acspeicher1_runter_regelzeit_s
+input_number.ems_acspeicher1_max_anderung_pro_schritt_w
+input_number.ems_acspeicher1_min_anderung_pro_schritt_w
+input_number.ems_acspeicher1_geschutzte_mindestleistung_w
+input_number.ems_acspeicher1_reserve_w
+input_number.ems_acspeicher1_netzlade_leistung_w         # v2
+input_number.ems_acspeicher1_netzlade_soc_ziel_prozent   # v2
 
 # Ausgang (HEMS schreibt)
-input_number.ems_speicher1_anforderung_ladeleistung_w
-input_number.ems_speicher1_anforderung_entladeleistung_w
-input_select.ems_speicher1_anforderung_betriebsart
+input_number.ems_acspeicher1_anforderung_leistung_w      # min MUSS negativ sein
+input_select.ems_acspeicher1_anforderung_betriebsart
 
 # Extern (HEMS liest)
-sensor.speicher_1_soc
-sensor.speicher_1_ladeleistung
-sensor.speicher_1_entladeleistung
+sensor.acspeicher1_soc
+sensor.acspeicher1_ladeleistung
+sensor.acspeicher1_entladeleistung
 ```
 
-**~34 Helfer pro Speicher.** Bei n Speichern identisch je Prefix.
+**~31 Helfer pro Speicher**, dazu ein globaler. Bei n Speichern identisch je
+Prefix.
 
 > **Zwingend für die Praxis:** Ein HA‑Package als Vorlage beilegen
-> (`packages/hems_speicher.yaml`), je Speicher kopieren und Prefix ersetzen.
-> 33 Helfer von Hand anzulegen ist bei 3 Speichern ~100 Klickstrecken und
+> (`packages/hems_ac_speicher.yaml`), je Speicher kopieren und Prefix ersetzen.
+> 31 Helfer von Hand anzulegen ist bei 3 Speichern ~100 Klickstrecken und
 > praktisch garantiert fehlerhaft. Ein Skript, das die Package‑YAML aus der
 > Add‑on‑Config generiert, wäre eine lohnende kleine Beigabe.
+>
+> **Namensraum beachten:** `ems_speicher_*` ist in dieser Anlage bereits von der
+> E3DC‑Regelung belegt (`ems_speicher_mindesladeleistung_1`,
+> `ems_speicher_soc_mindestwert_1/2`, `ems_speicher_regelung_stufe_1_aktiv`).
+> Der AC‑Speicher benutzt deshalb `acspeicher1`, der globale Helfer
+> `ems_ac_speicher_*`.
 
 ---
 
@@ -1546,7 +1646,7 @@ sensor.speicher_1_entladeleistung
 ```
  1. Globale Eingänge lesen                                       unverändert
     + speicher_in_residual_enthalten                             NEU
-    + ems_speicher_entlade_abschlag_w (global, 10.3)             NEU
+    + ems_ac_speicher_entlade_abschlag_w (global, 10.3)          NEU
 
  2. Geräte aus HA aktualisieren                                  unverändert
     (Speicher liest SoC, Ist-Leistungen, Betriebsart, Regelmodus)
@@ -1581,12 +1681,12 @@ sensor.speicher_1_entladeleistung
          -> je Speicher set_discharge_target(w)
          MUSS nach Schritt 8 und vor Schritt 10 laufen (D-B07)
 
-10. Rampenbegrenzung  for d: d.calculate_ramp(current_deficit_w) unverändert
+11. Rampenbegrenzung  for d: d.calculate_ramp(current_deficit_w) unverändert
                                                                   (Speicher löst hier
                                                                    die Richtung auf)
-11. Debug-Logging  + Speicherzeile                               ERWEITERT
-12. Write-Ops sammeln                                            unverändert
-13. Status-Snapshot  + pool_roh_w, hausdefizit_w, netz_support_w ERWEITERT
+12. Debug-Logging  + Speicherzeile                               ERWEITERT
+13. Write-Ops sammeln                                            unverändert
+14. Status-Snapshot  + pool_roh_w, hausdefizit_w, netz_support_w ERWEITERT
 ```
 
 ### Konkret
@@ -1603,13 +1703,15 @@ hems_last_gemessen_w = sum(d.gemessene_last_w for d in self._devices)
 pool_roh_w      = residual_bereinigt_w + hems_last_w
 entlade_basis_w = residual_bereinigt_w + hems_last_gemessen_w
 
+# Bewusst nicht max(x, 0.0): das liefert bei x == -0.0 ein negatives Null
+# zurueck, und die Oberflaeche zeigte dann "-0 W".
 if not ems_enabled or global_mode == "aus" or hard_lockout:
     pool_w = hausdefizit_w = 0.0
 else:
-    pool_w        = max( pool_roh_w,      0.0)
-    hausdefizit_w = max(-entlade_basis_w, 0.0)   # F-5: Force-Lasten draussen
+    pool_w        = pool_roh_w      if pool_roh_w > 0      else 0.0
+    hausdefizit_w = -entlade_basis_w if entlade_basis_w < 0 else 0.0  # F-5
 
-current_deficit_w    = max(-residual_bereinigt_w, 0.0)
+current_deficit_w    = -residual_bereinigt_w if residual_bereinigt_w < 0 else 0.0
 total_relief_w       = sum(d.max_relief_w for d in self._devices)
 binary_immediate_off = current_deficit_w > total_relief_w
 ```
@@ -1648,7 +1750,7 @@ def _allocate_discharge(self, batteries, hausdefizit_w, now_ts) -> None:
         return
 
     # Abschlag EINMAL systemweit, nicht je Speicher (10.3, F-4 gelöst)
-    ziel_w = max(hausdefizit_w - self._entlade_abschlag_w, 0.0)
+    ziel_w = max(hausdefizit_w - entlade_abschlag_w, 0.0)
     if ziel_w <= 0:
         return
 
@@ -1680,8 +1782,9 @@ höchstens um dessen Mindestleistung; die v3‑Umverteilung aus dem
 
 Der `entlade_abschlag_w` wird hier **einmal auf die Systemgröße** angewandt,
 nicht je Speicher – bei n Speichern wäre er sonst n‑fach wirksam (10.3). Er
-gehört damit als globaler Helfer `input_number.ems_speicher_entlade_abschlag_w`
-in die Konfiguration, analog zu `ems_einschaltreserve_global_w`.
+gehört damit als globaler Helfer
+`input_number.ems_ac_speicher_entlade_abschlag_w` in die Konfiguration, analog
+zu `ems_einschaltreserve_global_w`.
 
 Die gerätelokalen Rampenparameter (`entlade_sofort_schwelle_w`,
 `hoch_regelzeit_s`, `max_anderung_pro_schritt_w`) bleiben dagegen **pro
@@ -1739,7 +1842,8 @@ davon weiß.
 * **`entlade_abschlag_w` nicht n‑fach anwenden.** Der Abschlag ist eine
   Systemgröße. Er gehört **einmal** auf `hausdefizit_w`, nicht je Gerät. →
   Vorschlag: globale `input_number.ems_speicher_entlade_abschlag_w`, analog zu
-  `ems_einschaltreserve_global_w`. → [Offene Frage F‑4](#18-offene-fragen-an-dich).
+  `ems_einschaltreserve_global_w`. Der Namensraum `ems_speicher_*` ist von der
+  E3DC‑Regelung belegt, deshalb `ems_ac_speicher_*`.
 * **Ungleicher Verschleiß ist gewollt in Kauf genommen (F‑6/D‑B18).** Der
   erstplatzierte Speicher zykelt deutlich stärker. Gegenmittel ist
   ausschließlich `entlade_prioritat` – von Hand, saisonal oder später per
@@ -1816,30 +1920,17 @@ wie alle EP‑Felder ([Abschnitt 13](#13-energy-pilot-anbindung)).
 
 ## 12. Sicherheit, Fehlerfälle, Watchdog
 
-### 12.1 Der sichere Zustand hängt vom Wechselrichter ab
+### 12.1 Der sichere Zustand ist immer `standby`
 
-Im Normalbetrieb regelt das HEMS, die Shelly‑Nulleinspeisung ist deaktiviert.
-Fällt das HEMS aus, ist der beste Zustand **nicht** „alles auf 0" – dann zieht
-das Haus voll aus dem Netz, obwohl der Speicher voll ist.
-
-Stattdessen: **genau ein** Speicher (`shelly_fallback: true`) reaktiviert seine
-Shelly‑Regelung, alle anderen gehen auf `standby`. Ein einzelner autonomer
-Regler hat das Aufteilungsproblem aus D‑B05 nicht – deshalb trägt der Fallback,
-obwohl er als Dauerlösung nicht funktioniert.
+Es gibt keine autonome Rückfallregelung (D‑B22). Fällt das HEMS aus, geht jeder
+Speicher auf `standby` und das Haus zieht voll aus dem Netz, obwohl der
+Speicher geladen ist. Das kostet Geld, ist aber sicher — und der Grund, warum
+der Watchdog Pflicht ist.
 
 ```python
 def _sicherer_zustand(self) -> str:
-    """Zustand bei EMS-Ausfall/Lockout/fehlender Freigabe.
-
-    'inverter' = Shelly-Nulleinspeisung dieses Speichers wieder aktivieren.
-    Nur beim designierten Fallback-Speicher - sonst regeln mehrere autonome
-    Regler gegeneinander (D-B05, Einwand 1).
-    """
-    return "inverter" if self.shelly_fallback else "standby"
+    return "standby"
 ```
-
-**Diese Regel ist der Grund, warum `shelly_fallback` bei höchstens einem
-Speicher `true` sein darf.** `_build_devices` muss das erzwingen.
 
 | Ereignis | Verbraucher | Speicher |
 |---|---|---|
@@ -1848,8 +1939,9 @@ Speicher `true` sein darf.** `_build_devices` muss das erzwingen.
 | Hard‑Lockout (Sensor `unavailable` / ≤ −50 kW) | 0 W / aus | `_sicherer_zustand()` |
 | `technische_freigabe = off` | 0 W / aus | `_sicherer_zustand()` |
 | `input_select.ems_<p>_modus = aus` | 0 W / aus | `standby` (bewusste Stilllegung) |
-| `soc_entity` unavailable | – | `_sicherer_zustand()` + Fehlerlog |
-| Ist‑Leistungssensor unavailable | – | `_sicherer_zustand()` + Fehlerlog |
+| `input_select.ems_<p>_betriebsart = standby` | – | `standby` |
+| `soc_entity` unavailable | – | `standby`, Speicher fällt aus der Regelung |
+| Ist‑Leistungssensor unavailable | – | `standby`, Speicher fällt aus der Regelung |
 
 Der letzte Fall ist wichtig: **ohne Messwert ist `netz_support_w` unbekannt**,
 und damit ist die Pool‑Bereinigung blind → H‑1‑Gefahr. Ein Speicher ohne
@@ -1862,32 +1954,29 @@ gültigen Leistungsmesswert muss aus der Regelung fallen.
 
 ### 12.2 Watchdog – Pflicht, nicht Empfehlung
 
-Stirbt das Add‑on, während `anforderung_entladeleistung_w = 4000` in HA steht,
-entlädt der Speicher weiter bis leer. Ohne WR‑Eigenverbrauchsmodus gibt es
-keinen Automatismus, der das auffängt.
+Stirbt das Add‑on, während `anforderung_leistung_w = −4000` in HA steht,
+entlädt der Speicher weiter bis leer. Es gibt keinen Automatismus, der das
+auffängt (D‑B22).
 
-**Drei Ebenen, mindestens zwei davon bauen:**
+**Drei Ebenen, alle drei bauen** – Ebene 3 aus v4 (Shelly als Rückfallebene)
+entfällt mangels Shelly, damit sind die verbleibenden keine Auswahl mehr:
 
-1. **Heartbeat aus dem HEMS.** Billigste Variante ohne Codeänderung: die
-   vorhandene Option `post_cycle_script` auf ein HA‑Skript zeigen lassen, das
-   `input_datetime.ems_letzter_zyklus` auf `now()` setzt.
+1. **Heartbeat aus dem HEMS.** Die Option `post_cycle_script` ist in dieser
+   Anlage bereits durch `script.heizstab_sollleistung_setzen` belegt und kennt
+   nur einen Slot. Statt einer neuen Add‑on‑Option bekommt **dieses Skript**
+   eine zusätzliche Aktion, die `input_datetime.ems_letzter_zyklus` auf `now()`
+   setzt. Kein Codeänderung im Add‑on, kein zweiter Slot.
 2. **HA‑Automation als Totmann.** Trigger auf
    `input_datetime.ems_letzter_zyklus` älter als 3 × `interval_s`
-   (`for: 00:02:00`) → alle `ems_*_anforderung_entladeleistung_w` auf 0,
-   `…_anforderung_betriebsart` auf `standby` bzw. `inverter`.
-3. **Shelly‑Nulleinspeisung als Rückfallebene** (D‑B05). Dieselbe Automation
-   aktiviert beim Fallback‑Speicher die Shelly‑Regelung wieder. Das ist der
-   qualitativ beste Fallback: das Haus bleibt gestützt, statt voll ins Netz
-   zu fallen.
-4. **WR‑seitiger Modbus‑Watchdog**, falls unterstützt (Register‑Timeout →
-   Rückfall in Eigenverbrauch/Standby). **Die einzige Ebene, die auch einen
-   HA‑Ausfall überlebt** – wenn der WR das kann, ist sie die wichtigste.
+   (`for: 00:02:00`) → alle `ems_*_anforderung_leistung_w` auf 0,
+   `…_anforderung_betriebsart` auf `standby`.
+3. **Wechselrichterseitiger Watchdog**, falls das künftige Gerät einen hat
+   (Register‑Timeout → Rückfall in Eigenverbrauch oder Standby). **Die einzige
+   Ebene, die auch einen HA‑Ausfall überlebt** – beim Kauf darauf achten (F‑14).
 
-**Gegenprobe, die zum Testfall gehört:** Nach dem Fallback darf beim
-Wiederanlaufen des HEMS die Shelly‑Regelung **nicht** aktiv bleiben – sonst
-regeln HEMS und Shelly gegeneinander. Die Automation muss also beide
-Richtungen schalten, und der HEMS‑Start muss den Zustand aktiv
-zurücksetzen, nicht nur annehmen, dass er stimmt.
+**Wichtig:** Ebene 2 darf den Sollwert nicht nur auf 0 setzen, sondern muss auch
+die Betriebsart schreiben. Ein Gerät, das `0 W` bei `betriebsart: entladen`
+liest, verhält sich je nach Hersteller unterschiedlich.
 
 ### 12.3 Weitere Absicherungen
 
@@ -1897,6 +1986,7 @@ zurücksetzen, nicht nur annehmen, dass er stimmt.
 | Gleichzeitig laden + entladen | strukturell ausgeschlossen (4.4) + Property‑Test P1 |
 | Tiefentladung | `soc_min_prozent`, `soc_reserve_prozent`, Taper (D‑B09) |
 | Batterieexport | Asymmetrie + `entlade_abschlag_w` (5.2). **Kein harter Export‑Stopp nötig** – Einspeisevergütung vorhanden (F‑9) |
+| HEMS stirbt mit stehendem Entlade‑Sollwert | Watchdog‑Ebenen 1–3 (12.2). **Keine autonome Rückfallebene mehr** (D‑B22) |
 | Speicher deckt fremdgesteuerten Heizstab | `gemessene_last_w` (D‑B14/F‑5) |
 | Kreisstrom Netz→Speicher A→Speicher B (v2) | Netzladeleistung steckt in `gemessene_last_w` (11.3 Regel 1) |
 | Mikrozyklen / Verschleiß | `umschalt_totzone_w`, `min_umschaltzeit_s`, Deadband |
@@ -1905,7 +1995,8 @@ zurücksetzen, nicht nur annehmen, dass er stimmt.
 | Doppelte Bereinigung bei Summensensor | 10.3, letzter Punkt |
 | Schreiben jeden Zyklus zerstört Rampen‑Alterung | Deadband (D‑B08) |
 | Regelkreis schwingt | **Sensor‑Versatz** messen (H‑7), `hoch_regelzeit_s` ≥ Versatz. *Nicht* die Totzeit – die verzögert nur (H‑4) |
-| Zwei Regler auf einer Größe (HEMS + Shelly, oder n Shellys) | Shelly‑Regelung im Normalbetrieb aus; `shelly_fallback` bei max. einem Speicher (D‑B05) |
+| Zwei Regler auf einer Größe (HEMS + Eigenregelung des Geräts) | Eigenregelung im Normalbetrieb aus (D‑B05); Abschaltbarkeit vor dem Kauf klären (F‑14) |
+| Doppelte Bereinigung des E3DC | Der E3DC ist **kein** HEMS‑Gerät (D‑B21) – seine Leistung steckt bereits im Überschuss‑Sensor |
 
 ### 12.4 Plausibilitätswarnung als Frühwarnsystem
 
@@ -1956,63 +2047,85 @@ bringen ([devices.py:99-102](app/ems/devices.py#L99-L102)).
 
 ## 14. Web‑UI
 
-### 14.1 [index.html](app/templates/index.html)
+> **Vollständig neu gegenüber v4.** Dort stand noch `app/static/app.js` und
+> `app/templates/index.html`. Die Oberfläche ist seit `d5623b1` React +
+> TypeScript unter `web/src/`; `app/templates/` existiert nicht mehr. Vor der
+> ersten Zeile Frontend‑Code [docs/frontend.md](../docs/frontend.md) und
+> [docs/design-system.md](../docs/design-system.md) lesen.
 
-```html
-<div class="section">Speicher</div>
-<div class="devices" id="battery"></div>
-```
+### 14.1 `web/src/types.ts` – der Datenvertrag
 
-Platzierung **vor** „Regelbare Verbraucher" – der Speicher beeinflusst die
-Pool‑Rechnung, beim Debuggen will man ihn zuerst sehen.
+Die Datei ist ausdrücklich Vertrag, kein Hilfstyp: weicht der Server ab, wird
+hier nachgezogen und **nicht** mit `any` umgangen.
 
-### 14.2 [app.js](app/static/app.js) – `renderBattery(d)`
+* neues Interface `BatteryDevice extends DeviceBase` mit `type: 'battery'`
+* `Device`‑Union um `BatteryDevice` erweitern
+* `CycleStatus` um `residual_bereinigt_w`, `netz_support_w`, `hems_last_w`,
+  `hems_last_gemessen_w`, `pool_roh_w`, `entlade_basis_w`, `hausdefizit_w`
+
+### 14.2 `web/src/pages/Status.tsx` – `BatteryCard`
+
+Der Abschnitt „Speicher" steht **vor** „Regelbare Verbraucher" – der Speicher
+beeinflusst die Pool‑Rechnung, beim Debuggen will man ihn zuerst sehen.
 
 | Zeile | Inhalt |
 |---|---|
-| Titel | Label + Prio‑Badge (Laden) + **Entlade‑Prio‑Badge** + SoC‑Badge |
-| SoC‑Balken | Fortschritt mit Markern bei `soc_min` / `soc_max` / `soc_reserve` |
-| Freigabe | ✓/✗ |
-| Betriebsart | `auto → entladen` (gewünscht → effektiv) + Regelmodus‑Chip |
-| Ist | `−1.840 W (Entladen)` bzw. `+2.100 W (Laden)` |
-| Anforderung / Neu → HA | mit `changed`‑Highlight wie bei `renderControllable` |
-| Limits | `Laden ≤ 5.000 W · Entladen ≤ 5.000 W` (nach Taper) |
-| Sperre | `Umschaltsperre: 2m 15s` mit `_elapsed`‑Korrektur wie beim Phasen‑Lock |
-| Grund | `blockiert_grund` als Chip, wenn gesetzt |
+| Titel | Label + Badge „Laden \<prio\>" + Badge „Entladen \<prio\>" + SoC‑Badge |
+| SoC‑Balken | Fortschritt mit Markern bei `soc_min`, `soc_reserve`, `soc_max` |
+| Freigabe | ja/nein; bei ungültigen Messwerten eine eigene Zeile in Rot |
+| Betriebsart | `Automatik → Entladen` (gewünscht → effektiv) |
+| Ist / Anforderung | Betrag plus Richtung, aus dem signierten Wert abgeleitet |
+| Anteil am Hausdefizit | nur wenn > 0 |
+| Limits | `Laden ≤ … · Entladen ≤ …` (nach Taper und Derating) |
+| Energie | `8,7 von 12,8 kWh`, nur bei hinterlegter `capacity_kwh` |
+| Sperre | `Umschaltsperre: noch 2m 15s`, mit `elapsed`‑Korrektur wie beim Phasen‑Lock |
+| Grund | Sperrgrund als deutscher Klartext, wenn gesetzt |
+| Neu an HA | mit `changed`‑Hervorhebung wie bei `ControllableCard` |
 
-Kartenfarbe: `off` / `charge` (grün) / `discharge` (blau) / `idle`.
+Kartenzustand: `off` / `charge` / `discharge` / `idle`. `charge` und
+`discharge` kommen als Modifier zu `.device-card` dazu — kein neues Bauteil.
+
+**Inline‑Styles:** Der SoC‑Balken nutzt `style={{ width }}` bzw. `left`. Das ist
+nach [docs/design-system.md](../docs/design-system.md) ausdrücklich zulässig —
+dynamisch berechnete Fortschrittsbreiten und Positionen sind die genannte
+Ausnahme. Farben kommen weiterhin ausschließlich aus Tokens.
 
 ### 14.3 Statuskacheln
 
 Nur wenn mindestens ein Speicher konfiguriert ist:
 
-* `Speicher netto` – `Σ netto_w`
-* `SoC ⌀` – kapazitätsgewichtet über `capacity_kwh` aus der Add‑on‑Config
-* **`Hausdefizit`** – `hausdefizit_w`, die neue Kerngröße
+* **`Speicher netto`** – `Σ netto_w`, negativ = Speicher liefert
+* **`SoC ⌀`** – kapazitätsgewichtet über `capacity_kwh`; ohne hinterlegte
+  Kapazität zählt jeder Speicher gleich
+* **`Hausdefizit`** – die neue Kerngröße
 
 Weicht `hems_last_gemessen_w` von `hems_last_w` ab, läuft mindestens ein
 HEMS‑Gerät fremdgesteuert. Das ist der einzige Fall, in dem `Hausdefizit`
 kleiner ist als der sichtbare Netzbezug – ohne Hinweis wirkt das wie ein
-Regelfehler (D‑B14). Vorschlag: Kachel als
-`1.200 W (2.000 W fremdgesteuert ausgenommen)` erweitern, sobald die Differenz
-> 50 W ist.
+Regelfehler (D‑B14). Die Kachel schreibt dann
+`Ohne 2.000 W fremdgesteuerte HEMS‑Last`, sobald die Differenz > 50 W ist.
 
-Und für die Fehlersuche die Überschuss‑Kachel erweitern:
-`2.400 W (bereinigt 400 W)`.
+Die Überschuss‑Kachel bekommt zusätzlich den bereinigten Wert in die Fußzeile.
 
-### 14.4 [main.py](app/main.py) – `_ctrl_items_battery`
+### 14.4 `app/main.py` – Steuerung‑Tab und Energy‑Pilot‑Vertrag
 
-Analog zu [main.py:56](app/main.py#L56) mit allen Helfern aus 8.3, plus
-`elif cls == "battery":` in `_handle_device_controls_schema`
-([main.py:176-180](app/main.py#L176-L180)).
+`_ctrl_items_battery(prefix)` mit den Helfern aus 8.3, dazu ein
+`elif cls == "battery":`‑Zweig in `_build_device_controls_schema`. **Ohne
+diesen Zweig fehlt der Speicher im Steuerung‑Tab und im Energy‑Pilot‑Vertrag** –
+in v4 war das nicht erwähnt.
 
-Bei ~33 Helfern wird die Steuerungskarte lang – Gruppierung sinnvoll
-(Freigaben / Leistungsgrenzen / SoC / Regelverhalten). Das erfordert eine
-kleine Erweiterung des Schema‑Formats um optionale Untergruppen.
+Der Zweig liefert zusätzlich `soc_entity`, `capacity_kwh`, `request_entity`,
+`request_sign` und `mode_entity`, damit Konsumenten den signierten Vertrag
+nicht raten müssen. `web/src/pages/Steuerung.tsx` rendert das Schema generisch
+und braucht keine Änderung.
+
+Die Gruppierung der ~30 Helfer in Untergruppen bleibt vorerst außen vor: die
+Gerätegruppe ist bereits einklappbar, und das Schema‑Format um Untergruppen zu
+erweitern wäre eine eigene Änderung am Vertrag.
 
 ### 14.5 Übersetzungen
 
-`translations/de.yaml` + `en.yaml` um die neuen Config‑Felder ergänzen.
+`translations/de.yaml` und `en.yaml` um die neuen Config‑Felder ergänzen.
 
 ---
 
@@ -2034,18 +2147,22 @@ kleine Erweiterung des Schema‑Formats um optionale Untergruppen.
 | **`test_entladung_runter_sofort_ungerampt`** | **H‑5 / 5.2** |
 | **`test_entladung_hoch_gerampt`** | 5.2 |
 | **`test_entlade_abschlag_unterschiesst`** | Sollwert < Hausdefizit |
-| `test_huellen_modus_ueberschiesst` | D‑B05, umgekehrtes Vorzeichen |
+
 | `test_totzone_fuehrt_zu_standby` | Mikrozyklen |
 | `test_umschaltsperre_blockiert_richtungswechsel` | + `…_laeuft_ab` |
 | `test_umschaltsperre_faehrt_standby_nicht_alte_richtung` | 7.6 |
 | `test_deadband_beim_senken_der_entladung_aus` | D‑B08 |
 | `test_write_reihenfolge_ein_und_ausschalten` | D‑B11 beide Richtungen |
-| `test_signierter_sensor_beide_vorzeichen` | D‑B12 |
-| `test_fallback_standby_ohne_eigenverbrauchsmodus` | 12.1 |
-| `test_fallback_inverter_mit_eigenverbrauchsmodus` | 12.1 |
+| `test_signierter_ist_sensor_beide_vorzeichen` | D‑B12 Variante B |
+| **`test_signierter_sollwert_wird_korrekt_aufgeteilt`** | **D‑B20** – eine Entität, zwei Richtungen |
+| **`test_deadband_beim_vorzeichenwechsel_aus`** | **D‑B20** |
+| `test_sicherer_zustand_ist_immer_standby` | D‑B22, inklusive „`inverter` gibt es nicht" |
 | `test_schreibt_sicheren_zustand_aktiv_bei_lockout` | **nicht** „nichts tun" |
 | `test_leistungssensor_unavailable_faellt_aus_regelung` | 12.1 |
-| `test_blockiert_grund_je_sperrfall` | alle 11 Gründe |
+| `test_soc_unavailable_faellt_aus_regelung` | 12.1 |
+| `test_soc_max_hysterese_haelt_gesperrt` | D‑B09 |
+| `test_kein_schreiben_im_eingeschwungenen_zustand` | Schreiblast bei 3 s |
+| `test_blockiert_grund_je_sperrfall` | alle Gründe beider Pfade |
 
 ### 15.2 Erweiterung `tests/test_run_cycle.py`
 
@@ -2067,10 +2184,22 @@ kleine Erweiterung des Schema‑Formats um optionale Untergruppen.
 | **`test_zu_kleine_zuteilung_rastet_auf_null`** | `min_entladeleistung_w`, ersetzt den `proportional`‑Test |
 | **`test_netzladender_speicher_ist_keine_hauslast`** | 11.3 Regel 1, zwei Speicher (v2‑Vorbereitung) |
 | `test_speicher_prio_1_verdraengt_heizstab` / `…_prio_50_bekommt_rest` | D‑B02 |
+| **`test_entlade_abschlag_wirkt_einmal_systemweit`** | 10.3 – bei n Speichern nicht n‑fach |
+| **`test_lockout_schreibt_sicheren_zustand`** | 12.1 über den vollen Zyklus |
+| **`test_unvollstaendige_speicherkonfig_wird_uebersprungen`** | fehlerhafte Einträge einzeln überspringen |
 | `test_defekter_speicher_blockiert_flotte_nicht` | 10.3 |
 | `test_plausibilitaetswarnung_geloggt` | 12.4 via `caplog` |
 
 ### 15.3 Property‑Tests in `tests/test_allocation_properties.py`
+
+> **Korrektur gegenüber v4.** P3 und P4 standen dort auf der Sollwertebene
+> (`new_entlade_w`). Das kann die asymmetrische Rampe aus 5.3 nicht halten, und
+> zwar absichtlich: bei einer *kleinen* Zielabsenkung dämpft sie und hält den
+> Sollwert vorübergehend über dem Ziel — genau das ist das Gegenmittel gegen
+> H‑7. Ein Test in dieser Form meldete die gewollte Eigenschaft als Fehler.
+> Dieselbe Überlegung gilt für P4 gegenüber `runter_regelzeit_s`, und zwar
+> schon im Bestandscode. Beide gehören deshalb auf die **Zuteilungsebene**, wie
+> es die bestehende `tests/test_allocation_properties.py` ohnehin tut.
 
 ```python
 # P1  Nie gleichzeitig laden und entladen
@@ -2079,21 +2208,23 @@ assert new_lade_w == 0 or new_entlade_w == 0
 # P2  pool_w und hausdefizit_w sind komplementaer - auch mit Fremdlast (4.4)
 assert pool_w == 0 or hausdefizit_w == 0
 assert entlade_basis_w >= pool_roh_w - 1e-6      # die Ungleichung, die P2 traegt
+assert device.gemessene_last_w >= device.current_w   # je Geraet, sie traegt sie
 
-# P3  Entladung überschreitet nie das Hausdefizit
-assert sum(b.new_entlade_w for b in batteries) <= hausdefizit_w + 1e-6
+# P3  Die ZUTEILUNG überschreitet das Hausdefizit nie
+assert sum(b.entlade_ziel_w for b in batteries) <= hausdefizit_w + 1e-6
 
-# P4  Summe der Ladeleistungen überschreitet den Pool nicht
-assert sum(b.new_lade_w for b in batteries) <= pool_w + 1e-6
+# P4  Die ZUTEILUNG überschreitet den Pool nie
+assert sum(d.alloc_w for d in devices) <= pool_w + 1e-6
 
 # P5  SoC-Grenzen werden nie verletzt
 assert not (soc >= soc_max and new_lade_w > 0)
-assert not (soc <= soc_min and new_entlade_w > 0)
+assert not (soc <= max(soc_min, soc_reserve) and new_entlade_w > 0)
 
-# P6  Entladung sinkt nie langsamer als das Ziel (Asymmetrie, H-5)
-assert new_entlade_w <= max(ziel_w, entlade_anf_w)
+# P6  Der Sollwert steigt nie über Ziel UND bisherigen Wert hinaus
+assert new_entlade_w <= max(ziel_w, entlade_anf_w) + 1.0
 
 # P7  Ohne Speicher identisch zum Altverhalten (Referenzimplementierung)
+assert pool_w == max(residual_w + min(actual_w, anforderung_w), 0.0)
 ```
 
 ### 15.4 Regressionsschutz
@@ -2111,12 +2242,11 @@ Erweiterung wirklich additiv ist.
 
 ## 16. Umsetzungsphasen
 
-> **Reihenfolge‑Gate durch die offenen Fragen:** F‑2 (WR‑Anbindung), F‑11
-> (Shelly an/aus) und F‑12 (Sensorquelle) sind allesamt Phase‑0‑Themen und
-> blockieren **Phase 2 und 3** – dort wird zum ersten Mal geschrieben.
-> **Phase 1 ist davon unabhängig** und kann sofort beginnen: sie liest nur,
-> beseitigt H‑1/H‑2 und braucht weder Register noch Sollwerte.
-> Das ist die praktische Konsequenz aus „F‑2 ist noch nicht sicher".
+> **Kein Reihenfolge‑Gate mehr.** In v4 blockierten F‑2 und F‑11 die Phasen 2
+> und 3. Beide sind beantwortet: das HEMS schreibt nur HA‑Helfer, die
+> Ansteuerung macht eine externe Automation, und die Shelly‑Rückfallebene
+> entfällt. **Alle Phasen sind baubar.** Was offen bleibt (F‑12, F‑13, F‑14)
+> betrifft die Inbetriebnahme am realen Gerät, nicht den Code.
 
 ### Phase 0 · Vorbereitung: **messen**, kein Code
 
@@ -2125,7 +2255,8 @@ Nicht überspringen – ohne den Versatzwert ist `hoch_regelzeit_s` geraten.
 
 - [ ] **Messpunkt** `residual_power_entity` verifizieren (Prüfrezept D‑B03)
 - [ ] **Update‑Rate des Überschusssensors** (H‑6): in der HA‑History ansehen –
-      wie oft ändert er sich, wird gemittelt? Bei Shelly 3EM lokal typisch ~1 s.
+      wie oft ändert er sich, wird gemittelt? Der Sensor ist ein Template über
+      E3DC‑Modbus‑Werte, seine Rate ist die des Pollings.
       **Ergebnis notieren:** ______ s
 - [ ] **★ Sensor‑Versatz messen** (H‑7, der wichtigste Wert): Entladesollwert
       von Hand von 0 auf 2 kW setzen. Dann `residual_power_entity` und den
@@ -2138,24 +2269,22 @@ Nicht überspringen – ohne den Versatzwert ist `hoch_regelzeit_s` geraten.
       `residual_power_entity` überhaupt auf den Sprung? Bestimmt die
       Reaktionsgeschwindigkeit, **nicht** die Stabilität.
       **Ergebnis notieren:** ______ s
-- [ ] **★ F‑11 · Shelly‑Regelung abschaltbar?** Wie wird sie aktiviert/
-      deaktiviert (API, MQTT, Schalter)? → Voraussetzung für D‑B05 und den
-      Watchdog. **Ist sie nicht abschaltbar, darf Phase 3 nicht starten** –
-      HEMS und Shelly gleichzeitig aktiv ist der Grenzzyklus aus Merksatz 2.
-- [ ] **Hat der WR einen Modbus‑Watchdog?** → 12.2 Ebene 4
-- [ ] **★ F‑2 · Wechselrichter‑Steuerung festlegen** (aktuell offen):
-      Register/Services, nötige Reihenfolge Modus↔Leistung, Übernahmezeit.
-      Ergebnis entscheidet über `steuerprofil` und die Schreibreihenfolge in
-      D‑B11. **Gate für Phase 2.**
+- [ ] **F‑14 · Bringt das Gerät eine eigene Nulleinspeisung mit?** Wenn ja: wie
+      wird sie deaktiviert? Nicht abschaltbar ⇒ HEMS und Gerät regeln
+      gegeneinander (Merksatz 2). **Beim Kauf mitentscheiden.**
+- [ ] **Hat das Gerät einen Modbus‑ oder MQTT‑Watchdog?** → 12.2 Ebene 3
 - [ ] **F‑12 · Quelle von `residual_power_entity`** notieren (welches Gerät,
       lokal oder Cloud) – zusammen mit dem Batteriesensor bestimmt sie den
       Versatz aus dem Punkt darüber
-- [ ] HA‑Package mit allen Helfern anlegen (Vorlage 8.6)
-- [ ] HA‑Automation „Helfer → WR" schreiben und **ohne HEMS** testen
-- [ ] Baseline: `pytest tests/ -q`
+- [ ] HA‑Package mit allen Helfern anlegen (Vorlage 8.6) – **`min` des
+      Leistungshelfers negativ setzen** (D‑B20)
+- [ ] HA‑Automation „Helfer → Gerät" schreiben und **ohne HEMS** testen
+- [ ] Heartbeat: `script.heizstab_sollleistung_setzen` um das Setzen von
+      `input_datetime.ems_letzter_zyklus` erweitern (12.2 Ebene 1)
+- [ ] Baseline: `pytest -q`
 
-**Akzeptanz:** Speicher vollständig von Hand steuerbar; Shelly‑Regelung
-gezielt an/aus schaltbar; **Sensor‑Versatz ist eine gemessene Zahl.**
+**Akzeptanz:** Speicher vollständig von Hand über die beiden Ausgabe‑Entitäten
+steuerbar; **Sensor‑Versatz ist eine gemessene Zahl.**
 
 ### Phase 1 · Read‑only: Pool‑Bereinigung
 
@@ -2180,7 +2309,7 @@ mehr wegen Batteriestrom zu; ein von Hand eingeschalteter Heizstab senkt
 `hausdefizit_w` um seine volle Istleistung (F‑5). Bestehende Tests unverändert
 grün.
 
-### Phase 2 · Ladesteuerung  *(Gate: F‑2 beantwortet)*
+### Phase 2 · Ladesteuerung
 
 - [ ] SoC‑Limits + Taper (`_lade_limit_w`), WR‑Derating
 - [ ] `min_technisch_w` / `max_technisch_w` aus den Speicherhelfern befüllen
@@ -2192,14 +2321,15 @@ grün.
 **Akzeptanz:** Speicher lädt aus Überschuss, respektiert `prioritat`, stoppt
 bei `soc_max`, lädt nie bei Hausdefizit.
 
-### Phase 3 · Entladesteuerung, ein Speicher  *(Gate: F‑2 + F‑11)*
+### Phase 3 · Entladesteuerung, ein Speicher
 
 - [ ] `_entlade_limit_w`, `entlade_kapazitaet_w`, `set_discharge_target`
 - [ ] `EMSController._allocate_discharge` (Einzelspeicher‑Pfad)
 - [ ] `calculate_ramp` Entladeseite **mit Asymmetrie (5.2)**, Totzone,
       Umschaltsperre
-- [ ] `entlade_abschlag_w` (global) + `entlade_sofort_schwelle_w` (pro Gerät),
-      dimensioniert nach den Phase‑0‑Messwerten
+- [ ] `ems_ac_speicher_entlade_abschlag_w` (global) +
+      `entlade_sofort_schwelle_w` (pro Gerät), dimensioniert nach den
+      Phase‑0‑Messwerten
 - [ ] Vollständige Sicherheitsmatrix 12.1 inkl. aktivem Schreiben
 - [ ] Watchdog: `post_cycle_script`‑Heartbeat + HA‑Automation (12.2)
 - [ ] Tests Entladepfad, Asymmetrie, Fallbacks
@@ -2265,9 +2395,9 @@ Abschnitt 11, erst wenn Phase 1–5 stabil laufen.
 
 **Erledigt (v3):**
 
-* ~~F‑1 (Kann der WR selbst regeln?)~~ → Ja über Shelly 3EM, aber skaliert nicht
-  auf n und ist mit >5 s langsamer als der HEMS‑Zyklus. **HEMS regelt zentral**
-  (D‑B05); Shelly wird Rückfallebene.
+* ~~F‑1 (Kann der WR selbst regeln?)~~ → skaliert nicht auf n. **HEMS regelt
+  zentral** (D‑B05). Die in v3 vorgesehene Shelly‑Rückfallebene ist in v5
+  entfallen (D‑B22) – es gibt keinen Shelly 3EM.
 * ~~F‑4 (Abschlag pro Speicher oder global?)~~ → **global**, einmal in
   `_allocate_discharge` angewandt.
 * ~~F‑7 (`interval_s = 30` akzeptabel?)~~ → gegenstandslos, du fährst 3 s.
@@ -2285,13 +2415,21 @@ Abschnitt 11, erst wenn Phase 1–5 stabil laufen.
 | ~~**F‑9**~~ | Einspeisevergütung vorhanden, Export zulässig | 5.4, 12.3 |
 | ~~**F‑10**~~ | ein Netzübergabe‑Messpunkt, gilt für alle Speicher | D‑B03, 10.3 |
 
-**Weiterhin offen – alle drei sind Phase‑0‑Themen:**
+**Erledigt (v5, aus
+[`erweiterung_ac_speicher_1_antworten_2.md`](erweiterung_ac_speicher_1_antworten_2.md)):**
+
+| # | Antwort | Wohin sie geflossen ist |
+|---|---|---|
+| ~~**F‑2**~~ | HEMS schreibt nur Entitäten, Ansteuerung macht eine HA‑Automation | **D‑B19/D‑B20**, 1, 8.4, 14.4, 16 |
+| ~~**F‑11**~~ | kein Shelly 3EM vorhanden | **D‑B22**, D‑B04, D‑B05, 12.1, 12.2 |
+
+**Weiterhin offen – keine davon blockiert die Umsetzung:**
 
 | # | Frage | Blockiert | Warum sie den Entwurf ändert |
 |---|---|---|---|
-| **F‑2** | Welcher Wechselrichter, welche Register/Services? Moduswechsel **vor** dem Leistungswert nötig? Übernahmezeit? | Phase 2 + 3 | `get_write_ops`‑Reihenfolge (D‑B11) und Wahl des `steuerprofil`. Antwort v4: „noch nicht sicher" → Feld bleibt reserviert, **Phase 1 läuft ohne diese Antwort** |
-| **F‑11** | Wie wird die Shelly‑Nulleinspeisung an/aus geschaltet (API, MQTT, Schalter im Gerät)? | Phase 3 | Watchdog‑Ebene 3 (12.2) und „im Normalbetrieb aus" (D‑B05). Nicht abschaltbar ⇒ HEMS und Shelly regeln gegeneinander (Merksatz 2) |
-| **F‑12** | Aus welcher Quelle kommt `residual_power_entity` – dieselbe wie beim Batterie‑Leistungssensor? | Dimensionierung `hoch_regelzeit_s` | Bestimmt den Sensor‑Versatz (H‑7), das einzige echte Oszillationsrisiko. F‑10 klärt, dass es **ein** Messpunkt ist – nicht **welcher** |
+| **F‑12** | Aus welcher Quelle kommt `residual_power_entity`, und wie weit läuft er dem Batterie‑Leistungssensor nach? | nichts – nur die Dimensionierung | Bestimmt `hoch_regelzeit_s` und `entlade_sofort_schwelle_w` (H‑7). Messbar erst mit installiertem Speicher |
+| **F‑13** | Welches Gerät wird der AC‑Speicher? | Inbetriebnahme, nicht den Code | Liefert `soc_entity`, die Ist‑Leistungssensoren (Variante A oder B nach D‑B12), `capacity_kwh` und die technischen Grenzen |
+| **F‑14** | Bringt das Gerät eine eigene Nulleinspeisung mit, und lässt sie sich abschalten? | Inbetriebnahme | Ist sie nicht abschaltbar, regeln HEMS und Gerät gegeneinander – Merksatz 2 |
 
 ---
 
@@ -2301,11 +2439,12 @@ Abschnitt 11, erst wenn Phase 1–5 stabil laufen.
 |---|---|---|
 | [app/ems/devices.py](app/ems/devices.py) | +`Device.netz_support_w` (5 Z.), +`Device.gemessene_last_w` + 2 Overrides (12 Z., D‑B14), +`BatteryDevice` | ~395 Zeilen neu |
 | [app/ems/controller.py](app/ems/controller.py) | `_build_devices`‑Zweig, `run_cycle` Schritte 3–5/9, `_allocate_discharge`, `_discharge_order` (jetzt 2 Z., D‑B18), Warnung, Logging | ~100 neu, ~15 geändert |
-| [app/main.py](app/main.py) | `_ctrl_items_battery` (inkl. `entlade_prioritat`), Schema‑Zweig, Config‑Optionen | ~40 neu |
+| [app/main.py](app/main.py) | `_ctrl_items_battery` (inkl. `entlade_prioritat`), Schema‑Zweig, globaler Abschlag‑Helfer, Config‑Option durchreichen | ~130 neu |
 | [app/ha_client.py](app/ha_client.py) | **keine Änderung** (Subzyklus entfällt, D‑B06) | 0 |
-| [app/static/app.js](app/static/app.js) | `renderBattery`, Filter, Kacheln, Fremdlast‑Hinweis | ~85 neu |
-| [app/templates/index.html](app/templates/index.html) | Section + CSS | ~20 neu |
-| [config.yaml](config.yaml) | `class`‑Liste, 10 Gerätefelder, 1 globale Option | ~18 |
+| [web/src/types.ts](web/src/types.ts) | `BatteryDevice`, `Device`‑Union, `CycleStatus`‑Felder | ~55 neu |
+| [web/src/pages/Status.tsx](web/src/pages/Status.tsx) | `BatteryCard`, `SocBar`, Filter, drei Kacheln, Sperrgrund‑Labels | ~150 neu |
+| [web/src/components/DeviceCard.tsx](web/src/components/DeviceCard.tsx) / [Icon.tsx](web/src/components/Icon.tsx) / [styles.css](web/src/styles.css) | Kartenzustände `charge`/`discharge`, Batterie‑Icon, SoC‑Balken | ~15 |
+| [config.yaml](config.yaml) | `class`‑Liste, 8 Gerätefelder, 1 globale Option | ~18 |
 | [README.md](README.md) | Speicher‑Abschnitt, Tabellen, Prüfrezepte, Watchdog, **Hinweis Fremdlast** | ~260 |
 | `tests/test_battery_device.py` | neu | ~460 |
 | [tests/test_run_cycle.py](tests/test_run_cycle.py) | 17 neue Tests | ~360 |
@@ -2333,7 +2472,7 @@ und P7.
 
 > **2 · Zwei Regler auf einer Messgröße haben kein Gleichgewicht.**
 > `D₁ + D₂ = L` ist eine Gleichung mit zwei Unbekannten.
-> Egal ob zwei Speicher, oder HEMS und Shelly gleichzeitig –
+> Egal ob zwei Speicher, oder HEMS und die Eigenregelung des Geräts –
 > das Ergebnis ist immer ein Grenzzyklus.
 > Genau ein Regler, oder zentrale Aufteilung.
 

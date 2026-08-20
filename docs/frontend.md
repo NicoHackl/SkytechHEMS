@@ -199,6 +199,33 @@ Drei Zustände, immer alle drei umgesetzt:
 
 Ein Leerzustand ohne Weg zur ersten Aktion ist eine Sackgasse und gilt als Fehler.
 
+## Seitenmuster: Gerätekarte
+
+`components/DeviceCard.tsx` liefert die gemeinsame Form: Titel, optionale Badges, darunter
+Kennzahlzeilen (`KeyValue`). Die Seiten Status und Energy Pilot benutzen dieselbe Karte — welche
+Zeilen darin stehen, entscheidet die aufrufende Seite.
+
+Drei Gerätetypen, drei Karten in `pages/Status.tsx`, unterschieden über das diskriminierende Feld
+`type` aus `types.ts`:
+
+| Typ | Karte | Kartenzustand |
+|---|---|---|
+| `controllable` | `ControllableCard` | `off` / `active` / `idle` |
+| `binary` | `BinaryCard` | `off` / `active` / `idle` |
+| `battery` | `BatteryCard` | `off` / `charge` / `discharge` / `idle` |
+
+Der Abschnitt „Speicher" steht **vor** „Regelbare Verbraucher": der Speicher beeinflusst die
+Pool-Rechnung, beim Debuggen will man ihn zuerst sehen.
+
+Zwei Muster, die die Speicherkarte zusätzlich braucht:
+
+- **Signierte Werte als Betrag plus Richtung anzeigen.** `netto_w` ist positiv beim Laden und
+  negativ beim Entladen. In der Karte steht `1.760 W (Entladen)`, nicht `-1760 W` — das Vorzeichen
+  ist Datenvertrag, keine Anzeigeform.
+- **Technische Sperrgründe übersetzen.** `blockiert_grund` und die beiden Pfad-Felder liefern
+  Schlüssel wie `soc_reserve`. Die Karte bildet sie über eine Map auf deutschen Klartext ab;
+  ein unbekannter Schlüssel wird unverändert gezeigt, statt zu verschwinden.
+
 ## Seitenmuster: Formular
 
 - Ein Zustandsobjekt für den Datensatz, geändert über eine `patch(partial)`-Funktion.

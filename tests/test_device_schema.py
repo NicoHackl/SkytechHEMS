@@ -67,3 +67,47 @@ def test_schema_ignores_unknown_device_classes():
         interval_s=3,
     )
     assert [group["name"] for group in schema] == ["global"]
+
+
+def test_schema_kennt_battery_zweig():
+    """Ohne battery-Zweig fehlte der Speicher im Steuerung-Tab und im
+    Energy-Pilot-Vertrag."""
+    schema = _build_device_controls_schema(
+        [{
+            "name": "acspeicher1",
+            "label": "AC-Speicher",
+            "class": "battery",
+            "soc_entity": "sensor.acspeicher1_soc",
+            "charge_power_entity": "sensor.acspeicher1_lade_w",
+            "discharge_power_entity": "sensor.acspeicher1_entlade_w",
+            "capacity_kwh": 10.0,
+            "allowed_modes": "manuell,nur_laden",
+        }],
+        residual_power_entity="sensor.ueberschuss",
+        interval_s=3,
+    )
+    battery = schema[1]
+    assert battery["class"] == "battery"
+    assert battery["output_unit"] == "watt"
+    assert battery["soc_entity"] == "sensor.acspeicher1_soc"
+    assert battery["capacity_kwh"] == 10.0
+    # Ein signierter Sollwert plus Betriebsart (D-B20)
+    assert battery["request_entity"] == "input_number.ems_acspeicher1_anforderung_leistung_w"
+    assert battery["request_sign"] == "positiv_laden"
+    assert battery["mode_entity"] == "input_select.ems_acspeicher1_anforderung_betriebsart"
+
+    by_key = {item["key"]: item for item in battery["items"]}
+    assert by_key["entlade_prioritat"]["entity"] == "input_number.ems_acspeicher1_entlade_prioritat"
+    assert by_key["entlade_prioritat"]["planning_relevant"] is True
+    assert by_key["soc_min_prozent"]["unit"] == "%"
+    assert by_key["max_entladeleistung_w"]["role"] == "technical_constraint"
+
+
+def test_globales_schema_kennt_entlade_abschlag():
+    """Der Abschlag ist eine Systemgrösse und liegt deshalb global – im
+    Namensraum ems_ac_speicher_*, nicht ems_speicher_*."""
+    global_group = _schema()[0]
+    by_key = {item["key"]: item for item in global_group["items"]}
+    assert by_key["ac_speicher_entlade_abschlag_w"]["entity"] == (
+        "input_number.ems_ac_speicher_entlade_abschlag_w"
+    )

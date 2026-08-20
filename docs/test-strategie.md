@@ -24,7 +24,8 @@ bei dieser Anzahl ist eine Unterordnerstruktur reine Bewegung ohne Orientierungs
 | `test_controller.py` | Prioritätskaskade, One-Change-Limit, Pool-Berechnung |
 | `test_run_cycle.py` | Vollständiger Zyklus gegen einen gefälschten HA-State — die Integrationsebene |
 | `test_ep_uebernahme.py` | Übernahme der Energy-Pilot-Vorschläge je Regelmodus, Fallback auf Nutzerwerte |
-| `test_allocation_properties.py` | Property-Tests mit Hypothesis über die Pool-Verteilung |
+| `test_battery_device.py` | `BatteryDevice`: Pool-Semantik, SoC-Grenzen und Taper, Richtungsauflösung, asymmetrische Rampe, signierter Schreibvertrag |
+| `test_allocation_properties.py` | Property-Tests mit Hypothesis über die Pool-Verteilung und die Speicher-Invarianten P1–P7 |
 
 `tests/conftest.py` stellt die gemeinsamen Fixtures bereit (State-Schnappschüsse, Gerätekonfiguration).
 
@@ -43,6 +44,17 @@ Für die Regellogik zusätzlich verpflichtend:
    [architektur.md](architektur.md)).
 5. **Hard-Lockout** — ungültiger oder stark negativer Überschuss-Sensor schaltet alles ab.
 
+Für Speicher zusätzlich verpflichtend:
+
+6. **Die Entladung erhöht den Pool nicht.** Der wichtigste Test der Speicher-Erweiterung —
+   ohne ihn steht die Aufschaukelung wieder offen.
+7. **Das Hausdefizit schließt HEMS-Lasten aus**, auch fremdgesteuerte. Sonst deckt der Speicher
+   den von Hand eingeschalteten Heizstab.
+8. **Ohne konfigurierten Speicher bleibt das Verhalten unverändert.**
+   `test_pool_ohne_speicher_unveraendert` und die Property P7 sind der Beweis, dass die
+   Erweiterung wirklich additiv ist.
+9. **Der sichere Zustand wird aktiv geschrieben**, nicht ausgelassen.
+
 Ein Bugfix ohne Regressionstest ist nicht abgeschlossen. Der Test muss **vor** dem Fix
 nachweislich fehlschlagen.
 
@@ -57,6 +69,12 @@ nachweislich fehlschlagen.
   `test_binaeres_geraet_bleibt_an_waehrend_mindestlaufzeit`.
 
 ## Property-Tests
+
+Invarianten auf **Zuteilungs**- und **Sollwertebene** auseinanderhalten: `_alloc_w` und
+`_entlade_ziel_w` dürfen Pool und Hausdefizit nie überschreiten. Der geschriebene Sollwert darf
+das vorübergehend sehr wohl — die asymmetrische Entladerampe dämpft eine kleine Zielabsenkung
+absichtlich, sonst wird aus Sensor-Versatz ein Grenzzyklus. Auf Sollwertebene gilt deshalb nur
+die Monotonie-Form: nie über Ziel **und** bisherigen Wert hinaus.
 
 `test_allocation_properties.py` prüft mit Hypothesis Zusicherungen, die für **jede** zufällige
 Gerätekonstellation gelten müssen — etwa dass die Summe der Zuteilungen den Pool nie übersteigt und
