@@ -41,7 +41,7 @@ Entitätsnamen.
 | `class` | alle | ja | – | `controllable`, `binary` oder `battery` |
 | `label` | alle | nein | Wert von `name` | Anzeigename; darf Leerzeichen und Umlaute enthalten |
 | `entity_prefix` | alle | nein | Wert von `name` | Überschreibt ausschließlich das Präfix der HEMS-Helfer |
-| `allowed_modes` | alle | nein | `manuell` | Kommagetrennte globale Regelmodi, in denen normale Nutzerregeln wirken; zulässig sind `manuell`, `nur_heizen` und `nur_laden`. Der Alt-Wert `auto` wird auf `manuell` abgebildet |
+| `allowed_modes` | alle | ja | `manuell` | Kommagetrennte globale Regelmodi, in denen normale Nutzerregeln wirken; zulässig sind `manuell`, `nur_heizen` und `nur_laden`. Der Alt-Wert `auto` wird auf `manuell` abgebildet |
 
 Ein fehlendes `name` oder eine unbekannte `class` führt dazu, dass nur dieser Geräteeintrag mit
 einer Fehlermeldung übersprungen wird.
