@@ -100,8 +100,10 @@ Die bisherige Form bleibt additiv kompatibel. Geräte ergänzen `class`, `entity
 zusätzlich `key`, `kind`, `unit` (falls vorhanden), `role` und `planning_relevant`.
 
 Ein Speicher (`class: "battery"`) ergänzt `soc_entity`, `charge_power_entity`,
-`discharge_power_entity`, `power_entity`, `power_sign`, `available_charge_power_entity`,
-`available_discharge_power_entity`, `capacity_kwh`, `mode_entity` und `request_sign`. `request_entity` trägt beim Speicher **einen signierten Wert**: positiv = laden,
+`discharge_power_entity`, `power_entity`, `power_sign`, `available_charge_power_w`,
+`available_discharge_power_w`, `capacity_kwh`, `mode_entity` und `request_sign`. Die beiden
+`available_*_w`-Felder sind direkt konfigurierte Zahlenwerte in Watt, keine Entity-IDs.
+`request_entity` trägt beim Speicher **einen signierten Wert**: positiv = laden,
 negativ = entladen. `request_sign: "positiv_laden"` sagt das ausdrücklich, damit niemand raten
 muss.
 

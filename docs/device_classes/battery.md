@@ -12,8 +12,8 @@ Zusätzlich zu den hier beschriebenen Feldern und Entitäten gelten die
 | Feld | Pflicht | Default | Funktion beziehungsweise zugehörige Entität |
 |---|---:|---|---|
 | `soc_entity` | ja | – | Vollständige Entity-ID des Ladezustandssensors in Prozent |
-| `available_charge_power_entity` | ja | – | Momentan verfügbare **Ladeleistung** des Wechselrichters in Watt |
-| `available_discharge_power_entity` | ja | – | Momentan verfügbare **Entladeleistung** des Wechselrichters in Watt |
+| `available_charge_power_w` | ja | – | Direkt konfigurierte verfügbare **Ladeleistung** in Watt; `0` sperrt Laden |
+| `available_discharge_power_w` | ja | – | Direkt konfigurierte verfügbare **Entladeleistung** in Watt; `0` sperrt Entladen |
 | `charge_power_entity` | Variante A | – | Ist-Ladeleistung in W, immer ≥ `0` |
 | `discharge_power_entity` | Variante A | – | Ist-Entladeleistung in W, immer ≥ `0` |
 | `power_entity` | Variante B | – | Ein signierter Ist-Leistungssensor für beide Richtungen |
@@ -28,7 +28,7 @@ Es muss **genau eine** Leistungssensor-Variante vollständig konfiguriert sein:
 - **Variante B:** `power_entity`, dazu passend `power_sign`
 
 Beide Varianten gleichzeitig sind ungültig — welche gilt, wäre nicht mehr eindeutig. Fehlen
-`soc_entity`, eine vollständige Leistungsvariante oder einer der beiden `available_*`-Sensoren,
+`soc_entity`, eine vollständige Leistungsvariante oder einer der beiden `available_*_w`-Werte,
 wird der Geräteeintrag beim Start nicht instanziiert und erscheint als
 [inaktives Gerät](global.md#ungültige-geräteeinträge).
 
@@ -36,24 +36,20 @@ wird der Geräteeintrag beim Start nicht instanziiert und erscheint als
 `soc_max_hysterese_prozent` und `min_umschaltzeit_s`. Fehlen sie in einer Bestandskonfiguration,
 greift der Default; der Speicher wird davon **nicht** inaktiv.
 
-## Die beiden `available_*`-Sensoren
+## Die beiden `available_*_w`-Werte
 
-Sie sind die **alleinigen physischen Maximalgrenzen** des Speichers. Es gibt daneben keinen
-konfigurierten Maximalwert und kein zweites Drosselband mehr:
+Sie sind verpflichtende **statische Add-on-Werte** und die alleinigen physischen
+Maximalgrenzen des Speichers. Es werden dafür keine HA-Entitäten gelesen:
 
-- Jede Richtung wird **getrennt** ausgewertet. Ein fehlender, `unavailable`/`unknown` oder
-  unbrauchbarer Ladesensor sperrt ausschließlich den **Ladepfad** auf `0 W`; der Entladepfad läuft
-  weiter — und umgekehrt.
-- Ein **gültiger Wert `0`** sperrt die Richtung bewusst. Er ist kein Fehler und wird deshalb auch
-  nicht durch einen Ersatzwert überschrieben.
-- Innerhalb der SoC-Grenzen ist das momentane Limit maßgeblich, an der Grenze wird die Richtung
-  `0`. Ein lineares SoC-Taper gibt es nicht mehr: die CV-Phase regelt der Wechselrichter selbst,
-  und genau das meldet er über diese Sensoren. Ein zweites Drosselband im HEMS regelte dagegen.
-- Sinkt ein gültiges Limit, gilt das **sofort**. Die Rampe darf ein Ziel bremsen, aber nach der
-  Rampenrechnung liegt der Sollwert nie über der momentanen physischen Grenze.
+- Beide Werte müssen endlich und mindestens `0 W` sein.
+- Jede Richtung wird getrennt begrenzt. `available_charge_power_w: 0` sperrt nur den Ladepfad;
+  `available_discharge_power_w: 0` nur den Entladepfad.
+- Innerhalb der SoC-Grenzen gilt der konfigurierte Wert, an der Grenze wird die Richtung `0`.
+- Die Rampe darf einen Sollwert nie über die konfigurierte physische Grenze führen.
 
-Welcher Fall vorliegt, steht in `entity_diagnostics` und in den Sperrgründen: `limit_sensor` heißt
-„Sensor unbrauchbar", `wr_derating` heißt „gültige Grenze ist 0".
+Der Sperrgrund `wr_derating` bedeutet bei einem Wert `0`, dass die betreffende Richtung in der
+Add-on-Konfiguration deaktiviert ist. Einen Sperrgrund `limit_sensor` gibt es für diese beiden
+Werte nicht mehr.
 
 ## Über Namenskonvention gelesene HA-Helfer
 
@@ -102,7 +98,7 @@ Die vier [gemeinsamen HA-Helfer](global.md#gemeinsame-ha-helfer) werden ebenfall
 `prioritat` ist dabei ausschließlich die Ladepriorität.
 
 `min_technisch_w` und `max_technisch_w` werden für den Speicher **nicht** gelesen: die Basisklasse
-bekommt ihre Grenzen aus `min_ladeleistung_w` und dem momentanen Ladelimit.
+bekommt ihre Grenzen aus `min_ladeleistung_w` und dem konfigurierten Ladelimit.
 
 ### Entfallene Helfer
 
@@ -118,7 +114,7 @@ input_number.ems_<prefix>_entlade_sofort_schwelle_w
 input_number.ems_<prefix>_min_umschaltzeit_s
 ```
 
-Die Maximalleistungen ersetzen die beiden `available_*`-Sensoren. Notstromreserve
+Die beiden `available_*_w`-Felder ersetzen die entfallenen Maximalleistungs-Helfer. Notstromreserve
 (`soc_reserve_prozent`), Drosselband (`soc_taper_band_prozent`) und Entlade-Sofort-Schwelle
 (`entlade_sofort_schwelle_w`) **entfallen ersatzlos**; Hysterese und Umschaltsperre sind jetzt
 statische Add-on-Felder.
@@ -131,8 +127,6 @@ statische Add-on-Felder.
 | `charge_power_entity` | Ladeleistung ≥ `0 W` | Einer der beiden Sensoren ungültig: Speicher geht in den sicheren Zustand |
 | `discharge_power_entity` | Entladeleistung ≥ `0 W` | Einer der beiden Sensoren ungültig: Speicher geht in den sicheren Zustand |
 | `power_entity` | signierte Leistung gemäß `power_sign` | Ungültiger State: Speicher geht in den sicheren Zustand |
-| `available_charge_power_entity` | Ladelimit ≥ `0 W` | Ungültig: **nur** der Ladepfad wird auf `0 W` gesperrt |
-| `available_discharge_power_entity` | Entladelimit ≥ `0 W` | Ungültig: **nur** der Entladepfad wird auf `0 W` gesperrt |
 
 Ein ungültiger Speicher blockiert nicht die übrigen Speicher.
 
@@ -212,7 +206,8 @@ Speicher. Details und die Option `speicher_in_residual_enthalten` stehen in
 
 ## Pflicht für eine funktionsfähige Instanz
 
-- Add-on-Felder `name`, `class: battery`, `soc_entity`, beide `available_*`-Sensoren
+- Add-on-Felder `name`, `class: battery`, `soc_entity`, `available_charge_power_w` und
+  `available_discharge_power_w`
 - entweder beide Felder `charge_power_entity` und `discharge_power_entity` oder `power_entity`
 - alle [gemeinsamen HA-Helfer](global.md#gemeinsame-ha-helfer)
 - beide Anforderungshelfer: negatives Minimum beim Sollwert, drei Optionen bei der Betriebsart
@@ -238,8 +233,8 @@ devices:
     soc_entity: sensor.acspeicher1_soc
     charge_power_entity: sensor.acspeicher1_ladeleistung
     discharge_power_entity: sensor.acspeicher1_entladeleistung
-    available_charge_power_entity: sensor.acspeicher1_verfugbare_ladeleistung
-    available_discharge_power_entity: sensor.acspeicher1_verfugbare_entladeleistung
+    available_charge_power_w: 1500
+    available_discharge_power_w: 1500
     capacity_kwh: 12.8
     soc_max_hysteresis_percent: 2
     direction_switch_delay_s: 5

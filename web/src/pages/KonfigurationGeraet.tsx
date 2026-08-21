@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
 import { PageHeader } from '../components/Layout'
@@ -43,7 +43,6 @@ export function neuesGeraet(klasse: DeviceClass, supported: ConfigSupported): Co
     ...basis, ...defaults,
     soc_entity: '', charge_power_entity: '', discharge_power_entity: '',
     power_entity: '', power_sign: 'positiv_laden',
-    available_charge_power_entity: '', available_discharge_power_entity: '',
     capacity_kwh: 0,
   }
 }
@@ -80,16 +79,61 @@ export function KonfigurationGeraet({ mode }: { mode: 'create' | 'edit' }) {
   const position = mode === 'edit' ? Number.parseInt(index ?? '', 10) : -1
   const gespeichert = mode === 'edit' && draft ? draft.devices[position] : undefined
   const [device, setDevice] = useState<ConfigDevice | null>(null)
+  const [lokaleFehler, setLokaleFehler] = useState<Record<string, string>>({})
+  const [geaenderteFelder, setGeaenderteFelder] = useState<Set<string>>(new Set())
+  const validationRun = useRef(0)
 
   useEffect(() => {
     if (!data || !draft || device) return
-    setDevice(mode === 'edit'
+    const initial = mode === 'edit'
       ? (gespeichert ? structuredClone(gespeichert) : null)
-      : neuesGeraet('controllable', data.supported))
-  }, [data, draft, device, gespeichert, mode])
+      : neuesGeraet('controllable', data.supported)
+    setDevice(initial)
+    if (mode === 'edit') {
+      const prefix = `devices[${position}].`
+      setLokaleFehler(Object.fromEntries(Object.entries(fieldErrors)
+        .filter(([path]) => path.startsWith(prefix))
+        .map(([path, text]) => [path.slice(prefix.length), text])))
+    }
+  }, [data, draft, device, fieldErrors, gespeichert, mode, position])
+
+  /* Das lokal bearbeitete Gerät liegt bis „Übernehmen" noch nicht im
+     gemeinsamen Entwurf. Deshalb prüfen wir hier einen temporären
+     Gesamtentwurf. So verschwinden behobene Fehler direkt und Abhängigkeiten
+     zwischen zwei Feldern (z. B. Minimum/Maximum) bleiben korrekt. */
+  useEffect(() => {
+    if (!draft || !device) return
+    const target = mode === 'edit' ? position : draft.devices.length
+    const devices = [...draft.devices]
+    if (mode === 'edit') devices[target] = device
+    else devices.push(device)
+    const run = ++validationRun.current
+    const timer = window.setTimeout(() => {
+      void api.validateConfig({ ...draft, devices }).then((result) => {
+        if (validationRun.current !== run) return
+        const prefix = `devices[${target}].`
+        setLokaleFehler(Object.fromEntries(Object.entries(result.field_errors)
+          .filter(([path]) => path.startsWith(prefix))
+          .map(([path, text]) => [path.slice(prefix.length), text])))
+        setGeaenderteFelder(new Set())
+      }).catch(() => {
+        /* Ein Transportfehler darf das lokale Formular nicht blockieren. Der
+           Speichervorgang meldet ihn später sichtbar. */
+      })
+    }, 200)
+    return () => {
+      window.clearTimeout(timer)
+      if (validationRun.current === run) validationRun.current += 1
+    }
+  }, [device, draft, mode, position])
 
   const patch = useCallback((partial: Partial<ConfigDevice>) => {
     setDevice((current) => (current ? { ...current, ...partial } : current))
+    setGeaenderteFelder((current) => {
+      const next = new Set(current)
+      Object.keys(partial).forEach((key) => next.add(key))
+      return next
+    })
   }, [])
 
   if (!data || !draft) {
@@ -118,9 +162,9 @@ export function KonfigurationGeraet({ mode }: { mode: 'create' | 'edit' }) {
 
   if (!device) return null
 
-  const fehler = (feld: string) => (mode === 'edit'
-    ? fieldErrors[`devices[${position}].${feld}`]
-    : undefined)
+  const fehler = (feld: string) => (geaenderteFelder.has(feld)
+    ? undefined
+    : lokaleFehler[feld])
 
   const uebernehmen = () => {
     const devices = [...draft.devices]

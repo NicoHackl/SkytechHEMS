@@ -213,14 +213,12 @@ Verpflichtende externe Entity-Zuordnungen:
 - `soc_entity`;
 - genau eine vollständige Ist-Leistungsvariante:
   - `power_entity` mit `power_sign`, oder
-  - `charge_power_entity` und `discharge_power_entity`;
-- `available_charge_power_entity`;
-- `available_discharge_power_entity`.
+  - `charge_power_entity` und `discharge_power_entity`.
 
-Die beiden `available_*`-Sensoren sind die alleinigen physischen Maximalgrenzen. Die HA-Helfer
-`max_ladeleistung_w` und `max_entladeleistung_w` entfallen. Ein fehlender, nicht verfügbarer oder
-ungültiger `available_charge_power_entity`-State setzt nur den Ladepfad sicher auf `0 W`; beim
-Entladesensor entsprechend nur den Entladepfad. Ein gültiger Wert `0` sperrt die Richtung bewusst.
+Die beiden verpflichtenden Add-on-Felder `available_charge_power_w` und
+`available_discharge_power_w` sind direkte Wattwerte ab `0` und die alleinigen physischen
+Maximalgrenzen. Die HA-Helfer `max_ladeleistung_w` und `max_entladeleistung_w` entfallen. Ein
+konfigurierter Wert `0` sperrt nur die jeweilige Richtung bewusst.
 
 Neue beziehungsweise verbleibende statische Felder:
 
@@ -228,6 +226,8 @@ Neue beziehungsweise verbleibende statische Felder:
 |---|---|---|
 | `power_sign` | Default `positiv_laden` | `positiv_laden` oder `positiv_entladen` für `power_entity` |
 | `capacity_kwh` | optional, Default `0` | ausschließlich Anzeige |
+| `available_charge_power_w` | Pflicht, Formularstart `0` | statische Ladegrenze in Watt; `0` sperrt Laden |
+| `available_discharge_power_w` | Pflicht, Formularstart `0` | statische Entladegrenze in Watt; `0` sperrt Entladen |
 | `soc_max_hysteresis_percent` | Pflicht mit Default `2` | ersetzt den HA-Helfer `soc_max_hysterese_prozent` |
 | `direction_switch_delay_s` | Pflicht mit Default `5` | ersetzt den HA-Helfer `min_umschaltzeit_s` des Speichers |
 
@@ -243,8 +243,8 @@ Folgende Speicher-Helfer und ihre Funktion werden vollständig entfernt:
 
 Die entsprechenden Felder müssen auch aus Steuerschema, Statusdarstellung, UI, Tests und
 Dokumentation verschwinden. Bestehende öffentliche Statusfelder `max_ladeleistung_w` und
-`max_entladeleistung_w` bleiben aus Kompatibilitätsgründen erhalten, enthalten danach aber den
-jeweils gültigen momentanen Wert des `available_*`-Sensors. Die effektiven Felder `lade_limit_w`
+`max_entladeleistung_w` bleiben aus Kompatibilitätsgründen erhalten und enthalten die
+konfigurierten `available_*_w`-Werte. Die effektiven Felder `lade_limit_w`
 und `entlade_limit_w` bleiben ebenfalls bestehen. `soc_reserve_prozent` wird entfernt, weil seine
 Funktion ausdrücklich entfällt.
 
@@ -445,7 +445,7 @@ erklärt; niemals lokal so tun, als sei ein Supervisor-Schreibvorgang erfolgreic
   trotzdem wie oben beschrieben verpflichtend.
 - Beispielgeräte auf `manuell` statt des veralteten `auto` in `allowed_modes` umstellen und die
   neuen Pflicht-Fallbacks vollständig eintragen.
-- Batterie-Beispiel mit verpflichtenden `available_*`-Entity-IDs und den Defaults `2`/`5`
+- Batterie-Beispiel mit verpflichtenden `available_*_w`-Werten und den Defaults `2`/`5`
   ergänzen.
 - `translations/de.yaml` und `translations/en.yaml` aktualisieren. Deutsche UI-Texte bleiben
   deutsch; die englische Manifest-Übersetzung beschreibt denselben Vertrag.
@@ -478,16 +478,15 @@ erklärt; niemals lokal so tun, als sei ein Supervisor-Schreibvorgang erfolgreic
 
 ### 6. Speichervertrag vereinfachen
 
-- Konstruktor und Registry auf verpflichtende `available_*`-Entity-IDs sowie die beiden neuen
+- Konstruktor und Registry auf verpflichtende `available_*_w`-Werte sowie die beiden neuen
   statischen Felder umstellen.
 - HA-Lesen, Attribute, Sperrgründe, SoC-Latch, Grenzberechnung, Rampe und Status von
   `soc_reserve`, `soc_taper`, HA-Hysterese, HA-Umschaltzeit und Entlade-Sofort-Schwelle bereinigen.
 - SoC-Latch mit `soc_max_hysteresis_percent` aus der Add-on-Konfiguration weiterführen.
 - Entladeboden nur noch aus `soc_min_prozent` bilden.
-- Kein lineares SoC-Taper mehr anwenden. Innerhalb der SoC-Grenzen ist das gültige momentane
-  `available_*`-Limit maßgeblich; an der Grenze wird die Richtung `0`.
-- Lade- und Entladelimit getrennt validieren, damit der Ausfall einer Limit-Entität nicht die
-  andere Richtung sperrt.
+- Kein lineares SoC-Taper mehr anwenden. Innerhalb der SoC-Grenzen ist das konfigurierte
+  `available_*_w`-Limit maßgeblich; an der Grenze wird die Richtung `0`.
+- Lade- und Entladelimit getrennt validieren; `0` sperrt nur die jeweilige Richtung.
 - `laden_erlaubt`/`entladen_erlaubt` mit der besonderen Missing-/Unavailable-Regel umsetzen.
 - Batterie-Reserve mit fehlend = `50`, aber vorhandenem `0` = `0` umsetzen.
 - `max_anderung_pro_schritt_w` intern ohne magischen sehr großen Zahlenwert als optionales Limit
@@ -621,16 +620,16 @@ Mindestens folgende Testgruppen sind erforderlich:
 5. `tests/test_battery_device.py`:
    - keine HA-Maximalleistungs-, Reserve-, Taper-, Hysterese-, Speicher-Umschaltzeit- oder
      Sofortschwellen-Abfrage mehr;
-   - beide `available_*`-Limits begrenzen korrekt und unabhängig;
-   - fehlend/unavailable/invalid setzt nur die betroffene Richtung auf `0`;
-   - gültiges Limit `0` sperrt die Richtung;
+   - beide `available_*_w`-Limits begrenzen korrekt und unabhängig;
+   - fehlend, negativ oder nicht endlich macht die Konfiguration ungültig;
+   - Limit `0` sperrt nur die jeweilige Richtung;
    - SoC-Grenzen ohne Taper und ohne Reserve;
    - Config-Hysterese `2` und Config-Umschaltzeit `5`;
    - `laden_erlaubt`/`entladen_erlaubt`: Entity fehlt → an, Entity unavailable → aus;
    - Reserve fehlt → `50`, vorhandene `0` → `0`;
    - Maximaländerung fehlt → unbegrenzt, vorhanden → in beiden Richtungen eingehalten;
    - Sofort-Stopp bei Sicherheitsgründen;
-   - nach Rampenberechnung nie über einem gesunkenen WR-Limit;
+   - nach Rampenberechnung nie über einem konfigurierten Leistungslimit;
    - EP-Maximalvorschläge werden ignoriert.
 6. `tests/test_controller.py` und `tests/test_run_cycle.py`:
    - global deaktivierter Modus setzt sicher inaktiv;
@@ -682,7 +681,7 @@ Besonders zu korrigieren:
 
 - bisherige Aussage, nur `phase_switch_delay_s` sei ein echter Add-on-Fallback;
 - alle entfernten Speicher-Helfer, Taper-, Reserve- und Sofortschwellen-Erklärungen;
-- Bedeutung der verpflichtenden `available_*`-Sensoren;
+- Bedeutung der verpflichtenden direkten `available_*_w`-Werte;
 - globale Modi, EP-only-Geräte und `available_modes`;
 - Supervisor als einzige Schreibschnittstelle der Add-on-Optionen;
 - neue API-Endpunkte, Revisionen und Neustartverhalten;
@@ -696,7 +695,7 @@ Besonders zu korrigieren:
 Die geänderten Grundsatzentscheidungen erhalten neue Einträge in
 `docs/design-entscheidungen.md` und bei Bedarf ADRs:
 
-1. vereinfachter Speichervertrag: physische Maxima nur aus `available_*`, kein SoC-Taper, keine
+1. vereinfachter Speichervertrag: physische Maxima nur aus `available_*_w`, kein SoC-Taper, keine
    Notstromreserve im HEMS und keine Entlade-Sofort-Schwelle;
 2. Supervisor-gestützte Add-on-Konfigurationsseite mit Revisionsschutz, ohne eigene Persistenz.
 

@@ -20,6 +20,7 @@ from dataclasses import asdict
 from typing import Any, Callable, Dict, List, Optional
 
 from configuration import (
+    BATTERY_POWER_DEFAULTS,
     BATTERY_STATIC_DEFAULTS,
     BINARY_FALLBACK_DEFAULTS,
     CONTROLLABLE_FALLBACK_DEFAULTS,
@@ -161,7 +162,7 @@ class ConfigService:
             "device_defaults": {
                 "controllable": dict(CONTROLLABLE_FALLBACK_DEFAULTS),
                 "binary": dict(BINARY_FALLBACK_DEFAULTS),
-                "battery": dict(BATTERY_STATIC_DEFAULTS),
+                "battery": {**BATTERY_POWER_DEFAULTS, **BATTERY_STATIC_DEFAULTS},
             },
         }
 

@@ -62,6 +62,7 @@ export function ConfigDraftProvider({ children }: { children: ReactNode }) {
   const [conflict, setConflict] = useState(false)
   const [restarting, setRestarting] = useState(false)
   const requested = useRef(false)
+  const validationRun = useRef(0)
   const { toast } = useToast()
 
   const reload = useCallback(async () => {
@@ -98,6 +99,28 @@ export function ConfigDraftProvider({ children }: { children: ReactNode }) {
     window.addEventListener('beforeunload', warn)
     return () => window.removeEventListener('beforeunload', warn)
   }, [dirty])
+
+  /* Den im Entwurf liegenden Stand nach jeder Änderung erneut vom Backend
+     prüfen lassen. So bleiben weder Fehler der geladenen Alt-Konfiguration an
+     inzwischen korrigierten Feldern hängen, noch muss die Validierungslogik im
+     Browser ein zweites Mal nachgebaut werden. Die Laufnummer verhindert,
+     dass eine langsame alte Antwort einen neueren Stand überschreibt. */
+  useEffect(() => {
+    if (!dirty || !draft) return
+    const run = ++validationRun.current
+    const timer = window.setTimeout(() => {
+      void api.validateConfig(draft).then((result) => {
+        if (validationRun.current === run) setFieldErrors(result.field_errors)
+      }).catch(() => {
+        /* Speichern zeigt Transportfehler weiterhin sichtbar an. Eine
+           vorübergehend fehlgeschlagene Hintergrundprüfung blockiert die UI nicht. */
+      })
+    }, 200)
+    return () => {
+      window.clearTimeout(timer)
+      if (validationRun.current === run) validationRun.current += 1
+    }
+  }, [dirty, draft])
 
   const patch = useCallback((partial: Partial<ConfigOptions>) => {
     setDraft((current) => (current ? { ...current, ...partial } : current))

@@ -379,8 +379,7 @@ const BLOCK_LABELS: Record<string, string> = {
   entladen_gesperrt: 'Entladen gesperrt',
   soc_min: 'SoC-Minimum erreicht',
   soc_max: 'SoC-Maximum erreicht',
-  limit_sensor: 'Grenzwert-Sensor unbrauchbar',
-  wr_derating: 'Gerät meldet Grenze 0 W',
+  wr_derating: 'Verfügbare Leistung ist auf 0 W gesetzt',
   netzladen: 'Netzladen aktiv',
   hausdefizit: 'Hausdefizit – Laden gesperrt',
   umschaltsperre: 'Umschaltsperre',
@@ -400,9 +399,9 @@ const BETRIEBSART_LABELS: Record<string, string> = {
   entladen: 'Entladen',
 }
 
-/** Ein unbrauchbarer Grenzwert-Sensor ist etwas anderes als eine gemeldete 0. */
+/** Die statischen Speichergrenzen sind nach der Konfigurationsvalidierung immer gültig. */
 function limitText(value: number, gueltig: boolean): string {
-  return gueltig ? fmtW(value) : 'Sensor unbrauchbar'
+  return gueltig ? fmtW(value) : 'Konfiguration ungültig'
 }
 
 function BatteryCard({ device, elapsed }: { device: BatteryDevice; elapsed: number }) {

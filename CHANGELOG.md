@@ -20,9 +20,11 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
    muss größer als `0` sein.
 2. **Binäre Geräte** brauchen fünf neue Felder: `power_w` (größer als `0`), `on_reserve_w`,
    `min_runtime_s`, `min_offtime_s` und `off_delay_s`.
-3. **AC-Speicher** brauchen `available_charge_power_entity` und
-   `available_discharge_power_entity`. Optional, aber empfohlen: `soc_max_hysteresis_percent`
-   (Default `2`) und `direction_switch_delay_s` (Default `5`).
+3. **AC-Speicher** brauchen die direkten Wattwerte `available_charge_power_w` und
+   `available_discharge_power_w` (jeweils mindestens `0`). Die zuvor geplanten Felder
+   `available_charge_power_entity` und `available_discharge_power_entity` entfallen. Optional,
+   aber empfohlen: `soc_max_hysteresis_percent` (Default `2`) und
+   `direction_switch_delay_s` (Default `5`).
 4. Ein Gerät ohne diese Felder wird beim Start **nicht registriert**. Es verschwindet nicht:
    `/api/status` führt es unter `inactive_devices` samt Feldfehlern auf, und die Konfigurationsseite
    zeigt sie direkt am betroffenen Feld.
@@ -55,7 +57,7 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
   - Ein global nicht aktivierter Regelmodus wird als solcher benannt, statt wie ein normaler
     Modus auszusehen.
   - Der SoC-Balken der Speicherkarte trägt nur noch Minimum und Ladeschluss; die Limit-Zeile
-    unterscheidet einen unbrauchbaren Grenzwert-Sensor von einer gemeldeten 0.
+    zeigt die statischen Wattgrenzen aus der Add-on-Konfiguration.
   - Die Steuerungsseite markiert je Helfer, ob gerade der HA-Wert, der Add-on-Wert oder ein
     interner Default wirkt. Bei einem Helfer mit Add-on-Fallback war das vorher nicht erkennbar.
   - Der Energy Pilot zeigt `lade_max_w` und `entlade_max_w` nicht mehr an. Die HA-Entitäten
@@ -176,8 +178,8 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
     `input_select.ems_<prefix>_anforderung_betriebsart` die Betriebsart. Die Übersetzung nach
     Modbus oder MQTT macht eine HA-Automation, nicht das Add-on. **Der Zahlen-Helfer braucht ein
     negatives Minimum**, sonst klemmt Home Assistant jede Entladeanforderung auf 0.
-  - **SoC-Grenzen mit Drosselband und Hysterese**, Geräte-Derating über optionale
-    `available_*_power_entity` mit Vorrang, Totzone um Null, Sperrzeit nach Richtungswechsel und
+  - **SoC-Grenzen mit Drosselband und Hysterese**, statische Leistungsgrenzen in der
+    Add-on-Konfiguration, Totzone um Null, Sperrzeit nach Richtungswechsel und
     eine asymmetrische Entladerampe: ein echter Lastabwurf wird sofort zurückgenommen, eine
     kleine Abweichung gedämpft — sonst wird aus Sensor-Versatz ein Grenzzyklus.
   - **Der sichere Zustand wird aktiv geschrieben.** Bei Lockout, fehlender Freigabe oder
@@ -209,17 +211,14 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ### Geändert
 - **Der Speichervertrag ist deutlich schmaler (BRECHEND).** Die physische Grenze eines AC-Speichers
-  kommt jetzt ausschließlich aus zwei Sensoren, die beide **Pflicht** sind:
-  `available_charge_power_entity` und `available_discharge_power_entity`.
-  - **Getrennt ausfallsicher.** Ein fehlender, ausgefallener oder unbrauchbarer Ladesensor sperrt
-    nur den Ladepfad auf `0 W`; der Entladepfad läuft weiter — und umgekehrt. Ein **gültiger Wert
-    `0`** sperrt die Richtung bewusst und wird nicht als Fehler behandelt. Die Sperrgründe trennen
-    beides: `limit_sensor` heißt „Sensor unbrauchbar", `wr_derating` heißt „gültige Grenze ist 0".
-  - **Ein gesunkenes Limit gilt sofort.** Die Rampe darf ein Ziel bremsen, aber nach der
-    Rampenrechnung liegt der Sollwert nie über der momentanen physischen Grenze.
-  - **Kein SoC-Taper mehr.** Innerhalb der SoC-Grenzen ist allein das momentane Limit maßgeblich,
-    an der Grenze wird die Richtung `0`. Die CV-Phase regelt der Wechselrichter selbst und meldet
-    sie über genau diese Sensoren — ein zweites Drosselband im HEMS regelte dagegen.
+  kommt jetzt ausschließlich aus den beiden verpflichtenden Wattwerten
+  `available_charge_power_w` und `available_discharge_power_w` in der Add-on-Konfiguration.
+  Dafür werden keine HA-Sensoren gelesen.
+  - **Getrennte Grenzen.** Ein Wert `0` sperrt nur die jeweilige Richtung bewusst. Fehlende,
+    negative oder nicht endliche Werte machen den Geräteeintrag ungültig.
+  - **Harte Obergrenze.** Die Rampe darf einen Sollwert nie über den konfigurierten Wert führen.
+  - **Kein SoC-Taper mehr.** Innerhalb der SoC-Grenzen ist allein der konfigurierte Wert
+    maßgeblich, an der Grenze wird die Richtung `0`.
 - **`max_anderung_pro_schritt_w` beim Speicher ist optional.** Ohne gültigen Wert gibt es keine
   Schrittbegrenzung und das Ziel wird unmittelbar erreicht. Intern ist das ein echtes „kein Limit",
   kein magischer Großwert — im Status steht deshalb nirgends `Infinity`.
@@ -349,7 +348,8 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
   `max_ladeleistung_w`, `max_entladeleistung_w`, `soc_reserve_prozent`, `soc_taper_band_prozent`,
   `soc_max_hysterese_prozent`, `entlade_sofort_schwelle_w` und `min_umschaltzeit_s` (nur beim
   Speicher — beim regelbaren Gerät bleibt `min_umschaltzeit_s` die Phasenwechsel-Sperre).
-  - Die beiden Maximalleistungen ersetzen die `available_*`-Sensoren.
+  - Die beiden Maximalleistungen werden durch `available_charge_power_w` und
+    `available_discharge_power_w` in der Add-on-Konfiguration ersetzt.
   - Hysterese und Umschaltsperre sind jetzt statische Add-on-Felder
     `soc_max_hysteresis_percent` (Default `2`) und `direction_switch_delay_s` (Default `5`).
   - **Notstromreserve, Drosselband und Entlade-Sofort-Schwelle entfallen ersatzlos.** Der
@@ -363,6 +363,13 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
   Wechselrichters nicht überschreiben.
 
 ### Behoben
+- **Geräteformular bleibt nach Korrekturen nicht mehr rot.** Feldfehler aus dem geladenen Stand
+  werden bei einer lokalen Korrektur sofort ausgeblendet und der übernommene Entwurf danach erneut
+  serverseitig validiert. Langsame alte Validierungsantworten können keinen neueren Stand mehr
+  überschreiben.
+- **Konkrete Fehler beim Speichern sind wieder sichtbar.** Der Frontend-API-Client behält bei
+  `422` den vollständigen JSON-Fehlerrumpf. `field_errors` gingen zuvor verloren, sodass nur ein
+  allgemeiner Fehler erschien und die tatsächlich beanstandeten Felder nicht aktualisiert wurden.
 - **Fremdgesteuerte Verbraucher blähen den Pool nicht mehr auf.** Der Pool wird als
   `residual_w + Summe(current_w)` gebildet – diese Rückrechnung ist nur zulässig, wenn HEMS
   die Leistung selbst angefordert hat und sie daher auch wieder freigeben kann. Wurde ein

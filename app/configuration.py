@@ -80,6 +80,16 @@ BATTERY_STATIC_DEFAULTS: Dict[str, float] = {
     "direction_switch_delay_s":   5.0,
 }
 
+# Sichere Formular-Startwerte für die verpflichtenden statischen
+# Leistungsgrenzen. Anders als BATTERY_STATIC_DEFAULTS sind das keine
+# Laufzeit-Fallbacks: fehlt ein Feld in den gespeicherten Optionen, bleibt der
+# Speicher ungültig. Eine ausdrückliche 0 ist dagegen gültig und sperrt nur die
+# betreffende Richtung.
+BATTERY_POWER_DEFAULTS: Dict[str, float] = {
+    "available_charge_power_w":    0.0,
+    "available_discharge_power_w": 0.0,
+}
+
 GLOBAL_DEFAULTS: Dict[str, Any] = {
     "interval_s": 30,
     "log_level": "info",
@@ -235,10 +245,10 @@ def _normalize_device(raw: Dict[str, Any]) -> Dict[str, Any]:
             "discharge_power_entity": _as_text(raw.get("discharge_power_entity")),
             "power_entity": _as_text(raw.get("power_entity")),
             "power_sign": _as_text(raw.get("power_sign")) or "positiv_laden",
-            "available_charge_power_entity": _as_text(raw.get("available_charge_power_entity")),
-            "available_discharge_power_entity": _as_text(raw.get("available_discharge_power_entity")),
             "capacity_kwh": _as_float(raw.get("capacity_kwh"), 0.0),
         })
+        for key in BATTERY_POWER_DEFAULTS:
+            device[key] = _as_float(raw.get(key), None) if key in raw else None
         for key, default in BATTERY_STATIC_DEFAULTS.items():
             value = _as_float(raw.get(key), None) if key in raw else None
             device[key] = default if value is None else value
@@ -417,8 +427,9 @@ def _validate_binary(device: Dict[str, Any], fail) -> None:
 
 def _validate_battery(device: Dict[str, Any], fail) -> None:
     _require_entity(device, "soc_entity", fail)
-    _require_entity(device, "available_charge_power_entity", fail)
-    _require_entity(device, "available_discharge_power_entity", fail)
+    for key in BATTERY_POWER_DEFAULTS:
+        _number(device, key, fail, minimum=0.0,
+                text="Pflichtfeld: endliche Zahl ab 0 W.")
 
     signed = device["power_entity"]
     pair = (device["charge_power_entity"], device["discharge_power_entity"])

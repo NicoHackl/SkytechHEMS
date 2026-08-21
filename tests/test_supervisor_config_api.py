@@ -129,6 +129,8 @@ def test_read_liefert_die_unterstuetzten_wertebereiche():
     assert unterstuetzt["modes"] == ["manuell", "nur_heizen", "nur_laden"]
     assert "auto" in unterstuetzt["special_modes"]
     assert unterstuetzt["device_defaults"]["controllable"]["maximum_step_change"] == 1000.0
+    assert unterstuetzt["device_defaults"]["battery"]["available_charge_power_w"] == 0.0
+    assert unterstuetzt["device_defaults"]["battery"]["available_discharge_power_w"] == 0.0
 
 
 def test_read_gibt_keine_unbekannten_felder_an_den_browser():

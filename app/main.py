@@ -217,7 +217,7 @@ def _ctrl_items_battery(p: str) -> list:
     Leistungsgrenzen, SoC, Regelverhalten – so wird die Karte lesbar.
 
     Nicht mehr enthalten: max_lade-/max_entladeleistung_w (ersetzt durch die
-    beiden available_*-Sensoren), soc_reserve_prozent und soc_taper_band_prozent
+    beiden statischen available_*_w-Felder), soc_reserve_prozent und soc_taper_band_prozent
     (Funktion entfällt), soc_max_hysterese_prozent und min_umschaltzeit_s
     (jetzt statische Add-on-Felder) sowie entlade_sofort_schwelle_w."""
     return [
@@ -356,8 +356,8 @@ def _build_device_controls_schema(
                 "discharge_power_entity": cfg["discharge_power_entity"],
                 "power_entity": cfg["power_entity"],
                 "power_sign": cfg["power_sign"],
-                "available_charge_power_entity": cfg["available_charge_power_entity"],
-                "available_discharge_power_entity": cfg["available_discharge_power_entity"],
+                "available_charge_power_w": cfg["available_charge_power_w"],
+                "available_discharge_power_w": cfg["available_discharge_power_w"],
                 "capacity_kwh": cfg["capacity_kwh"],
                 "request_entity": f"input_number.ems_{prefix}_anforderung_leistung_w",
                 "request_sign": "positiv_laden",
