@@ -23,7 +23,7 @@ description: >-
   momentanes Geräte-Limit), capacity_kwh (optional, nur für die Anzeige).
   Die globale Option residual_power_entity legt den Überschuss-Sensor fest,
   speicher_in_residual_enthalten sagt, ob die Speicherleistung darin steckt.
-version: "1.2.0"
+version: "1.2.1"
 slug: "skytech_hems"
 init: false
 arch:
