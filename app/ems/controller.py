@@ -115,9 +115,11 @@ def _build_devices(device_configs: List[dict]) -> List[Device]:
                 discharge_power_entity=cfg["discharge_power_entity"] or None,
                 power_entity=cfg["power_entity"] or None,
                 power_sign=cfg["power_sign"],
-                available_charge_power_entity=cfg["available_charge_power_entity"] or None,
-                available_discharge_power_entity=cfg["available_discharge_power_entity"] or None,
+                available_charge_power_entity=cfg["available_charge_power_entity"],
+                available_discharge_power_entity=cfg["available_discharge_power_entity"],
                 capacity_kwh=cfg["capacity_kwh"],
+                soc_max_hysteresis_percent=cfg["soc_max_hysteresis_percent"],
+                direction_switch_delay_s=cfg["direction_switch_delay_s"],
                 entity_prefix=prefix,
                 label=label,
             ))

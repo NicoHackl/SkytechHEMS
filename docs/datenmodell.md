@@ -101,23 +101,27 @@ Helfer (Freigabe, technische Freigabe, Modus, Priorität) und die geerbten Regel
 regelbaren Geräte (`hoch_regelzeit_s`, `runter_regelzeit_s`, `max_anderung_pro_schritt_w`,
 `min_anderung_pro_schritt_w`, `geschutzte_mindestleistung_w`, `reserve_w`) — dazu diese eigenen:
 
-| Suffix | Einheit | Default | Funktion |
+| Suffix | Einheit | Ersatzwert | Funktion |
 |---|---|---|---|
 | `entlade_prioritat` | – | 50 | **Reihenfolge beim Entladen, unabhängig von `prioritat`.** Kleiner = zuerst; bei Gleichstand entscheidet die Reihenfolge in der Add-on-Konfiguration |
-| `max_ladeleistung_w`, `min_ladeleistung_w` | W | – / 0 | Grenzen des Ladepfads. Unterhalb der Mindestleistung wird auf 0 gerastet, nicht überschossen |
-| `max_entladeleistung_w`, `min_entladeleistung_w` | W | – / 0 | Grenzen des Entladepfads |
-| `soc_min_prozent` | % | 10 | Entladeschluss (Tiefentladeschutz) |
+| `min_ladeleistung_w`, `min_entladeleistung_w` | W | 0 | Untere Grenzen. Darunter wird auf 0 gerastet, nicht überschossen |
+| `soc_min_prozent` | % | 10 | Entladeschluss und **einziger** Entladeboden |
 | `soc_max_prozent` | % | 100 | Ladeschluss |
-| `soc_reserve_prozent` | % | 0 | Notstromreserve; darunter entlädt das HEMS nicht mehr |
-| `soc_taper_band_prozent` | % | 5 | Drosselband vor der Grenze; bildet die CV-Phase des Geräts nach |
-| `soc_max_hysterese_prozent` | % | 2 | Wiedereinstiegsschwelle unter `soc_max`. Ohne sie flippt der Speicher bei 100 % im Takt |
-| `entlade_sofort_schwelle_w` | W | 300 | Ab dieser Absenkung wird ungerampt zurückgenommen — echter Lastabwurf. Kleinere Absenkungen werden gedämpft, sonst wird aus Sensor-Versatz ein Grenzzyklus |
-| `umschalt_totzone_w` | W | 100 | Totzone um 0; ein Netto-Wunsch darunter führt zu `standby` und verhindert Mikrozyklen |
-| `min_umschaltzeit_s` | s | 300 | Sperrzeit nach einem Richtungswechsel. In der Sperrzeit wird `standby` gefahren, **nicht** die alte Richtung fortgesetzt |
+| `umschalt_totzone_w` | W | 100 | Totzone um 0; ein Netto-Wunsch darunter führt zu `standby` |
 | `netzlade_leistung_w` | W | 0 | Reservierte, noch nicht sicher freigegebene Netzlade-Schnittstelle; muss wegen [B-4](bekannte-luecken.md#offene-bugs) auf `0` bleiben |
-| `netzlade_soc_ziel_prozent` | % | 0 | Nur im Entwurf vorhanden; wird vom aktuellen Code nicht gelesen |
 | `anforderung_leistung_w` **(Ausgabe)** | W | – | **Ein signierter Sollwert: + laden / − entladen.** Der Helfer braucht ein **negatives Minimum** |
-| `anforderung_betriebsart` **(Ausgabe, `input_select`)** | – | – | `laden` / `entladen` / `standby` |
+| `anforderung_betriebsart` **(Ausgabe, `input_select`)** | – | – | `laden` / `entladen` / `standby`; genau diese drei Optionen sind erforderlich |
+
+Beim Speicher weichen drei Ersatzwerte von der sonstigen Regel ab:
+
+- `reserve_w` fällt auf **50 W**, nicht auf 0. Eine vorhandene Entität mit gültiger `0` setzt den
+  Puffer bewusst ab.
+- `max_anderung_pro_schritt_w` hat **keinen** Ersatzwert: ohne gültigen Wert gibt es keine
+  Schrittbegrenzung, das Ziel wird unmittelbar erreicht. Im Status erscheint dafür kein
+  magischer Großwert und kein `Infinity`.
+- `laden_erlaubt` und `entladen_erlaubt` trennen fehlend von ausgefallen: eine **nicht angelegte**
+  Entität heißt „erlaubt", eine vorhandene mit `unknown`/`unavailable`/ungültigem State heißt
+  „gesperrt".
 
 Dazu drei Schalter und eine Auswahlliste:
 
@@ -125,13 +129,23 @@ Dazu drei Schalter und eine Auswahlliste:
 |---|---|---|
 | `input_boolean.ems_<prefix>_laden_erlaubt` | `on`/`off` | Ladepfad freigeben |
 | `input_boolean.ems_<prefix>_entladen_erlaubt` | `on`/`off` | Entladepfad freigeben |
-| `input_boolean.ems_<prefix>_netzladen_aktiv` | `on`/`off` | Reserviert; entgegen der früheren Annahme nicht hart gesperrt und daher bis zur Behebung von [B-4](bekannte-luecken.md#offene-bugs) zwingend `off` |
+| `input_boolean.ems_<prefix>_netzladen_aktiv` | `on`/`off` | Reserviert; bis zur Behebung von [B-4](bekannte-luecken.md#offene-bugs) zwingend `off` |
 | `input_select.ems_<prefix>_betriebsart` | `auto`, `nur_laden`, `nur_entladen`, `standby` | Was das HEMS überhaupt darf |
 
-Externe Sensoren je Speicher: `soc_entity` (Pflicht) und entweder `charge_power_entity` **und**
-`discharge_power_entity` (beide ≥ 0) oder ein signierter `power_entity` mit `power_sign`.
-Optional `available_charge_power_entity` / `available_discharge_power_entity` für das momentane
-Geräte-Limit — sie haben Vorrang vor `max_ladeleistung_w` bzw. `max_entladeleistung_w`.
+Externe Sensoren je Speicher: `soc_entity` (Pflicht), **beide** `available_*`-Sensoren (Pflicht)
+und genau eine Ist-Leistungsvariante — entweder `charge_power_entity` **und**
+`discharge_power_entity` (beide ≥ 0) oder ein signierter `power_entity` mit `power_sign`. Beide
+Varianten gleichzeitig sind ungültig.
+
+`available_charge_power_entity` und `available_discharge_power_entity` sind die **alleinigen
+physischen Maximalgrenzen**. Sie werden getrennt ausgewertet: der Ausfall des einen sperrt nur
+seine Richtung auf `0 W`; ein gültiger Wert `0` sperrt die Richtung bewusst.
+
+**Entfallen** sind `max_ladeleistung_w`, `max_entladeleistung_w`, `soc_reserve_prozent`,
+`soc_taper_band_prozent`, `soc_max_hysterese_prozent`, `entlade_sofort_schwelle_w` und
+`min_umschaltzeit_s`. Hysterese und Umschaltsperre stehen jetzt als
+`soc_max_hysteresis_percent` (Default 2) und `direction_switch_delay_s` (Default 5) in der
+Add-on-Konfiguration; Notstromreserve, Drosselband und Sofort-Schwelle entfallen ersatzlos.
 
 Fehlt einer der Messwerte (`unavailable`), fällt genau dieser Speicher aus der Regelung und geht
 auf `standby`; die übrigen laufen weiter. Ohne Ist-Leistung wäre die Pool-Bereinigung blind.
@@ -151,7 +165,7 @@ auf `standby`; die übrigen laufen weiter. Ohne Ist-Leistung wäre die Pool-Bere
 | `soc_entity` je Speicher | Ladezustand in Prozent |
 | `charge_power_entity` / `discharge_power_entity` je Speicher | Ist-Leistung in Watt, beide ≥ 0 |
 | `power_entity` + `power_sign` je Speicher | Alternative: eine signierte Entität für beide Richtungen |
-| `available_charge_power_entity` / `available_discharge_power_entity` | Momentanes Geräte-Limit, optional |
+| `available_charge_power_entity` / `available_discharge_power_entity` | **Pflicht.** Momentane physische Lade- bzw. Entladegrenze in Watt |
 
 ## Statusvertrag `/api/status`
 
@@ -202,9 +216,10 @@ Speicher (`type: "battery"`): `id`, `label`, `priority` (Laden), `entlade_priori
 `entlade_anforderung_w`, `new_lade_w`, `new_entlade_w`, `netto_w`, `max_ladeleistung_w`,
 `max_entladeleistung_w`, `lade_limit_w`, `entlade_limit_w`, `hausdefizit_anteil_w`, `schutz_w`,
 `geschuetzte_mindestleistung_w`, `laden_erlaubt`, `entladen_erlaubt`, `netzladen_aktiv`,
-`soc_min_prozent`, `soc_max_prozent`, `soc_reserve_prozent`, `umschaltsperre_rest_s`,
-`lade_blockiert_grund`, `entlade_blockiert_grund`, `blockiert_grund`. Dazu `energie_kwh`, sofern
-`capacity_kwh > 0` konfiguriert ist.
+`soc_min_prozent`, `soc_max_prozent`, `soc_max_hysteresis_percent`, `direction_switch_delay_s`,
+`lade_limit_gueltig`, `entlade_limit_gueltig`, `umschaltsperre_rest_s`, `lade_blockiert_grund`,
+`entlade_blockiert_grund`, `blockiert_grund`. Dazu `energie_kwh`, sofern `capacity_kwh > 0`
+konfiguriert ist. `soc_reserve_prozent` ist **entfallen**.
 
 Fallstricke, die schon Fehler verursacht haben:
 
@@ -212,9 +227,13 @@ Fallstricke, die schon Fehler verursacht haben:
   (`Sockel + reserve_w + globaler Puffer`, geklemmt). Der rohe Nutzerwert steht in
   `geschuetzte_mindestleistung_w` bzw. `_a`. Vergleiche gehören gegen den Rohwert.
 - **`source`** sagt, woher die wirksamen Werte stammen: `aus`, `user` oder `ep`.
-- **`max_ladeleistung_w` ist nicht `lade_limit_w`.** Dieselbe Falle wie bei `schutz_w`: das eine
-  ist der Nutzerwert, das andere die Grenze nach SoC-Taper und Geräte-Derating. Vergleiche
-  gehören gegen den Rohwert, Anzeigen von Grenzen gegen den effektiven.
+- **`max_ladeleistung_w` ist nicht `lade_limit_w`.** Beide Schlüssel bleiben aus
+  Kompatibilitätsgründen erhalten, tragen aber Neues: `max_ladeleistung_w` und
+  `max_entladeleistung_w` sind jetzt der gültige Momentanwert des jeweiligen
+  `available_*`-Sensors, `lade_limit_w` und `entlade_limit_w` derselbe Wert **nach** Freigaben und
+  SoC-Grenzen. `lade_limit_gueltig` und `entlade_limit_gueltig` sagen, ob der Sensor überhaupt
+  brauchbar war — `0` bei `gueltig: true` ist eine bewusste Sperre, `0` bei `false` ein
+  Sensorfehler.
 - **`netto_w` ist signiert:** positiv = laden, negativ = entladen. Genauso der geschriebene
   Sollwert `anforderung_leistung_w`.
 - **Drei Sperrgrund-Felder statt einem.** `lade_blockiert_grund` und `entlade_blockiert_grund`

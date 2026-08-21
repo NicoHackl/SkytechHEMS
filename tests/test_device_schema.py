@@ -119,7 +119,17 @@ def test_schema_kennt_battery_zweig():
     assert by_key["entlade_prioritat"]["entity"] == "input_number.ems_acspeicher1_entlade_prioritat"
     assert by_key["entlade_prioritat"]["planning_relevant"] is True
     assert by_key["soc_min_prozent"]["unit"] == "%"
-    assert by_key["max_entladeleistung_w"]["role"] == "technical_constraint"
+    assert by_key["min_entladeleistung_w"]["role"] == "technical_constraint"
+
+    # Entfallene Helfer dürfen im Steuerschema nicht mehr auftauchen: die
+    # physische Grenze kommt aus den available_*-Sensoren, Notstromreserve,
+    # Drosselband und Entlade-Sofort-Schwelle gibt es nicht mehr, Hysterese und
+    # Umschaltsperre sind statische Add-on-Felder.
+    assert not {
+        "max_ladeleistung_w", "max_entladeleistung_w", "soc_reserve_prozent",
+        "soc_taper_band_prozent", "soc_max_hysterese_prozent",
+        "entlade_sofort_schwelle_w", "min_umschaltzeit_s",
+    } & set(by_key)
 
 
 def test_globales_schema_kennt_entlade_abschlag():

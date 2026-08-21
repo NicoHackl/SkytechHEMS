@@ -209,7 +209,12 @@ def _ctrl_items_binary(p: str) -> list:
 
 def _ctrl_items_battery(p: str) -> list:
     """Helfer eines AC-Speichers. Reihenfolge: Freigaben, Prioritäten,
-    Leistungsgrenzen, SoC, Regelverhalten – so wird die Karte lesbar."""
+    Leistungsgrenzen, SoC, Regelverhalten – so wird die Karte lesbar.
+
+    Nicht mehr enthalten: max_lade-/max_entladeleistung_w (ersetzt durch die
+    beiden available_*-Sensoren), soc_reserve_prozent und soc_taper_band_prozent
+    (Funktion entfällt), soc_max_hysterese_prozent und min_umschaltzeit_s
+    (jetzt statische Add-on-Felder) sowie entlade_sofort_schwelle_w."""
     return [
         _control_item(f"input_boolean.ems_{p}_freigabe", "Freigabe", "freigabe", "user_control"),
         _control_item(
@@ -236,16 +241,8 @@ def _ctrl_items_battery(p: str) -> list:
             "entlade_prioritat", "user_preference",
         ),
         _control_item(
-            f"input_number.ems_{p}_max_ladeleistung_w", "Max. Ladeleistung",
-            "max_ladeleistung_w", "technical_constraint", unit="W",
-        ),
-        _control_item(
             f"input_number.ems_{p}_min_ladeleistung_w", "Min. Ladeleistung",
             "min_ladeleistung_w", "technical_constraint", unit="W",
-        ),
-        _control_item(
-            f"input_number.ems_{p}_max_entladeleistung_w", "Max. Entladeleistung",
-            "max_entladeleistung_w", "technical_constraint", unit="W",
         ),
         _control_item(
             f"input_number.ems_{p}_min_entladeleistung_w", "Min. Entladeleistung",
@@ -260,18 +257,6 @@ def _ctrl_items_battery(p: str) -> list:
             "user_preference", unit="%",
         ),
         _control_item(
-            f"input_number.ems_{p}_soc_reserve_prozent", "SoC Notstromreserve",
-            "soc_reserve_prozent", "user_preference", unit="%",
-        ),
-        _control_item(
-            f"input_number.ems_{p}_soc_taper_band_prozent", "SoC Drosselband",
-            "soc_taper_band_prozent", "control_tuning", unit="%", planning_relevant=False,
-        ),
-        _control_item(
-            f"input_number.ems_{p}_soc_max_hysterese_prozent", "SoC Wiedereinstieg",
-            "soc_max_hysterese_prozent", "control_tuning", unit="%", planning_relevant=False,
-        ),
-        _control_item(
             f"input_number.ems_{p}_geschutzte_mindestleistung_w",
             "Geschützte Mindestleistung", "geschutzte_mindestleistung", "user_preference",
             unit="W",
@@ -281,16 +266,8 @@ def _ctrl_items_battery(p: str) -> list:
             unit="W",
         ),
         _control_item(
-            f"input_number.ems_{p}_entlade_sofort_schwelle_w", "Entladung sofort ab",
-            "entlade_sofort_schwelle_w", "control_tuning", unit="W", planning_relevant=False,
-        ),
-        _control_item(
             f"input_number.ems_{p}_umschalt_totzone_w", "Totzone um Null",
             "umschalt_totzone_w", "control_tuning", unit="W", planning_relevant=False,
-        ),
-        _control_item(
-            f"input_number.ems_{p}_min_umschaltzeit_s", "Umschaltsperre",
-            "min_umschaltzeit_s", "timing_guard", unit="s",
         ),
         _control_item(
             f"input_number.ems_{p}_hoch_regelzeit_s", "Hoch-Regelzeit", "hoch_regelzeit_s",

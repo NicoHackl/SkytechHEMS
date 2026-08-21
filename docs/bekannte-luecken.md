@@ -60,8 +60,8 @@ Der Code ist gebaut und getestet; diese Fragen betreffen die **Inbetriebnahme am
 
 | # | Frage | Blockiert |
 |---|---|---|
-| F-12 | Aus welcher Quelle kommt `residual_power_entity`, und wie weit läuft er dem Batterie-Leistungssensor nach? | Dimensionierung von `hoch_regelzeit_s` und `entlade_sofort_schwelle_w` |
-| F-13 | Welches Gerät wird der AC-Speicher? Liefert `soc_entity`, die Ist-Leistungssensoren und `capacity_kwh` | Inbetriebnahme, nicht den Code |
+| F-12 | Aus welcher Quelle kommt `residual_power_entity`, und wie weit läuft er dem Batterie-Leistungssensor nach? | Dimensionierung von `hoch_regelzeit_s` und `max_anderung_pro_schritt_w` |
+| F-13 | Welches Gerät wird der AC-Speicher? Liefert `soc_entity`, die Ist-Leistungssensoren, **beide `available_*`-Sensoren** und `capacity_kwh` | Inbetriebnahme, nicht den Code |
 | F-14 | Bringt das Gerät eine eigene Nulleinspeisung mit, und lässt sie sich abschalten? Nicht abschaltbar heißt: HEMS und Gerät regeln gegeneinander | Inbetriebnahme |
 
 ## Bewusst nicht umgesetzt

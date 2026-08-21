@@ -126,6 +126,27 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
   `ep_proposal_status`; die bestehende Moduslogik bleibt unverändert.
 
 ### Geändert
+- **Der Speichervertrag ist deutlich schmaler (BRECHEND).** Die physische Grenze eines AC-Speichers
+  kommt jetzt ausschließlich aus zwei Sensoren, die beide **Pflicht** sind:
+  `available_charge_power_entity` und `available_discharge_power_entity`.
+  - **Getrennt ausfallsicher.** Ein fehlender, ausgefallener oder unbrauchbarer Ladesensor sperrt
+    nur den Ladepfad auf `0 W`; der Entladepfad läuft weiter — und umgekehrt. Ein **gültiger Wert
+    `0`** sperrt die Richtung bewusst und wird nicht als Fehler behandelt. Die Sperrgründe trennen
+    beides: `limit_sensor` heißt „Sensor unbrauchbar", `wr_derating` heißt „gültige Grenze ist 0".
+  - **Ein gesunkenes Limit gilt sofort.** Die Rampe darf ein Ziel bremsen, aber nach der
+    Rampenrechnung liegt der Sollwert nie über der momentanen physischen Grenze.
+  - **Kein SoC-Taper mehr.** Innerhalb der SoC-Grenzen ist allein das momentane Limit maßgeblich,
+    an der Grenze wird die Richtung `0`. Die CV-Phase regelt der Wechselrichter selbst und meldet
+    sie über genau diese Sensoren — ein zweites Drosselband im HEMS regelte dagegen.
+- **`max_anderung_pro_schritt_w` beim Speicher ist optional.** Ohne gültigen Wert gibt es keine
+  Schrittbegrenzung und das Ziel wird unmittelbar erreicht. Intern ist das ein echtes „kein Limit",
+  kein magischer Großwert — im Status steht deshalb nirgends `Infinity`.
+- **Speicher-Reserve fällt auf 50 W statt 0 W.** Eine vorhandene Entität mit gültiger `0` setzt den
+  Puffer weiterhin bewusst ab.
+- **`laden_erlaubt` und `entladen_erlaubt` trennen fehlend von ausgefallen.** Eine gar nicht
+  angelegte Freigabe heißt „erlaubt" — wer den Schalter nie angelegt hat, will keine zusätzliche
+  Sperre. Eine vorhandene Entität mit `unknown`, `unavailable` oder unbrauchbarem State heißt
+  dagegen „gesperrt": ein ausgefallener Schalter ist kein Grund weiterzuregeln.
 - **Gerätename und effektives Entitätspräfix müssen eindeutig sein.** Zwei Geräte mit demselben
   Präfix schrieben bisher unbemerkt auf dieselben HA-Helfer.
 - **`/api/status` liefert die Zwischengrößen der Pool-Rechnung mit.** Neu sind
@@ -217,6 +238,25 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
   Ampere-Vorschlag (`geschutzte_mindestleistung_a_vorschlag`) vergleichen: Watt-Geräte hatten
   `schutz_w`, Ampere-Geräte (Wallbox) gar kein Pendant, sodass die Plan-Rückkopplung dort
   „unbekannt" statt eines Vergleichs zeigte.
+
+### Entfernt
+- **Sieben Speicher-Helfer entfallen (BRECHEND).** Sie werden nicht mehr gelesen, haben keine
+  Wirkung mehr und dürfen in Home Assistant gelöscht werden:
+  `max_ladeleistung_w`, `max_entladeleistung_w`, `soc_reserve_prozent`, `soc_taper_band_prozent`,
+  `soc_max_hysterese_prozent`, `entlade_sofort_schwelle_w` und `min_umschaltzeit_s` (nur beim
+  Speicher — beim regelbaren Gerät bleibt `min_umschaltzeit_s` die Phasenwechsel-Sperre).
+  - Die beiden Maximalleistungen ersetzen die `available_*`-Sensoren.
+  - Hysterese und Umschaltsperre sind jetzt statische Add-on-Felder
+    `soc_max_hysteresis_percent` (Default `2`) und `direction_switch_delay_s` (Default `5`).
+  - **Notstromreserve, Drosselband und Entlade-Sofort-Schwelle entfallen ersatzlos.** Der
+    Entladeboden ist nur noch `soc_min_prozent`. Absenkungen der Entladeanforderung laufen
+    ausschließlich über `max_anderung_pro_schritt_w`; die Fälle, die wirklich sofort auf `0 W`
+    müssen — sicherer Standby, ungültiger Sensor, Richtungswechsel, Netzdefizit — greifen ohnehin
+    vor der Rampe. Der Status verliert dadurch `soc_reserve_prozent` und den Sperrgrund
+    `soc_reserve`.
+- **Die Energy-Pilot-Vorschläge `lade_max_w` und `entlade_max_w` werden nicht mehr gelesen** und
+  sind aus dem HEMS-Gerätevertrag entfernt. Der Energy Pilot darf physische Grenzen des
+  Wechselrichters nicht überschreiben.
 
 ### Behoben
 - **Fremdgesteuerte Verbraucher blähen den Pool nicht mehr auf.** Der Pool wird als
