@@ -4,7 +4,7 @@
 etwas in [architektur.md](architektur.md), heißt das nicht, dass es implementiert ist — hier steht,
 wo nicht.
 
-Stand: 20.08.2026.
+Stand: 21.08.2026.
 
 ## Abweichungen Spec ↔ Code
 
@@ -41,16 +41,32 @@ Dinge, die schon einmal Zeit gekostet haben:
   steht dort `min: 0`, klemmt Home Assistant jede Entladeanforderung serverseitig auf 0 und der
   Speicher entlädt nie.
 - **Add-on-Optionen erscheinen als YAML-Editor.** Weil das Schema eine Objektliste enthält, zeigt
-  Home Assistant die Feldbeschreibungen aus `translations/` nicht an. Maßgeblich ist
+  Home Assistant die Feldbeschreibungen aus `translations/` nicht an. Bequemer ist der Bereich
+  **Konfiguration** im Ingress-Panel; er schreibt dieselbe Quelle (D-042). Maßgeblich bleibt
   [konfiguration.md](konfiguration.md).
+- **Das Manifest-Schema kann Pflichtfelder je Geräteklasse nicht ausdrücken.** Eine gemischte
+  Objektliste kennt keine bedingten Pflichtfelder, und eine Pflichtmarkierung für `switch_entity`
+  machte jedes `controllable`-Gerät ungültig. Alle klassenspezifischen Felder stehen deshalb als
+  `?` im Schema — autoritativ validiert [`app/configuration.py`](../app/configuration.py). Wer die
+  Pflichtangaben sucht, findet sie in [device_classes/](device_classes/global.md), nicht in
+  `config.yaml`.
+- **Neue Pflichtfelder machen Bestandsgeräte inaktiv.** Nach dem Update auf den Entitäts-Fallback-
+  Vertrag laufen `controllable`- und `binary`-Geräte ohne ihre neuen Add-on-Felder nicht mehr an,
+  ebenso ein Speicher ohne die beiden `available_*`-Sensoren. Sie verschwinden nicht, sondern
+  stehen mit ihren Feldfehlern unter `inactive_devices`. Die Migrationsschritte stehen im
+  [CHANGELOG.md](../CHANGELOG.md).
+- **Ein Schreibziel hat keinen Fallback.** Fehlt der `anforderung_*`-Helfer, hat er die falsche
+  Domain, fehlen dem Betriebsart-Helfer Optionen oder erlaubt der Speicher-Sollwert keinen
+  negativen Wert, ist **nur dieses** Gerät `runtime_active: false`. Es schreibt weiter seinen
+  sicheren Zustand — der Grund steht in `inactive_reasons`, nicht nur im Log.
 
 ## Offene Bugs
 
 | ID | Beschreibung | Auswirkung | Umgehung |
 |---|---|---|---|
 | B-1 | Im Ampere-Modus rechnen Deadband und Schreib-Guard in [`app/ems/devices.py`](../app/ems/devices.py) (`get_write_ops`) in **Watt**, geschrieben werden aber abgerundete Ampere. Eine Watt-Änderung unter 1 A ergibt denselben Ampere-Wert und löst trotzdem einen Schreibvorgang aus | Der identische Wert wird erneut geschrieben, `last_changed` springt und stört das Rampen-Timing. Nur bei `output_unit=ampere`, vor allem bei `min_anderung_pro_schritt_a = 0` | `min_anderung_pro_schritt_a` > 0 setzen. Fix: Ziel- gegen Ist-**Ampere** vergleichen und das Totband ebenfalls in Ampere prüfen |
-| B-2 | Fehlgeschlagene Write-Ops werden in [`app/ha_client.py`](../app/ha_client.py) (`execute_write_ops`) nur geloggt, nicht geworfen. Der Zyklus gilt danach als erfolgreich (`error: ""`) | Ein vertippter Helfername schlägt jeden Zyklus still fehl; in der Oberfläche ist nichts zu sehen | Add-on-Log prüfen. Fix: fehlgeschlagene Ops zählen und in `/api/status` sichtbar machen |
 | B-3 | `POST /api/set` schränkt die Ziel-Entität innerhalb der erlaubten Domains nicht auf `ems_*` ein | Wer den Endpunkt direkt aufruft, kann jeden `input_*`-Helfer setzen. Hinter dem Ingress authentifiziert, deshalb bewusst belassen | — |
+| B-4 | Die reservierten Helfer `input_boolean.ems_<prefix>_netzladen_aktiv` und `input_number.ems_<prefix>_netzlade_leistung_w` werden bereits ausgeführt, obwohl Netzladen zurückgestellt ist. `netzlade_soc_ziel_prozent` wird dagegen nicht gelesen; SoC-Ziel, Preislogik und vollständige Sicherheitsbegrenzung fehlen | Ein versehentliches `netzladen_aktiv: on` kann einen AC-Speicher unkontrolliert aus dem Netz laden | Beide Helfer nicht anlegen oder auf `off` und `0 W` halten. Vor Freigabe des Netzladens den Pfad hart sperren oder Phase 6 vollständig implementieren und testen |
 
 ## Offene Fachfragen der AC-Speicher-Erweiterung
 
@@ -59,8 +75,8 @@ Der Code ist gebaut und getestet; diese Fragen betreffen die **Inbetriebnahme am
 
 | # | Frage | Blockiert |
 |---|---|---|
-| F-12 | Aus welcher Quelle kommt `residual_power_entity`, und wie weit läuft er dem Batterie-Leistungssensor nach? | Dimensionierung von `hoch_regelzeit_s` und `entlade_sofort_schwelle_w` |
-| F-13 | Welches Gerät wird der AC-Speicher? Liefert `soc_entity`, die Ist-Leistungssensoren und `capacity_kwh` | Inbetriebnahme, nicht den Code |
+| F-12 | Aus welcher Quelle kommt `residual_power_entity`, und wie weit läuft er dem Batterie-Leistungssensor nach? | Dimensionierung von `hoch_regelzeit_s` und `max_anderung_pro_schritt_w` |
+| F-13 | Welches Gerät wird der AC-Speicher? Liefert `soc_entity`, die Ist-Leistungssensoren, **beide `available_*`-Sensoren** und `capacity_kwh` | Inbetriebnahme, nicht den Code |
 | F-14 | Bringt das Gerät eine eigene Nulleinspeisung mit, und lässt sie sich abschalten? Nicht abschaltbar heißt: HEMS und Gerät regeln gegeneinander | Inbetriebnahme |
 
 ## Bewusst nicht umgesetzt

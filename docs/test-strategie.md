@@ -18,13 +18,14 @@ bei dieser Anzahl ist eine Unterordnerstruktur reine Bewegung ohne Orientierungs
 
 | Datei | Umfang |
 |---|---|
-| `test_state.py` | `StateProxy`, `safe_float`, `parse_ts` — reine Unit-Tests |
+| `test_state.py` | `StateProxy`, Resolve-Vertrag (`missing`/`unavailable`/`invalid`/`valid`, Quelle), `safe_float`, `parse_ts` |
+| `test_configuration.py` | Normalisierung, Validierung mit Feldpfaden, Modus-Listen, Eindeutigkeit, Revisions-Hash, Diff für die sichere Deaktivierung |
 | `test_controllable_device.py` | `ControllableDevice`: Rampe, Deadband, Ampere-Umrechnung, Phasenwahl |
 | `test_binary_device.py` | `BinaryDevice`: Hysterese, Mindestlaufzeit, Mindestauszeit, Abschaltverzögerung |
 | `test_controller.py` | Prioritätskaskade, One-Change-Limit, Pool-Berechnung |
 | `test_run_cycle.py` | Vollständiger Zyklus gegen einen gefälschten HA-State — die Integrationsebene |
 | `test_ep_uebernahme.py` | Übernahme der Energy-Pilot-Vorschläge je Regelmodus, Fallback auf Nutzerwerte |
-| `test_battery_device.py` | `BatteryDevice`: Pool-Semantik, SoC-Grenzen und Taper, Richtungsauflösung, asymmetrische Rampe, signierter Schreibvertrag |
+| `test_battery_device.py` | `BatteryDevice`: Pool-Semantik, SoC-Grenzen, getrennte `available_*`-Limits, Richtungsauflösung, Rampe, signierter Schreibvertrag |
 | `test_allocation_properties.py` | Property-Tests mit Hypothesis über die Pool-Verteilung und die Speicher-Invarianten P1–P7 |
 
 `tests/conftest.py` stellt die gemeinsamen Fixtures bereit (State-Schnappschüsse, Gerätekonfiguration).
@@ -54,6 +55,15 @@ Für Speicher zusätzlich verpflichtend:
    `test_pool_ohne_speicher_unveraendert` und die Property P7 sind der Beweis, dass die
    Erweiterung wirklich additiv ist.
 9. **Der sichere Zustand wird aktiv geschrieben**, nicht ausgelassen.
+10. **Beide `available_*`-Limits begrenzen getrennt.** Der Ausfall des einen darf die andere
+    Richtung nicht sperren, und ein gültiges Limit `0` ist eine bewusste Sperre, kein Fehler.
+11. **Nach der Rampe nie über dem gültigen WR-Limit.** Ein gesunkenes Limit gilt sofort.
+
+Für jeden Fallback zusätzlich verpflichtend:
+
+12. **Die volle Matrix je Feld:** gültiger HA-Wert, gültiger HA-Nullwert, fehlende Entität,
+    `unavailable`, `unknown` und nicht numerischer Wert. Wert und Diagnose werden getrennt
+    geprüft — `missing` und `unavailable` liefern denselben Wert, aber verschiedene Ursachen.
 
 Ein Bugfix ohne Regressionstest ist nicht abgeschlossen. Der Test muss **vor** dem Fix
 nachweislich fehlschlagen.
@@ -72,9 +82,9 @@ nachweislich fehlschlagen.
 
 Invarianten auf **Zuteilungs**- und **Sollwertebene** auseinanderhalten: `_alloc_w` und
 `_entlade_ziel_w` dürfen Pool und Hausdefizit nie überschreiten. Der geschriebene Sollwert darf
-das vorübergehend sehr wohl — die asymmetrische Entladerampe dämpft eine kleine Zielabsenkung
-absichtlich, sonst wird aus Sensor-Versatz ein Grenzzyklus. Auf Sollwertebene gilt deshalb nur
-die Monotonie-Form: nie über Ziel **und** bisherigen Wert hinaus.
+das vorübergehend sehr wohl — die Schrittbegrenzung dämpft eine Zielabsenkung absichtlich, sonst
+wird aus Sensor-Versatz ein Grenzzyklus. Auf Sollwertebene gilt deshalb nur die Monotonie-Form:
+nie über Ziel **und** bisherigen Wert hinaus.
 
 `test_allocation_properties.py` prüft mit Hypothesis Zusicherungen, die für **jede** zufällige
 Gerätekonstellation gelten müssen — etwa dass die Summe der Zuteilungen den Pool nie übersteigt und

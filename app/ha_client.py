@@ -1,8 +1,10 @@
 import logging
 import os
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import aiohttp
+
+from ems.ops import WriteOp, WriteResult
 
 log = logging.getLogger(__name__)
 
@@ -76,20 +78,35 @@ class HAClient:
                     f"HA service {domain}.{service} returned {resp.status}: {text[:200]}"
                 )
 
-    async def execute_write_ops(self, write_ops: List[Tuple[str, str, Dict[str, Any]]]) -> None:
-        """Führt (domain, service, service_data)-Tupel gegen die HA-REST-API aus."""
+    async def execute_write_ops(self, write_ops: List[WriteOp]) -> List[WriteResult]:
+        """Führt die Operationen aus und meldet je Operation Erfolg oder Fehler.
+
+        Ein Nicht-2xx-Status wird NICHT mehr verschluckt: der Aufrufer ordnet den
+        Fehler über `WriteOp.owner` dem verursachenden Gerät zu und macht ihn im
+        Status sichtbar. Geworfen wird trotzdem nicht – ein kaputtes Schreibziel
+        darf die übrigen Geräte nicht mitreißen.
+        """
+        results: List[WriteResult] = []
         if not write_ops:
-            return
+            return results
         session = self._get_session()
-        for domain, service, data in write_ops:
-            url = f"{_HA_URL}/api/services/{domain}/{service}"
+        for op in write_ops:
+            url = f"{_HA_URL}/api/services/{op.domain}/{op.service}"
             try:
                 async with session.post(
                     url,
-                    json=data,
+                    json=op.data,
                     timeout=aiohttp.ClientTimeout(total=5),
                 ) as resp:
-                    if resp.status not in (200, 201):
-                        log.warning("Service %s.%s → HTTP %s", domain, service, resp.status)
+                    if resp.status in (200, 201):
+                        results.append(WriteResult(op, True))
+                        continue
+                    error = f"HTTP {resp.status}"
+                    log.warning("Service %s.%s (%s) → %s",
+                                op.domain, op.service, op.owner or "global", error)
             except Exception as exc:
-                log.error("Service call %s.%s failed: %s", domain, service, exc)
+                error = str(exc)
+                log.error("Service-Aufruf %s.%s (%s) fehlgeschlagen: %s",
+                          op.domain, op.service, op.owner or "global", error)
+            results.append(WriteResult(op, False, error))
+        return results

@@ -17,15 +17,24 @@ PREFIX = "acspeicher1"
 SOC_ENTITY     = f"sensor.{PREFIX}_soc"
 LADE_ENTITY    = f"sensor.{PREFIX}_ladeleistung"
 ENTLADE_ENTITY = f"sensor.{PREFIX}_entladeleistung"
+LADE_LIMIT     = f"sensor.{PREFIX}_lade_limit"
+ENTLADE_LIMIT  = f"sensor.{PREFIX}_entlade_limit"
 ANF_ENTITY     = f"input_number.ems_{PREFIX}_anforderung_leistung_w"
 ANF_MODE       = f"input_select.ems_{PREFIX}_anforderung_betriebsart"
 
 
 def make_battery(**kw):
-    """Speicher mit getrennten Ist-Sensoren (Variante A aus D-B12)."""
+    """Speicher mit getrennten Ist-Sensoren (Variante A aus D-B12).
+
+    Die beiden available_*-Sensoren sind Pflicht: sie sind die alleinigen
+    physischen Maximalgrenzen.
+    """
     kw.setdefault("soc_entity", SOC_ENTITY)
-    kw.setdefault("charge_power_entity", LADE_ENTITY)
-    kw.setdefault("discharge_power_entity", ENTLADE_ENTITY)
+    kw.setdefault("available_charge_power_entity", LADE_LIMIT)
+    kw.setdefault("available_discharge_power_entity", ENTLADE_LIMIT)
+    if not kw.get("power_entity"):
+        kw.setdefault("charge_power_entity", LADE_ENTITY)
+        kw.setdefault("discharge_power_entity", ENTLADE_ENTITY)
     d = BatteryDevice(id=PREFIX, allowed_modes=["auto", "manuell"],
                       entity_prefix=PREFIX, **kw)
     d.eligible = True
@@ -35,9 +44,9 @@ def make_battery(**kw):
 
 def battery_states(*, soc=50, lade_ist=0, entlade_ist=0, sollwert=0,
                    betriebsart="auto", anforderung_betriebsart="standby",
-                   max_lade=5000, min_lade=0, max_entlade=5000, min_entlade=0,
-                   soc_min=10, soc_max=100, soc_reserve=0, taper=0, hysterese=2,
-                   prio=1, entlade_prio=50, sofort=300, totzone=0, umschaltzeit=0,
+                   lade_limit=5000, entlade_limit=5000,
+                   min_lade=0, min_entlade=0, soc_min=10, soc_max=100,
+                   prio=1, entlade_prio=50, totzone=0,
                    hoch=0, runter=0, schritt=100000, deadband=0,
                    laden="on", entladen="on", netzladen="off",
                    geschuetzt=0, reserve=0, **extra):
@@ -50,6 +59,8 @@ def battery_states(*, soc=50, lade_ist=0, entlade_ist=0, sollwert=0,
         SOC_ENTITY:     soc,
         LADE_ENTITY:    lade_ist,
         ENTLADE_ENTITY: entlade_ist,
+        LADE_LIMIT:     lade_limit,
+        ENTLADE_LIMIT:  entlade_limit,
         ANF_ENTITY:     sollwert,
         ANF_MODE:       anforderung_betriebsart,
         f"input_select.ems_{PREFIX}_betriebsart":              betriebsart,
@@ -58,18 +69,11 @@ def battery_states(*, soc=50, lade_ist=0, entlade_ist=0, sollwert=0,
         f"input_boolean.ems_{PREFIX}_netzladen_aktiv":         netzladen,
         f"input_number.ems_{PREFIX}_prioritat":                prio,
         f"input_number.ems_{PREFIX}_entlade_prioritat":        entlade_prio,
-        f"input_number.ems_{PREFIX}_max_ladeleistung_w":       max_lade,
         f"input_number.ems_{PREFIX}_min_ladeleistung_w":       min_lade,
-        f"input_number.ems_{PREFIX}_max_entladeleistung_w":    max_entlade,
         f"input_number.ems_{PREFIX}_min_entladeleistung_w":    min_entlade,
         f"input_number.ems_{PREFIX}_soc_min_prozent":          soc_min,
         f"input_number.ems_{PREFIX}_soc_max_prozent":          soc_max,
-        f"input_number.ems_{PREFIX}_soc_reserve_prozent":      soc_reserve,
-        f"input_number.ems_{PREFIX}_soc_taper_band_prozent":   taper,
-        f"input_number.ems_{PREFIX}_soc_max_hysterese_prozent": hysterese,
-        f"input_number.ems_{PREFIX}_entlade_sofort_schwelle_w": sofort,
         f"input_number.ems_{PREFIX}_umschalt_totzone_w":       totzone,
-        f"input_number.ems_{PREFIX}_min_umschaltzeit_s":       umschaltzeit,
         f"input_number.ems_{PREFIX}_hoch_regelzeit_s":         hoch,
         f"input_number.ems_{PREFIX}_runter_regelzeit_s":       runter,
         f"input_number.ems_{PREFIX}_max_anderung_pro_schritt_w": schritt,
@@ -155,11 +159,7 @@ def test_signierter_ist_sensor_beide_vorzeichen():
         ("positiv_entladen", 2000, 0.0, 2000.0),
         ("positiv_entladen", -900, 900.0, 0.0),
     ]:
-        b = BatteryDevice(id=PREFIX, allowed_modes=["auto"], entity_prefix=PREFIX,
-                          soc_entity=SOC_ENTITY,
-                          power_entity=f"sensor.{PREFIX}_leistung",
-                          power_sign=sign)
-        b.eligible, b.source = True, "user"
+        b = make_battery(power_entity=f"sensor.{PREFIX}_leistung", power_sign=sign)
         prepare(b, **{f"sensor.{PREFIX}_leistung": wert})
         assert b.gemessene_last_w == erwartet_lade
         assert b.netz_support_w == erwartet_entlade
@@ -180,36 +180,41 @@ def test_soc_min_stoppt_entladen():
     assert b.entlade_kapazitaet_w() == 0.0
 
 
-def test_soc_taper_linear():
-    """Halbes Drosselband übrig -> halbe Leistung."""
-    b = prepare(make_battery(), soc=97.5, soc_max=100, taper=5, max_lade=4000)
-    assert b._lade_limit_w() == pytest.approx(2000.0)
-    b = prepare(make_battery(), soc=12.5, soc_min=10, taper=5, max_entlade=4000)
-    assert b._entlade_limit_w() == pytest.approx(2000.0)
+def test_kein_soc_taper_mehr():
+    """Innerhalb der SoC-Grenzen gilt allein das momentane WR-Limit.
+
+    Die CV-Phase regelt der Wechselrichter selbst – und genau das meldet er
+    über die available_*-Sensoren. Ein zweites, lineares Drosselband im HEMS
+    hätte dagegengeregelt."""
+    b = prepare(make_battery(), soc=97.5, soc_max=100, lade_limit=4000)
+    assert b._lade_limit_w() == pytest.approx(4000.0)
+    b = prepare(make_battery(), soc=12.5, soc_min=10, entlade_limit=4000)
+    assert b._entlade_limit_w() == pytest.approx(4000.0)
 
 
 def test_soc_max_hysterese_haelt_gesperrt():
     """Nach Erreichen von soc_max bleibt der Ladepfad zu, bis der SoC unter die
     Wiedereinstiegsschwelle fällt – sonst flippt der Speicher bei 100 % im Takt."""
-    b = make_battery()
-    prepare(b, soc=100, soc_max=100, hysterese=2)
+    b = make_battery(soc_max_hysteresis_percent=2.0)
+    prepare(b, soc=100, soc_max=100)
     assert b._lade_limit_w() == 0.0
-    prepare(b, soc=99, soc_max=100, hysterese=2)      # noch im Hysterese-Band
+    prepare(b, soc=99, soc_max=100)      # noch im Hysterese-Band
     assert b._lade_limit_w() == 0.0
-    prepare(b, soc=97, soc_max=100, hysterese=2)      # unter der Schwelle
+    prepare(b, soc=97, soc_max=100)      # unter der Schwelle
     assert b._lade_limit_w() > 0.0
 
 
-def test_soc_reserve_blockiert_entladung():
-    b = prepare(make_battery(), soc=25, soc_min=10, soc_reserve=30)
+def test_entladeboden_ist_allein_soc_min():
+    """Die Notstromreserve entfällt ersatzlos – der Boden ist soc_min_prozent."""
+    b = prepare(make_battery(), soc=25, soc_min=10)
+    assert b.entlade_kapazitaet_w() > 0.0
+    b = prepare(make_battery(), soc=9, soc_min=10)
     assert b.entlade_kapazitaet_w() == 0.0
-    assert b._entlade_block == "soc_reserve"
+    assert b._entlade_block == "soc_min"
 
 
-def test_wr_derating_hat_vorrang():
-    entity = f"sensor.{PREFIX}_lade_limit"
-    b = make_battery(available_charge_power_entity=entity)
-    prepare(b, max_lade=5000, **{entity: 1200})
+def test_available_sensor_ist_die_ladegrenze():
+    b = prepare(make_battery(), lade_limit=1200)
     assert b._lade_limit_w() == 1200.0
 
 
@@ -263,7 +268,7 @@ def test_totzone_fuehrt_zu_standby():
 
 def test_umschaltsperre_blockiert_richtungswechsel():
     """Läuft der Speicher auf Laden, darf er nicht sofort auf Entladen springen."""
-    b = prepare(make_battery(), sollwert=2000, umschaltzeit=300)
+    b = prepare(make_battery(direction_switch_delay_s=300), sollwert=2000)
     b._last_direction_change_ts = 10_000.0 - 60.0     # vor 60 s gewechselt
     b.set_discharge_target(1500.0)
     b.calculate_ramp(0.0)
@@ -274,7 +279,7 @@ def test_umschaltsperre_blockiert_richtungswechsel():
 def test_umschaltsperre_faehrt_standby_nicht_alte_richtung():
     """In der Sperrzeit wird STANDBY gefahren – sonst entlädt der Speicher in den
     PV-Überschuss hinein."""
-    b = prepare(make_battery(), sollwert=-1800, umschaltzeit=300)
+    b = prepare(make_battery(direction_switch_delay_s=300), sollwert=-1800)
     b._last_direction_change_ts = 10_000.0 - 10.0
     b._alloc_w = 2500.0
     b.calculate_ramp(0.0)
@@ -283,7 +288,7 @@ def test_umschaltsperre_faehrt_standby_nicht_alte_richtung():
 
 
 def test_umschaltsperre_laeuft_ab():
-    b = prepare(make_battery(), sollwert=2000, umschaltzeit=300)
+    b = prepare(make_battery(direction_switch_delay_s=300), sollwert=2000)
     b._last_direction_change_ts = 10_000.0 - 400.0    # Sperre abgelaufen
     b.set_discharge_target(1500.0)
     b.calculate_ramp(0.0)
@@ -294,22 +299,25 @@ def test_umschaltsperre_laeuft_ab():
 # Rampen
 # ---------------------------------------------------------------------------
 
-def test_entladung_runter_sofort_ungerampt():
-    """H-5: grosse Absenkung ist ein echter Lastabwurf -> sofort, sonst
-    exportieren wir Batteriestrom."""
-    b = prepare(make_battery(), sollwert=-3000, sofort=300, schritt=100)
+def test_entladung_runter_folgt_der_schrittbegrenzung():
+    """Die Entlade-Sofort-Schwelle entfällt: Absenkungen laufen ausschließlich
+    über max_anderung_pro_schritt_w."""
+    b = prepare(make_battery(), sollwert=-3000, schritt=100)
+    b.set_discharge_target(500.0)
+    b.calculate_ramp(0.0)
+    assert b.new_entlade_w == 2900.0
+
+
+def test_entladung_runter_ohne_schrittbegrenzung_sofort():
+    """Fehlt die Maximaländerung, wird das Ziel unmittelbar erreicht."""
+    states = battery_states(sollwert=-3000)
+    del states._states[f"input_number.ems_{PREFIX}_max_anderung_pro_schritt_w"]
+    b = make_battery()
+    b.begin_cycle(10_000.0)
+    b.update_from_ha(states, 10_000.0, 0.0)
     b.set_discharge_target(500.0)
     b.calculate_ramp(0.0)
     assert b.new_entlade_w == 500.0
-
-
-def test_kleine_absenkung_wird_gedaempft():
-    """H-7: kleine Absenkungen sind meist Sensor-Versatz -> dämpfen, sonst
-    entsteht daraus ein Grenzzyklus."""
-    b = prepare(make_battery(), sollwert=-2000, sofort=300, schritt=50)
-    b.set_discharge_target(1900.0)
-    b.calculate_ramp(0.0)
-    assert b.new_entlade_w == 1950.0
 
 
 def test_entladung_hoch_gerampt():
@@ -397,8 +405,8 @@ def test_deadband_beim_senken_der_entladung_aus():
 
 
 def test_deadband_beim_vorzeichenwechsel_aus():
-    b = prepare(make_battery(), sollwert=-50, anforderung_betriebsart="entladen",
-                deadband=500, umschaltzeit=0, min_entlade=0)
+    b = prepare(make_battery(direction_switch_delay_s=0), sollwert=-50,
+                anforderung_betriebsart="entladen", deadband=500, min_entlade=0)
     b._alloc_w = 60.0
     b.calculate_ramp(0.0)
     assert op_for(b.get_write_ops(), ANF_ENTITY)[2]["value"] == 60.0
@@ -458,9 +466,12 @@ def test_unbekannte_betriebsart_faellt_auf_standby():
     ({"betriebsart": "nur_laden"},         "_entlade_block", "betriebsart"),
     ({"entladen": "off"},                  "_entlade_block", "entladen_gesperrt"),
     ({"soc": 5, "soc_min": 10},            "_entlade_block", "soc_min"),
-    ({"soc": 20, "soc_reserve": 40},       "_entlade_block", "soc_reserve"),
     ({"netzladen": "on"},                  "_entlade_block", "netzladen"),
     ({"soc": "unavailable"},               "_lade_block",    "sensor_ungueltig"),
+    ({"lade_limit": "unavailable"},        "_lade_block",    "limit_sensor"),
+    ({"entlade_limit": "unavailable"},     "_entlade_block", "limit_sensor"),
+    ({"lade_limit": 0},                    "_lade_block",    "wr_derating"),
+    ({"entlade_limit": 0},                 "_entlade_block", "wr_derating"),
 ])
 def test_blockiert_grund_je_sperrfall(kwargs, feld, grund):
     b = prepare(make_battery(), **kwargs)
@@ -498,3 +509,182 @@ def test_gesperrter_speicher_reserviert_keinen_pool():
 
     b = prepare(make_battery(), betriebsart="auto", geschuetzt=1500)
     assert b.consume_from_pool(4000.0, 0.0) == 2500.0
+
+
+# ---------------------------------------------------------------------------
+# Vereinfachter Speichervertrag: available_*-Sensoren, entfallene Helfer
+# ---------------------------------------------------------------------------
+
+ENTFALLENE_HELFER = (
+    f"input_number.ems_{PREFIX}_max_ladeleistung_w",
+    f"input_number.ems_{PREFIX}_max_entladeleistung_w",
+    f"input_number.ems_{PREFIX}_soc_reserve_prozent",
+    f"input_number.ems_{PREFIX}_soc_taper_band_prozent",
+    f"input_number.ems_{PREFIX}_soc_max_hysterese_prozent",
+    f"input_number.ems_{PREFIX}_entlade_sofort_schwelle_w",
+    f"input_number.ems_{PREFIX}_min_umschaltzeit_s",
+)
+
+
+def test_entfallene_helfer_werden_nicht_mehr_gelesen():
+    """Sie dürfen weder die Regelung beeinflussen noch in der Diagnose auftauchen."""
+    b = prepare(make_battery(), **{entity: 4242 for entity in ENTFALLENE_HELFER})
+    assert not set(ENTFALLENE_HELFER) & set(b.entity_diagnostics)
+    assert b._lade_limit_w() == 5000.0          # aus dem available_*-Sensor, nicht 4242
+    assert b.soc_max_hysteresis_percent == 2.0
+    assert b.direction_switch_delay_s == 5.0
+
+
+def test_beide_limits_begrenzen_unabhaengig():
+    b = prepare(make_battery(), lade_limit=1500, entlade_limit=4200)
+    assert b._lade_limit_w() == 1500.0
+    assert b._entlade_limit_w() == 4200.0
+
+
+@pytest.mark.parametrize("fehlerbild", ["unavailable", "unknown", "kaputt"])
+def test_defekter_ladelimit_sensor_sperrt_nur_den_ladepfad(fehlerbild):
+    b = prepare(make_battery(), lade_limit=fehlerbild, entlade_limit=4000)
+    assert b._lade_limit_w() == 0.0
+    assert b._darf_laden() is False
+    assert b._lade_block == "limit_sensor"
+    assert b.entlade_kapazitaet_w() == 4000.0
+
+
+@pytest.mark.parametrize("fehlerbild", ["unavailable", "unknown", "kaputt"])
+def test_defekter_entladelimit_sensor_sperrt_nur_den_entladepfad(fehlerbild):
+    b = prepare(make_battery(), lade_limit=4000, entlade_limit=fehlerbild)
+    assert b.entlade_kapazitaet_w() == 0.0
+    assert b._entlade_block == "limit_sensor"
+    assert b._darf_laden() is True
+
+
+def test_fehlender_limit_sensor_sperrt_nur_seine_richtung():
+    states = battery_states()
+    del states._states[LADE_LIMIT]
+    b = make_battery()
+    b.begin_cycle(10_000.0)
+    b.update_from_ha(states, 10_000.0, 0.0)
+    assert b._darf_laden() is False
+    assert b.entlade_kapazitaet_w() == 5000.0
+    assert b.entity_diagnostics[LADE_LIMIT]["state"] == "missing"
+
+
+def test_gueltige_null_sperrt_die_richtung_bewusst():
+    b = prepare(make_battery(), lade_limit=0, entlade_limit=0)
+    assert b._darf_laden() is False
+    assert b._lade_block == "wr_derating"
+    assert b.entlade_kapazitaet_w() == 0.0
+    assert b._entlade_block == "wr_derating"
+    assert b.entity_diagnostics[LADE_LIMIT]["state"] == "valid"
+
+
+def test_defaults_der_statischen_speicherfelder():
+    b = make_battery()
+    assert b.soc_max_hysteresis_percent == 2.0
+    assert b.direction_switch_delay_s == 5.0
+
+
+# ---- Freigaben: fehlend heißt erlaubt, ausgefallen heißt gesperrt ----
+
+def test_fehlende_freigabe_entitaet_gilt_als_erlaubt():
+    states = battery_states()
+    del states._states[f"input_boolean.ems_{PREFIX}_laden_erlaubt"]
+    del states._states[f"input_boolean.ems_{PREFIX}_entladen_erlaubt"]
+    b = make_battery()
+    b.begin_cycle(10_000.0)
+    b.update_from_ha(states, 10_000.0, 0.0)
+    assert b.laden_erlaubt is True
+    assert b.entladen_erlaubt is True
+
+
+@pytest.mark.parametrize("fehlerbild", ["unavailable", "unknown", "vielleicht"])
+def test_ausgefallene_freigabe_entitaet_gilt_als_gesperrt(fehlerbild):
+    """Ein ausgefallener Schalter ist kein Grund, weiterzuregeln."""
+    b = prepare(make_battery(), laden=fehlerbild, entladen=fehlerbild)
+    assert b.laden_erlaubt is False
+    assert b.entladen_erlaubt is False
+    assert b._darf_laden() is False
+    assert b.entlade_kapazitaet_w() == 0.0
+
+
+# ---- Reserve ----
+
+def test_fehlende_reserve_entitaet_faellt_auf_50_watt():
+    states = battery_states()
+    del states._states[f"input_number.ems_{PREFIX}_reserve_w"]
+    b = make_battery()
+    b.begin_cycle(10_000.0)
+    b.update_from_ha(states, 10_000.0, 0.0)
+    assert b.reserve_w == 50.0
+
+
+def test_vorhandene_reserve_null_ueberschreibt_den_default():
+    b = prepare(make_battery(), reserve=0)
+    assert b.reserve_w == 0.0
+
+
+# ---- Schrittbegrenzung ----
+
+def test_schrittbegrenzung_gilt_in_beiden_richtungen():
+    b = prepare(make_battery(), sollwert=1000, schritt=200)
+    b._alloc_w = 5000.0
+    b.calculate_ramp(0.0)
+    assert b.new_lade_w == 1200.0
+
+    b = prepare(make_battery(), sollwert=-1000, schritt=200)
+    b.set_discharge_target(4000.0)
+    b.calculate_ramp(0.0)
+    assert b.new_entlade_w == 1200.0
+
+
+def test_ohne_schrittbegrenzung_wird_das_ziel_direkt_erreicht():
+    states = battery_states(sollwert=0)
+    del states._states[f"input_number.ems_{PREFIX}_max_anderung_pro_schritt_w"]
+    b = make_battery()
+    b.begin_cycle(10_000.0)
+    b.update_from_ha(states, 10_000.0, 0.0)
+    assert b._step_limit_w is None
+    b._alloc_w = 4000.0
+    b.calculate_ramp(0.0)
+    assert b.new_lade_w == 4000.0
+
+
+# ---- Sofort-Stopp und gesunkenes Limit ----
+
+@pytest.mark.parametrize("kwargs", [
+    {"betriebsart": "standby"},
+    {"soc": "unavailable"},
+    {"entlade_ist": "unavailable"},
+])
+def test_sicherheitsgruende_stoppen_sofort_ohne_rampe(kwargs):
+    b = prepare(make_battery(), sollwert=-4000, schritt=50, **kwargs)
+    b.calculate_ramp(0.0)
+    assert (b.new_lade_w, b.new_entlade_w) == (0.0, 0.0)
+    assert b.new_betriebsart == "standby"
+
+
+def test_gesunkenes_wr_limit_wird_nach_der_rampe_nie_ueberschritten():
+    """Die Rampe darf bremsen, aber nie über die momentane physische Grenze."""
+    b = prepare(make_battery(), sollwert=-4000, entlade_limit=800, schritt=100)
+    b.set_discharge_target(4000.0)
+    b.calculate_ramp(0.0)
+    assert b.new_entlade_w <= 800.0
+
+    b = prepare(make_battery(), sollwert=4000, lade_limit=600, schritt=100)
+    b._alloc_w = 4000.0
+    b.calculate_ramp(0.0)
+    assert b.new_lade_w <= 600.0
+
+
+# ---- Energy Pilot ----
+
+def test_ep_maximalvorschlaege_werden_ignoriert():
+    """Der Energy Pilot darf physische WR-Limits nicht überschreiben."""
+    b = make_battery()
+    b.source = "ep"
+    prepare(b, lade_limit=1500, entlade_limit=1500, **{
+        f"sensor.ep_{PREFIX}_lade_max_w_vorschlag": 9000,
+        f"sensor.ep_{PREFIX}_entlade_max_w_vorschlag": 9000,
+    })
+    assert b._lade_limit_w() == 1500.0
+    assert b._entlade_limit_w() == 1500.0

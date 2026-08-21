@@ -4,10 +4,15 @@ import { HashRouter } from 'react-router-dom'
 import { App } from './App'
 import { ThemeProvider } from './components/Theme'
 import { ToastProvider } from './components/Toast'
+import { ConfigDraftProvider } from './components/ConfigDraft'
 import './styles.css'
 
 /* Verdrahtung, keine Logik. Provider-Reihenfolge: Router aussen, dann Theme,
-   dann Toast — Theme haengt an nichts und alles darunter darf es lesen.
+   dann Toast, dann der Konfigurationsentwurf — Theme haengt an nichts, der
+   Entwurf meldet Fehler ueber Toasts und liegt deshalb darunter. Er liegt ueber
+   dem Layout, damit ein Seitenwechsel ihn nicht verwirft und die Navigation
+   ungespeicherte Aenderungen erkennen kann. Geladen wird er erst, wenn eine
+   Konfigurationsseite es anfordert.
 
    HashRouter statt BrowserRouter: Unter dem HA-Ingress kennt der Server das
    Pfadpraefix nicht und koennte fuer Unterrouten keine index.html ausliefern
@@ -17,7 +22,9 @@ createRoot(document.getElementById('root')!).render(
     <HashRouter>
       <ThemeProvider>
         <ToastProvider>
-          <App />
+          <ConfigDraftProvider>
+            <App />
+          </ConfigDraftProvider>
         </ToastProvider>
       </ThemeProvider>
     </HashRouter>

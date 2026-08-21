@@ -4,6 +4,7 @@ from ems.controller import EMSController, DEFAULT_RESIDUAL_ENTITY
 from ems.devices import BinaryDevice
 
 from conftest import make_states
+from test_run_cycle import BIN_FALLBACKS
 
 
 def make_binary(prio, actual_on, final_on):
@@ -118,3 +119,135 @@ def test_cascade_promotes_higher_priority_on():
     ctrl._apply_priority_cascade([high, low])
     # Höher-priores Gerät darf nicht aus sein, während niedriger-priores an ist
     assert high.final_on is True
+
+
+# ---- Charakterisierung: Modus-Migration der Geräte-Registry ----
+
+def test_allowed_modes_auto_wird_auf_manuell_abgebildet():
+    """`auto` ist kein Nutzer-Gate mehr – Alt-Konfigurationen werden umgeschrieben."""
+    ctrl = EMSController([{
+        "name": "luft", "class": "binary",
+        "switch_entity": "switch.luft", "allowed_modes": "auto,nur_heizen",
+        **BIN_FALLBACKS,
+    }])
+    assert ctrl._devices[0]._allowed_modes == ["manuell", "nur_heizen"]
+
+
+def test_allowed_modes_fehlt_ergibt_manuell():
+    ctrl = EMSController([{
+        "name": "luft", "class": "binary", "switch_entity": "switch.luft",
+        **BIN_FALLBACKS,
+    }])
+    assert ctrl._devices[0]._allowed_modes == ["manuell"]
+
+
+def test_geraet_ohne_pflichtentitaet_wird_uebersprungen():
+    """Der Rest der Anlage läuft weiter – ein kaputter Eintrag legt nichts still."""
+    ctrl = EMSController([
+        {"name": "kaputt", "class": "binary"},
+        {"name": "luft", "class": "binary", "switch_entity": "switch.luft", **BIN_FALLBACKS},
+    ])
+    assert [d.id for d in ctrl._devices] == ["luft"]
+
+
+# ---- Global deaktivierter Regelmodus ----
+
+def _aktiv(mode="manuell", **over):
+    states = {
+        "input_boolean.ems_pv_regelung_aktiv": "on",
+        "input_select.ems_regelmodus": mode,
+        "sensor.s": 3000,
+    }
+    states.update(over)
+    return make_states(states)
+
+
+def test_nicht_konfigurierter_modus_macht_den_zyklus_sicher_inaktiv():
+    """Hinter einem global deaktivierten Modus steht keine Regellogik."""
+    ctrl = EMSController([], residual_power_entity="sensor.s",
+                         available_modes="manuell")
+    status = ctrl.run_cycle(_aktiv("nur_heizen"))["status"]
+    assert status["global_mode"] == "nur_heizen"      # roher HA-State bleibt sichtbar
+    assert status["global_mode_configured"] is False
+    assert status["pool_w"] == 0.0
+    assert status["hausdefizit_w"] == 0.0
+
+
+def test_konfigurierter_modus_regelt_normal():
+    ctrl = EMSController([], residual_power_entity="sensor.s",
+                         available_modes="manuell,nur_heizen")
+    status = ctrl.run_cycle(_aktiv("nur_heizen"))["status"]
+    assert status["global_mode_configured"] is True
+    assert status["pool_w"] == 3000.0
+
+
+def test_sondermodi_bleiben_immer_unterstuetzt():
+    ctrl = EMSController([], residual_power_entity="sensor.s", available_modes="manuell")
+    for mode in ("auto", "aus"):
+        status = ctrl.run_cycle(_aktiv(mode))["status"]
+        assert status["global_mode_configured"] is True, mode
+
+
+def test_available_modes_default_sind_alle_drei():
+    assert EMSController([]).available_modes == ["manuell", "nur_heizen", "nur_laden"]
+
+
+# ---- Nur-Energy-Pilot-Gerät ----
+
+def test_leeres_allowed_modes_wird_von_normalen_regeln_nicht_aktiviert():
+    ctrl = EMSController([{
+        "name": "luft", "class": "binary", "switch_entity": "switch.luft",
+        "allowed_modes": "", **BIN_FALLBACKS,
+    }], residual_power_entity="sensor.s")
+    device = ctrl._devices[0]
+    assert device._allowed_modes == []
+    status = ctrl.run_cycle(_aktiv("manuell", **{
+        "input_boolean.ems_luft_freigabe": "on",
+        "input_boolean.ems_luft_technische_freigabe": "on",
+        "input_select.ems_luft_modus": "manuell",
+    }))["status"]
+    assert status["devices"][0]["source"] == "aus"
+
+
+def test_leeres_allowed_modes_folgt_weiter_dem_energy_pilot():
+    ctrl = EMSController([{
+        "name": "luft", "class": "binary", "switch_entity": "switch.luft",
+        "allowed_modes": "", **BIN_FALLBACKS,
+    }], residual_power_entity="sensor.s")
+    status = ctrl.run_cycle(_aktiv("auto", **{
+        "input_select.ems_luft_modus": "auto",
+    }))["status"]
+    assert status["devices"][0]["source"] == "ep"
+
+
+# ---- Ungültige Geräteeinträge ----
+
+def test_ungueltiger_eintrag_erscheint_als_inaktives_geraet():
+    ctrl = EMSController([
+        {"name": "luft", "class": "binary", "switch_entity": "switch.luft", **BIN_FALLBACKS},
+        {"name": "kaputt", "class": "binary", "switch_entity": "switch.k"},
+    ], residual_power_entity="sensor.s")
+    status = ctrl.run_cycle(_aktiv())["status"]
+    assert [d["id"] for d in status["devices"]] == ["luft"]
+    inaktiv = status["inactive_devices"]
+    assert len(inaktiv) == 1
+    assert inaktiv[0]["name"] == "kaputt"
+    assert inaktiv[0]["device_class"] == "binary"
+    assert "power_w" in inaktiv[0]["errors"]
+
+
+def test_inaktives_geraet_erzeugt_keine_erfundenen_istwerte():
+    ctrl = EMSController([{"name": "kaputt", "class": "binary", "switch_entity": "switch.k"}],
+                         residual_power_entity="sensor.s")
+    status = ctrl.run_cycle(_aktiv())["status"]
+    assert status["devices"] == []
+    assert set(status["inactive_devices"][0]) == {
+        "index", "name", "device_class", "label", "errors",
+    }
+
+
+def test_inaktives_geraet_beeinflusst_den_pool_nicht():
+    mit = EMSController([{"name": "kaputt", "class": "binary", "switch_entity": "switch.k"}],
+                        residual_power_entity="sensor.s").run_cycle(_aktiv())["status"]
+    ohne = EMSController([], residual_power_entity="sensor.s").run_cycle(_aktiv())["status"]
+    assert mit["pool_w"] == ohne["pool_w"] == 3000.0

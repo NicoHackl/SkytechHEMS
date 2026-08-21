@@ -13,13 +13,13 @@ import pytest
 
 from ems.controller import EMSController
 from conftest import make_states
-from test_run_cycle import _global, _controllable_w
+from test_run_cycle import _global, _controllable_w, CTRL_FALLBACKS
 
 
 def _ctrl_heizstab(allowed="manuell"):
     return EMSController(
         [{"name": "heizstab", "class": "controllable",
-          "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": allowed}],
+          "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": allowed, **CTRL_FALLBACKS}],
         residual_power_entity="sensor.s",
     )
 
@@ -175,7 +175,7 @@ def test_manuell_respects_type_gate():
     ctrl = EMSController(
         [{"name": "wallbox_1", "class": "controllable",
           "actual_power_entity": "sensor.wb", "entity_prefix": "wallbox",
-          "allowed_modes": "nur_laden", "output_unit": "ampere", "phases": "1"}],
+          "allowed_modes": "nur_laden", "output_unit": "ampere", "phases": "1", **CTRL_FALLBACKS}],
         residual_power_entity="sensor.s",
     )
     base = {

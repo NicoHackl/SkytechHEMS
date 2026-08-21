@@ -16,6 +16,7 @@ from hypothesis import given, strategies as st
 
 from ems.controller import EMSController
 from ems.devices import BinaryDevice, ControllableDevice
+from test_run_cycle import CTRL_FALLBACKS
 
 from conftest import make_states
 from test_battery_device import battery_states, make_battery
@@ -152,15 +153,12 @@ def _battery_state(draw):
         soc=draw(_soc),
         soc_min=soc_min,
         soc_max=soc_max,
-        soc_reserve=draw(st.floats(min_value=0.0, max_value=50.0, allow_nan=False)),
-        taper=draw(st.sampled_from([0.0, 5.0, 20.0])),
-        max_lade=draw(_watt),
-        max_entlade=draw(_watt),
+        lade_limit=draw(_watt),
+        entlade_limit=draw(_watt),
         min_lade=draw(st.sampled_from([0.0, 500.0])),
         min_entlade=draw(st.sampled_from([0.0, 500.0])),
         sollwert=draw(st.floats(min_value=-8000.0, max_value=8000.0, allow_nan=False)),
         totzone=draw(st.sampled_from([0.0, 100.0])),
-        sofort=draw(st.sampled_from([100.0, 300.0, 100000.0])),
         schritt=draw(st.sampled_from([50.0, 500.0, 100000.0])),
         betriebsart=draw(st.sampled_from(["auto", "nur_laden", "nur_entladen"])),
         laden=draw(st.sampled_from(["on", "off"])),
@@ -190,7 +188,7 @@ def test_p5_soc_grenzen_werden_nie_verletzt(params, alloc, ziel):
     b.calculate_ramp(0.0)
     if b.soc_prozent >= b.soc_max_prozent:
         assert b.new_lade_w == 0.0
-    if b.soc_prozent <= max(b.soc_min_prozent, b.soc_reserve_prozent):
+    if b.soc_prozent <= b.soc_min_prozent:
         assert b.new_entlade_w == 0.0
 
 
@@ -237,7 +235,7 @@ def test_p7_ohne_speicher_identisch_zum_altverhalten(residual, heizstab_ist, sol
     """Referenzimplementierung des alten _calc_pool gegen den neuen Zyklus."""
     ctrl = EMSController(
         [{"name": "heizstab", "class": "controllable",
-          "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto"}],
+          "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto", **CTRL_FALLBACKS}],
         residual_power_entity="sensor.s",
     )
     states = {

@@ -1,25 +1,41 @@
-"""Contract-Tests für das additive HEMS-Geräteschema des Energy Pilot."""
+"""Contract-Tests für das additive HEMS-Geräteschema des Energy Pilot.
 
+Das Schema wird aus BEREITS VALIDIERTEN Gerätekonfigurationen gebaut – derselben
+Menge, die der Controller registriert. Die Tests gehen deshalb durch
+configuration.validate_options(), statt rohe Dicts zu stellen.
+"""
+
+from configuration import validate_options
 from main import _build_device_controls_schema
+
+from test_run_cycle import BIN_FALLBACKS, CTRL_FALLBACKS
+
+
+def _valid(devices):
+    result = validate_options({"devices": devices})
+    assert not result.field_errors, result.field_errors
+    return result.devices
 
 
 def _schema():
     return _build_device_controls_schema(
-        [
+        _valid([
             {
                 "name": "heizstab",
                 "label": "Heizstab",
                 "class": "controllable",
                 "actual_power_entity": "sensor.elwa_istleistung",
                 "allowed_modes": "auto,nur_heizen",
+                **CTRL_FALLBACKS,
             },
             {
                 "name": "heizlufter_1",
                 "class": "binary",
                 "switch_entity": "switch.heizlufter",
                 "allowed_modes": "nur_heizen",
+                **BIN_FALLBACKS,
             },
-        ],
+        ]),
         residual_power_entity="sensor.ueberschuss",
         interval_s=3,
     )
@@ -60,12 +76,13 @@ def test_schema_items_have_stable_semantics_without_suffix_inference():
     assert by_key["hoch_regelzeit_s"]["planning_relevant"] is False
 
 
-def test_schema_ignores_unknown_device_classes():
+def test_unbekannte_klasse_erreicht_das_schema_nicht():
+    """Die Validierung sortiert sie vorher aus – der Builder sieht sie nie."""
+    result = validate_options({"devices": [{"name": "x", "class": "future"}]})
+    assert result.devices == []
+    assert result.inactive_devices[0].name == "x"
     schema = _build_device_controls_schema(
-        [{"name": "x", "class": "future"}],
-        residual_power_entity="sensor.ueberschuss",
-        interval_s=3,
-    )
+        result.devices, residual_power_entity="sensor.ueberschuss", interval_s=3)
     assert [group["name"] for group in schema] == ["global"]
 
 
@@ -73,16 +90,18 @@ def test_schema_kennt_battery_zweig():
     """Ohne battery-Zweig fehlte der Speicher im Steuerung-Tab und im
     Energy-Pilot-Vertrag."""
     schema = _build_device_controls_schema(
-        [{
+        _valid([{
             "name": "acspeicher1",
             "label": "AC-Speicher",
             "class": "battery",
             "soc_entity": "sensor.acspeicher1_soc",
             "charge_power_entity": "sensor.acspeicher1_lade_w",
             "discharge_power_entity": "sensor.acspeicher1_entlade_w",
+            "available_charge_power_entity": "sensor.acspeicher1_lade_limit",
+            "available_discharge_power_entity": "sensor.acspeicher1_entlade_limit",
             "capacity_kwh": 10.0,
             "allowed_modes": "manuell,nur_laden",
-        }],
+        }]),
         residual_power_entity="sensor.ueberschuss",
         interval_s=3,
     )
@@ -100,7 +119,17 @@ def test_schema_kennt_battery_zweig():
     assert by_key["entlade_prioritat"]["entity"] == "input_number.ems_acspeicher1_entlade_prioritat"
     assert by_key["entlade_prioritat"]["planning_relevant"] is True
     assert by_key["soc_min_prozent"]["unit"] == "%"
-    assert by_key["max_entladeleistung_w"]["role"] == "technical_constraint"
+    assert by_key["min_entladeleistung_w"]["role"] == "technical_constraint"
+
+    # Entfallene Helfer dürfen im Steuerschema nicht mehr auftauchen: die
+    # physische Grenze kommt aus den available_*-Sensoren, Notstromreserve,
+    # Drosselband und Entlade-Sofort-Schwelle gibt es nicht mehr, Hysterese und
+    # Umschaltsperre sind statische Add-on-Felder.
+    assert not {
+        "max_ladeleistung_w", "max_entladeleistung_w", "soc_reserve_prozent",
+        "soc_taper_band_prozent", "soc_max_hysterese_prozent",
+        "entlade_sofort_schwelle_w", "min_umschaltzeit_s",
+    } & set(by_key)
 
 
 def test_globales_schema_kennt_entlade_abschlag():

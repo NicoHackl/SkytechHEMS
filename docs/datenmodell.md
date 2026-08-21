@@ -2,7 +2,8 @@
 
 Das Add-on hat **keine eigene Persistenz**. Zustand lebt an zwei Orten: in den HA-Helfer-Entitäten
 (überlebt Neustarts) und im Speicher der Geräteobjekte (Timer, überlebt keinen Neustart). Dieses
-Dokument beschreibt beide Verträge — den zu Home Assistant und den zum **Energy Pilot**.
+Dokument beschreibt Identität und Statusverträge. Die vollständigen Pflichtfelder, Leserichtungen,
+Schreibrichtungen und Fallbacks der HA-Entitäten stehen in [device_classes/](device_classes/global.md).
 
 ## Identitäten
 
@@ -16,7 +17,8 @@ Grundsatz: Konsumenten machen die Identität am `name` fest und zeigen nur das `
 umbenanntes Label darf keine Zuordnung brechen.
 
 Erlaubte Zeichen in `name` und `entity_prefix`: Kleinbuchstaben, Ziffern, Unterstrich — sie fließen
-unverändert in Entitätsnamen ein.
+unverändert in Entitätsnamen ein. Beide müssen je Anlage **eindeutig** sein; zwei Geräte mit
+demselben effektiven Präfix schrieben sonst auf dieselben Helfer.
 
 ## HA-Helfer — Namenskonvention
 
@@ -24,8 +26,18 @@ unverändert in Entitätsnamen ein.
 <domain>.ems_<prefix>_<suffix>
 ```
 
-`<domain>` ist `input_boolean`, `input_select` oder `input_number`. Die Helfer müssen in Home
-Assistant existieren; das Add-on legt sie nicht an.
+`<domain>` ist `input_boolean`, `input_select` oder `input_number`. Das Add-on legt die Helfer
+nicht an.
+
+Für die **Eingangswerte** von `controllable` und `binary` gibt es je ein verpflichtendes Feld in
+der Add-on-Konfiguration, das bei fehlender, nicht verfügbarer oder unbrauchbarer Entität greift —
+siehe [Add-on-Fallbacks](device_classes/global.md#add-on-fallbacks-für-ha-entitäten). Die
+**Ausgabe**-Helfer (`anforderung_*`, `anzahl_phase`) haben keinen Fallback: ein Sollwert lässt sich
+nicht erfinden.
+
+Die Tabellen in diesem Abschnitt sind eine Übersicht. Kanonische Detailreferenz sind die Seiten
+für [globale Werte](device_classes/global.md), [regelbare Geräte](device_classes/controllable.md),
+[binäre Geräte](device_classes/binary.md) und [AC-Speicher](device_classes/battery.md).
 
 ### Global
 
@@ -61,7 +73,7 @@ Ampere. `reserve_w` ist **immer** in Watt.
 | `hoch_regelzeit_s`, `runter_regelzeit_s` | s | Mindestabstand zwischen Regelschritten; bei Defizit wird sofort heruntergeregelt |
 | `max_anderung_pro_schritt_w` / `_a` | W / A | Maximale Änderung je Zyklus |
 | `min_anderung_pro_schritt_w` / `_a` | W / A | Totband — kleinere Änderungen werden nicht geschrieben |
-| `min_umschaltzeit_s` *(optional)* | s | Phasenwechsel-Hysterese; überschreibt `phase_switch_delay_s`. Fehlt beides, gelten 30 s |
+| `min_umschaltzeit_s` | s | Phasenwechsel-Hysterese; Fallback `phase_switch_delay_s`, dann 30 s. Ein gültiger Wert `0` gilt als „keine Sperrzeit" und wird nicht ersetzt |
 | `anforderung_leistung_w` / `_a` **(Ausgabe)** | W / A | Vom EMS geschriebener Sollwert, im Ampere-Modus ganzzahlig abgerundet |
 | `anzahl_phase` **(Ausgabe)** | 1 oder 3 | Gewählte Phasenzahl, nur bei `phases="1,3"` |
 
@@ -89,22 +101,27 @@ Helfer (Freigabe, technische Freigabe, Modus, Priorität) und die geerbten Regel
 regelbaren Geräte (`hoch_regelzeit_s`, `runter_regelzeit_s`, `max_anderung_pro_schritt_w`,
 `min_anderung_pro_schritt_w`, `geschutzte_mindestleistung_w`, `reserve_w`) — dazu diese eigenen:
 
-| Suffix | Einheit | Default | Funktion |
+| Suffix | Einheit | Ersatzwert | Funktion |
 |---|---|---|---|
 | `entlade_prioritat` | – | 50 | **Reihenfolge beim Entladen, unabhängig von `prioritat`.** Kleiner = zuerst; bei Gleichstand entscheidet die Reihenfolge in der Add-on-Konfiguration |
-| `max_ladeleistung_w`, `min_ladeleistung_w` | W | – / 0 | Grenzen des Ladepfads. Unterhalb der Mindestleistung wird auf 0 gerastet, nicht überschossen |
-| `max_entladeleistung_w`, `min_entladeleistung_w` | W | – / 0 | Grenzen des Entladepfads |
-| `soc_min_prozent` | % | 10 | Entladeschluss (Tiefentladeschutz) |
+| `min_ladeleistung_w`, `min_entladeleistung_w` | W | 0 | Untere Grenzen. Darunter wird auf 0 gerastet, nicht überschossen |
+| `soc_min_prozent` | % | 10 | Entladeschluss und **einziger** Entladeboden |
 | `soc_max_prozent` | % | 100 | Ladeschluss |
-| `soc_reserve_prozent` | % | 0 | Notstromreserve; darunter entlädt das HEMS nicht mehr |
-| `soc_taper_band_prozent` | % | 5 | Drosselband vor der Grenze; bildet die CV-Phase des Geräts nach |
-| `soc_max_hysterese_prozent` | % | 2 | Wiedereinstiegsschwelle unter `soc_max`. Ohne sie flippt der Speicher bei 100 % im Takt |
-| `entlade_sofort_schwelle_w` | W | 300 | Ab dieser Absenkung wird ungerampt zurückgenommen — echter Lastabwurf. Kleinere Absenkungen werden gedämpft, sonst wird aus Sensor-Versatz ein Grenzzyklus |
-| `umschalt_totzone_w` | W | 100 | Totzone um 0; ein Netto-Wunsch darunter führt zu `standby` und verhindert Mikrozyklen |
-| `min_umschaltzeit_s` | s | 300 | Sperrzeit nach einem Richtungswechsel. In der Sperrzeit wird `standby` gefahren, **nicht** die alte Richtung fortgesetzt |
-| `netzlade_leistung_w`, `netzlade_soc_ziel_prozent` | W / % | 0 | Reserviert für Netzladen; im Code hart gesperrt |
+| `umschalt_totzone_w` | W | 100 | Totzone um 0; ein Netto-Wunsch darunter führt zu `standby` |
+| `netzlade_leistung_w` | W | 0 | Reservierte, noch nicht sicher freigegebene Netzlade-Schnittstelle; muss wegen [B-4](bekannte-luecken.md#offene-bugs) auf `0` bleiben |
 | `anforderung_leistung_w` **(Ausgabe)** | W | – | **Ein signierter Sollwert: + laden / − entladen.** Der Helfer braucht ein **negatives Minimum** |
-| `anforderung_betriebsart` **(Ausgabe, `input_select`)** | – | – | `laden` / `entladen` / `standby` |
+| `anforderung_betriebsart` **(Ausgabe, `input_select`)** | – | – | `laden` / `entladen` / `standby`; genau diese drei Optionen sind erforderlich |
+
+Beim Speicher weichen drei Ersatzwerte von der sonstigen Regel ab:
+
+- `reserve_w` fällt auf **50 W**, nicht auf 0. Eine vorhandene Entität mit gültiger `0` setzt den
+  Puffer bewusst ab.
+- `max_anderung_pro_schritt_w` hat **keinen** Ersatzwert: ohne gültigen Wert gibt es keine
+  Schrittbegrenzung, das Ziel wird unmittelbar erreicht. Im Status erscheint dafür kein
+  magischer Großwert und kein `Infinity`.
+- `laden_erlaubt` und `entladen_erlaubt` trennen fehlend von ausgefallen: eine **nicht angelegte**
+  Entität heißt „erlaubt", eine vorhandene mit `unknown`/`unavailable`/ungültigem State heißt
+  „gesperrt".
 
 Dazu drei Schalter und eine Auswahlliste:
 
@@ -112,13 +129,23 @@ Dazu drei Schalter und eine Auswahlliste:
 |---|---|---|
 | `input_boolean.ems_<prefix>_laden_erlaubt` | `on`/`off` | Ladepfad freigeben |
 | `input_boolean.ems_<prefix>_entladen_erlaubt` | `on`/`off` | Entladepfad freigeben |
-| `input_boolean.ems_<prefix>_netzladen_aktiv` | `on`/`off` | Reserviert, im Code gesperrt |
+| `input_boolean.ems_<prefix>_netzladen_aktiv` | `on`/`off` | Reserviert; bis zur Behebung von [B-4](bekannte-luecken.md#offene-bugs) zwingend `off` |
 | `input_select.ems_<prefix>_betriebsart` | `auto`, `nur_laden`, `nur_entladen`, `standby` | Was das HEMS überhaupt darf |
 
-Externe Sensoren je Speicher: `soc_entity` (Pflicht) und entweder `charge_power_entity` **und**
-`discharge_power_entity` (beide ≥ 0) oder ein signierter `power_entity` mit `power_sign`.
-Optional `available_charge_power_entity` / `available_discharge_power_entity` für das momentane
-Geräte-Limit — sie haben Vorrang vor `max_ladeleistung_w` bzw. `max_entladeleistung_w`.
+Externe Sensoren je Speicher: `soc_entity` (Pflicht), **beide** `available_*`-Sensoren (Pflicht)
+und genau eine Ist-Leistungsvariante — entweder `charge_power_entity` **und**
+`discharge_power_entity` (beide ≥ 0) oder ein signierter `power_entity` mit `power_sign`. Beide
+Varianten gleichzeitig sind ungültig.
+
+`available_charge_power_entity` und `available_discharge_power_entity` sind die **alleinigen
+physischen Maximalgrenzen**. Sie werden getrennt ausgewertet: der Ausfall des einen sperrt nur
+seine Richtung auf `0 W`; ein gültiger Wert `0` sperrt die Richtung bewusst.
+
+**Entfallen** sind `max_ladeleistung_w`, `max_entladeleistung_w`, `soc_reserve_prozent`,
+`soc_taper_band_prozent`, `soc_max_hysterese_prozent`, `entlade_sofort_schwelle_w` und
+`min_umschaltzeit_s`. Hysterese und Umschaltsperre stehen jetzt als
+`soc_max_hysteresis_percent` (Default 2) und `direction_switch_delay_s` (Default 5) in der
+Add-on-Konfiguration; Notstromreserve, Drosselband und Sofort-Schwelle entfallen ersatzlos.
 
 Fehlt einer der Messwerte (`unavailable`), fällt genau dieser Speicher aus der Regelung und geht
 auf `standby`; die übrigen laufen weiter. Ohne Ist-Leistung wäre die Pool-Bereinigung blind.
@@ -138,7 +165,7 @@ auf `standby`; die übrigen laufen weiter. Ohne Ist-Leistung wäre die Pool-Bere
 | `soc_entity` je Speicher | Ladezustand in Prozent |
 | `charge_power_entity` / `discharge_power_entity` je Speicher | Ist-Leistung in Watt, beide ≥ 0 |
 | `power_entity` + `power_sign` je Speicher | Alternative: eine signierte Entität für beide Richtungen |
-| `available_charge_power_entity` / `available_discharge_power_entity` | Momentanes Geräte-Limit, optional |
+| `available_charge_power_entity` / `available_discharge_power_entity` | **Pflicht.** Momentane physische Lade- bzw. Entladegrenze in Watt |
 
 ## Statusvertrag `/api/status`
 
@@ -152,6 +179,8 @@ Global:
 | `ems_enabled` | bool | Globale Freigabe |
 | `global_mode` | string | Regelmodus |
 | `hard_lockout` | bool | Sperre wegen ungültigem Überschuss-Sensor |
+| `global_mode_configured` | bool | `false`, wenn `global_mode` ein normaler, aber global nicht aktivierter Modus ist — der Zyklus bleibt dann sicher inaktiv |
+| `available_modes` | Liste | Die aktivierten normalen Regelmodi |
 | `residual_sensor_valid` | bool | Sensor lieferte einen brauchbaren Wert |
 | `residual_w`, `pool_w`, `current_deficit_w`, `binary_total_w` | float | Leistungen in Watt |
 | `residual_bereinigt_w` | float | `residual_w` abzüglich der gemessenen Speicherentladung. **Alle Regelentscheidungen laufen darüber**, nicht über `residual_w` |
@@ -164,6 +193,22 @@ Global:
 | `binary_immediate_off` | bool | Notabschaltung binärer Geräte |
 | `timestamp` | string | **Maschinenformat** `JJJJ-MM-TT hh:mm:ss`, nicht zur Anzeige gedacht |
 | `devices` | Liste | siehe unten |
+| `devices_inactive_runtime` | Liste | Geräte-IDs, die diesen Zyklus technisch nicht regelbar waren (Schreibziel fehlt oder Schreiben schlug fehl) |
+| `inactive_devices` | Liste | Beim Start übersprungene Geräteeinträge: `index`, `name`, `device_class`, `label`, `errors` (Feldname → deutsche Meldung). Ausdrücklich **ohne** erfundene Ist-, SoC- oder Schaltwerte |
+
+Jedes Gerät trägt zusätzlich:
+
+| Feld | Typ | Bedeutung |
+|---|---|---|
+| `entity_diagnostics` | Objekt | `{entity_id: {role, state, source}}` |
+| `runtime_active` | bool | `false`, wenn ein Schreibziel fehlt, unbrauchbar ist oder der letzte Schreibversuch fehlschlug |
+| `inactive_reasons` | Liste | `schreibziel_fehlt`, `schreibziel_nicht_verfuegbar`, `schreibziel_ungueltig`, `schreiben_fehlgeschlagen` |
+| `write_error` | string oder `null` | Bereinigte Fehlermeldung des letzten Schreibversuchs |
+
+`state` ist `valid`, `missing`, `unavailable` oder `invalid`; bei Schreibzielen zusätzlich
+`write_failed`. `source` ist `ha`, `addon` oder `internal`.
+Damit ist beantwortbar, welcher Wert gerade wirkt und warum nicht der aus Home Assistant — siehe
+[Doppelte Auflösung](device_classes/global.md#doppelte-auflösung-von-ha-entitäten).
 
 Regelbares Gerät: `type`, `id`, `label`, `priority`, `eligible`, `source`, `actual_w`,
 `anforderung_current_w`, `alloc_w`, `new_w`, `schutz_w`, `geschuetzte_mindestleistung_w`,
@@ -181,9 +226,10 @@ Speicher (`type: "battery"`): `id`, `label`, `priority` (Laden), `entlade_priori
 `entlade_anforderung_w`, `new_lade_w`, `new_entlade_w`, `netto_w`, `max_ladeleistung_w`,
 `max_entladeleistung_w`, `lade_limit_w`, `entlade_limit_w`, `hausdefizit_anteil_w`, `schutz_w`,
 `geschuetzte_mindestleistung_w`, `laden_erlaubt`, `entladen_erlaubt`, `netzladen_aktiv`,
-`soc_min_prozent`, `soc_max_prozent`, `soc_reserve_prozent`, `umschaltsperre_rest_s`,
-`lade_blockiert_grund`, `entlade_blockiert_grund`, `blockiert_grund`. Dazu `energie_kwh`, sofern
-`capacity_kwh > 0` konfiguriert ist.
+`soc_min_prozent`, `soc_max_prozent`, `soc_max_hysteresis_percent`, `direction_switch_delay_s`,
+`lade_limit_gueltig`, `entlade_limit_gueltig`, `umschaltsperre_rest_s`, `lade_blockiert_grund`,
+`entlade_blockiert_grund`, `blockiert_grund`. Dazu `energie_kwh`, sofern `capacity_kwh > 0`
+konfiguriert ist. `soc_reserve_prozent` ist **entfallen**.
 
 Fallstricke, die schon Fehler verursacht haben:
 
@@ -191,9 +237,13 @@ Fallstricke, die schon Fehler verursacht haben:
   (`Sockel + reserve_w + globaler Puffer`, geklemmt). Der rohe Nutzerwert steht in
   `geschuetzte_mindestleistung_w` bzw. `_a`. Vergleiche gehören gegen den Rohwert.
 - **`source`** sagt, woher die wirksamen Werte stammen: `aus`, `user` oder `ep`.
-- **`max_ladeleistung_w` ist nicht `lade_limit_w`.** Dieselbe Falle wie bei `schutz_w`: das eine
-  ist der Nutzerwert, das andere die Grenze nach SoC-Taper und Geräte-Derating. Vergleiche
-  gehören gegen den Rohwert, Anzeigen von Grenzen gegen den effektiven.
+- **`max_ladeleistung_w` ist nicht `lade_limit_w`.** Beide Schlüssel bleiben aus
+  Kompatibilitätsgründen erhalten, tragen aber Neues: `max_ladeleistung_w` und
+  `max_entladeleistung_w` sind jetzt der gültige Momentanwert des jeweiligen
+  `available_*`-Sensors, `lade_limit_w` und `entlade_limit_w` derselbe Wert **nach** Freigaben und
+  SoC-Grenzen. `lade_limit_gueltig` und `entlade_limit_gueltig` sagen, ob der Sensor überhaupt
+  brauchbar war — `0` bei `gueltig: true` ist eine bewusste Sperre, `0` bei `false` ein
+  Sensorfehler.
 - **`netto_w` ist signiert:** positiv = laden, negativ = entladen. Genauso der geschriebene
   Sollwert `anforderung_leistung_w`.
 - **Drei Sperrgrund-Felder statt einem.** `lade_blockiert_grund` und `entlade_blockiert_grund`
@@ -202,6 +252,11 @@ Fallstricke, die schon Fehler verursacht haben:
   gesperrten Ladepfad und trotzdem keinen Fehler.
 - **`off_delay_remaining_s` ist `null`**, wenn keine Abschaltverzögerung läuft — `0` bedeutet
   „läuft ab", nicht „nicht vorhanden".
+- **Drei verschiedene „inaktiv".** `eligible: false` ist die Freigabeentscheidung dieses Zyklus
+  (Schalter, Modus, Lockout). `runtime_active: false` heißt „technisch nicht regelbar" — ein
+  Schreibziel fehlt oder das Schreiben schlug fehl; das Gerät steht weiterhin in `devices`. Ein
+  Eintrag, der wegen fehlender Pflichtfelder gar nicht erst registriert wurde, steht in
+  `inactive_devices` und taucht in `devices` überhaupt nicht auf.
 - Restzeiten sind zum Zyklus-Zeitpunkt gültig. Die Oberfläche zählt zwischen den Zyklen selbst
   herunter, statt eingefrorene Werte zu zeigen.
 

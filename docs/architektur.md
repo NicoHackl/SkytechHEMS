@@ -12,7 +12,9 @@ Verbraucher (Heizlüfter) — mit Zeitschutz, Hysterese, Rampenbegrenzung und No
 **Nicht** Aufgabe dieses Projekts:
 
 - **Eigene Persistenz.** Es gibt keine Datenbank und keine Datei mit Zustand. Alles, was einen
-  Neustart überleben soll, steht als HA-Helfer-Entität in Home Assistant.
+  Neustart überleben soll, steht als HA-Helfer-Entität in Home Assistant. Auch die
+  Konfigurationsseite legt nichts an: sie schreibt über die Supervisor-API dieselbe Optionsquelle,
+  die die native Add-on-Seite bedient.
 - **Anlegen der HA-Helfer.** Das Add-on liest und schreibt sie, erzeugt sie aber nicht.
 - **Prognose und Planung.** Vorausschauende Optimierung liefert der separate **Energy Pilot**;
   HEMS übernimmt dessen Vorschläge nur, siehe [datenmodell.md](datenmodell.md).
@@ -47,11 +49,15 @@ Verbraucher (Heizlüfter) — mit Zeitschutz, Hysterese, Rampenbegrenzung und No
 
 | Komponente | Verantwortung | Darf nicht |
 |---|---|---|
-| `app/main.py` | Add-on-Optionen laden, Scheduler betreiben, HTTP-Routen bereitstellen, Steuerschema aus der Gerätekonfiguration ableiten | Regelentscheidungen treffen |
+| `app/main.py` | Add-on-Optionen laden, Scheduler betreiben, HTTP-Routen bereitstellen, Steuerschema aus der Gerätekonfiguration ableiten | Regelentscheidungen treffen, Optionen selbst prüfen |
+| `app/supervisor_client.py` | Einzige Stelle mit Supervisor-REST-Zugriff: eigene Optionen lesen, validieren, speichern, Add-on neu starten | Fachlogik enthalten, Token oder rohe Optionen loggen |
+| `app/config_service.py` | Ablauf der Konfigurationsverwaltung: lesen, validieren, Revision prüfen, mischen, speichern, Altgeräte sicher deaktivieren, Neustart anstoßen | HTTP sprechen — die Handler übersetzen nur Ausnahmen in Statuscodes |
+| `app/configuration.py` | Add-on-Optionen normalisieren und validieren, Modus-Listen parsen und stabil serialisieren, Revisions-Hash bilden, Diff für die sichere Deaktivierung liefern | HA oder den Supervisor ansprechen, Zustand halten |
 | `app/ems/controller.py` | Einen Zyklus orchestrieren: globale Eingaben, Pool, Prioritätskaskade, Statusaufbau | Selbst HTTP sprechen |
 | `app/ems/devices.py` | Verhalten je Gerätetyp: Eligibility, Pool-Verbrauch, Rampe, Zeitschutz, Write-Ops. Hierarchie: `Device` → `ControllableDevice` → `BatteryDevice`, daneben `BinaryDevice` | Auf HA zugreifen (bekommt einen `StateProxy`) |
-| `app/ems/state.py` | Lesezugriff auf den State-Schnappschuss, `safe_float`, `parse_ts` | Zustand halten, der einen Zyklus überdauert |
-| `app/ha_client.py` | Einzige Stelle mit HA-REST-Zugriff, Session-Verwaltung, Timeouts | Fachlogik enthalten |
+| `app/ems/state.py` | Lesezugriff auf den State-Schnappschuss, Resolve-Vertrag (`has`, `availability`, `resolve_number/bool/select`), `safe_float`, `parse_ts` | Zustand halten, der einen Zyklus überdauert; klassenspezifische Defaultwerte kennen |
+| `app/ha_client.py` | Einzige Stelle mit HA-REST-Zugriff, Session-Verwaltung, Timeouts; meldet je Schreiboperation Erfolg oder bereinigten Fehler zurück | Fachlogik enthalten, einen Fehlschlag verschlucken |
+| `app/ems/ops.py` | `WriteOp` (Operation samt verursachendem Gerät), `WriteResult`, `WriteTarget` | Selbst schreiben |
 | `web/` → `app/static/` | Darstellung und Bedienung | Fachlogik doppeln — sie rechnet nur an, was `/api/status` liefert |
 
 Regel: Keine Komponente übernimmt Aufgaben einer anderen. Verschiebt sich eine Verantwortung,
@@ -95,7 +101,16 @@ Ein Zyklus (`EMSController.run_cycle()`), ausgelöst alle `interval_s` Sekunden:
     laufen — der Speicher löst dort seine Richtung auf.
 12. **Rampenbegrenzung** der Sollwerte, bei Defizit sofortiger Run-down.
 13. **Write-Ops** sammeln, bei `output_unit=ampere` von Watt in ganze Ampere abrunden und gegen die
-    HA-REST-API ausführen; optional das Post-Cycle-Skript auslösen.
+    HA-REST-API ausführen; optional das Post-Cycle-Skript auslösen. Jede Operation trägt ihr
+    verursachendes Gerät; das Ergebnis geht an den Controller zurück.
+
+Zwischen Schritt 2 und 3 steht ein hartes Gate: **Schreibziel-Gesundheit.** Für jedes Gerät wird
+geprüft, ob seine Ausgabe-Entitäten im Schnappschuss vorhanden, verfügbar, von der richtigen Domain
+und ausreichend konfiguriert sind (`input_select` mit den nötigen Optionen, der Speicher-Sollwert
+mit negativem Minimum). Fehlt oder taugt eines davon — oder ist der letzte Schreibversuch
+fehlgeschlagen — wird **nur dieses** Gerät `runtime_active: false`: es bekommt keine Zuteilung,
+schreibt aber weiter seinen sicheren Zustand, damit eine reparierte Entität ohne Add-on-Neustart
+wieder eingefangen wird.
 
 Die Geräteobjekte leben über alle Zyklen hinweg. Dadurch bleiben interne Timer (z. B.
 `_off_since_ts`) ohne zusätzliche HA-Helfer erhalten — ein Add-on-Neustart setzt sie zurück.
@@ -113,12 +128,16 @@ Details zu Endpunkten: [api-referenz.md](api-referenz.md).
 ├── translations/           Feldbeschreibungen der Add-on-Optionen (de, en)
 ├── app/
 │   ├── main.py             Scheduler, HTTP-Routen, Steuerschema
+│   ├── configuration.py    Optionen normalisieren, validieren, Revision und Diff
+│   ├── config_service.py   Ablauf der Konfigurationsverwaltung (ohne HTTP)
+│   ├── supervisor_client.py Supervisor-REST-Client für die eigenen Optionen
 │   ├── ha_client.py        HA-REST-Client
 │   ├── requirements.txt    Laufzeit-Abhängigkeiten des Containers
 │   ├── ems/
 │   │   ├── controller.py   EMSController, config-getriebene Geräte-Registry
-│   │   ├── devices.py      Device / ControllableDevice / BinaryDevice
-│   │   └── state.py        StateProxy, safe_float, parse_ts
+│   │   ├── devices.py      Device / ControllableDevice / BinaryDevice / BatteryDevice
+│   │   ├── ops.py          WriteOp, WriteResult, WriteTarget
+│   │   └── state.py        StateProxy, Resolve-Vertrag, safe_float, parse_ts
 │   └── static/             gebautes SPA-Bundle (eingecheckt, D-035)
 ├── web/                    Quellen der Oberfläche (React + TypeScript + Vite)
 ├── tests/                  pytest, inklusive Hypothesis-Property-Tests
@@ -147,6 +166,14 @@ Zusagen, auf die sich der gesamte Code verlässt. Wer eine davon bricht, bricht 
    Sollwert nicht einfach stehen. Sonst entlädt der Speicher nach einem Add-on-Absturz bis leer.
 8. **Mindestlaufzeit und Abschaltverzögerung gelten auch bei Notabschaltung** — Geräteschutz
    schlägt Regelgüte (siehe [design-entscheidungen.md](design-entscheidungen.md)).
+9. **Ein defektes Gerät legt nur sich selbst still.** Ein fehlendes oder nicht beschreibbares
+   Schreibziel und ein fehlgeschlagener Service-Aufruf werden dem verursachenden Gerät zugeordnet
+   und im Status sichtbar gemacht; die übrigen Geräte regeln weiter, und der Zyklus gilt nicht als
+   fehlgeschlagen.
+10. **Ein gültiger Wert `0` wird nie durch einen Ersatzwert verdrängt.** Jede Auflösung eines
+   HA-States läuft über den Resolve-Vertrag in [`app/ems/state.py`](../app/ems/state.py) und meldet
+   neben dem Wert auch Ursache (`valid`, `missing`, `unavailable`, `invalid`) und Quelle (`ha`,
+   `addon`, `internal`). Wahrheitswert-Ausdrücke wie `wert or fallback` sind damit ausgeschlossen.
 
 ## Start und Betrieb
 
