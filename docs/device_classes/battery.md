@@ -41,6 +41,8 @@ greift der Default; der Speicher wird davon **nicht** inaktiv.
 Sie sind verpflichtende **statische Add-on-Werte** und die alleinigen physischen
 Maximalgrenzen des Speichers. Es werden dafür keine HA-Entitäten gelesen:
 
+- Beim Anlegen bleiben beide Felder leer und werden als Pflichtfehler markiert, bis die realen
+  Gerätegrenzen eingetragen wurden.
 - Beide Werte müssen endlich und mindestens `0 W` sein.
 - Jede Richtung wird getrennt begrenzt. `available_charge_power_w: 0` sperrt nur den Ladepfad;
   `available_discharge_power_w: 0` nur den Entladepfad.

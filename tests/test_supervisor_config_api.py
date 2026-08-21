@@ -129,8 +129,8 @@ def test_read_liefert_die_unterstuetzten_wertebereiche():
     assert unterstuetzt["modes"] == ["manuell", "nur_heizen", "nur_laden"]
     assert "auto" in unterstuetzt["special_modes"]
     assert unterstuetzt["device_defaults"]["controllable"]["maximum_step_change"] == 1000.0
-    assert unterstuetzt["device_defaults"]["battery"]["available_charge_power_w"] == 0.0
-    assert unterstuetzt["device_defaults"]["battery"]["available_discharge_power_w"] == 0.0
+    assert unterstuetzt["device_defaults"]["battery"]["available_charge_power_w"] is None
+    assert unterstuetzt["device_defaults"]["battery"]["available_discharge_power_w"] is None
 
 
 def test_read_gibt_keine_unbekannten_felder_an_den_browser():
@@ -205,6 +205,29 @@ def test_speichern_uebernimmt_den_entwurf_und_startet_nicht_neu():
     assert sup.restarts == 0
     assert svc.restart_task is None
     assert ergebnis["restart_required"] is True
+
+
+def test_speichern_ersetzt_alte_speichersensoren_durch_wattwerte():
+    alt = battery()
+    alt.pop("available_charge_power_w")
+    alt.pop("available_discharge_power_w")
+    alt["available_charge_power_entity"] = "sensor.acspeicher1_lade_limit"
+    alt["available_discharge_power_entity"] = "sensor.acspeicher1_entlade_limit"
+    stored = options(alt)
+    draft = options(battery(
+        available_charge_power_w=0,
+        available_discharge_power_w=1500,
+    ))
+    sup = FakeSupervisor(stored)
+    svc = service(stored, supervisor=sup)
+
+    run(svc.save(draft, cfg.revision(stored)))
+
+    gespeichert = sup.saved[0]["devices"][0]
+    assert gespeichert["available_charge_power_w"] == 0.0
+    assert gespeichert["available_discharge_power_w"] == 1500.0
+    assert "available_charge_power_entity" not in gespeichert
+    assert "available_discharge_power_entity" not in gespeichert
 
 
 def test_speichern_behaelt_unbekannte_top_level_felder():
@@ -328,6 +351,32 @@ def test_save_and_restart_haelt_die_reihenfolge_ein():
     assert sup.saved and sup.restarts == 1
     assert writer.ops, "das geänderte Altgerät muss vorher sicher abgeschaltet werden"
     assert ergebnis["restarting"] is True
+
+
+def test_save_and_restart_akzeptiert_korrigierte_alte_speicheroptionen():
+    alt = battery()
+    alt.pop("available_charge_power_w")
+    alt.pop("available_discharge_power_w")
+    alt["available_charge_power_entity"] = "sensor.acspeicher1_lade_limit"
+    alt["available_discharge_power_entity"] = "sensor.acspeicher1_entlade_limit"
+    stored = options(alt)
+    draft = options(battery(
+        available_charge_power_w=0,
+        available_discharge_power_w=1500,
+    ))
+    sup = FakeSupervisor(stored)
+    svc = service(stored, supervisor=sup)
+
+    ergebnis = run(_mit_neustart(
+        svc,
+        draft=draft,
+        stored_revision=cfg.revision(stored),
+    ))
+
+    assert ergebnis["restarting"] is True
+    assert sup.saved[0]["devices"][0]["available_charge_power_w"] == 0.0
+    assert sup.saved[0]["devices"][0]["available_discharge_power_w"] == 1500.0
+    assert sup.restarts == 1
 
 
 def test_save_and_restart_speichert_auch_wenn_die_deaktivierung_scheitert():

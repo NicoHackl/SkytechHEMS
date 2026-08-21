@@ -86,6 +86,11 @@ export function KonfigurationGeraete() {
   const uebersprungen = (name: string) =>
     data.inactive_devices.some((issue) => issue.name === name)
 
+  const entwurfGeaendert = (device: ConfigDevice) => {
+    const gespeichert = data.options.devices.find((entry) => entry.name === device.name)
+    return !gespeichert || JSON.stringify(gespeichert) !== JSON.stringify(device)
+  }
+
   return (
     <>
       <PageHeader
@@ -138,6 +143,7 @@ export function KonfigurationGeraete() {
                   {draft.devices.map((device, index) => {
                     const fehler = fehlerZuGeraet(index)
                     const modi = device.allowed_modes.split(',').map((m) => m.trim()).filter(Boolean)
+                    const geaendert = entwurfGeaendert(device)
                     return (
                       <tr key={`${device.name}-${index}`}>
                         <td>
@@ -156,6 +162,8 @@ export function KonfigurationGeraete() {
                             <span className="pill err" title={fehler.map(([f, t]) => `${f}: ${t}`).join('\n')}>
                               {fehler.length} Feldfehler
                             </span>
+                          ) : geaendert ? (
+                            <span className="pill warn">Gültiger Entwurf</span>
                           ) : uebersprungen(device.name) ? (
                             <span className="pill err">Beim Start übersprungen</span>
                           ) : nichtRegelbar[device.name] ? (

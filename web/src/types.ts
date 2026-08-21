@@ -309,7 +309,7 @@ export interface ConfigSupported {
   phases: string[]
   power_signs: string[]
   global_defaults: Record<string, string | number | boolean>
-  device_defaults: Record<DeviceClass, Record<string, number>>
+  device_defaults: Record<DeviceClass, Record<string, number | null>>
 }
 
 export interface ConfigValidation {

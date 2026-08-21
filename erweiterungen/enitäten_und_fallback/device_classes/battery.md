@@ -109,7 +109,8 @@ vom Wechselrichter verlangten Reihenfolge nach Modbus, MQTT oder eine andere Sch
 - Für keinen speicherspezifischen HA-Helfer gibt es einen Wert in der Add-on-Konfiguration.
 - `capacity_kwh` ist ein statischer Anzeigewert und ersetzt keinen SoC- oder Leistungssensor.
 - `available_charge_power_w` und `available_discharge_power_w` sind verpflichtende statische
-  Grenzen ohne HA-Fallback; ein Wert `0` sperrt die jeweilige Richtung.
+  Grenzen ohne HA-Fallback. Neue Formulare lassen sie leer; ein eingegebener Wert `0` sperrt die
+  jeweilige Richtung.
 - `entity_prefix` fällt auf `name`, `power_sign` auf `positiv_laden` und `capacity_kwh` auf `0`
   zurück.
 - Fehlende Freigaben werden sicher als `off`, fehlende Maximalleistungen als `0 W` behandelt.

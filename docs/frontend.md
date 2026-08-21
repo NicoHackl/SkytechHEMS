@@ -285,6 +285,10 @@ Zwei Muster, die die Speicherkarte zusätzlich braucht:
   `/api/config/validate` erneut geprüft; eine langsamere alte Antwort darf keine neuere ersetzen.
 - Ein im Geräteformular lokal korrigiertes Feld zeigt seinen alten Serverfehler sofort nicht mehr.
   Nach **Übernehmen** prüft der Server den gesamten Entwurf erneut und zeigt verbleibende Fehler.
+- Die Geräteliste bewertet zuerst den aktuellen Entwurf. Ein gegenüber dem geladenen Stand
+  korrigiertes, fehlerfreies Gerät trägt „Gültiger Entwurf" und nicht den veralteten Laufzeitstatus
+  „Beim Start übersprungen". Nach erfolgreichem Speichern werden die alten
+  `inactive_devices`-Einträge aus dem UI-Zustand entfernt.
 - Nach dem Speichern: Toast **und** Rücknavigation zur Liste.
 - Formularaufbau folgt dem Server-Schema, wo eines existiert: Feldtyp → Widget. Zwei Quellen für
   „welche Felder hat dieser Datensatz" laufen sonst auseinander.

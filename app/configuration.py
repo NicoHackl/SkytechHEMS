@@ -80,15 +80,14 @@ BATTERY_STATIC_DEFAULTS: Dict[str, float] = {
     "direction_switch_delay_s":   5.0,
 }
 
-# Sichere Formular-Startwerte für die verpflichtenden statischen
-# Leistungsgrenzen. Anders als BATTERY_STATIC_DEFAULTS sind das keine
-# Laufzeit-Fallbacks: fehlt ein Feld in den gespeicherten Optionen, bleibt der
-# Speicher ungültig. Eine ausdrückliche 0 ist dagegen gültig und sperrt nur die
-# betreffende Richtung.
-BATTERY_POWER_DEFAULTS: Dict[str, float] = {
-    "available_charge_power_w":    0.0,
-    "available_discharge_power_w": 0.0,
-}
+# Verpflichtende statische Leistungsgrenzen ohne Default oder Fallback. Neue
+# Formulare lassen beide Felder leer, damit die reale Gerätegrenze ausdrücklich
+# gepflegt werden muss. Eine bewusst eingetragene 0 bleibt gültig und sperrt nur
+# die betreffende Richtung.
+BATTERY_POWER_FIELDS: Tuple[str, ...] = (
+    "available_charge_power_w",
+    "available_discharge_power_w",
+)
 
 GLOBAL_DEFAULTS: Dict[str, Any] = {
     "interval_s": 30,
@@ -247,7 +246,7 @@ def _normalize_device(raw: Dict[str, Any]) -> Dict[str, Any]:
             "power_sign": _as_text(raw.get("power_sign")) or "positiv_laden",
             "capacity_kwh": _as_float(raw.get("capacity_kwh"), 0.0),
         })
-        for key in BATTERY_POWER_DEFAULTS:
+        for key in BATTERY_POWER_FIELDS:
             device[key] = _as_float(raw.get(key), None) if key in raw else None
         for key, default in BATTERY_STATIC_DEFAULTS.items():
             value = _as_float(raw.get(key), None) if key in raw else None
@@ -427,7 +426,7 @@ def _validate_binary(device: Dict[str, Any], fail) -> None:
 
 def _validate_battery(device: Dict[str, Any], fail) -> None:
     _require_entity(device, "soc_entity", fail)
-    for key in BATTERY_POWER_DEFAULTS:
+    for key in BATTERY_POWER_FIELDS:
         _number(device, key, fail, minimum=0.0,
                 text="Pflichtfeld: endliche Zahl ab 0 W.")
 

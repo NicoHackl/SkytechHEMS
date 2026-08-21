@@ -24,7 +24,8 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
    `available_discharge_power_w` (jeweils mindestens `0`). Die zuvor geplanten Felder
    `available_charge_power_entity` und `available_discharge_power_entity` entfallen. Optional,
    aber empfohlen: `soc_max_hysteresis_percent` (Default `2`) und
-   `direction_switch_delay_s` (Default `5`).
+   `direction_switch_delay_s` (Default `5`). Neue Speicherformulare lassen die beiden
+   Leistungswerte bewusst leer und markieren sie bis zur Eingabe als Pflichtfehler.
 4. Ein Gerät ohne diese Felder wird beim Start **nicht registriert**. Es verschwindet nicht:
    `/api/status` führt es unter `inactive_devices` samt Feldfehlern auf, und die Konfigurationsseite
    zeigt sie direkt am betroffenen Feld.
@@ -363,6 +364,13 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
   Wechselrichters nicht überschreiben.
 
 ### Behoben
+- **Gültig korrigierte Geräte bleiben nicht mehr als übersprungen markiert.** Die Geräteliste
+  unterscheidet jetzt den aktuellen Entwurf vom geladenen Altzustand. Nach einer erfolgreichen
+  Speicherung werden die veralteten Fehler- und `inactive_devices`-Daten ebenfalls entfernt.
+  Dadurch ist sichtbar, dass Speichern erfolgreich war und nur noch der Neustart aussteht.
+- **Neue Speichergrenzen werden nicht mehr still mit `0 W` vorbelegt.** Beide Pflichtfelder
+  starten leer und bleiben rot markiert, bis der User die reale Lade- beziehungsweise
+  Entladegrenze ausdrücklich eingetragen hat. Eine bewusst eingegebene `0` bleibt gültig.
 - **Geräteformular bleibt nach Korrekturen nicht mehr rot.** Feldfehler aus dem geladenen Stand
   werden bei einer lokalen Korrektur sofort ausgeblendet und der übernommene Entwurf danach erneut
   serverseitig validiert. Langsame alte Validierungsantworten können keinen neueren Stand mehr
