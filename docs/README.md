@@ -30,6 +30,10 @@ nicht stillschweigend schöngeschrieben.
 | [adr/](adr/) | Ausführliche Architecture Decision Records zu einzelnen Entscheidungen |
 | [konfiguration.md](konfiguration.md) | Add-on-Optionen, Umgebungsvariablen, Secrets-Handhabung |
 | [datenmodell.md](datenmodell.md) | HA-Helfer-Namenskonvention, Statusvertrag zum Energy Pilot |
+| [device_classes/global.md](device_classes/global.md) | Globale HA-Entitäten, Add-on-Optionen, gemeinsame Gerätefelder und Fallback-Regeln |
+| [device_classes/controllable.md](device_classes/controllable.md) | HA- und Add-on-Vertrag für stufenlos regelbare Geräte |
+| [device_classes/binary.md](device_classes/binary.md) | HA- und Add-on-Vertrag für binäre Geräte |
+| [device_classes/battery.md](device_classes/battery.md) | HA- und Add-on-Vertrag für AC-Speicher |
 | [api-referenz.md](api-referenz.md) | REST-Endpunkte des Add-ons und genutzte HA-Endpunkte |
 | [sicherheit-datenschutz.md](sicherheit-datenschutz.md) | Token, personenbezogene Daten, externe Dienste |
 | [bekannte-luecken.md](bekannte-luecken.md) | Abweichungen Spec ↔ Code, Stolpersteine, offene Bugs |

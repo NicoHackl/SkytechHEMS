@@ -106,6 +106,7 @@ passende Datei lesen, statt zu raten:
 | [docs/design-entscheidungen.md](docs/design-entscheidungen.md) | Entscheidungs-Log — Quelle der Wahrheit fürs „warum" |
 | [docs/konfiguration.md](docs/konfiguration.md) | Env-Variablen, Config-Optionen, Secrets-Handhabung |
 | [docs/datenmodell.md](docs/datenmodell.md) | Schema, Migrationen, Datenverträge |
+| [docs/device_classes/](docs/device_classes/) | Pflichtfelder, HA-Entitäten, Add-on-Zuordnungen und Fallbacks je Geräteklasse sowie global |
 | [docs/api-referenz.md](docs/api-referenz.md) | Endpunkte und öffentliche Schnittstellen |
 | [docs/sicherheit-datenschutz.md](docs/sicherheit-datenschutz.md) | Secrets, personenbezogene Daten, externe Dienste |
 | [docs/bekannte-luecken.md](docs/bekannte-luecken.md) | Abweichungen Spec ↔ Code, Stolpersteine, offene Bugs |

@@ -58,7 +58,7 @@ Deckung des Hausverbrauchs. Entwurf v5:
 | Phase 3 — Entladepfad, Asymmetrie, sicherer Zustand | fertig | D-040 |
 | Phase 4 — Mehrspeicher, getrennte Lade-/Entladepriorität | fertig | D-040 |
 | Phase 5 — Energy-Pilot-Vorschlagsfelder für Speicher | offen | Entwurf, Abschnitt 13 |
-| Phase 6 — Netzladen mit dynamischen Tarifen | zurückgestellt | Entwurf, Abschnitt 11 |
+| Phase 6 — Netzladen mit dynamischen Tarifen | zurückgestellt | Entwurf, Abschnitt 11; B-4 |
 | Inbetriebnahme am realen Gerät | offen | F-12, F-13, F-14 |
 
 Der Code läuft gegen Tests und einen synthetischen HA-Zustand. **Erprobt am Gerät ist er nicht** —
@@ -72,7 +72,7 @@ Der vorhandene E3DC ist bewusst **kein** HEMS-Gerät: er regelt sich selbst und 
 
 | Thema | Warum zurückgestellt | Bedingung für Wiederaufnahme |
 |---|---|---|
-| Netzladen mit dynamischen Tarifen | Erst sinnvoll, wenn ein Speicher real läuft. Die Schnittstellen stehen, `netzladen_aktiv` ist im Code hart auf „aus" geklemmt | M4 am Gerät in Betrieb |
+| Netzladen mit dynamischen Tarifen | Erst sinnvoll, wenn ein Speicher real läuft. Die reservierten Helfer werden teilweise ausgeführt, aber SoC-Ziel, Preislogik und vollständige Sicherheitsbegrenzung fehlen; bis zur Behebung von B-4 müssen sie `off` beziehungsweise `0 W` bleiben | M4 am Gerät in Betrieb und B-4 behoben |
 | Fehlgeschlagene Write-Ops im Status sichtbar machen (B-2) | Kein Datenverlust, nur Diagnose | Sobald ein Fehlerbild darauf zurückgeht |
 
 ---

@@ -9,6 +9,12 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 ## [Unreleased]
 
 ### Hinzugefügt
+- **Geräteklassen-Referenz unter `docs/device_classes/`.** Je eine Seite für `controllable`,
+  `binary`, `battery` und globale Werte dokumentiert den tatsächlichen HA-Lese-/Schreibvertrag,
+  Pflichtfelder der Add-on-Konfiguration, externe Entitätszuordnungen, Defaults und echte
+  Add-on-Fallbacks. Die Prüfung hat außerdem B-4 sichtbar gemacht: Die reservierte
+  Netzlade-Schnittstelle ist entgegen der bisherigen Dokumentation nicht hart gesperrt und muss
+  bis zur vollständigen Implementierung deaktiviert bleiben.
 - **AC-gekoppelte Speicher als eigene Geräteklasse (D-040, 1.1.0 → 1.2.0).** Mit
   `class: battery` verwaltet das HEMS jetzt auch Batteriespeicher: geladen wird aus
   PV-Überschuss und in derselben Prioritätsreihenfolge wie jeder andere Verbraucher, entladen

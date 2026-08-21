@@ -2,7 +2,8 @@
 
 Das Add-on hat **keine eigene Persistenz**. Zustand lebt an zwei Orten: in den HA-Helfer-Entitäten
 (überlebt Neustarts) und im Speicher der Geräteobjekte (Timer, überlebt keinen Neustart). Dieses
-Dokument beschreibt beide Verträge — den zu Home Assistant und den zum **Energy Pilot**.
+Dokument beschreibt Identität und Statusverträge. Die vollständigen Pflichtfelder, Leserichtungen,
+Schreibrichtungen und Fallbacks der HA-Entitäten stehen in [device_classes/](device_classes/global.md).
 
 ## Identitäten
 
@@ -26,6 +27,10 @@ unverändert in Entitätsnamen ein.
 
 `<domain>` ist `input_boolean`, `input_select` oder `input_number`. Die Helfer müssen in Home
 Assistant existieren; das Add-on legt sie nicht an.
+
+Die Tabellen in diesem Abschnitt sind eine Übersicht. Kanonische Detailreferenz sind die Seiten
+für [globale Werte](device_classes/global.md), [regelbare Geräte](device_classes/controllable.md),
+[binäre Geräte](device_classes/binary.md) und [AC-Speicher](device_classes/battery.md).
 
 ### Global
 
@@ -102,7 +107,8 @@ regelbaren Geräte (`hoch_regelzeit_s`, `runter_regelzeit_s`, `max_anderung_pro_
 | `entlade_sofort_schwelle_w` | W | 300 | Ab dieser Absenkung wird ungerampt zurückgenommen — echter Lastabwurf. Kleinere Absenkungen werden gedämpft, sonst wird aus Sensor-Versatz ein Grenzzyklus |
 | `umschalt_totzone_w` | W | 100 | Totzone um 0; ein Netto-Wunsch darunter führt zu `standby` und verhindert Mikrozyklen |
 | `min_umschaltzeit_s` | s | 300 | Sperrzeit nach einem Richtungswechsel. In der Sperrzeit wird `standby` gefahren, **nicht** die alte Richtung fortgesetzt |
-| `netzlade_leistung_w`, `netzlade_soc_ziel_prozent` | W / % | 0 | Reserviert für Netzladen; im Code hart gesperrt |
+| `netzlade_leistung_w` | W | 0 | Reservierte, noch nicht sicher freigegebene Netzlade-Schnittstelle; muss wegen [B-4](bekannte-luecken.md#offene-bugs) auf `0` bleiben |
+| `netzlade_soc_ziel_prozent` | % | 0 | Nur im Entwurf vorhanden; wird vom aktuellen Code nicht gelesen |
 | `anforderung_leistung_w` **(Ausgabe)** | W | – | **Ein signierter Sollwert: + laden / − entladen.** Der Helfer braucht ein **negatives Minimum** |
 | `anforderung_betriebsart` **(Ausgabe, `input_select`)** | – | – | `laden` / `entladen` / `standby` |
 
@@ -112,7 +118,7 @@ Dazu drei Schalter und eine Auswahlliste:
 |---|---|---|
 | `input_boolean.ems_<prefix>_laden_erlaubt` | `on`/`off` | Ladepfad freigeben |
 | `input_boolean.ems_<prefix>_entladen_erlaubt` | `on`/`off` | Entladepfad freigeben |
-| `input_boolean.ems_<prefix>_netzladen_aktiv` | `on`/`off` | Reserviert, im Code gesperrt |
+| `input_boolean.ems_<prefix>_netzladen_aktiv` | `on`/`off` | Reserviert; entgegen der früheren Annahme nicht hart gesperrt und daher bis zur Behebung von [B-4](bekannte-luecken.md#offene-bugs) zwingend `off` |
 | `input_select.ems_<prefix>_betriebsart` | `auto`, `nur_laden`, `nur_entladen`, `standby` | Was das HEMS überhaupt darf |
 
 Externe Sensoren je Speicher: `soc_entity` (Pflicht) und entweder `charge_power_entity` **und**
