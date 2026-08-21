@@ -11,6 +11,7 @@ anzahl_phase) sowie die Watt↔Ampere-Umrechnung.
 import pytest
 
 from ems.controller import EMSController
+from ems.ops import WriteOp, WriteResult
 
 from conftest import make_states
 
@@ -299,6 +300,8 @@ def test_ampere_device_writes_floored_ampere_and_phase():
         "input_number.ems_wallbox_max_anderung_pro_schritt_a": 16,
         "input_number.ems_wallbox_min_anderung_pro_schritt_a": 0,
         "input_number.ems_wallbox_anforderung_leistung_a": 0,
+        # Bei phases "1,3" ist der Phasenhelfer ein Schreibziel und damit Pflicht.
+        "input_number.ems_wallbox_anzahl_phase": 1,
         "sensor.wb": 0,
         "sensor.s": 5000,
     }
@@ -742,3 +745,148 @@ def test_unvollstaendige_speicherkonfig_wird_uebersprungen():
     states = {**_global(), **_battery("sp1"), "sensor.s": 0}
     status = ctrl.run_cycle(make_states(states))["status"]
     assert [d["id"] for d in status["devices"]] == ["sp1"]
+
+
+# ---------------------------------------------------------------------------
+# Schreibziel-Gesundheit und Write-Fehler (B-2)
+# ---------------------------------------------------------------------------
+
+def _heizstab_cfg():
+    return {"name": "heizstab", "class": "controllable",
+            "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto",
+            **CTRL_FALLBACKS}
+
+
+def _heizstab_states(**over):
+    states = {
+        **_global(),
+        **_controllable_w("heizstab", min_w=500, max_w=3000),
+        "sensor.s": 3000,
+        "sensor.heizstab_ist": 0,
+    }
+    states.update(over)
+    return states
+
+
+def _dev(res, device_id="heizstab"):
+    return next(d for d in res["status"]["devices"] if d["id"] == device_id)
+
+
+def test_fehlendes_schreibziel_verhindert_zuteilung():
+    ctrl = EMSController([_heizstab_cfg()], residual_power_entity="sensor.s")
+    states = _heizstab_states()
+    del states["input_number.ems_heizstab_anforderung_leistung_w"]
+    res = ctrl.run_cycle(make_states(states))
+    device = _dev(res)
+    assert device["runtime_active"] is False
+    assert device["inactive_reasons"] == ["schreibziel_fehlt"]
+    assert device["alloc_w"] == 0.0
+    assert res["status"]["pool_w"] == 3000.0     # Pool bleibt unangetastet
+
+
+def test_nicht_verfuegbares_schreibziel_verhindert_zuteilung():
+    ctrl = EMSController([_heizstab_cfg()], residual_power_entity="sensor.s")
+    res = ctrl.run_cycle(make_states(_heizstab_states(**{
+        "input_number.ems_heizstab_anforderung_leistung_w": "unavailable",
+    })))
+    assert _dev(res)["inactive_reasons"] == ["schreibziel_nicht_verfuegbar"]
+
+
+def test_speicher_ohne_negatives_minimum_ist_nicht_regelbar():
+    """Mit min: 0 klemmt HA jede Entladeanforderung – der Speicher entlädt nie."""
+    ctrl = EMSController([_battery_cfg("speicher")], residual_power_entity="sensor.s")
+    states = {**_global(), **_battery("speicher"), "sensor.s": 0}
+    st = make_states(states, attributes={
+        "input_number.ems_speicher_anforderung_leistung_w": {"min": 0.0, "max": 5000.0},
+    })
+    device = _dev(ctrl.run_cycle(st), "speicher")
+    assert device["runtime_active"] is False
+    assert device["inactive_reasons"] == ["schreibziel_ungueltig"]
+
+
+def test_speicher_ohne_betriebsart_optionen_ist_nicht_regelbar():
+    ctrl = EMSController([_battery_cfg("speicher")], residual_power_entity="sensor.s")
+    states = {**_global(), **_battery("speicher"), "sensor.s": 0}
+    st = make_states(states, attributes={
+        "input_number.ems_speicher_anforderung_leistung_w": {"min": -5000.0},
+        "input_select.ems_speicher_anforderung_betriebsart": {"options": ["an", "aus"]},
+    })
+    assert _dev(ctrl.run_cycle(st), "speicher")["runtime_active"] is False
+
+
+def test_inaktives_geraet_schreibt_weiter_den_sicheren_zustand():
+    """Sonst bliebe der letzte Sollwert stehen, bis jemand das Add-on neu startet."""
+    ctrl = EMSController([_heizstab_cfg()], residual_power_entity="sensor.s")
+    res = ctrl.run_cycle(make_states(_heizstab_states(**{
+        "input_number.ems_heizstab_anforderung_leistung_w": "unavailable",
+    })))
+    op = _op_for(res["write_ops"], "input_number.ems_heizstab_anforderung_leistung_w")
+    assert op is not None and op[2]["value"] == 0.0
+
+
+def test_inaktiver_speicher_schreibt_weiter_standby():
+    ctrl = EMSController([_battery_cfg("speicher")], residual_power_entity="sensor.s")
+    states = {**_global(), **_battery("speicher", sollwert=-2000,
+                                      anforderung_betriebsart="entladen"),
+              "sensor.s": 0}
+    st = make_states(states, attributes={
+        "input_number.ems_speicher_anforderung_leistung_w": {"min": 0.0},
+    })
+    res = ctrl.run_cycle(st)
+    assert _op_for(res["write_ops"],
+                   "input_number.ems_speicher_anforderung_leistung_w")[2]["value"] == 0.0
+    assert _op_for(res["write_ops"],
+                   "input_select.ems_speicher_anforderung_betriebsart")[2]["option"] == "standby"
+
+
+def test_write_fehler_markiert_nur_das_betroffene_geraet():
+    cfg = [_heizstab_cfg(),
+           {"name": "luft", "class": "binary", "switch_entity": "switch.luft",
+            "allowed_modes": "auto", **BIN_FALLBACKS}]
+    ctrl = EMSController(cfg, residual_power_entity="sensor.s")
+    states = {**_heizstab_states(), **_binary("luft", prio=2, power=1000)}
+
+    res = ctrl.run_cycle(make_states(states))
+    assert _dev(res)["runtime_active"] is True
+
+    kaputt = _op_for(res["write_ops"], "input_number.ems_heizstab_anforderung_leistung_w")
+    ctrl.report_write_results([
+        WriteResult(op, ok=(op is not kaputt), error="" if op is not kaputt else "HTTP 400")
+        for op in res["write_ops"]
+    ])
+
+    res = ctrl.run_cycle(make_states(states))
+    assert _dev(res)["runtime_active"] is False
+    assert _dev(res)["inactive_reasons"] == ["schreiben_fehlgeschlagen"]
+    assert _dev(res)["write_error"] == "HTTP 400"
+    # Das andere Gerät regelt unbeeindruckt weiter.
+    assert _dev(res, "luft")["runtime_active"] is True
+    assert res["status"]["devices_inactive_runtime"] == ["heizstab"]
+
+
+def test_repariertes_ziel_wird_ueber_sicheren_retry_wieder_aktiv():
+    ctrl = EMSController([_heizstab_cfg()], residual_power_entity="sensor.s")
+    states = _heizstab_states()
+
+    ctrl.run_cycle(make_states(states))
+    ctrl.report_write_results([WriteResult(
+        WriteOp("input_number", "set_value", {}, "heizstab"), False, "HTTP 500")])
+
+    res = ctrl.run_cycle(make_states(states))
+    assert _dev(res)["runtime_active"] is False
+
+    # Der sichere Schreibvorgang geht durch -> nächster Zyklus wieder aktiv.
+    ctrl.report_write_results([WriteResult(op, True) for op in res["write_ops"]])
+    res = ctrl.run_cycle(make_states(states))
+    assert _dev(res)["runtime_active"] is True
+    assert _dev(res)["alloc_w"] > 0.0
+
+
+def test_schreibziel_erscheint_in_der_entitaetsdiagnose():
+    ctrl = EMSController([_heizstab_cfg()], residual_power_entity="sensor.s")
+    states = _heizstab_states()
+    del states["input_number.ems_heizstab_anforderung_leistung_w"]
+    diagnose = _dev(ctrl.run_cycle(make_states(states)))["entity_diagnostics"]
+    assert diagnose["input_number.ems_heizstab_anforderung_leistung_w"] == {
+        "role": "request", "state": "missing", "source": "ha",
+    }

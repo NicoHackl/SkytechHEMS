@@ -76,6 +76,9 @@ laufen — die Differenz ist deren gemessene Last, die ein Speicher ausdrücklic
 soll.
 
 `error` ist ein leerer String, solange der letzte Zyklus durchlief; andernfalls die Fehlermeldung.
+Ein einzelnes Gerät mit kaputtem Schreibziel macht den Zyklus **nicht** fehlerhaft — es steht in
+`devices_inactive_runtime` und trägt selbst `runtime_active: false` samt `inactive_reasons` und
+`write_error`.
 
 ### `GET /api/controls`
 
@@ -158,4 +161,4 @@ Vom Add-on genutzte Endpunkte von Home Assistant:
 | Dienst | Endpunkt | Wofür | Verhalten bei Ausfall |
 |---|---|---|---|
 | Home Assistant | `GET /api/states` | Kompletter State-Schnappschuss je Zyklus, Timeout 10 s | Zyklus wird abgebrochen und in `/api/status.error` gemeldet; die zuletzt geschriebenen Sollwerte bleiben stehen |
-| Home Assistant | `POST /api/services/<domain>/<service>` | Sollwerte, Schaltanforderungen, Post-Cycle-Skript, Timeout 5 s | Einzelne Write-Ops werden geloggt und übersprungen (siehe [bekannte-luecken.md](bekannte-luecken.md)); das Post-Cycle-Skript wirft und wird als Warnung gemeldet |
+| Home Assistant | `POST /api/services/<domain>/<service>` | Sollwerte, Schaltanforderungen, Post-Cycle-Skript, Timeout 5 s | Eine fehlgeschlagene Write-Op wird ihrem Gerät zugeordnet, geloggt und im Status sichtbar gemacht; das Gerät fährt im nächsten Zyklus nur noch seinen sicheren Zustand, die übrigen regeln weiter. Das Post-Cycle-Skript wirft und wird als Warnung gemeldet |

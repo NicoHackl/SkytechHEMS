@@ -21,6 +21,7 @@ from configuration import (
     validate_options,
 )
 
+from .ops import WriteOp, WriteResult
 from .state import StateProxy, safe_float
 from .devices import Device, ControllableDevice, BinaryDevice, BatteryDevice
 
@@ -165,6 +166,10 @@ class EMSController:
         # Ein global nicht aktivierter Regelmodus wird gemeldet, sobald er sich
         # ändert – jeden Zyklus zu warnen macht das Log unlesbar.
         self._last_unconfigured_mode: Optional[str] = None
+        # Letzter Schreibfehler je Geräte-ID. Er stammt aus dem VORHERIGEN
+        # Zyklus und gilt genau einen Zyklus: das Gerät fährt dann seinen
+        # sicheren Zustand. Klappt das, ist es im Zyklus darauf wieder aktiv.
+        self._write_failures: Dict[str, str] = {}
         self._residual_entity = (residual_power_entity or "").strip() or DEFAULT_RESIDUAL_ENTITY
         # Ist die Speicherleistung im Überschuss-Sensor enthalten (Messpunkt an
         # der Netzübergabe, Normalfall bei AC-Kopplung), muss sie herausgerechnet
@@ -173,6 +178,23 @@ class EMSController:
         log.info("EMSController bereit – %d Geräte registriert, Überschuss-Sensor='%s', "
                  "Speicher im Überschuss-Sensor=%s.",
                  len(self._devices), self._residual_entity, self._speicher_in_residual)
+
+    def report_write_results(self, results: List[WriteResult]) -> None:
+        """Ordnet fehlgeschlagene Schreiboperationen ihrem Gerät zu (behebt B-2).
+
+        Bisher wurden sie nur geloggt, der Zyklus galt als erfolgreich und in
+        der Oberfläche war nichts zu sehen. Die Karte wird bei jedem Zyklus neu
+        aufgebaut: ein Gerät, das nichts geschrieben hat oder dessen Schreiben
+        durchging, steht danach nicht mehr darin.
+        """
+        self._write_failures = {
+            result.op.owner: result.error
+            for result in results
+            if result.op.owner and not result.ok
+        }
+        for device_id, error in self._write_failures.items():
+            log.error("Gerät '%s': Schreiben fehlgeschlagen (%s) – nur sicherer "
+                      "Zustand bis das Ziel wieder funktioniert.", device_id, error)
 
     @property
     def inactive_devices(self) -> List[Dict]:
@@ -248,6 +270,13 @@ class EMSController:
             )
             device.eligible = device.check_eligible(st)
             device.update_from_ha(st, now_ts, global_puffer)
+            # Hartes Gate VOR der Pool-Verteilung: ein Gerät, dessen Sollwert
+            # nirgends ankommt, darf keine Leistung reservieren, die dann
+            # niemand abruft. Es fährt weiter seinen sicheren Zustand, damit ein
+            # repariertes Ziel ohne Neustart wieder eingefangen wird.
+            device.check_runtime_health(st, self._write_failures.get(device.id, ""))
+            if not device.runtime_active:
+                device.eligible = False
 
         # ── 3. Netz-Bereinigung ─────────────────────────────────────────
         # Ein Speicher ist kein Verbraucher mit Vorzeichen: seine Entladung
@@ -353,7 +382,7 @@ class EMSController:
             self._log_cycle(binary_devices, pool_w, binary_immediate_off, now_ts)
 
         # ── 13. HA-Schreiboperationen sammeln ───────────────────────────
-        write_ops = [op for d in self._devices for op in d.get_write_ops()]
+        write_ops: List[WriteOp] = [op for d in self._devices for op in d.get_write_ops()]
 
         # ── 14. Status-Snapshot für die Web-UI aufbauen ─────────────────
         status = {
@@ -380,6 +409,10 @@ class EMSController:
             # Beim Start übersprungene Einträge: sichtbar mit Feldfehlern, aber
             # ausdrücklich ohne erfundene Ist-, SoC- oder Schaltwerte.
             "inactive_devices":      self._inactive_devices,
+            # Ein einzelnes Gerät mit kaputtem Schreibziel macht den Zyklus
+            # nicht rot – die übrigen regeln weiter.
+            "devices_inactive_runtime": [d.id for d in self._devices
+                                         if not d.runtime_active],
             "timestamp":             now_dt,
         }
 

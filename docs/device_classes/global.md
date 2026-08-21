@@ -60,6 +60,34 @@ Diese vier Helfer werden von jeder Geräteklasse gelesen:
 Die Bedienfreigabe und die technische Freigabe müssen beide wirksam sein. Zusätzlich müssen die
 globale Freigabe, der globale Modus und `allowed_modes` das Gerät zulassen.
 
+## Schreibziele und inaktive Geräte
+
+Für die **Ausgabe**-Entitäten eines Geräts gibt es ausdrücklich **keinen** Fallback: einen Sollwert
+kann man nicht erfinden. Vor der Pool-Verteilung prüft der Zyklus deshalb je Gerät:
+
+| Prüfung | Betrifft |
+|---|---|
+| Entity-ID im Schnappschuss vorhanden | alle Schreibziele |
+| State nicht `unknown`/`unavailable`/`null` | alle Schreibziele |
+| Domain passt (`input_number`, `input_boolean`, `input_select`) | alle Schreibziele |
+| `input_select` trägt die nötigen Optionen | `anforderung_betriebsart` (`laden`, `entladen`, `standby`) |
+| `input_number` erlaubt einen negativen Wert | signierter Speicher-Sollwert |
+
+Schlägt eine Prüfung fehl oder ist der **letzte Schreibversuch** fehlgeschlagen, wird **nur dieses**
+Gerät `runtime_active: false`. Es erhält keine normale Zuteilung, reserviert keine Leistung und
+beeinflusst den Pool nicht. Den sicheren Zustand schreibt es weiter — `controllable` `0`, `binary`
+`off`, `battery` `0 W` und `standby` — und zwar bedingungslos, damit eine reparierte Entität ohne
+Add-on-Neustart wieder eingefangen wird. Die übrigen Geräte regeln unverändert weiter, und der
+Zyklus gilt nicht als fehlgeschlagen.
+
+Die Ursache steht in `inactive_reasons` (`schreibziel_fehlt`, `schreibziel_nicht_verfuegbar`,
+`schreibziel_ungueltig`, `schreiben_fehlgeschlagen`), die betroffene Entität in
+`entity_diagnostics`, die bereinigte Fehlermeldung in `write_error`.
+
+Ein fehlendes Schreibziel kann **nicht** durch einen Direktzugriff auf das reale Gerät ersetzt
+werden — das HEMS schreibt ausschließlich `input_*`-Helfer. Der unabhängige HA-Watchdog beim
+Speicher bleibt deshalb Pflicht.
+
 ## Doppelte Auflösung von HA-Entitäten
 
 Jeder gelesene HA-State läuft über den Resolve-Vertrag in

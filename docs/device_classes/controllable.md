@@ -82,8 +82,9 @@ Sensorfehler.
 | `input_number.ems_<prefix>_anforderung_leistung_a` | `output_unit: ampere` | lesen und schreiben | Sollwert in ganzen Ampere; intern rechnet das HEMS in Watt |
 | `input_number.ems_<prefix>_anzahl_phase` | nur bei `phases: "1,3"` | lesen und schreiben | Zuletzt angeforderte und neu gewählte Phasenzahl `1` oder `3` |
 
-Diese Schreibziele haben **keinen** Fallback — ein Sollwert lässt sich nicht erfinden. Fehlt der
-Helfer, bleibt der geschriebene Wert wirkungslos.
+Diese Schreibziele haben **keinen** Fallback — ein Sollwert lässt sich nicht erfinden. Fehlt einer,
+ist er `unavailable` oder hat er die falsche Domain, wird das Gerät als
+[zur Laufzeit inaktiv](global.md#schreibziele-und-inaktive-geräte) gekennzeichnet.
 
 Das HEMS schreibt den Leistungssollwert nur bei einer wirksamen Änderung. Dadurch bleibt
 `last_changed` als Zeitbasis der Rampe nutzbar. Eine HA-Automation oder Geräteintegration muss den

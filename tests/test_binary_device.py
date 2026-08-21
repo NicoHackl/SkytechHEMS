@@ -120,8 +120,10 @@ def test_candidate_not_eligible_is_off():
 def test_write_ops_reflect_final_state():
     b = make_binary()
     b._final_on = True
-    assert b.get_write_ops() == [
-        ("input_boolean", "turn_on", {"entity_id": "input_boolean.ems_luft_anforderung_an"})
+    ops = b.get_write_ops()
+    assert [(op.domain, op.service, op.data, op.owner) for op in ops] == [
+        ("input_boolean", "turn_on",
+         {"entity_id": "input_boolean.ems_luft_anforderung_an"}, "luft")
     ]
     b._final_on = False
     assert b.get_write_ops()[0][1] == "turn_off"

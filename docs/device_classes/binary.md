@@ -58,8 +58,9 @@ von Home Assistant bereitgestellte Attribut `last_changed`.
 |---|---|---|---|
 | `input_boolean.ems_<prefix>_anforderung_an` | lesen und schreiben | `on`, `off` | HEMS-Anforderung; unterscheidet eine eigene Anforderung von einem extern erzwungenen Schaltzustand |
 
-Dieses Schreibziel hat **keinen** Fallback — eine Anforderung lässt sich nicht erfinden. Fehlt der
-Helfer, bleibt der geschriebene Wert wirkungslos.
+Dieses Schreibziel hat **keinen** Fallback — eine Anforderung lässt sich nicht erfinden. Fehlt es,
+ist es `unavailable` oder hat es die falsche Domain, wird das Gerät als
+[zur Laufzeit inaktiv](global.md#schreibziele-und-inaktive-geräte) gekennzeichnet.
 
 Der Regelzyklus schreibt diese Anforderung in jedem Zyklus. Er schreibt niemals direkt auf
 `switch_entity`.

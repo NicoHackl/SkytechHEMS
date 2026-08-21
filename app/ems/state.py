@@ -18,6 +18,9 @@ STATE_VALID       = "valid"
 STATE_MISSING     = "missing"
 STATE_UNAVAILABLE = "unavailable"
 STATE_INVALID     = "invalid"
+# Nur für Schreibziele: die Entität ist brauchbar, der letzte Schreibversuch
+# ist trotzdem fehlgeschlagen (HA nicht erreichbar, Service abgelehnt).
+STATE_WRITE_FAILED = "write_failed"
 
 # Woher der wirksame Wert stammt.
 SOURCE_HA       = "ha"

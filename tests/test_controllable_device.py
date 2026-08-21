@@ -240,9 +240,10 @@ def test_write_emitted_on_change_watt():
     d._anforderung_current_w = 1000.0
     d._new_w = 1500.0
     ops = d.get_write_ops()
-    assert ops == [
+    assert [(op.domain, op.service, op.data, op.owner) for op in ops] == [
         ("input_number", "set_value",
-         {"entity_id": "input_number.ems_heizstab_anforderung_leistung_w", "value": 1500.0})
+         {"entity_id": "input_number.ems_heizstab_anforderung_leistung_w", "value": 1500.0},
+         "heizstab")
     ]
 
 

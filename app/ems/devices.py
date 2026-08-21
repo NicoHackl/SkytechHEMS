@@ -15,9 +15,11 @@ import math
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Tuple
 
+from .ops import WriteOp, WriteTarget
 from .state import (
     StateProxy, Resolved, safe_float, parse_ts,
-    STATE_VALID, STATE_INVALID, STATE_MISSING, SOURCE_INTERNAL,
+    STATE_VALID, STATE_INVALID, STATE_MISSING, STATE_UNAVAILABLE,
+    STATE_WRITE_FAILED, SOURCE_HA, SOURCE_INTERNAL,
 )
 
 log = logging.getLogger(__name__)
@@ -56,6 +58,12 @@ class Device(ABC):
         # Sie beantwortet die Frage, die vorher nur ein Debug-Log beantworten
         # konnte: welcher Wert wirkt gerade, und warum nicht der aus HA.
         self._entity_diagnostics: Dict[str, Dict[str, str]] = {}
+        # Laufzeit-Aktivität. Anders als `eligible` (Freigabeentscheidung dieses
+        # Zyklus) sagt sie: das Gerät ist technisch gar nicht regelbar, weil ein
+        # Schreibziel fehlt oder der letzte Schreibversuch fehlschlug.
+        self._runtime_active: bool = True
+        self._inactive_reasons: List[str] = []
+        self._write_error: str = ""
 
     # Vom Nutzer wählbare Gerätemodi. `auto` = Energy Pilot, `manuell` = normale
     # Regeln, `aus` = gerätespezifischer Kill-Switch.
@@ -66,6 +74,85 @@ class Device(ABC):
         self._now_ts = now_ts
         self._ep_proposal_status = "not_requested"
         self._entity_diagnostics = {}
+        self._runtime_active = True
+        self._inactive_reasons = []
+        self._write_error = ""
+
+    # ------------------------------------------------------------------
+    # Laufzeitgesundheit: Schreibziele und Schreibfehler
+    # ------------------------------------------------------------------
+
+    @property
+    def runtime_active(self) -> bool:
+        return self._runtime_active
+
+    @property
+    def inactive_reasons(self) -> List[str]:
+        return list(self._inactive_reasons)
+
+    @property
+    def write_error(self) -> str:
+        return self._write_error
+
+    def mark_inactive(self, reason: str) -> None:
+        """Nimmt dieses – und nur dieses – Gerät aus der Regelung."""
+        self._runtime_active = False
+        if reason not in self._inactive_reasons:
+            self._inactive_reasons.append(reason)
+
+    def write_targets(self) -> List[WriteTarget]:
+        """Entitäten, die dieses Gerät beschreiben muss. Ohne Fallback."""
+        return []
+
+    def check_runtime_health(self, st: StateProxy, last_write_error: str = "") -> None:
+        """Prüft Schreibziele und den letzten Schreibversuch.
+
+        Läuft VOR der Pool-Verteilung: ein Gerät, dessen Sollwert nirgends
+        ankommt, darf keine Leistung reservieren, die dann niemand abruft.
+        Der sichere Zustand wird trotzdem weiter geschrieben – eine reparierte
+        Entität kommt so ohne Add-on-Neustart wieder in die Regelung.
+        """
+        for target in self.write_targets():
+            state = self._check_write_target(st, target)
+            self._entity_diagnostics[target.entity_id] = {
+                "role":   target.role,
+                "state":  state,
+                "source": SOURCE_HA,
+            }
+            if state == STATE_MISSING:
+                self.mark_inactive("schreibziel_fehlt")
+            elif state == STATE_UNAVAILABLE:
+                self.mark_inactive("schreibziel_nicht_verfuegbar")
+            elif state != STATE_VALID:
+                self.mark_inactive("schreibziel_ungueltig")
+
+        if last_write_error:
+            self._write_error = last_write_error
+            self.mark_inactive("schreiben_fehlgeschlagen")
+            for target in self.write_targets():
+                self._entity_diagnostics[target.entity_id]["state"] = STATE_WRITE_FAILED
+
+    @staticmethod
+    def _check_write_target(st: StateProxy, target: WriteTarget) -> str:
+        """`valid`, `missing`, `unavailable` oder `invalid` für ein Schreibziel."""
+        availability = st.availability(target.entity_id)
+        if availability != STATE_VALID:
+            return availability
+        if target.entity_id.split(".", 1)[0] != target.domain:
+            return STATE_INVALID
+
+        attributes = st.getattr(target.entity_id) or {}
+        if target.options:
+            vorhanden = attributes.get("options") or []
+            if not set(target.options).issubset(set(vorhanden)):
+                return STATE_INVALID
+        if target.requires_negative_minimum:
+            # Mit min: 0 klemmt Home Assistant jede Entladeanforderung auf 0 –
+            # der Speicher entlädt dann nie, ohne dass ein Fehler entsteht.
+            minimum = attributes.get("min")
+            if not isinstance(minimum, (int, float)) or minimum >= 0:
+                return STATE_INVALID
+        return STATE_VALID
 
     # ------------------------------------------------------------------
     # Diagnostizierte Auflösung – jede Klasse liest ausschließlich hierüber
@@ -281,8 +368,8 @@ class Device(ABC):
         """Begrenzt die Sollwertänderung. Bei nicht regelbaren Geräten ein No-Op."""
 
     @abstractmethod
-    def get_write_ops(self) -> List[Tuple[str, str, Dict]]:
-        """Liefert HA-Service-Aufrufe: [(domain, service, data), ...]"""
+    def get_write_ops(self) -> List[WriteOp]:
+        """Liefert die HA-Service-Aufrufe dieses Geräts, jeder mit Besitzer."""
 
     @abstractmethod
     def to_status_dict(self) -> Dict:
@@ -649,6 +736,14 @@ class ControllableDevice(Device):
             self._apply_raw_to_watt()
             self._anforderung_age_s = 0.0
 
+    def write_targets(self) -> List[WriteTarget]:
+        targets = [WriteTarget(self.entity_anforderung_w, "request", "input_number")]
+        if self.output_unit == "ampere" and len(self._allowed_phases) > 1:
+            targets.append(WriteTarget(
+                f"input_number.ems_{self._entity_prefix}_anzahl_phase",
+                "phase_count", "input_number"))
+        return targets
+
     def consume_from_pool(self, remaining_w: float, _: float) -> float:
         """Reserviert schutz_w, damit binäre Geräte diese Leistung nicht verbrauchen."""
         return remaining_w - self._schutz_w if self.eligible else remaining_w
@@ -724,31 +819,37 @@ class ControllableDevice(Device):
 
         self._new_w = round(max(min(new_w, self.max_technisch_w), 0.0))
 
-    def get_write_ops(self) -> List[Tuple[str, str, Dict]]:
+    def get_write_ops(self) -> List[WriteOp]:
         delta     = abs(self._new_w - self._anforderung_current_w)
         is_on_off = (self._new_w < EPS_W) != (self._anforderung_current_w < EPS_W)
         # Nur schreiben, wenn sich der Wert tatsächlich ändert – würde man jeden
         # Zyklus denselben Wert schreiben, setzte das last_changed zurück und
         # anforderung_age_s könnte nicht korrekt altern, was das Rampen-Timing
         # (hoch_regelzeit_s / runter_regelzeit_s) zerstört.
-        write = is_on_off or (delta > 0 and (self.deadband_w <= 0 or delta >= self.deadband_w))
+        #
+        # Ausnahme: ist das Gerät zur Laufzeit inaktiv, wird der sichere Zustand
+        # bedingungslos geschrieben. Bei einem unbrauchbaren Schreibziel ist
+        # nicht bekannt, was dort steht – „hat sich nichts geändert" wäre eine
+        # Annahme, und das Rampen-Timing spielt ohnehin keine Rolle mehr.
+        write = (not self._runtime_active) or is_on_off or (
+            delta > 0 and (self.deadband_w <= 0 or delta >= self.deadband_w))
 
-        ops: List[Tuple[str, str, Dict]] = []
+        ops: List[WriteOp] = []
 
         # Phasenanzahl nur schreiben, wenn sie sich geändert hat (hält die HA-Schreibanzahl niedrig)
         if self.output_unit == 'ampere' and self._current_phases != self._ha_phases:
-            ops.append(("input_number", "set_value", {
+            ops.append(WriteOp("input_number", "set_value", {
                 "entity_id": f"input_number.ems_{self._entity_prefix}_anzahl_phase",
                 "value":     float(self._current_phases),
-            }))
+            }, self.id))
 
         if write:
             eff   = self._eff()
             value = math.floor(self._new_w / eff) if self.output_unit == 'ampere' and eff > 0 else self._new_w
-            ops.append(("input_number", "set_value", {
+            ops.append(WriteOp("input_number", "set_value", {
                 "entity_id": self.entity_anforderung_w,
                 "value":     value,
-            }))
+            }, self.id))
         else:
             self._new_w = self._anforderung_current_w  # Deadband aktiv – kein Schreibvorgang
 
@@ -764,6 +865,9 @@ class ControllableDevice(Device):
             "source":                self.source,
             "ep_proposal_status":    self._ep_proposal_status,
             "entity_diagnostics":    self._entity_diagnostics,
+            "runtime_active":        self._runtime_active,
+            "inactive_reasons":      self.inactive_reasons,
+            "write_error":           self._write_error or None,
             "actual_w":              self._actual_w,
             "anforderung_current_w": self._anforderung_current_w,
             "alloc_w":               self._alloc_w,
@@ -975,9 +1079,13 @@ class BinaryDevice(Device):
         """Setzt den Abschaltverzögerungs-Timer zurück. Wird nach der Prioritätskaskade aufgerufen, wenn das Gerät AUS geht."""
         self._off_since_ts = 0.0
 
-    def get_write_ops(self) -> List[Tuple[str, str, Dict]]:
+    def write_targets(self) -> List[WriteTarget]:
+        return [WriteTarget(self.entity_anforderung_an, "request", "input_boolean")]
+
+    def get_write_ops(self) -> List[WriteOp]:
         svc = "turn_on" if self._final_on else "turn_off"
-        return [("input_boolean", svc, {"entity_id": self.entity_anforderung_an})]
+        return [WriteOp("input_boolean", svc,
+                        {"entity_id": self.entity_anforderung_an}, self.id)]
 
     def to_status_dict(self) -> Dict:
         off_delay_remaining: Optional[float] = None
@@ -995,6 +1103,9 @@ class BinaryDevice(Device):
             "source":               self.source,
             "ep_proposal_status":   self._ep_proposal_status,
             "entity_diagnostics":   self._entity_diagnostics,
+            "runtime_active":       self._runtime_active,
+            "inactive_reasons":     self.inactive_reasons,
+            "write_error":          self._write_error or None,
             "power_w":              self.power_w,
             "actual_on":            self._actual_on,
             "anforderung_an":       self._anforderung_an,
@@ -1607,7 +1718,17 @@ class BatteryDevice(ControllableDevice):
     # Ausgabe
     # ------------------------------------------------------------------
 
-    def get_write_ops(self) -> List[Tuple[str, str, Dict]]:
+    def write_targets(self) -> List[WriteTarget]:
+        """Sollwert mit negativem Minimum plus Betriebsart mit ihren drei Optionen."""
+        return [
+            WriteTarget(self.entity_anforderung_w, "request", "input_number",
+                        requires_negative_minimum=True),
+            WriteTarget(f"input_select.ems_{self._entity_prefix}_anforderung_betriebsart",
+                        "request_mode", "input_select",
+                        options=("laden", "entladen", "standby")),
+        ]
+
+    def get_write_ops(self) -> List[WriteOp]:
         """Schreibt signierten Sollwert und Betriebsart (D-B11/D-B20).
 
         Reihenfolge: beim Einschalten und Ändern erst die Betriebsart, dann die
@@ -1629,11 +1750,14 @@ class BatteryDevice(ControllableDevice):
         # Vorzeichenwechsel und das Zurücknehmen einer laufenden Entladung.
         vorzeichenwechsel  = (neu_signed > 0) != (alt_signed > 0) or (neu_signed < 0) != (alt_signed < 0)
         entladung_zurueck  = alt_signed < 0 and neu_signed > alt_signed
-        schreibt_leistung  = delta > 0 and (
+        # Ein zur Laufzeit inaktiver Speicher schreibt seinen sicheren Zustand
+        # bedingungslos: 'nichts tun' liesse den letzten Sollwert stehen.
+        erzwungen = not self._runtime_active
+        schreibt_leistung  = erzwungen or (delta > 0 and (
             vorzeichenwechsel or entladung_zurueck
             or self.deadband_w <= 0 or delta >= self.deadband_w
-        )
-        schreibt_betriebsart = self._new_betriebsart != self._betriebsart_anf
+        ))
+        schreibt_betriebsart = erzwungen or self._new_betriebsart != self._betriebsart_anf
 
         if not schreibt_leistung:
             # Totband aktiv – die Anzeige soll zeigen, was wirklich in HA steht.
@@ -1641,16 +1765,16 @@ class BatteryDevice(ControllableDevice):
             self._new_entlade_w = self._entlade_anf_w
             neu_signed          = alt_signed
 
-        leistung_op = ("input_number", "set_value", {
+        leistung_op = WriteOp("input_number", "set_value", {
             "entity_id": self.entity_anforderung_w,
             "value":     float(neu_signed),
-        })
-        betriebsart_op = ("input_select", "select_option", {
+        }, self.id)
+        betriebsart_op = WriteOp("input_select", "select_option", {
             "entity_id": betriebsart_entity,
             "option":    self._new_betriebsart,
-        })
+        }, self.id)
 
-        ops: List[Tuple[str, str, Dict]] = []
+        ops: List[WriteOp] = []
         if self._new_betriebsart == "standby":
             if schreibt_leistung:
                 ops.append(leistung_op)
@@ -1683,6 +1807,9 @@ class BatteryDevice(ControllableDevice):
             "source":                self.source,
             "ep_proposal_status":    self._ep_proposal_status,
             "entity_diagnostics":    self._entity_diagnostics,
+            "runtime_active":        self._runtime_active,
+            "inactive_reasons":      self.inactive_reasons,
+            "write_error":           self._write_error or None,
             "sensoren_gueltig":      self.sensoren_gueltig,
             "soc_prozent":           round(self._soc, 1),
             "capacity_kwh":          self.capacity_kwh,

@@ -193,10 +193,20 @@ Global:
 | `binary_immediate_off` | bool | Notabschaltung binärer Geräte |
 | `timestamp` | string | **Maschinenformat** `JJJJ-MM-TT hh:mm:ss`, nicht zur Anzeige gedacht |
 | `devices` | Liste | siehe unten |
+| `devices_inactive_runtime` | Liste | Geräte-IDs, die diesen Zyklus technisch nicht regelbar waren (Schreibziel fehlt oder Schreiben schlug fehl) |
 | `inactive_devices` | Liste | Beim Start übersprungene Geräteeinträge: `index`, `name`, `device_class`, `label`, `errors` (Feldname → deutsche Meldung). Ausdrücklich **ohne** erfundene Ist-, SoC- oder Schaltwerte |
 
-Jedes Gerät trägt zusätzlich `entity_diagnostics`: `{entity_id: {role, state, source}}` mit
-`state` aus `valid`/`missing`/`unavailable`/`invalid` und `source` aus `ha`/`addon`/`internal`.
+Jedes Gerät trägt zusätzlich:
+
+| Feld | Typ | Bedeutung |
+|---|---|---|
+| `entity_diagnostics` | Objekt | `{entity_id: {role, state, source}}` |
+| `runtime_active` | bool | `false`, wenn ein Schreibziel fehlt, unbrauchbar ist oder der letzte Schreibversuch fehlschlug |
+| `inactive_reasons` | Liste | `schreibziel_fehlt`, `schreibziel_nicht_verfuegbar`, `schreibziel_ungueltig`, `schreiben_fehlgeschlagen` |
+| `write_error` | string oder `null` | Bereinigte Fehlermeldung des letzten Schreibversuchs |
+
+`state` ist `valid`, `missing`, `unavailable` oder `invalid`; bei Schreibzielen zusätzlich
+`write_failed`. `source` ist `ha`, `addon` oder `internal`.
 Damit ist beantwortbar, welcher Wert gerade wirkt und warum nicht der aus Home Assistant — siehe
 [Doppelte Auflösung](device_classes/global.md#doppelte-auflösung-von-ha-entitäten).
 
@@ -242,9 +252,11 @@ Fallstricke, die schon Fehler verursacht haben:
   gesperrten Ladepfad und trotzdem keinen Fehler.
 - **`off_delay_remaining_s` ist `null`**, wenn keine Abschaltverzögerung läuft — `0` bedeutet
   „läuft ab", nicht „nicht vorhanden".
-- **`eligible: false` ist keine ungültige Konfiguration.** Es ist die aktuelle Freigabeentscheidung
-  dieses Zyklus. Ein Gerät, das wegen fehlender Pflichtfelder gar nicht erst registriert wurde,
-  steht in `inactive_devices` und taucht in `devices` überhaupt nicht auf.
+- **Drei verschiedene „inaktiv".** `eligible: false` ist die Freigabeentscheidung dieses Zyklus
+  (Schalter, Modus, Lockout). `runtime_active: false` heißt „technisch nicht regelbar" — ein
+  Schreibziel fehlt oder das Schreiben schlug fehl; das Gerät steht weiterhin in `devices`. Ein
+  Eintrag, der wegen fehlender Pflichtfelder gar nicht erst registriert wurde, steht in
+  `inactive_devices` und taucht in `devices` überhaupt nicht auf.
 - Restzeiten sind zum Zyklus-Zeitpunkt gültig. Die Oberfläche zählt zwischen den Zyklen selbst
   herunter, statt eingefrorene Werte zu zeigen.
 

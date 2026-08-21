@@ -143,6 +143,11 @@ Ein ungültiger Speicher blockiert nicht die übrigen Speicher.
 | `input_number.ems_<prefix>_anforderung_leistung_w` | lesen und schreiben | positiv = laden, negativ = entladen, `0` = aus | Ein gemeinsamer signierter Sollwert; `last_changed` ist die Zeitbasis der Rampen |
 | `input_select.ems_<prefix>_anforderung_betriebsart` | lesen und schreiben | `laden`, `entladen`, `standby` | Explizite Betriebsart für die nachgelagerte Geräteautomation |
 
+Beide sind [Schreibziele ohne Fallback](global.md#schreibziele-und-inaktive-geräte): fehlt einer,
+ist er `unavailable`, hat er die falsche Domain, fehlen dem Auswahlhelfer Optionen oder erlaubt der
+Zahlenhelfer keinen negativen Wert, wird der Speicher als zur Laufzeit inaktiv gekennzeichnet und
+fährt nur noch `0 W` und `standby`.
+
 Der Zahlenhelfer muss ein ausreichend **negatives Minimum** besitzen. Mit `min: 0` klemmt Home
 Assistant jede Entladeanforderung auf `0`. Der Auswahlhelfer braucht genau die drei Optionen
 `laden`, `entladen` und `standby`. Die Geräteautomation muss die beiden Ausgaben in der vom

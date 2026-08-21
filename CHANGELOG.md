@@ -239,6 +239,24 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
   `schutz_w`, Ampere-Geräte (Wallbox) gar kein Pendant, sodass die Plan-Rückkopplung dort
   „unbekannt" statt eines Vergleichs zeigte.
 
+### Behoben
+- **Fehlgeschlagene Schreiboperationen verschwinden nicht mehr im Log (B-2).** Bisher wurde ein
+  Nicht-2xx-Status nur geloggt, der Zyklus galt danach als erfolgreich (`error: ""`) und in der
+  Oberfläche war nichts zu sehen — ein vertippter Helfername schlug jeden Zyklus still fehl. Jede
+  Operation trägt jetzt ihr verursachendes Gerät mit; `HAClient.execute_write_ops()` meldet je
+  Operation Erfolg oder bereinigten Fehler zurück, und der Controller ordnet ihn zu.
+- **Schreibziele werden vor der Zuteilung geprüft.** Existenz, Verfügbarkeit, Domain, die nötigen
+  `input_select`-Optionen und beim signierten Speicher-Sollwert das negative Minimum. Fehlt oder
+  taugt eines davon, wird **nur dieses** Gerät `runtime_active: false`: keine Zuteilung, keine
+  Pool-Reservierung — aber weiterhin der sichere Zustand (`0`, `off` beziehungsweise `0 W` und
+  `standby`), und zwar bedingungslos, damit eine reparierte Entität ohne Add-on-Neustart wieder
+  eingefangen wird. Die übrigen Geräte regeln unverändert weiter, und der Zyklus gilt nicht als
+  fehlgeschlagen.
+  - Neu im Status je Gerät: `runtime_active`, `inactive_reasons` und `write_error`; global
+    `devices_inactive_runtime`.
+  - `eligible: false`, `runtime_active: false` und ein Eintrag in `inactive_devices` sind drei
+    verschiedene Aussagen und werden getrennt angezeigt.
+
 ### Entfernt
 - **Sieben Speicher-Helfer entfallen (BRECHEND).** Sie werden nicht mehr gelesen, haben keine
   Wirkung mehr und dürfen in Home Assistant gelöscht werden:

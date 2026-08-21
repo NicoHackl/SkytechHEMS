@@ -52,7 +52,8 @@ Verbraucher (Heizlüfter) — mit Zeitschutz, Hysterese, Rampenbegrenzung und No
 | `app/ems/controller.py` | Einen Zyklus orchestrieren: globale Eingaben, Pool, Prioritätskaskade, Statusaufbau | Selbst HTTP sprechen |
 | `app/ems/devices.py` | Verhalten je Gerätetyp: Eligibility, Pool-Verbrauch, Rampe, Zeitschutz, Write-Ops. Hierarchie: `Device` → `ControllableDevice` → `BatteryDevice`, daneben `BinaryDevice` | Auf HA zugreifen (bekommt einen `StateProxy`) |
 | `app/ems/state.py` | Lesezugriff auf den State-Schnappschuss, Resolve-Vertrag (`has`, `availability`, `resolve_number/bool/select`), `safe_float`, `parse_ts` | Zustand halten, der einen Zyklus überdauert; klassenspezifische Defaultwerte kennen |
-| `app/ha_client.py` | Einzige Stelle mit HA-REST-Zugriff, Session-Verwaltung, Timeouts | Fachlogik enthalten |
+| `app/ha_client.py` | Einzige Stelle mit HA-REST-Zugriff, Session-Verwaltung, Timeouts; meldet je Schreiboperation Erfolg oder bereinigten Fehler zurück | Fachlogik enthalten, einen Fehlschlag verschlucken |
+| `app/ems/ops.py` | `WriteOp` (Operation samt verursachendem Gerät), `WriteResult`, `WriteTarget` | Selbst schreiben |
 | `web/` → `app/static/` | Darstellung und Bedienung | Fachlogik doppeln — sie rechnet nur an, was `/api/status` liefert |
 
 Regel: Keine Komponente übernimmt Aufgaben einer anderen. Verschiebt sich eine Verantwortung,
@@ -96,7 +97,16 @@ Ein Zyklus (`EMSController.run_cycle()`), ausgelöst alle `interval_s` Sekunden:
     laufen — der Speicher löst dort seine Richtung auf.
 12. **Rampenbegrenzung** der Sollwerte, bei Defizit sofortiger Run-down.
 13. **Write-Ops** sammeln, bei `output_unit=ampere` von Watt in ganze Ampere abrunden und gegen die
-    HA-REST-API ausführen; optional das Post-Cycle-Skript auslösen.
+    HA-REST-API ausführen; optional das Post-Cycle-Skript auslösen. Jede Operation trägt ihr
+    verursachendes Gerät; das Ergebnis geht an den Controller zurück.
+
+Zwischen Schritt 2 und 3 steht ein hartes Gate: **Schreibziel-Gesundheit.** Für jedes Gerät wird
+geprüft, ob seine Ausgabe-Entitäten im Schnappschuss vorhanden, verfügbar, von der richtigen Domain
+und ausreichend konfiguriert sind (`input_select` mit den nötigen Optionen, der Speicher-Sollwert
+mit negativem Minimum). Fehlt oder taugt eines davon — oder ist der letzte Schreibversuch
+fehlgeschlagen — wird **nur dieses** Gerät `runtime_active: false`: es bekommt keine Zuteilung,
+schreibt aber weiter seinen sicheren Zustand, damit eine reparierte Entität ohne Add-on-Neustart
+wieder eingefangen wird.
 
 Die Geräteobjekte leben über alle Zyklen hinweg. Dadurch bleiben interne Timer (z. B.
 `_off_since_ts`) ohne zusätzliche HA-Helfer erhalten — ein Add-on-Neustart setzt sie zurück.
@@ -119,7 +129,8 @@ Details zu Endpunkten: [api-referenz.md](api-referenz.md).
 │   ├── requirements.txt    Laufzeit-Abhängigkeiten des Containers
 │   ├── ems/
 │   │   ├── controller.py   EMSController, config-getriebene Geräte-Registry
-│   │   ├── devices.py      Device / ControllableDevice / BinaryDevice
+│   │   ├── devices.py      Device / ControllableDevice / BinaryDevice / BatteryDevice
+│   │   ├── ops.py          WriteOp, WriteResult, WriteTarget
 │   │   └── state.py        StateProxy, Resolve-Vertrag, safe_float, parse_ts
 │   └── static/             gebautes SPA-Bundle (eingecheckt, D-035)
 ├── web/                    Quellen der Oberfläche (React + TypeScript + Vite)
@@ -149,7 +160,11 @@ Zusagen, auf die sich der gesamte Code verlässt. Wer eine davon bricht, bricht 
    Sollwert nicht einfach stehen. Sonst entlädt der Speicher nach einem Add-on-Absturz bis leer.
 8. **Mindestlaufzeit und Abschaltverzögerung gelten auch bei Notabschaltung** — Geräteschutz
    schlägt Regelgüte (siehe [design-entscheidungen.md](design-entscheidungen.md)).
-9. **Ein gültiger Wert `0` wird nie durch einen Ersatzwert verdrängt.** Jede Auflösung eines
+9. **Ein defektes Gerät legt nur sich selbst still.** Ein fehlendes oder nicht beschreibbares
+   Schreibziel und ein fehlgeschlagener Service-Aufruf werden dem verursachenden Gerät zugeordnet
+   und im Status sichtbar gemacht; die übrigen Geräte regeln weiter, und der Zyklus gilt nicht als
+   fehlgeschlagen.
+10. **Ein gültiger Wert `0` wird nie durch einen Ersatzwert verdrängt.** Jede Auflösung eines
    HA-States läuft über den Resolve-Vertrag in [`app/ems/state.py`](../app/ems/state.py) und meldet
    neben dem Wert auch Ursache (`valid`, `missing`, `unavailable`, `invalid`) und Quelle (`ha`,
    `addon`, `internal`). Wahrheitswert-Ausdrücke wie `wert or fallback` sind damit ausgeschlossen.

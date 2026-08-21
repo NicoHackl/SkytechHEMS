@@ -412,7 +412,10 @@ class HEMSApp:
             states = await self.ha.fetch_all_states()
             st     = StateProxy(states)
             result = self.ems.run_cycle(st)
-            await self.ha.execute_write_ops(result["write_ops"])
+            write_results = await self.ha.execute_write_ops(result["write_ops"])
+            # Ergebnis zurückmelden: der Controller ordnet einen Fehlschlag dem
+            # verursachenden Gerät zu und macht ihn im Status sichtbar (B-2).
+            self.ems.report_write_results(write_results)
             if self.post_cycle_script:
                 try:
                     await self.ha.call_service("script", "turn_on",
