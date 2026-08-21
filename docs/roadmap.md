@@ -41,6 +41,9 @@ Anlage blockiert.
 | Punkt | Status | Verweis |
 |---|---|---|
 | Regelwerk, `docs/`, Changelog- und Doku-Pflicht | fertig | [README.md](README.md) |
+| Add-on-Optionen aus dem Ingress-Panel pflegbar | fertig | D-042, [api-referenz.md](api-referenz.md) |
+| Diagnostizierbare Entitäts-Fallbacks (Ursache und Quelle je Wert) | fertig | [device_classes/global.md](device_classes/global.md) |
+| Schreibziel-Prüfung und Write-Fehler je Gerät | fertig | [architektur.md](architektur.md) |
 | Oberfläche als React + TypeScript + Vite mit Design-System | fertig | D-035, D-036 |
 | Hell/Dunkel-Schalter mit gespeicherter Wahl | fertig | [design-system.md](design-system.md) |
 | Frontend-Build und Drift-Check in der CI | fertig | [git-workflow.md](git-workflow.md) |
@@ -54,15 +57,16 @@ Deckung des Hausverbrauchs. Entwurf v5:
 | Punkt | Status | Verweis |
 |---|---|---|
 | Phase 1 — Pool-Bereinigung, `hausdefizit_w`, Anzeige | fertig | D-040 |
-| Phase 2 — Ladepfad mit SoC-Taper und Derating | fertig | D-040 |
-| Phase 3 — Entladepfad, Asymmetrie, sicherer Zustand | fertig | D-040 |
+| Phase 2 — Ladepfad mit SoC-Grenzen und momentanem WR-Limit | fertig | D-040, D-041 |
+| Phase 3 — Entladepfad, Rampe, sicherer Zustand | fertig | D-040, D-041 |
 | Phase 4 — Mehrspeicher, getrennte Lade-/Entladepriorität | fertig | D-040 |
 | Phase 5 — Energy-Pilot-Vorschlagsfelder für Speicher | offen | Entwurf, Abschnitt 13 |
 | Phase 6 — Netzladen mit dynamischen Tarifen | zurückgestellt | Entwurf, Abschnitt 11; B-4 |
 | Inbetriebnahme am realen Gerät | offen | F-12, F-13, F-14 |
 
 Der Code läuft gegen Tests und einen synthetischen HA-Zustand. **Erprobt am Gerät ist er nicht** —
-es gibt noch keinen AC-Speicher. Die verbliebenen Fragen stehen in
+es gibt noch keinen AC-Speicher. Seit D-041 ist die physische Grenze allein das momentane
+WR-Limit; beide `available_*`-Sensoren sind damit Voraussetzung für die Inbetriebnahme. Die verbliebenen Fragen stehen in
 [bekannte-luecken.md](bekannte-luecken.md).
 
 Der vorhandene E3DC ist bewusst **kein** HEMS-Gerät: er regelt sich selbst und steckt im
@@ -73,7 +77,6 @@ Der vorhandene E3DC ist bewusst **kein** HEMS-Gerät: er regelt sich selbst und 
 | Thema | Warum zurückgestellt | Bedingung für Wiederaufnahme |
 |---|---|---|
 | Netzladen mit dynamischen Tarifen | Erst sinnvoll, wenn ein Speicher real läuft. Die reservierten Helfer werden teilweise ausgeführt, aber SoC-Ziel, Preislogik und vollständige Sicherheitsbegrenzung fehlen; bis zur Behebung von B-4 müssen sie `off` beziehungsweise `0 W` bleiben | M4 am Gerät in Betrieb und B-4 behoben |
-| Fehlgeschlagene Write-Ops im Status sichtbar machen (B-2) | Kein Datenverlust, nur Diagnose | Sobald ein Fehlerbild darauf zurückgeht |
 
 ---
 

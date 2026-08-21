@@ -28,7 +28,7 @@ nicht stillschweigend schöngeschrieben.
 | [test-strategie.md](test-strategie.md) | Testarten, Pflicht-Testfälle, Fixtures, Coverage-Ziel |
 | [design-entscheidungen.md](design-entscheidungen.md) | Entscheidungs-Log — Quelle der Wahrheit fürs „warum" |
 | [adr/](adr/) | Ausführliche Architecture Decision Records zu einzelnen Entscheidungen |
-| [konfiguration.md](konfiguration.md) | Add-on-Optionen, Umgebungsvariablen, Secrets-Handhabung |
+| [konfiguration.md](konfiguration.md) | Add-on-Optionen, Konfigurationsseite und Supervisor-Anbindung, Umgebungsvariablen, Secrets-Handhabung |
 | [datenmodell.md](datenmodell.md) | HA-Helfer-Namenskonvention, Statusvertrag zum Energy Pilot |
 | [device_classes/global.md](device_classes/global.md) | Globale HA-Entitäten, Add-on-Optionen, gemeinsame Gerätefelder und Fallback-Regeln |
 | [device_classes/controllable.md](device_classes/controllable.md) | HA- und Add-on-Vertrag für stufenlos regelbare Geräte |

@@ -8,6 +8,29 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+> **Brechende Konfigurationsänderung.** Vor dem nächsten Release ist die **MAJOR**-Stelle in
+> `config.yaml` anzuheben (siehe [docs/git-workflow.md](docs/git-workflow.md)). Bestandsanlagen
+> müssen ihre Add-on-Optionen ergänzen, sonst laufen betroffene Geräte nicht mehr an.
+
+### Migration bestehender Anlagen
+
+1. **Regelbare Geräte** brauchen sechs neue Felder: `technical_minimum`, `technical_maximum`,
+   `increase_delay_s`, `decrease_delay_s`, `maximum_step_change` und `minimum_step_change` — in der
+   zu `output_unit` passenden Einheit, also bei einer Wallbox in **Ampere**. `technical_maximum`
+   muss größer als `0` sein.
+2. **Binäre Geräte** brauchen fünf neue Felder: `power_w` (größer als `0`), `on_reserve_w`,
+   `min_runtime_s`, `min_offtime_s` und `off_delay_s`.
+3. **AC-Speicher** brauchen `available_charge_power_entity` und
+   `available_discharge_power_entity`. Optional, aber empfohlen: `soc_max_hysteresis_percent`
+   (Default `2`) und `direction_switch_delay_s` (Default `5`).
+4. Ein Gerät ohne diese Felder wird beim Start **nicht registriert**. Es verschwindet nicht:
+   `/api/status` führt es unter `inactive_devices` samt Feldfehlern auf, und die Konfigurationsseite
+   zeigt sie direkt am betroffenen Feld.
+5. **Löschbar** sind danach die sieben entfallenen Speicher-Helfer (siehe „Entfernt"). Beim
+   regelbaren Gerät bleibt `min_umschaltzeit_s` als Phasenwechsel-Sperre erhalten.
+6. Die Add-on-Optionen lassen sich jetzt im Ingress-Panel unter **Konfiguration** pflegen —
+   dieselbe Quelle, die auch die native Add-on-Seite schreibt.
+
 ### Hinzugefügt
 - **Doppelte Fallback-Auflösung mit Ursache und Quelle.** `StateProxy` kann jetzt zwischen
   `missing` (Entity-ID im HA-Schnappschuss nicht vorhanden), `unavailable` (Entität da, State

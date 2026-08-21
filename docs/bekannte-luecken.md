@@ -41,8 +41,24 @@ Dinge, die schon einmal Zeit gekostet haben:
   steht dort `min: 0`, klemmt Home Assistant jede Entladeanforderung serverseitig auf 0 und der
   Speicher entlädt nie.
 - **Add-on-Optionen erscheinen als YAML-Editor.** Weil das Schema eine Objektliste enthält, zeigt
-  Home Assistant die Feldbeschreibungen aus `translations/` nicht an. Maßgeblich ist
+  Home Assistant die Feldbeschreibungen aus `translations/` nicht an. Bequemer ist der Bereich
+  **Konfiguration** im Ingress-Panel; er schreibt dieselbe Quelle (D-042). Maßgeblich bleibt
   [konfiguration.md](konfiguration.md).
+- **Das Manifest-Schema kann Pflichtfelder je Geräteklasse nicht ausdrücken.** Eine gemischte
+  Objektliste kennt keine bedingten Pflichtfelder, und eine Pflichtmarkierung für `switch_entity`
+  machte jedes `controllable`-Gerät ungültig. Alle klassenspezifischen Felder stehen deshalb als
+  `?` im Schema — autoritativ validiert [`app/configuration.py`](../app/configuration.py). Wer die
+  Pflichtangaben sucht, findet sie in [device_classes/](device_classes/global.md), nicht in
+  `config.yaml`.
+- **Neue Pflichtfelder machen Bestandsgeräte inaktiv.** Nach dem Update auf den Entitäts-Fallback-
+  Vertrag laufen `controllable`- und `binary`-Geräte ohne ihre neuen Add-on-Felder nicht mehr an,
+  ebenso ein Speicher ohne die beiden `available_*`-Sensoren. Sie verschwinden nicht, sondern
+  stehen mit ihren Feldfehlern unter `inactive_devices`. Die Migrationsschritte stehen im
+  [CHANGELOG.md](../CHANGELOG.md).
+- **Ein Schreibziel hat keinen Fallback.** Fehlt der `anforderung_*`-Helfer, hat er die falsche
+  Domain, fehlen dem Betriebsart-Helfer Optionen oder erlaubt der Speicher-Sollwert keinen
+  negativen Wert, ist **nur dieses** Gerät `runtime_active: false`. Es schreibt weiter seinen
+  sicheren Zustand — der Grund steht in `inactive_reasons`, nicht nur im Log.
 
 ## Offene Bugs
 
