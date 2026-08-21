@@ -154,6 +154,90 @@ Schreibt einen Wert in eine HA-`input_*`-Entität.
 | `400` | Domain wird nicht unterstützt | `{"error": "Unsupported domain: <domain>"}` |
 | `500` | Schreiben fehlgeschlagen | `{"error": "<Meldung>"}` |
 
+## Konfigurations-Endpunkte
+
+Sie bedienen den Bereich **Konfiguration** der Oberfläche. Geschrieben wird ausschließlich über die
+Supervisor-API — es gibt keine zweite Konfigurationsdatei und kein direktes Schreiben nach
+`/data/options.json`.
+
+Fehlercodes durchgehend: `400` unlesbarer Request, `409` Revisionskonflikt, `422` Feldvalidierung,
+`502` Supervisor nicht erreichbar, `503` kein Supervisor-Zugang oder Neustart nicht auslösbar.
+Fehlertexte für den User sind deutsch; technische Details stehen bereinigt im Log.
+
+### `GET /api/config`
+
+Alles, was die Konfigurationsseite zum Anzeigen braucht.
+
+| Feld | Bedeutung |
+|---|---|
+| `options` | Die **normalisierten, bekannten** Optionsfelder. Unbekannte künftige Top-Level-Felder werden ausdrücklich nicht an den Browser gegeben |
+| `valid`, `errors`, `field_errors` | Serverseitige Prüfung der gespeicherten Konfiguration; Feldpfade wie `devices[2].technical_maximum` |
+| `inactive_devices` | Einträge, die beim Start nicht instanziiert würden, samt Feldfehlern |
+| `stored_revision` | Hash der aktuell beim Supervisor gespeicherten **rohen** Optionen |
+| `loaded_revision` | Stand, mit dem der laufende Controller instanziiert wurde |
+| `restart_required` | `true`, wenn beide abweichen |
+| `can_save`, `can_restart` | Fähigkeiten dieser Instanz — ohne Supervisor beide `false` |
+| `supervisor_available`, `supervisor_error` | Warum gegebenenfalls nicht |
+| `instance_id` | Kennung dieses Prozessstarts |
+| `supported` | Wertebereiche und Formular-Startwerte: Modi, Klassen, Log-Level, Einheiten, Phasen, Vorzeichen, Defaults je Klasse |
+
+Außerhalb des Add-on-Containers fällt der Endpunkt auf die lokal gelesene Konfiguration zurück.
+Speichern und Neustarten sind dann deaktiviert — es wird niemals vorgetäuscht, ein
+Supervisor-Schreibvorgang sei erfolgreich gewesen.
+
+### `GET /api/config/entities`
+
+Reduzierte Entitätsliste aus dem letzten HA-Schnappschuss für die Suchauswahl:
+`{entity_id, domain, state, friendly_name}`. Ohne Parameter `sensor`, `switch` und `script`;
+`?domains=input_number,input_boolean` fragt andere Domains ab. Bewusst ohne die vollständigen
+Attribute.
+
+### `POST /api/config/validate`
+
+Prüft einen Entwurf, ohne zu speichern. **Rumpf** `{"options": { … }}`.
+**Antwort `200`** `{"valid": …, "errors": [ … ], "field_errors": { … }, "inactive_devices": [ … ]}`.
+
+### `PUT /api/config`
+
+**Rumpf** `{"options": { … }, "stored_revision": "…"}`. Ablauf in genau dieser Reihenfolge:
+
+1. eigene fachliche Validierung → `422` mit `field_errors`;
+2. frisch gelesene gespeicherte Optionen holen und die Revision vergleichen → `409`;
+3. bekannte Felder in diese rohen Optionen mischen, damit unbekannte künftige Felder erhalten
+   bleiben;
+4. Validierung durch den Supervisor → `422`;
+5. speichern.
+
+**Antwort `200`** `{"stored_revision": "…", "loaded_revision": "…", "restart_required": true}`.
+Der Endpunkt startet ausdrücklich **nicht** neu.
+
+### `POST /api/config/restart`
+
+Startet mit der **bereits gespeicherten** Konfiguration neu; ein Browser-Entwurf wird nie still
+verworfen. Zuerst werden die Ausgänge betroffener Altgeräte sicher gesetzt (`controllable` → `0`,
+`binary` → `off`, `battery` → erst `0 W`, dann `standby`). Schlägt das fehl, wird **nicht** neu
+gestartet: `503` mit `deactivation_failed`.
+
+**Antwort `202`** `{"restarting": true, "instance_id": "…", "stored_revision": "…"}` — sie geht
+raus, bevor der Prozess endet.
+
+### `POST /api/config/save-and-restart`
+
+Rumpf wie `PUT /api/config`. Reihenfolge: speichern → sicher deaktivieren → neu starten.
+Schlägt die Deaktivierung fehl, **bleibt die Konfiguration gespeichert** und der Neustart
+unterbleibt; die Antwort benennt diesen Teilstatus:
+
+- `202` `{"restarting": true, …}` — gespeichert und Neustart läuft;
+- `200` `{"restarting": false, "deactivation_failed": [ … ], "message": "…"}` — gespeichert, aber
+  nicht neu gestartet.
+
+### Neustart erkennen
+
+`GET /api/status` liefert `instance_id`, eine je Prozessstart neue Kennung. Die Oberfläche pollt
+nach einem ausgelösten Neustart den relativen API-Pfad und wertet erst eine **andere**
+`instance_id` als abgeschlossenen Neustart — eine sehr kurze Unterbrechung sähe sonst wie ein
+erfolgreicher Neustart aus.
+
 ## Fremde Schnittstellen
 
 Vom Add-on genutzte Endpunkte von Home Assistant:
@@ -161,4 +245,8 @@ Vom Add-on genutzte Endpunkte von Home Assistant:
 | Dienst | Endpunkt | Wofür | Verhalten bei Ausfall |
 |---|---|---|---|
 | Home Assistant | `GET /api/states` | Kompletter State-Schnappschuss je Zyklus, Timeout 10 s | Zyklus wird abgebrochen und in `/api/status.error` gemeldet; die zuletzt geschriebenen Sollwerte bleiben stehen |
+| Supervisor | `GET /addons/self/info` | Gespeicherte Add-on-Optionen lesen, Timeout 10 s | `GET /api/config` fällt auf die lokal gelesene Konfiguration zurück, Speichern und Neustarten sind gesperrt |
+| Supervisor | `POST /addons/self/options/validate` | Optionen gegen das Manifest-Schema prüfen, Timeout 10 s | Ablehnung wird als `422` mit der Supervisor-Meldung durchgereicht |
+| Supervisor | `POST /addons/self/options` | Optionen speichern, Timeout 10 s | Fehler als `502`; es wird nie vorgetäuscht, das Speichern sei gelungen |
+| Supervisor | `POST /addons/self/restart` | Eigenes Add-on neu starten, Timeout 30 s | Wird erst nach der ausgelieferten `202`-Antwort angestoßen |
 | Home Assistant | `POST /api/services/<domain>/<service>` | Sollwerte, Schaltanforderungen, Post-Cycle-Skript, Timeout 5 s | Eine fehlgeschlagene Write-Op wird ihrem Gerät zugeordnet, geloggt und im Status sichtbar gemacht; das Gerät fährt im nächsten Zyklus nur noch seinen sicheren Zustand, die übrigen regeln weiter. Das Post-Cycle-Skript wirft und wird als Warnung gemeldet |

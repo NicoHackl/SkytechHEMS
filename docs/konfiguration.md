@@ -2,7 +2,15 @@
 
 Das Add-on kennt zwei Konfigurationsebenen: die **Add-on-Optionen** in Home Assistant
 (`config.yaml` → `options`, zur Laufzeit unter `/data/options.json`) und die **HA-Helfer**, über
-die im Betrieb geregelt wird. Die vollständigen Felder, Pflichtangaben, Entitäten und Fallbacks
+die im Betrieb geregelt wird.
+
+Die Add-on-Optionen lassen sich an zwei Stellen bearbeiten — der nativen Add-on-Seite von Home
+Assistant und dem Bereich **Konfiguration** im Ingress-Panel. Beide schreiben über die
+Supervisor-API **dieselbe** Quelle; es gibt keine zweite Konfigurationsdatei und kein direktes
+Schreiben nach `/data/options.json`. Ein Revisions-Hash über die rohen gespeicherten Optionen
+erkennt eine zwischenzeitliche Änderung an der jeweils anderen Stelle und verhindert, dass sie
+überschrieben wird. Eine gespeicherte Änderung wird erst nach einem **Neustart** des Add-ons
+wirksam; die Endpunkte dazu stehen in [api-referenz.md](api-referenz.md#konfigurations-endpunkte). Die vollständigen Felder, Pflichtangaben, Entitäten und Fallbacks
 stehen in der Referenz [Geräteklassen](device_classes/global.md).
 
 ## Umgebungsvariablen
@@ -12,9 +20,17 @@ stehen in der Referenz [Geräteklassen](device_classes/global.md).
 | `SUPERVISOR_TOKEN` | ja (im Add-on) | — | Wird vom Supervisor automatisch injiziert. Keine weitere Authentifizierung nötig. |
 | `HA_URL` | nein | `http://supervisor/core` | Nur für die lokale Entwicklung außerhalb des Add-on-Containers. |
 | `HA_TOKEN` | nein | Wert von `SUPERVISOR_TOKEN` | Long-Lived Access Token für die lokale Entwicklung. |
+| `SUPERVISOR_URL` | nein | `http://supervisor` | Nur für Tests und lokale Entwicklung. |
+| `HEMS_OPTIONS_PATH` | nein | `/data/options.json` | Nur für die lokale Entwicklung: von wo die Add-on-Optionen **gelesen** werden. |
 
-Gelesen werden sie ausschließlich in [`app/ha_client.py`](../app/ha_client.py). Eine `.env` gibt es
-nicht — im Add-on-Betrieb kommt alles vom Supervisor, lokal werden die beiden Variablen exportiert.
+Gelesen werden sie in [`app/ha_client.py`](../app/ha_client.py) (HA-Zugriff),
+[`app/supervisor_client.py`](../app/supervisor_client.py) (`SUPERVISOR_TOKEN`, `SUPERVISOR_URL`) und
+[`app/main.py`](../app/main.py) (`HEMS_OPTIONS_PATH`). Eine `.env` gibt es nicht — im Add-on-Betrieb
+kommt alles vom Supervisor, lokal werden die Variablen exportiert.
+
+Fehlt `SUPERVISOR_TOKEN`, läuft das Add-on außerhalb von Home Assistant: die Konfigurationsseite
+schaltet dann sichtbar in einen **Nur-Lese-Modus**. Es wird niemals vorgetäuscht, ein
+Supervisor-Schreibvorgang sei erfolgreich gewesen.
 
 ## Add-on-Optionen
 
@@ -101,7 +117,7 @@ steht auf den drei Klassenseiten; geprüft wird in
 | `config.yaml` | Add-on-Manifest: Version, Optionen, Schema, Ingress | ja |
 | `repository.yaml` | Manifest des Custom-Repositories | ja |
 | `translations/de.yaml`, `translations/en.yaml` | Feldbeschreibungen der Optionen | ja |
-| `/data/options.json` | Vom Supervisor erzeugte Laufzeitkonfiguration | nein (nicht im Repo) |
+| `/data/options.json` | Vom Supervisor erzeugte Laufzeitkonfiguration; wird nur **gelesen** | nein (nicht im Repo) |
 
 ## Secrets
 

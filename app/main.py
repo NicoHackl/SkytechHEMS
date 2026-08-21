@@ -7,15 +7,19 @@ import asyncio
 import datetime
 import json
 import logging
+import os
 import signal
+import uuid
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from aiohttp import web
 
+from config_service import ConfigProblem, ConfigService
 from configuration import GLOBAL_DEFAULTS, parse_modes, validate_options
 from ha_client import HAClient
 from ems import EMSController, StateProxy
+from supervisor_client import SupervisorClient
 
 # Alle für Menschen lesbaren Zeitangaben laufen über diese Zone und dieses
 # Format – Datum TT.MM.JJJJ, Uhrzeit Berliner Zeit ohne Offset oder Kürzel.
@@ -42,8 +46,9 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 # Vom Supervisor erzeugte Laufzeitkonfiguration. Sie wird nur GELESEN – geschrieben
-# werden Add-on-Optionen ausschließlich über die Supervisor-API.
-OPTIONS_PATH = Path("/data/options.json")
+# werden Add-on-Optionen ausschließlich über die Supervisor-API. Der Pfad ist für
+# die lokale Entwicklung außerhalb des Containers überschreibbar.
+OPTIONS_PATH = Path(os.environ.get("HEMS_OPTIONS_PATH", "/data/options.json"))
 
 
 def _load_raw_options() -> dict:
@@ -369,6 +374,10 @@ def _build_device_controls_schema(
 
 class HEMSApp:
     def __init__(self):
+        # Eine je Prozessstart neue Kennung. Die Oberfläche erkennt daran, dass
+        # nach einem Neustart wirklich eine NEUE Instanz antwortet – eine sehr
+        # kurze Unterbrechung sähe sonst wie ein abgeschlossener Neustart aus.
+        self.instance_id: str = uuid.uuid4().hex
         self._raw_options = _load_raw_options()
         validated = validate_options(self._raw_options)
         options = validated.options
@@ -389,6 +398,7 @@ class HEMSApp:
         # dieselbe Menge, die der Controller auch wirklich registriert.
         self._device_configs: list = validated.devices
         self.ha  = HAClient()
+        self.supervisor = SupervisorClient()
         self.ems = EMSController(
             validated.devices,
             residual_power_entity=str(option("residual_power_entity")),
@@ -396,7 +406,17 @@ class HEMSApp:
             available_modes=options["available_modes"],
         )
 
+        self.config = ConfigService(
+            supervisor=self.supervisor,
+            write_ops=self.ha.execute_write_ops,
+            local_options=self._raw_options,
+            loaded_options=self._raw_options,
+            instance_id=self.instance_id,
+            entity_snapshot=lambda: self._last_states,
+        )
+
         # Gemeinsamer Zustand – vom Scheduler geschrieben, vom Web-Handler gelesen
+        self._last_states: dict = {}
         self._last_status: dict = {}
         self._last_cycle_at: str = ""      # Anzeigeformat: TT.MM.JJJJ hh:mm:ss (Berliner Zeit)
         self._last_cycle_at_iso: str = ""  # Maschinenformat, unverändert für Bestandskonsumenten
@@ -410,6 +430,9 @@ class HEMSApp:
     async def _run_cycle(self) -> None:
         try:
             states = await self.ha.fetch_all_states()
+            # Für die Entitätsauswahl der Konfigurationsseite vorhalten: sie
+            # braucht denselben Schnappschuss, nicht einen eigenen HA-Abruf.
+            self._last_states = states
             st     = StateProxy(states)
             result = self.ems.run_cycle(st)
             write_results = await self.ha.execute_write_ops(result["write_ops"])
@@ -457,6 +480,9 @@ class HEMSApp:
             "cycle_count":       self._cycle_count,
             "error":             self._last_error,
             "interval_s":        self.interval_s,
+            # Wechselt bei jedem Prozessstart – so erkennt die Oberfläche einen
+            # abgeschlossenen Neustart zuverlässig.
+            "instance_id":       self.instance_id,
         })
 
     async def _handle_device_controls_schema(self, request: web.Request) -> web.Response:
@@ -528,6 +554,77 @@ class HEMSApp:
             return web.json_response({"error": str(exc)}, status=500)
 
     # ------------------------------------------------------------------
+    # Konfigurations-Handler – dünn: die Fachlogik liegt in ConfigService
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _problem(exc: ConfigProblem) -> web.Response:
+        return web.json_response({"error": exc.message, **exc.payload}, status=exc.status)
+
+    @staticmethod
+    async def _draft(request: web.Request) -> tuple:
+        """Liest Entwurf und Revision aus dem Rumpf. Wirft bei Unlesbarem."""
+        try:
+            body = await request.json()
+        except Exception as exc:
+            raise ConfigProblem("Der Anfragerumpf ist kein gültiges JSON.") from exc
+        if not isinstance(body, dict):
+            raise ConfigProblem("Erwartet wird ein JSON-Objekt.")
+        options = body.get("options")
+        if not isinstance(options, dict):
+            raise ConfigProblem("Feld 'options' fehlt oder ist kein Objekt.")
+        return options, str(body.get("stored_revision") or "")
+
+    async def _handle_config_get(self, request: web.Request) -> web.Response:
+        try:
+            return web.json_response(await self.config.read())
+        except ConfigProblem as exc:
+            return self._problem(exc)
+
+    async def _handle_config_entities(self, request: web.Request) -> web.Response:
+        raw = request.query.get("domains", "")
+        domains = [d.strip() for d in raw.split(",") if d.strip()] or None
+        return web.json_response({"entities": self.config.entities(domains)})
+
+    async def _handle_config_validate(self, request: web.Request) -> web.Response:
+        try:
+            options, _ = await self._draft(request)
+        except ConfigProblem as exc:
+            return web.json_response({"error": exc.message}, status=400)
+        return web.json_response(self.config.validate(options))
+
+    async def _handle_config_put(self, request: web.Request) -> web.Response:
+        try:
+            options, stored_revision = await self._draft(request)
+        except ConfigProblem as exc:
+            return web.json_response({"error": exc.message}, status=400)
+        try:
+            return web.json_response(await self.config.save(options, stored_revision))
+        except ConfigProblem as exc:
+            return self._problem(exc)
+
+    async def _handle_config_restart(self, request: web.Request) -> web.Response:
+        try:
+            # 202: angenommen, läuft. Der eigentliche Neustart folgt erst, wenn
+            # diese Antwort den Browser erreicht hat.
+            return web.json_response(await self.config.restart(), status=202)
+        except ConfigProblem as exc:
+            return self._problem(exc)
+
+    async def _handle_config_save_and_restart(self, request: web.Request) -> web.Response:
+        try:
+            options, stored_revision = await self._draft(request)
+        except ConfigProblem as exc:
+            return web.json_response({"error": exc.message}, status=400)
+        try:
+            result = await self.config.save_and_restart(options, stored_revision)
+        except ConfigProblem as exc:
+            return self._problem(exc)
+        # Gespeichert, aber ohne Neustart, ist kein Fehler – nur ein anderer
+        # Zustand. Er bekommt deshalb 200 statt 202 und benennt sich selbst.
+        return web.json_response(result, status=202 if result.get("restarting") else 200)
+
+    # ------------------------------------------------------------------
     # Ausführung
     # ------------------------------------------------------------------
 
@@ -540,6 +637,13 @@ class HEMSApp:
         app.router.add_get("/api/ep",                      self._handle_ep)
         app.router.add_get("/api/device_controls_schema", self._handle_device_controls_schema)
         app.router.add_post("/api/set",                   self._handle_set)
+        app.router.add_get("/api/config",                 self._handle_config_get)
+        app.router.add_get("/api/config/entities",        self._handle_config_entities)
+        app.router.add_post("/api/config/validate",       self._handle_config_validate)
+        app.router.add_put("/api/config",                 self._handle_config_put)
+        app.router.add_post("/api/config/restart",        self._handle_config_restart)
+        app.router.add_post("/api/config/save-and-restart",
+                            self._handle_config_save_and_restart)
 
         # Gebündelte Assets der Oberfläche. Vite legt sie unter assets/ ab; die
         # Pfade in index.html sind relativ, damit sie auch unter dem
@@ -573,6 +677,7 @@ class HEMSApp:
             except asyncio.CancelledError:
                 pass
             await self.ha.close()
+            await self.supervisor.close()
             await runner.cleanup()
 
 

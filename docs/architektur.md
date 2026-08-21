@@ -12,7 +12,9 @@ Verbraucher (Heizlüfter) — mit Zeitschutz, Hysterese, Rampenbegrenzung und No
 **Nicht** Aufgabe dieses Projekts:
 
 - **Eigene Persistenz.** Es gibt keine Datenbank und keine Datei mit Zustand. Alles, was einen
-  Neustart überleben soll, steht als HA-Helfer-Entität in Home Assistant.
+  Neustart überleben soll, steht als HA-Helfer-Entität in Home Assistant. Auch die
+  Konfigurationsseite legt nichts an: sie schreibt über die Supervisor-API dieselbe Optionsquelle,
+  die die native Add-on-Seite bedient.
 - **Anlegen der HA-Helfer.** Das Add-on liest und schreibt sie, erzeugt sie aber nicht.
 - **Prognose und Planung.** Vorausschauende Optimierung liefert der separate **Energy Pilot**;
   HEMS übernimmt dessen Vorschläge nur, siehe [datenmodell.md](datenmodell.md).
@@ -48,6 +50,8 @@ Verbraucher (Heizlüfter) — mit Zeitschutz, Hysterese, Rampenbegrenzung und No
 | Komponente | Verantwortung | Darf nicht |
 |---|---|---|
 | `app/main.py` | Add-on-Optionen laden, Scheduler betreiben, HTTP-Routen bereitstellen, Steuerschema aus der Gerätekonfiguration ableiten | Regelentscheidungen treffen, Optionen selbst prüfen |
+| `app/supervisor_client.py` | Einzige Stelle mit Supervisor-REST-Zugriff: eigene Optionen lesen, validieren, speichern, Add-on neu starten | Fachlogik enthalten, Token oder rohe Optionen loggen |
+| `app/config_service.py` | Ablauf der Konfigurationsverwaltung: lesen, validieren, Revision prüfen, mischen, speichern, Altgeräte sicher deaktivieren, Neustart anstoßen | HTTP sprechen — die Handler übersetzen nur Ausnahmen in Statuscodes |
 | `app/configuration.py` | Add-on-Optionen normalisieren und validieren, Modus-Listen parsen und stabil serialisieren, Revisions-Hash bilden, Diff für die sichere Deaktivierung liefern | HA oder den Supervisor ansprechen, Zustand halten |
 | `app/ems/controller.py` | Einen Zyklus orchestrieren: globale Eingaben, Pool, Prioritätskaskade, Statusaufbau | Selbst HTTP sprechen |
 | `app/ems/devices.py` | Verhalten je Gerätetyp: Eligibility, Pool-Verbrauch, Rampe, Zeitschutz, Write-Ops. Hierarchie: `Device` → `ControllableDevice` → `BatteryDevice`, daneben `BinaryDevice` | Auf HA zugreifen (bekommt einen `StateProxy`) |
@@ -125,6 +129,8 @@ Details zu Endpunkten: [api-referenz.md](api-referenz.md).
 ├── app/
 │   ├── main.py             Scheduler, HTTP-Routen, Steuerschema
 │   ├── configuration.py    Optionen normalisieren, validieren, Revision und Diff
+│   ├── config_service.py   Ablauf der Konfigurationsverwaltung (ohne HTTP)
+│   ├── supervisor_client.py Supervisor-REST-Client für die eigenen Optionen
 │   ├── ha_client.py        HA-REST-Client
 │   ├── requirements.txt    Laufzeit-Abhängigkeiten des Containers
 │   ├── ems/

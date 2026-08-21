@@ -23,6 +23,31 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
   - **Fehlend und ausgefallen sind trennbar.** `resolve_bool()` kennt dafür einen eigenen
     `missing_fallback` — eine gar nicht angelegte Freigabe darf anders behandelt werden als eine
     ausgefallene.
+- **Add-on-Optionen sind jetzt aus dem Ingress-Panel heraus pflegbar.** Neue Endpunkte
+  `GET /api/config`, `GET /api/config/entities`, `POST /api/config/validate`, `PUT /api/config`,
+  `POST /api/config/restart` und `POST /api/config/save-and-restart`. Geschrieben wird
+  ausschließlich über die Supervisor-API (`http://supervisor/addons/self/…`) — **dieselbe Quelle**,
+  die die native Add-on-Seite bedient. Es gibt keine zweite Konfigurationsdatei und kein direktes
+  Schreiben nach `/data/options.json`; die Datei wird nur noch gelesen.
+  - **Revisionsschutz.** Ein Hash über die **rohen** gespeicherten Optionen erkennt auch eine
+    Änderung an einem Feld, das diese Oberfläche gar nicht anzeigt. Wurde zwischenzeitlich an
+    anderer Stelle gespeichert, antwortet der Server mit `409` statt die fremde Änderung zu
+    überschreiben. Beim Speichern werden die bekannten Felder in die **frisch gelesenen** rohen
+    Optionen gemischt, damit unbekannte künftige Top-Level-Felder erhalten bleiben.
+  - **Speichern und Neustarten sind getrennt.** Speichern startet nie neu; `restart_required`
+    zeigt an, dass die laufende Regelung noch mit dem alten Stand arbeitet. Vor einem Neustart
+    werden geänderte oder gelöschte Altgeräte über ihre **alten** Schreibziele sicher deaktiviert
+    (`controllable` → `0`, `binary` → `off`, `battery` → erst `0 W`, dann `standby`). Schlägt das
+    fehl, wird **nicht** neu gestartet — bei „Speichern und neu starten" bleibt die Konfiguration
+    dann gespeichert, und die Antwort benennt diesen Teilstatus ausdrücklich.
+  - **`instance_id` in `/api/status`.** Eine je Prozessstart neue Kennung; erst eine andere
+    `instance_id` gilt als abgeschlossener Neustart. Eine sehr kurze Unterbrechung sähe sonst wie
+    ein erfolgreicher Neustart aus.
+  - **Nur-Lese-Modus ohne Supervisor.** Läuft das Add-on außerhalb von Home Assistant, ist die
+    Konfiguration weiterhin sichtbar, `can_save` und `can_restart` sind `false` und die Oberfläche
+    erklärt warum. Es wird nie vorgetäuscht, ein Schreibvorgang sei gelungen.
+  - `config.yaml` erhält dafür `hassio_api: true`, ausdrücklich `hassio_role: default` — die
+    `self`-Endpunkte brauchen keine Manager-Rolle — und `panel_admin: true`.
 - **Zentrales Konfigurationsmodell `app/configuration.py`.** Normalisierung, Validierung mit
   Feldpfaden (`devices[2].technical_maximum`) und deutschen Meldungen, stabiler Parser und
   Serializer für Modus-Listen, Eindeutigkeitsprüfung von Gerätename und Präfix, kanonischer

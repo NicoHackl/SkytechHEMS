@@ -6,9 +6,11 @@ description: >-
   Speicher – mit Zeitschutz, Hysterese, Rampenbegrenzung und Notabschaltung.
   Bedienung über ein integriertes Web-UI und HA-Helfer-Entitäten.
 
-  KONFIGURATION: Da das Schema eine Geräteliste enthält, zeigt Home Assistant
-  die Konfiguration als YAML-Editor an. Alle Felder, Pflichtangaben und
-  Fallbacks sind unter docs/device_classes/ im Repository dokumentiert.
+  KONFIGURATION: Diese Seite ist der YAML-Editor des Supervisors, weil das
+  Schema eine Geräteliste enthält. Bequemer geht es über den Bereich
+  „Konfiguration" im Ingress-Panel des Add-ons – er schreibt dieselben Optionen
+  über die Supervisor-API. Alle Felder, Pflichtangaben und Fallbacks sind unter
+  docs/device_classes/ im Repository dokumentiert.
 
   Gemeinsame Felder je Gerät: name (Pflicht, technischer Bezeichner für
   Entitätsnamen), class (Pflicht: controllable, binary oder battery), label
@@ -47,8 +49,17 @@ arch:
   - armv7
   - i386
 homeassistant_api: true
+# Für den Konfigurationsbereich der eigenen Oberfläche: das Add-on liest und
+# schreibt seine EIGENEN Optionen über http://supervisor/addons/self/… . Diese
+# self-Endpunkte sind laut Supervisor-Sicherheitsvertrag ohne Manager- oder
+# Admin-Rolle freigegeben, deshalb bleibt hassio_role auf default.
+hassio_api: true
+hassio_role: default
 ingress: true
 ingress_port: 8099
+# Die Konfigurationsseite schreibt Add-on-Optionen – das ist eine
+# Administratorenaufgabe und wird hier ausdrücklich so markiert.
+panel_admin: true
 panel_icon: mdi:solar-power
 panel_title: "HEMS"
 options:

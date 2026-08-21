@@ -71,3 +71,20 @@ eine Design-Entscheidung → [design-entscheidungen.md](design-entscheidungen.md
 - Fehlt oder stört ein Vorschlag, greift der Nutzerwert. Ein KI-Ausfall darf die Anlage nie
   blockieren.
 - Kein von einer KI erzeugter Code wird ungeprüft ausgeführt.
+
+## Supervisor-Zugriff
+
+Für den Konfigurationsbereich der eigenen Oberfläche verwendet das Add-on die
+`self`-Endpunkte des Supervisors:
+
+- `config.yaml` setzt `hassio_api: true` und **ausdrücklich** `hassio_role: default`. Die
+  `self`-Endpunkte sind laut Supervisor-Sicherheitsvertrag für das eigene Add-on freigegeben; eine
+  Manager- oder Admin-Rolle wäre deutlich mehr Zugriff, als die Aufgabe braucht.
+- `panel_admin: true` markiert das Panel als Administratorenaufgabe — es schreibt Add-on-Optionen.
+- Der Token kommt ausschließlich aus `SUPERVISOR_TOKEN` und wird nur als
+  `Authorization`-Header gesetzt. Er erscheint nie in einem Log, einer Fehlermeldung oder einer
+  API-Antwort.
+- Auch die **rohen Optionsdaten** werden nie geloggt: eine Optionsliste enthält Entity-IDs und
+  damit Rückschlüsse auf die Anlage. Geloggt wird nur die Meldung des Supervisors.
+- `GET /api/config` gibt ausschließlich die bekannten, normalisierten Optionsfelder an den Browser.
+  Ein unbekanntes künftiges Feld — das ein Geheimnis enthalten könnte — wird nicht durchgereicht.
