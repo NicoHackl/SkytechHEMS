@@ -118,3 +118,30 @@ def test_cascade_promotes_higher_priority_on():
     ctrl._apply_priority_cascade([high, low])
     # Höher-priores Gerät darf nicht aus sein, während niedriger-priores an ist
     assert high.final_on is True
+
+
+# ---- Charakterisierung: Modus-Migration der Geräte-Registry ----
+
+def test_allowed_modes_auto_wird_auf_manuell_abgebildet():
+    """`auto` ist kein Nutzer-Gate mehr – Alt-Konfigurationen werden umgeschrieben."""
+    ctrl = EMSController([{
+        "name": "luft", "class": "binary",
+        "switch_entity": "switch.luft", "allowed_modes": "auto,nur_heizen",
+    }])
+    assert ctrl._devices[0]._allowed_modes == ["manuell", "nur_heizen"]
+
+
+def test_allowed_modes_fehlt_ergibt_manuell():
+    ctrl = EMSController([{
+        "name": "luft", "class": "binary", "switch_entity": "switch.luft",
+    }])
+    assert ctrl._devices[0]._allowed_modes == ["manuell"]
+
+
+def test_geraet_ohne_pflichtentitaet_wird_uebersprungen():
+    """Der Rest der Anlage läuft weiter – ein kaputter Eintrag legt nichts still."""
+    ctrl = EMSController([
+        {"name": "kaputt", "class": "binary"},
+        {"name": "luft", "class": "binary", "switch_entity": "switch.luft"},
+    ])
+    assert [d.id for d in ctrl._devices] == ["luft"]

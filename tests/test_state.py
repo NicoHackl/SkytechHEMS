@@ -53,3 +53,18 @@ def test_stateproxy_getattr():
     sp = StateProxy({"sensor.x": {"state": "1", "attributes": {"unit": "W"}, "last_changed": None}})
     assert sp.getattr("sensor.x") == {"unit": "W"}
     assert sp.getattr("sensor.missing") is None
+
+
+# ---- Charakterisierung: Lücken, die der Resolve-Vertrag schließt ----
+
+def test_stateproxy_get_trennt_fehlend_und_null_nicht():
+    """`get()` liefert für beide Fälle None – deshalb braucht es eine eigene Präsenzprüfung."""
+    sp = StateProxy({"sensor.null": {"state": None, "attributes": {}, "last_changed": None}})
+    assert sp.get("sensor.null") is None
+    assert sp.get("sensor.gibt_es_nicht") is None
+
+
+def test_safe_float_laesst_nan_und_unendlich_durch():
+    """`safe_float` prüft nur die Umwandlung, nicht die Endlichkeit."""
+    assert safe_float("inf") == float("inf")
+    assert safe_float("nan") != safe_float("nan")   # NaN ist zu sich selbst ungleich

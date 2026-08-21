@@ -2,6 +2,8 @@
 
 from ems.devices import BinaryDevice
 
+from conftest import make_states
+
 
 def make_binary(prio=1, power=1000.0, on_reserve=0.0):
     b = BinaryDevice(
@@ -123,3 +125,54 @@ def test_write_ops_reflect_final_state():
     ]
     b._final_on = False
     assert b.get_write_ops()[0][1] == "turn_off"
+
+
+# ---- Charakterisierung: Fallback-Verhalten vor dem Umbau ----
+
+def binary_states(**overrides):
+    """HA-Schnappschuss eines binären Geräts mit dem Präfix 'luft'."""
+    states = {
+        "switch.luft":                                 "off",
+        "input_boolean.ems_luft_anforderung_an":       "off",
+        "input_number.ems_luft_prioritat":             "5",
+        "input_number.ems_luft_leistung_w":            "1500",
+        "input_number.ems_luft_einschaltreserve_w":    "200",
+        "input_number.ems_luft_mindestlaufzeit_s":     "600",
+        "input_number.ems_luft_mindestauszeit_s":      "300",
+        "input_number.ems_luft_abschaltverzogerung_s": "120",
+    }
+    states.update(overrides)
+    return make_states(states)
+
+
+def test_gueltige_null_bleibt_null():
+    b = make_binary()
+    b.update_from_ha(binary_states(**{
+        "input_number.ems_luft_leistung_w":        "0",
+        "input_number.ems_luft_mindestlaufzeit_s": "0",
+    }), 10_000.0, 0.0)
+    assert b.power_w == 0.0
+    assert b.min_runtime_s == 0.0
+
+
+def test_fehlender_zahlenhelfer_wird_als_null_gelesen():
+    """Heute unauffällig – nach dem Umbau greift stattdessen der Add-on-Fallback."""
+    b = make_binary()
+    states = binary_states()
+    del states._states["input_number.ems_luft_leistung_w"]
+    b.update_from_ha(states, 10_000.0, 0.0)
+    assert b.power_w == 0.0
+
+
+def test_unavailable_zahlenhelfer_wird_wie_fehlend_behandelt():
+    b = make_binary()
+    b.update_from_ha(binary_states(**{
+        "input_number.ems_luft_leistung_w": "unavailable",
+    }), 10_000.0, 0.0)
+    assert b.power_w == 0.0
+
+
+def test_unbekannter_schalterzustand_gilt_als_aus():
+    b = make_binary()
+    b.update_from_ha(binary_states(**{"switch.luft": "unavailable"}), 10_000.0, 0.0)
+    assert b.actual_on is False

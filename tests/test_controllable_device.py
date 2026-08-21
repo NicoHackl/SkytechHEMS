@@ -4,6 +4,8 @@ import pytest
 
 from ems.devices import ControllableDevice
 
+from conftest import make_states
+
 
 def make_watt(prio=1, min_w=0.0, max_w=3000.0, geschuetzt=0.0):
     d = ControllableDevice(
@@ -281,3 +283,65 @@ def test_phase_single_phase_config_never_switches():
     d._anforderung_current_w = 0.0
     d.select_phases(10000.0, now_ts=1000.0)
     assert d._current_phases == 1
+
+
+# ---- Charakterisierung: Fallback-Verhalten vor dem Umbau ----
+
+def ctrl_states(**overrides):
+    """HA-Schnappschuss eines Watt-Geräts mit dem Präfix 'heizstab'."""
+    states = {
+        "sensor.heizstab_ist":                                     "0",
+        "input_number.ems_heizstab_anforderung_leistung_w":        "0",
+        "input_number.ems_heizstab_prioritat":                     "5",
+        "input_number.ems_heizstab_reserve_w":                     "0",
+        "input_number.ems_heizstab_hoch_regelzeit_s":              "0",
+        "input_number.ems_heizstab_runter_regelzeit_s":            "0",
+        "input_number.ems_heizstab_min_technisch_w":               "500",
+        "input_number.ems_heizstab_max_technisch_w":               "3000",
+        "input_number.ems_heizstab_geschutzte_mindestleistung_w":  "0",
+        "input_number.ems_heizstab_max_anderung_pro_schritt_w":    "800",
+        "input_number.ems_heizstab_min_anderung_pro_schritt_w":    "0",
+    }
+    states.update(overrides)
+    return make_states(states)
+
+
+def test_gueltige_null_aus_ha_wird_nicht_durch_default_ersetzt():
+    """Eine ausdrückliche 0 ist ein Wert, kein Anlass für einen Ersatzwert."""
+    d = make_watt()
+    d.update_from_ha(ctrl_states(**{
+        "input_number.ems_heizstab_max_anderung_pro_schritt_w": "0",
+        "input_number.ems_heizstab_min_technisch_w":            "0",
+    }), 10_000.0, 0.0)
+    assert d.max_anderung_pro_schritt_w == 0.0
+    assert d.min_technisch_w == 0.0
+
+
+def test_fehlender_zahlenhelfer_verwendet_den_ersatzwert():
+    d = make_watt()
+    states = ctrl_states()
+    del states._states["input_number.ems_heizstab_max_anderung_pro_schritt_w"]
+    d.update_from_ha(states, 10_000.0, 0.0)
+    assert d.max_anderung_pro_schritt_w == 1000.0
+
+
+def test_unavailable_zahlenhelfer_verwendet_denselben_ersatzwert_wie_fehlend():
+    """Der Wert ist gleich, die Ursache nicht – genau das trennt der Umbau."""
+    d = make_watt()
+    d.update_from_ha(ctrl_states(**{
+        "input_number.ems_heizstab_max_anderung_pro_schritt_w": "unavailable",
+    }), 10_000.0, 0.0)
+    assert d.max_anderung_pro_schritt_w == 1000.0
+
+
+def test_spannungssensor_ausserhalb_der_plausibilitaet_faellt_auf_230v():
+    d = ControllableDevice(
+        id="wallbox",
+        allowed_modes=["manuell"],
+        entity_actual_w="sensor.wb_ist",
+        entity_anforderung_w="input_number.ems_wallbox_anforderung_leistung_a",
+        output_unit="ampere",
+        voltage_l1_entity="sensor.spannung_l1",
+    )
+    d.update_from_ha(make_states({"sensor.spannung_l1": "412"}), 10_000.0, 0.0)
+    assert d._voltage_l1 == 230.0
