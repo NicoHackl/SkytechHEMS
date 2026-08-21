@@ -266,8 +266,12 @@ Zwei Muster, die die Speicherkarte zusätzlich braucht:
   negativ beim Entladen. In der Karte steht `1.760 W (Entladen)`, nicht `-1760 W` — das Vorzeichen
   ist Datenvertrag, keine Anzeigeform.
 - **Technische Sperrgründe übersetzen.** `blockiert_grund` und die beiden Pfad-Felder liefern
-  Schlüssel wie `soc_reserve`. Die Karte bildet sie über eine Map auf deutschen Klartext ab;
-  ein unbekannter Schlüssel wird unverändert gezeigt, statt zu verschwinden.
+  Schlüssel wie `limit_sensor`. Die Karte bildet sie über eine Map auf deutschen Klartext ab;
+  ein unbekannter Schlüssel wird unverändert gezeigt, statt zu verschwinden. Dasselbe gilt für
+  `inactive_reasons` — dort ist der Unterschied zwischen einem fehlenden Schreibziel und einem
+  fehlgeschlagenen Schreibversuch die ganze Information.
+- **Der SoC-Balken trägt zwei Marker**, Minimum und Ladeschluss. Eine Notstromreserve gibt es
+  nicht mehr; ein dritter Marker behauptete eine Grenze, die keine Wirkung hat.
 
 ## Seitenmuster: Formular
 
@@ -289,6 +293,7 @@ Zwei Muster, die die Speicherkarte zusätzlich braucht:
 | Toast (`ok` / `err`) | Ergebnis einer Aktion: gespeichert, gelöscht, fehlgeschlagen. Verschwindet nach ~4 s |
 | `.alert` | Fehler, der die ganze Seite betrifft und stehen bleiben muss |
 | `.field-error` | Fehler an genau einem Eingabefeld |
+| `.pill.warn` an einer Helfer-Zeile | Der HA-Helfer wirkt gerade nicht — Add-on-Wert oder interner Default greift |
 | `.hint-box` | Fehlende Voraussetzung plus Knopf, der sie herstellt |
 | `.info-strip` | Erklärung zur Bedienung einer Liste, kein Fehler |
 

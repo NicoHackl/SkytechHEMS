@@ -156,6 +156,7 @@ class EMSController:
             "devices": device_configs,
             "available_modes": serialize_modes(self._available_modes),
         })
+        self._device_configs: List[Dict] = validated.devices
         self._devices: List[Device] = _build_devices(validated.devices)
         self._inactive_devices: List[Dict] = [asdict(issue)
                                               for issue in validated.inactive_devices]
@@ -195,6 +196,11 @@ class EMSController:
         for device_id, error in self._write_failures.items():
             log.error("Gerät '%s': Schreiben fehlgeschlagen (%s) – nur sicherer "
                       "Zustand bis das Ziel wieder funktioniert.", device_id, error)
+
+    @property
+    def device_configs(self) -> List[Dict]:
+        """Die validierten Konfigurationen der tatsächlich registrierten Geräte."""
+        return self._device_configs
 
     @property
     def inactive_devices(self) -> List[Dict]:

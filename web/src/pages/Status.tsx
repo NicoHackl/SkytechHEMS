@@ -4,7 +4,10 @@ import { PageHeader } from '../components/Layout'
 import { DeviceCard, KeyValue, type CardState } from '../components/DeviceCard'
 import { Icon } from '../components/Icon'
 import { fmtDur, fmtW, modeLabel } from '../format'
-import type { BatteryDevice, BinaryDevice, ControllableDevice, CycleStatus, StatusResponse } from '../types'
+import type {
+  BatteryDevice, BinaryDevice, ControllableDevice, CycleStatus, Device,
+  InactiveDeviceIssue, StatusResponse,
+} from '../types'
 
 /* Live-Anzeige des letzten Regelzyklus.
 
@@ -100,7 +103,14 @@ export function Status() {
               <span className={cycle.ems_enabled ? 'pill ok' : 'pill muted'}>
                 {cycle.ems_enabled ? 'EMS aktiv' : 'EMS inaktiv'}
               </span>
-              <span className="pill primary">Modus: {modeLabel(cycle.global_mode)}</span>
+              <span className={cycle.global_mode_configured ? 'pill primary' : 'pill err'}>
+                Modus: {modeLabel(cycle.global_mode)}
+              </span>
+              {!cycle.global_mode_configured ? (
+                <span className="pill err">
+                  Modus global nicht aktiviert – Zyklus sicher inaktiv
+                </span>
+              ) : null}
               {cycle.hard_lockout ? <span className="pill err">Sperre – Überschuss-Sensor ungültig</span> : null}
               {cycle.binary_immediate_off ? <span className="pill err">Notabschaltung</span> : null}
               {!cycle.residual_sensor_valid && !cycle.hard_lockout
@@ -189,6 +199,17 @@ export function Status() {
           <div className="card"><div className="empty">Keine regelbaren Verbraucher konfiguriert.</div></div>
         )}
 
+        {cycle?.inactive_devices?.length ? (
+          <>
+            <div className="section-title"><Icon name="warning" size={14} />Beim Start übersprungen</div>
+            <div className="device-grid">
+              {cycle.inactive_devices.map((issue) => (
+                <UebersprungenCard key={`${issue.name}-${issue.index}`} issue={issue} />
+              ))}
+            </div>
+          </>
+        ) : null}
+
         <div className="section-title"><Icon name="plug" size={14} />Binäre Verbraucher</div>
         {binary.length ? (
           <div className="device-grid">
@@ -211,8 +232,51 @@ function PriorityBadge({ device }: { device: { priority: number; source: string 
   )
 }
 
+/* Warum ein Gerät technisch nicht regelbar ist. Das ist etwas anderes als
+   „gerade nicht freigegeben" — deshalb eigene Texte und eine eigene Zeile. */
+const RUNTIME_LABELS: Record<string, string> = {
+  schreibziel_fehlt: 'Schreibziel fehlt in Home Assistant',
+  schreibziel_nicht_verfuegbar: 'Schreibziel ist nicht verfügbar',
+  schreibziel_ungueltig: 'Schreibziel ist falsch angelegt',
+  schreiben_fehlgeschlagen: 'Letzter Schreibversuch fehlgeschlagen',
+}
+
+/** Zeile mit dem Laufzeitgrund, sofern das Gerät gerade nicht regelbar ist. */
+function RuntimeRow({ device }: { device: Device }) {
+  if (device.runtime_active) return null
+  const gruende = device.inactive_reasons.map((grund) => RUNTIME_LABELS[grund] ?? grund)
+  return (
+    <>
+      <KeyValue label="Nicht regelbar" value={gruende.join(' · ') || 'unbekannt'} tone="err" />
+      {device.write_error ? (
+        <KeyValue label="Schreibfehler" value={device.write_error} tone="err" />
+      ) : null}
+    </>
+  )
+}
+
+/** Ein Geräteeintrag, der beim Start nicht instanziiert wurde.
+
+    Bewusst ohne Ist-, SoC- oder Schaltwerte: es gibt keine, und erfundene
+    Nullwerte sähen aus wie ein laufendes Gerät. */
+function UebersprungenCard({ issue }: { issue: InactiveDeviceIssue }) {
+  return (
+    <DeviceCard
+      title={issue.label || issue.name || `Position ${issue.index + 1}`}
+      badge={<span className="pill err">Nicht registriert</span>}
+      state="off"
+    >
+      <KeyValue label="Klasse" value={issue.device_class || 'unbekannt'} tone="muted" />
+      {Object.entries(issue.errors).map(([feld, text]) => (
+        <KeyValue key={feld} label={feld} value={text} tone="err" />
+      ))}
+    </DeviceCard>
+  )
+}
+
 function ControllableCard({ device, elapsed }: { device: ControllableDevice; elapsed: number }) {
-  const state: CardState = !device.eligible ? 'off' : device.new_w > 0 ? 'active' : 'idle'
+  const state: CardState = !device.eligible || !device.runtime_active
+    ? 'off' : device.new_w > 0 ? 'active' : 'idle'
   const changed = Math.round(device.new_w) !== Math.round(device.anforderung_current_w)
   const isAmpere = device.output_unit === 'ampere'
 
@@ -237,6 +301,7 @@ function ControllableCard({ device, elapsed }: { device: ControllableDevice; ela
   return (
     <DeviceCard title={device.label || device.id} badge={<PriorityBadge device={device} />} state={state}>
       <KeyValue label="Freigabe" value={device.eligible ? 'ja' : 'nein'} tone={device.eligible ? 'ok' : 'err'} />
+      <RuntimeRow device={device} />
       <KeyValue label="Ist" value={fmtW(device.actual_w)} />
       <KeyValue label="Anforderung" value={currentLabel} />
       <KeyValue label="Zuteilung" value={fmtW(device.alloc_w)} />
@@ -261,7 +326,8 @@ function ControllableCard({ device, elapsed }: { device: ControllableDevice; ela
 }
 
 function BinaryCard({ device, elapsed }: { device: BinaryDevice; elapsed: number }) {
-  const state: CardState = !device.eligible ? 'off' : device.final_on ? 'active' : 'idle'
+  const state: CardState = !device.eligible || !device.runtime_active
+    ? 'off' : device.final_on ? 'active' : 'idle'
   const changed = device.actual_on !== device.final_on
   // Schalter extern an, ohne HEMS-Anforderung: Fremdsteuerung ("Force-Modus").
   const externallyOn = device.actual_on && !device.anforderung_an
@@ -277,6 +343,7 @@ function BinaryCard({ device, elapsed }: { device: BinaryDevice; elapsed: number
   return (
     <DeviceCard title={device.label || device.id} badge={<PriorityBadge device={device} />} state={state}>
       <KeyValue label="Freigabe" value={device.eligible ? 'ja' : 'nein'} tone={device.eligible ? 'ok' : 'err'} />
+      <RuntimeRow device={device} />
       <KeyValue label="Leistung" value={fmtW(device.power_w)} />
       <KeyValue label="Ist" value={device.actual_on ? 'AN' : 'AUS'} tone={device.actual_on ? 'ok' : 'err'} />
       {externallyOn ? (
@@ -312,8 +379,8 @@ const BLOCK_LABELS: Record<string, string> = {
   entladen_gesperrt: 'Entladen gesperrt',
   soc_min: 'SoC-Minimum erreicht',
   soc_max: 'SoC-Maximum erreicht',
-  soc_reserve: 'Notstromreserve',
-  wr_derating: 'Gerät drosselt',
+  limit_sensor: 'Grenzwert-Sensor unbrauchbar',
+  wr_derating: 'Gerät meldet Grenze 0 W',
   netzladen: 'Netzladen aktiv',
   hausdefizit: 'Hausdefizit – Laden gesperrt',
   umschaltsperre: 'Umschaltsperre',
@@ -333,8 +400,13 @@ const BETRIEBSART_LABELS: Record<string, string> = {
   entladen: 'Entladen',
 }
 
+/** Ein unbrauchbarer Grenzwert-Sensor ist etwas anderes als eine gemeldete 0. */
+function limitText(value: number, gueltig: boolean): string {
+  return gueltig ? fmtW(value) : 'Sensor unbrauchbar'
+}
+
 function BatteryCard({ device, elapsed }: { device: BatteryDevice; elapsed: number }) {
-  const state: CardState = !device.eligible || !device.sensoren_gueltig
+  const state: CardState = !device.eligible || !device.runtime_active || !device.sensoren_gueltig
     ? 'off'
     : device.new_lade_w > 0
       ? 'charge'
@@ -369,6 +441,7 @@ function BatteryCard({ device, elapsed }: { device: BatteryDevice; elapsed: numb
     >
       <SocBar device={device} />
       <KeyValue label="Freigabe" value={device.eligible ? 'ja' : 'nein'} tone={device.eligible ? 'ok' : 'err'} />
+      <RuntimeRow device={device} />
       {!device.sensoren_gueltig ? (
         <KeyValue label="Messwerte" value="unvollständig – aus der Regelung" tone="err" />
       ) : null}
@@ -391,8 +464,9 @@ function BatteryCard({ device, elapsed }: { device: BatteryDevice; elapsed: numb
       ) : null}
       <KeyValue
         label="Limits"
-        value={`Laden ≤ ${fmtW(device.lade_limit_w)} · Entladen ≤ ${fmtW(device.entlade_limit_w)}`}
-        tone="muted"
+        value={`Laden ≤ ${limitText(device.lade_limit_w, device.lade_limit_gueltig)} · `
+               + `Entladen ≤ ${limitText(device.entlade_limit_w, device.entlade_limit_gueltig)}`}
+        tone={device.lade_limit_gueltig && device.entlade_limit_gueltig ? 'muted' : 'warn'}
       />
       {device.energie_kwh != null ? (
         <KeyValue
@@ -414,7 +488,10 @@ function BatteryCard({ device, elapsed }: { device: BatteryDevice; elapsed: numb
   )
 }
 
-/** Ladezustand mit Markern für Minimum, Notstromreserve und Ladeschluss. */
+/** Ladezustand mit Markern für Minimum und Ladeschluss.
+
+    Die Notstromreserve ist ersatzlos entfallen — der Entladeboden ist allein
+    soc_min_prozent. */
 function SocBar({ device }: { device: BatteryDevice }) {
   const clamp = (value: number) => Math.min(100, Math.max(0, value))
   return (
@@ -425,9 +502,6 @@ function SocBar({ device }: { device: BatteryDevice }) {
     >
       <span className="fill" style={{ width: `${clamp(device.soc_prozent)}%` }} />
       <span className="mark limit" style={{ left: `${clamp(device.soc_min_prozent)}%` }} />
-      {device.soc_reserve_prozent > 0 ? (
-        <span className="mark limit" style={{ left: `${clamp(device.soc_reserve_prozent)}%` }} />
-      ) : null}
       <span className="mark" style={{ left: `${clamp(device.soc_max_prozent)}%` }} />
     </div>
   )

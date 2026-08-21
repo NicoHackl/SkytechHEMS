@@ -204,11 +204,18 @@ function fieldWeight(label: string): number {
  *   2. bei doppeltem Feld je Gerät nur den frischeren behalten (späteres
  *      valid_until) — das dedupliziert einen Sensortausch sofort.
  */
+/* Vorschlagsfelder, die das HEMS nicht mehr liest. Die HA-Entitäten können in
+   einer Bestandsanlage weiterleben; sie hier zu zeigen behauptete aber, sie
+   wirkten noch — der Energy Pilot darf die physischen WR-Grenzen des Speichers
+   nicht überschreiben. */
+const AUSSER_DIENST = ['_lade_max_w_vorschlag', '_entlade_max_w_vorschlag']
+
 function groupSuggestions(states: HaEntities, now: number): SuggestionGroup[] {
   const grouped: Record<string, Record<string, SuggestionField>> = {}
 
   for (const [entityId, entity] of Object.entries(states)) {
     if (!entityId.endsWith('_vorschlag')) continue
+    if (AUSSER_DIENST.some((feld) => entityId.endsWith(feld))) continue // (0) nicht mehr gelesen
 
     const validUntil = Date.parse(entity.attributes.valid_until ?? '')
     if (!Number.isNaN(validUntil) && validUntil < now) continue // (1) abgelaufen/verwaist

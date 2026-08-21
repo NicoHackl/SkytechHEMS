@@ -394,17 +394,20 @@ class HEMSApp:
         logging.getLogger().setLevel(
             getattr(logging, str(option("log_level")).upper(), logging.INFO))
 
-        # Nur die gültigen Einträge bekommen Helfer-Karten im Steuerung-Tab –
-        # dieselbe Menge, die der Controller auch wirklich registriert.
-        self._device_configs: list = validated.devices
         self.ha  = HAClient()
         self.supervisor = SupervisorClient()
+        # Die VOLLSTÄNDIGE Geräteliste, auch die ungültigen Einträge: der
+        # Controller ist die eine autoritative Validierung und macht daraus
+        # sowohl die Registry als auch die inactive_devices im Status. Filterte
+        # main.py hier vor, bliebe die Liste im Status immer leer.
         self.ems = EMSController(
-            validated.devices,
+            options["devices"],
             residual_power_entity=str(option("residual_power_entity")),
             speicher_in_residual_enthalten=bool(options["speicher_in_residual_enthalten"]),
             available_modes=options["available_modes"],
         )
+        # Helfer-Karten im Steuerung-Tab nur für tatsächlich registrierte Geräte.
+        self._device_configs: list = self.ems.device_configs
 
         self.config = ConfigService(
             supervisor=self.supervisor,

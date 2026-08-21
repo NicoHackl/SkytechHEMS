@@ -890,3 +890,19 @@ def test_schreibziel_erscheint_in_der_entitaetsdiagnose():
     assert diagnose["input_number.ems_heizstab_anforderung_leistung_w"] == {
         "role": "request", "state": "missing", "source": "ha",
     }
+
+
+def test_ungueltiger_eintrag_bleibt_bis_in_den_status_sichtbar():
+    """Regression: filterte der Aufrufer vor, blieb inactive_devices immer leer.
+
+    Der Controller ist die eine autoritative Validierung – er bekommt die
+    vollständige Liste und macht daraus Registry UND inactive_devices.
+    """
+    ctrl = EMSController([
+        _heizstab_cfg(),
+        {"name": "pumpe", "class": "binary", "switch_entity": "switch.pumpe"},
+    ], residual_power_entity="sensor.s")
+    status = ctrl.run_cycle(make_states(_heizstab_states()))["status"]
+    assert [d["id"] for d in status["devices"]] == ["heizstab"]
+    assert [i["name"] for i in status["inactive_devices"]] == ["pumpe"]
+    assert [c["name"] for c in ctrl.device_configs] == ["heizstab"]

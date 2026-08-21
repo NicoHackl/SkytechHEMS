@@ -23,6 +23,20 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
   - **Fehlend und ausgefallen sind trennbar.** `resolve_bool()` kennt dafür einen eigenen
     `missing_fallback` — eine gar nicht angelegte Freigabe darf anders behandelt werden als eine
     ausgefallene.
+- **Status- und Steuerungsseite zeigen die neuen Diagnosen.**
+  - Die Statusseite unterscheidet jetzt sichtbar drei Fälle: keine Freigabe (`eligible`),
+    technisch nicht regelbar (`runtime_active`, mit dem Grund im Klartext und der bereinigten
+    Schreibfehlermeldung) und beim Start übersprungen. Übersprungene Einträge stehen in einem
+    eigenen Abschnitt mit ihren Feldfehlern — ausdrücklich **ohne** erfundene Leistungs-, SoC-
+    oder Schaltwerte.
+  - Ein global nicht aktivierter Regelmodus wird als solcher benannt, statt wie ein normaler
+    Modus auszusehen.
+  - Der SoC-Balken der Speicherkarte trägt nur noch Minimum und Ladeschluss; die Limit-Zeile
+    unterscheidet einen unbrauchbaren Grenzwert-Sensor von einer gemeldeten 0.
+  - Die Steuerungsseite markiert je Helfer, ob gerade der HA-Wert, der Add-on-Wert oder ein
+    interner Default wirkt. Bei einem Helfer mit Add-on-Fallback war das vorher nicht erkennbar.
+  - Der Energy Pilot zeigt `lade_max_w` und `entlade_max_w` nicht mehr an. Die HA-Entitäten
+    dürfen in einer Bestandsanlage weiterleben; sie anzuzeigen behauptete aber, sie wirkten noch.
 - **Neuer Bereich „Konfiguration" in der Oberfläche.** Globale Einstellungen und Geräte lassen
   sich jetzt bedienbar pflegen, statt nur im YAML-Editor der Add-on-Seite.
   - **Geräteliste** mit Klasse, Name, Präfix, erlaubten Modi, Validität, Laufzeitstatus,
@@ -285,6 +299,10 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
   „unbekannt" statt eines Vergleichs zeigte.
 
 ### Behoben
+- **Ungültige Geräteeinträge erreichten den Status nicht.** `main.py` reichte nur die bereits
+  gefilterten, gültigen Einträge an den Controller weiter — der fand darin folgerichtig nichts
+  Ungültiges mehr, und `inactive_devices` blieb im Status immer leer. Der Controller bekommt
+  jetzt die vollständige Liste und ist die eine autoritative Validierung.
 - **Fehlgeschlagene Schreiboperationen verschwinden nicht mehr im Log (B-2).** Bisher wurde ein
   Nicht-2xx-Status nur geloggt, der Zyklus galt danach als erfolgreich (`error: ""`) und in der
   Oberfläche war nichts zu sehen — ein vertippter Helfername schlug jeden Zyklus still fehl. Jede

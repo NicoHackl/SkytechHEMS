@@ -93,10 +93,14 @@ export interface BatteryDevice extends DeviceBase {
   new_entlade_w: number
   /** + laden / − entladen, so wie der Sollwert nach HA geschrieben wird. */
   netto_w: number
-  /** Nutzerwert. Die tatsächliche Grenze steht in lade_limit_w / entlade_limit_w. */
+  /** Gültiger Momentanwert des jeweiligen available_*-Sensors: die einzige
+      physische Grenze. `0` bei gueltig: false ist ein Sensorfehler, bei
+      gueltig: true eine bewusste Sperre. */
   max_ladeleistung_w: number
   max_entladeleistung_w: number
-  /** Nach SoC-Taper und Geräte-Derating — nicht mit den Nutzerwerten vergleichen. */
+  lade_limit_gueltig: boolean
+  entlade_limit_gueltig: boolean
+  /** Derselbe Wert nach Freigaben und SoC-Grenzen. */
   lade_limit_w: number
   entlade_limit_w: number
   /** Vom Controller zugeteilter Anteil am Hausdefizit. */
@@ -108,7 +112,9 @@ export interface BatteryDevice extends DeviceBase {
   netzladen_aktiv: boolean
   soc_min_prozent: number
   soc_max_prozent: number
-  soc_reserve_prozent: number
+  /** Ersetzen die entfallenen HA-Helfer; stehen in der Add-on-Konfiguration. */
+  soc_max_hysteresis_percent: number
+  direction_switch_delay_s: number
   umschaltsperre_rest_s: number
   /** Warum gerade nicht geladen wird. */
   lade_blockiert_grund: string | null

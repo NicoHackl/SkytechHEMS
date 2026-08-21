@@ -3,14 +3,18 @@ import { api } from '../api'
 import { PageHeader } from '../components/Layout'
 import { Icon } from '../components/Icon'
 import { useToast } from '../components/Toast'
-import type { ControlGroup, ControlItem, HaEntities, HaEntity } from '../types'
+import type { ControlGroup, ControlItem, EntityDiagnostic, HaEntities, HaEntity } from '../types'
 
 /* Alle EMS-Helfer je Gerät und global, direkt einstellbar.
 
    Das Schema kommt aus /api/device_controls_schema und wird einmal geladen —
    es ändert sich nur, wenn die Add-on-Konfiguration geändert und das Add-on neu
    gestartet wird. Die Werte kommen aus /api/controls und werden alle 15 s
-   aufgefrischt. */
+   aufgefrischt.
+
+   Zusätzlich wird die Entitätsdiagnose des letzten Zyklus geholt: viele Helfer
+   sind optional und haben einen Add-on-Fallback. Ohne Kennzeichnung wäre nicht
+   erkennbar, ob der hier stehende Wert überhaupt wirkt. */
 
 const REFRESH_MS = 15000
 const DEBOUNCE_MS = 700
@@ -18,6 +22,7 @@ const DEBOUNCE_MS = 700
 export function Steuerung() {
   const [schema, setSchema] = useState<ControlGroup[] | null>(null)
   const [states, setStates] = useState<HaEntities | null>(null)
+  const [diagnostics, setDiagnostics] = useState<Record<string, EntityDiagnostic>>({})
   const [loadError, setLoadError] = useState('')
   const [updatedAt, setUpdatedAt] = useState('')
   /* Lokal geänderte, noch nicht bestätigte Werte. Ohne sie würde die
@@ -28,12 +33,16 @@ export function Steuerung() {
 
   const load = useCallback(async () => {
     try {
-      const [nextSchema, nextStates] = await Promise.all([
+      const [nextSchema, nextStates, status] = await Promise.all([
         schema ? Promise.resolve(schema) : api.controlsSchema(),
         api.controls(),
+        api.status(),
       ])
       setSchema(nextSchema)
       setStates(nextStates)
+      setDiagnostics('devices' in status.status
+        ? Object.assign({}, ...status.status.devices.map((device) => device.entity_diagnostics))
+        : {})
       setUpdatedAt(new Date().toLocaleTimeString('de-DE'))
       setLoadError('')
     } catch (error) {
@@ -123,6 +132,7 @@ export function Steuerung() {
                       key={item.entity}
                       item={item}
                       entity={states[item.entity]}
+                      diagnostic={diagnostics[item.entity]}
                       edit={edits[item.entity]}
                       onToggle={(value) => void save(item.entity, value)}
                       onSelect={(value) => void save(item.entity, value)}
@@ -144,9 +154,24 @@ export function Steuerung() {
   )
 }
 
+/* Woher der wirksame Wert stammt. `ha` ist der Normalfall und bleibt
+   unbeschriftet — eine Markierung an jedem Helfer wäre nur Rauschen. Der Text
+   ist kurz gehalten, damit er in einer Zeile neben dem Wert Platz hat; die
+   ausführliche Erklärung steht im title. */
+const QUELLE_LABEL: Record<string, string> = {
+  addon: 'Add-on-Wert',
+  internal: 'Default',
+}
+
+const QUELLE_TITEL: Record<string, string> = {
+  addon: 'Dieser Helfer wirkt gerade nicht – der Wert aus der Add-on-Konfiguration greift.',
+  internal: 'Dieser Helfer wirkt gerade nicht – ein interner Sicherheitsdefault greift.',
+}
+
 function ControlRow({
   item,
   entity,
+  diagnostic,
   edit,
   onToggle,
   onSelect,
@@ -155,6 +180,7 @@ function ControlRow({
 }: {
   item: ControlItem
   entity: HaEntity | undefined
+  diagnostic: EntityDiagnostic | undefined
   edit: string | undefined
   onToggle: (value: boolean) => void
   onSelect: (value: string) => void
@@ -167,6 +193,12 @@ function ControlRow({
     <div className="ctrl-row">
       <span className="k">{item.label}</span>
       <div className="ctrl-value">
+        {diagnostic && diagnostic.source !== 'ha' ? (
+          <span className="pill warn"
+                title={`${QUELLE_TITEL[diagnostic.source] ?? ''} Zustand: ${diagnostic.state}.`}>
+            {QUELLE_LABEL[diagnostic.source] ?? diagnostic.source}
+          </span>
+        ) : null}
         {!entity ? (
           <span className="ctrl-missing">Helfer nicht gefunden</span>
         ) : domain === 'input_boolean' ? (
