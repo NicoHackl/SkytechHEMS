@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 
 from aiohttp import web
 
+from configuration import GLOBAL_DEFAULTS, parse_modes, validate_options
 from ha_client import HAClient
 from ems import EMSController, StateProxy
 
@@ -40,15 +41,20 @@ log = logging.getLogger(__name__)
 # Konfiguration
 # ---------------------------------------------------------------------------
 
-def _load_config() -> dict:
-    path = Path("/data/options.json")
-    if path.exists():
+# Vom Supervisor erzeugte Laufzeitkonfiguration. Sie wird nur GELESEN – geschrieben
+# werden Add-on-Optionen ausschließlich über die Supervisor-API.
+OPTIONS_PATH = Path("/data/options.json")
+
+
+def _load_raw_options() -> dict:
+    """Liest die rohen Add-on-Optionen. Fehlt die Datei, gilt die leere Konfiguration."""
+    if OPTIONS_PATH.exists():
         try:
-            with open(path) as f:
+            with open(OPTIONS_PATH) as f:
                 return json.load(f)
         except Exception as exc:
-            log.warning("Could not read /data/options.json: %s", exc)
-    return {"interval_s": 30, "log_level": "info"}
+            log.warning("Add-on-Optionen konnten nicht gelesen werden: %s", exc)
+    return {}
 
 
 # ---------------------------------------------------------------------------
@@ -305,15 +311,6 @@ def _ctrl_items_battery(p: str) -> list:
     ]
 
 
-def _normalized_modes(raw: object) -> list[str]:
-    """Liefert dieselben erlaubten Modi wie der Controller, aber als API-Liste."""
-    return [
-        "manuell" if mode.strip() == "auto" else mode.strip()
-        for mode in str(raw or "manuell").split(",")
-        if mode.strip()
-    ]
-
-
 def _build_device_controls_schema(
     device_configs: list,
     *,
@@ -331,32 +328,29 @@ def _build_device_controls_schema(
         "items": _GLOBAL_CTRL_ITEMS,
     }]
     for cfg in device_configs:
-        name = (cfg.get("name") or "").strip()
-        cls = (cfg.get("class") or "").strip()
-        prefix = (cfg.get("entity_prefix") or "").strip() or name
-        label = (cfg.get("label") or "").strip() or name.replace("_", " ").title()
+        name = cfg["name"]
+        cls = cfg["class"]
+        prefix = cfg["entity_prefix"]
+        label = cfg["label"] or name.replace("_", " ").title()
         base = {
             "name": name,
             "label": label,
             "class": cls,
             "entity_prefix": prefix,
-            "allowed_modes": _normalized_modes(cfg.get("allowed_modes")),
+            "allowed_modes": parse_modes(cfg.get("allowed_modes")),
             "control_policy": "pv_surplus_only",
         }
         if cls == "controllable":
-            output_unit = (cfg.get("output_unit") or "watt").strip()
+            output_unit = cfg["output_unit"]
             suffix = "a" if output_unit == "ampere" else "w"
             base.update({
                 "output_unit": output_unit,
-                "actual_power_entity": (cfg.get("actual_power_entity") or "").strip(),
+                "actual_power_entity": cfg["actual_power_entity"],
                 "request_entity": f"input_number.ems_{prefix}_anforderung_leistung_{suffix}",
-                "allowed_phases": [
-                    int(value) for value in str(cfg.get("phases") or "1").split(",")
-                    if value.strip() in ("1", "3")
-                ] or [1],
+                "allowed_phases": [int(value) for value in cfg["phases"].split(",")],
                 "voltage_entities": [
                     value for key in ("voltage_l1_entity", "voltage_l2_entity", "voltage_l3_entity")
-                    if (value := (cfg.get(key) or "").strip())
+                    if (value := cfg[key])
                 ],
                 "items": _ctrl_items_controllable(prefix, output_unit),
             })
@@ -364,7 +358,7 @@ def _build_device_controls_schema(
         elif cls == "binary":
             base.update({
                 "output_unit": "watt",
-                "switch_entity": (cfg.get("switch_entity") or "").strip(),
+                "switch_entity": cfg["switch_entity"],
                 "request_entity": f"input_boolean.ems_{prefix}_anforderung_an",
                 "items": _ctrl_items_binary(prefix),
             })
@@ -375,12 +369,14 @@ def _build_device_controls_schema(
             # nie eine Entladeanforderung an.
             base.update({
                 "output_unit": "watt",
-                "soc_entity": (cfg.get("soc_entity") or "").strip(),
-                "charge_power_entity": (cfg.get("charge_power_entity") or "").strip(),
-                "discharge_power_entity": (cfg.get("discharge_power_entity") or "").strip(),
-                "power_entity": (cfg.get("power_entity") or "").strip(),
-                "power_sign": (cfg.get("power_sign") or "positiv_laden").strip(),
-                "capacity_kwh": float(cfg.get("capacity_kwh") or 0.0),
+                "soc_entity": cfg["soc_entity"],
+                "charge_power_entity": cfg["charge_power_entity"],
+                "discharge_power_entity": cfg["discharge_power_entity"],
+                "power_entity": cfg["power_entity"],
+                "power_sign": cfg["power_sign"],
+                "available_charge_power_entity": cfg["available_charge_power_entity"],
+                "available_discharge_power_entity": cfg["available_discharge_power_entity"],
+                "capacity_kwh": cfg["capacity_kwh"],
                 "request_entity": f"input_number.ems_{prefix}_anforderung_leistung_w",
                 "request_sign": "positiv_laden",
                 "mode_entity": f"input_select.ems_{prefix}_anforderung_betriebsart",
@@ -396,21 +392,31 @@ def _build_device_controls_schema(
 
 class HEMSApp:
     def __init__(self):
-        cfg = _load_config()
-        self.interval_s: int = int(cfg.get("interval_s", 30))
-        self.post_cycle_script: str = (cfg.get("post_cycle_script") or "").strip()
-        residual_entity: str = (cfg.get("residual_power_entity") or "").strip()
-        speicher_in_residual = bool(cfg.get("speicher_in_residual_enthalten", True))
+        self._raw_options = _load_raw_options()
+        validated = validate_options(self._raw_options)
+        options = validated.options
 
-        log_level = cfg.get("log_level", "info").upper()
-        logging.getLogger().setLevel(getattr(logging, log_level, logging.INFO))
+        # Ein ungültiger globaler Wert darf den Start nicht verhindern: er fällt
+        # auf den dokumentierten Default zurück und bleibt als Feldfehler sichtbar.
+        def option(key: str):
+            return (GLOBAL_DEFAULTS[key] if key in validated.field_errors
+                    else options[key])
 
-        self._device_configs: list = cfg.get("devices", [])
+        self.interval_s: int = int(option("interval_s"))
+        self.post_cycle_script: str = str(option("post_cycle_script"))
+
+        logging.getLogger().setLevel(
+            getattr(logging, str(option("log_level")).upper(), logging.INFO))
+
+        # Nur die gültigen Einträge bekommen Helfer-Karten im Steuerung-Tab –
+        # dieselbe Menge, die der Controller auch wirklich registriert.
+        self._device_configs: list = validated.devices
         self.ha  = HAClient()
         self.ems = EMSController(
-            self._device_configs,
-            residual_power_entity=residual_entity,
-            speicher_in_residual_enthalten=speicher_in_residual,
+            validated.devices,
+            residual_power_entity=str(option("residual_power_entity")),
+            speicher_in_residual_enthalten=bool(options["speicher_in_residual_enthalten"]),
+            available_modes=options["available_modes"],
         )
 
         # Gemeinsamer Zustand – vom Scheduler geschrieben, vom Web-Handler gelesen

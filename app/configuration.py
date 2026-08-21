@@ -197,7 +197,9 @@ def _normalize_device(raw: Dict[str, Any]) -> Dict[str, Any]:
     device: Dict[str, Any] = {
         "name": name,
         "class": _as_text(raw.get("class")),
-        "label": _as_text(raw.get("label")) or name,
+        # label bleibt leer, wenn nichts eingetragen ist: Statusanzeige und
+        # Steuerschema haben verschiedene Anzeige-Fallbacks (name bzw. Titelform).
+        "label": _as_text(raw.get("label")),
         "entity_prefix": _as_text(raw.get("entity_prefix")) or name,
     }
 

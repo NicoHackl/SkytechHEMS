@@ -31,6 +31,35 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
   bedingten Pflichtfelder je Geräteklasse ausdrücken — die Anwendung ist deshalb die autoritative
   Validierung, und Oberfläche wie Controller bekommen dieselbe Antwort auf „ist dieser Eintrag
   gültig".
+- **Verpflichtende Add-on-Fallbacks für `controllable` und `binary`.** Ein regelbares Gerät bringt
+  jetzt `technical_minimum`, `technical_maximum`, `increase_delay_s`, `decrease_delay_s`,
+  `maximum_step_change` und `minimum_step_change` mit, ein binäres `power_w`, `on_reserve_w`,
+  `min_runtime_s`, `min_offtime_s` und `off_delay_s`. Die gleichnamigen HA-Helfer bleiben optional
+  und haben bei einem gültigen State weiterhin Vorrang; fehlt der Helfer, fällt oder ist er
+  unbrauchbar, greift der konfigurierte Wert. Bisher lief ein Gerät ohne seine Helfer still mit
+  Nullwerten weiter — ein binäres Gerät mit `leistung_w = 0` machte die Pool-Rechnung fachlich
+  unbrauchbar, ohne dass irgendwo etwas zu sehen war.
+  - Die Werte eines Ampere-Geräts liegen in **Ampere**, nicht in Watt; die Umrechnung über
+    Phasenzahl × Spannung erfolgt erst danach.
+  - `phase_switch_delay_s` behält seine eigene Kette HA → Add-on → intern, verwirft aber keine
+    gültige `0` mehr: sie bedeutet jetzt „keine Sperrzeit" statt „nimm den Default".
+- **Globale Option `available_modes`.** Sie legt fest, welche der drei normalen Regelmodi
+  (`manuell`, `nur_heizen`, `nur_laden`) in dieser Anlage überhaupt verwendet werden; Default sind
+  alle drei, Bestandsanlagen verhalten sich also unverändert. `devices[].allowed_modes` muss eine
+  Teilmenge davon sein. Meldet `input_select.ems_regelmodus` einen normalen, nicht aktivierten
+  Modus, bleibt der Zyklus sicher inaktiv; der rohe HA-State bleibt als `global_mode` sichtbar und
+  `global_mode_configured: false` nennt die Ursache. Die Optionen des HA-Helfers legt oder ändert
+  das Add-on weiterhin nicht.
+- **Ein leeres `allowed_modes` ist ein unterstütztes Gerät.** Es bedeutet **Nur Energy Pilot**:
+  normale Nutzerregeln aktivieren das Gerät nie, der Energy Pilot erreicht es weiterhin. Fehlt das
+  Feld ganz, gilt wie bisher `manuell`.
+- **`inactive_devices` im Status.** Geräteeinträge mit fehlenden oder unbrauchbaren Pflichtfeldern
+  werden beim Start nicht instanziiert, verschwinden aber nicht mehr in einer Log-Zeile: sie stehen
+  mit Geräte-ID, Klasse, Label und konkreten Feldfehlern in `/api/status`. Für sie werden
+  ausdrücklich **keine** Ist-, SoC- oder Schaltwerte erfunden, und sie beeinflussen den Pool nicht.
+- **`entity_diagnostics` je Gerät.** `{entity_id: {role, state, source}}` beantwortet je gelesener
+  Entität, welcher Wert gerade wirkt und warum nicht der aus Home Assistant.
+
 - **Geräteklassen-Referenz unter `docs/device_classes/`.** Je eine Seite für `controllable`,
   `binary`, `battery` und globale Werte dokumentiert den tatsächlichen HA-Lese-/Schreibvertrag,
   Pflichtfelder der Add-on-Konfiguration, externe Entitätszuordnungen, Defaults und echte
@@ -97,6 +126,8 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
   `ep_proposal_status`; die bestehende Moduslogik bleibt unverändert.
 
 ### Geändert
+- **Gerätename und effektives Entitätspräfix müssen eindeutig sein.** Zwei Geräte mit demselben
+  Präfix schrieben bisher unbemerkt auf dieselben HA-Helfer.
 - **`/api/status` liefert die Zwischengrößen der Pool-Rechnung mit.** Neu sind
   `residual_bereinigt_w`, `netz_support_w`, `hems_last_w`, `hems_last_gemessen_w`, `pool_roh_w`,
   `entlade_basis_w` und `hausdefizit_w`. Rein additiv — bestehende Felder ändern weder Namen noch

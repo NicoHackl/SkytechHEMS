@@ -60,6 +60,30 @@ Diese vier Helfer werden von jeder Geräteklasse gelesen:
 Die Bedienfreigabe und die technische Freigabe müssen beide wirksam sein. Zusätzlich müssen die
 globale Freigabe, der globale Modus und `allowed_modes` das Gerät zulassen.
 
+## Doppelte Auflösung von HA-Entitäten
+
+Jeder gelesene HA-State läuft über den Resolve-Vertrag in
+[`app/ems/state.py`](../../app/ems/state.py). Er liefert neben dem wirksamen Wert immer auch die
+Ursache und die Quelle:
+
+| Zustand | Bedeutung |
+|---|---|
+| `valid` | Der State ist verwendbar. Ein gültiger Wert `0` ist ein Wert und wird **nie** ersetzt |
+| `missing` | Die Entity-ID ist im HA-Schnappschuss nicht vorhanden |
+| `unavailable` | Die Entität existiert, ihr State ist `unknown`, `unavailable` oder `null` |
+| `invalid` | Der State ist vorhanden, aber vom falschen Typ, nicht endlich (`NaN`, `±inf`) oder außerhalb eines zwingenden Wertebereichs |
+
+| Quelle | Bedeutung |
+|---|---|
+| `ha` | Der Wert stammt aus einer gültigen HA-Entität |
+| `addon` | Der Wert stammt aus einem Feld der Add-on-Konfiguration |
+| `internal` | Der Wert ist ein interner Sicherheitsdefault ohne Konfigurationsfeld |
+
+Die Reihenfolge ist immer: **gültiger HA-State → Add-on-Feld → interner Default.** `missing`,
+`unavailable` und `invalid` verwenden denselben Ersatzwert; unterschiedlich ist nur die Diagnose.
+Sie steht je Gerät unter `entity_diagnostics` in `/api/status`, als
+`{entity_id: {role, state, source}}`.
+
 ## Globale HA-Helfer
 
 Der Regelzyklus liest diese Entitäten. Er schreibt keine globale HA-Entität selbst; Änderungen in
@@ -101,17 +125,36 @@ in [konfiguration.md](../konfiguration.md#semantik-des-überschuss-sensors).
 | `post_cycle_script` | nein | leer | alle | Optionales `script.<name>`, das nach einem erfolgreichen Regelzyklus gestartet wird |
 | `residual_power_entity` | nein | `sensor.verfugbare_leistung_fur_uberschussverbraucher` | alle | Vollständige Entity-ID des Überschuss-Sensors; dies ist eine Entity-Zuordnung, kein Ersatzwert für einen HA-State |
 | `speicher_in_residual_enthalten` | nein | `true` | `battery` | Legt fest, ob gemessene Speicherentladung vor der Pool-Berechnung vom Überschuss-Sensor abgezogen wird |
+| `available_modes` | nein | alle drei normalen Modi | alle | Kommagetrennte Teilmenge aus `manuell`, `nur_heizen` und `nur_laden`; legt fest, welche normalen Regelmodi in dieser Anlage überhaupt verwendet werden |
 | `devices` | ja | Manifest enthält Beispielgeräte; Laufzeit ohne Feld: leere Liste | alle | Liste der Geräteinstanzen und ihrer klassenspezifischen Felder |
 
-### Tatsächliche Add-on-Fallbacks für HA-Entitäten
+### Normale Modi und Sondermodi
 
-Nur ein klassenspezifisches Add-on-Feld ersetzt unmittelbar einen fehlenden HA-Helferwert:
-`phase_switch_delay_s` bei einem mehrphasigen `controllable`-Gerät. Details stehen in
-[controllable.md](controllable.md#fallbacks-und-interne-defaults).
+Die vom Code unterstützten **normalen** Regelmodi sind fest: `manuell`, `nur_heizen` und
+`nur_laden`. Für frei erfundene Namen gibt es keine Regellogik, sie sind deshalb unzulässig.
+`auto` und `aus` sind **Sondermodi** von `input_select.ems_regelmodus`; sie gehören weder in
+`available_modes` noch in `devices[].allowed_modes` und bleiben immer unterstützt.
+
+Meldet `input_select.ems_regelmodus` einen normalen Modus, der nicht in `available_modes` steht,
+ist dieser Zyklus **sicher inaktiv**: Pool und Hausdefizit sind `0`, alle Geräte gehen in ihren
+sicheren Zustand. Der rohe HA-State bleibt als `global_mode` im Status sichtbar, zusätzlich meldet
+`global_mode_configured: false` die Ursache. Die Optionen des HA-Helfers legt oder ändert das
+Add-on ausdrücklich **nicht**.
+
+### Add-on-Fallbacks für HA-Entitäten
+
+Jede Geräteklasse bringt verpflichtende Add-on-Felder mit, die einen fehlenden, nicht verfügbaren
+oder unbrauchbaren HA-Helferwert unmittelbar ersetzen:
+
+| Klasse | Fallbackfelder | Referenz |
+|---|---|---|
+| `controllable` | `technical_minimum`, `technical_maximum`, `increase_delay_s`, `decrease_delay_s`, `maximum_step_change`, `minimum_step_change`, zusätzlich `phase_switch_delay_s` | [controllable.md](controllable.md#über-namenskonvention-gelesene-ha-helfer) |
+| `binary` | `power_w`, `on_reserve_w`, `min_runtime_s`, `min_offtime_s`, `off_delay_s` | [binary.md](binary.md#über-namenskonvention-gelesene-ha-helfer) |
+| `battery` | `soc_max_hysteresis_percent`, `direction_switch_delay_s` | [battery.md](battery.md) |
 
 `entity_prefix` fällt auf `name` zurück, erzeugt damit aber lediglich Entitätsnamen. Es liefert
-keinen State und legt keine HA-Entität an. Alle anderen fehlenden HA-Werte verwenden interne
-Sicherheitsdefaults, die in den Klassenseiten dokumentiert sind.
+keinen State und legt keine HA-Entität an. Alle übrigen fehlenden HA-Werte verwenden interne
+Sicherheitsdefaults, die auf den Klassenseiten dokumentiert sind.
 
 ## Energy-Pilot-Vertrag
 

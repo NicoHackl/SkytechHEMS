@@ -41,6 +41,17 @@ werden abgeschaltet. Der Lockout prüft bewusst den **Rohwert** — er ist eine
 Sensor-Plausibilitätsprüfung, keine Regelgröße, und eine Bereinigung würde einen defekten Sensor
 kaschieren.
 
+### `available_modes`
+
+Legt fest, welche der drei normalen Regelmodi (`manuell`, `nur_heizen`, `nur_laden`) in dieser
+Anlage überhaupt verwendet werden; Default sind alle drei. `devices[].allowed_modes` muss eine
+Teilmenge davon sein. Die Sondermodi `auto` (Energy Pilot) und `aus` gehören nicht in die Liste und
+bleiben immer unterstützt.
+
+Meldet `input_select.ems_regelmodus` einen normalen Modus, der hier nicht aktiviert ist, bleibt der
+Zyklus sicher inaktiv — Einzelheiten in
+[Normale Modi und Sondermodi](device_classes/global.md#normale-modi-und-sondermodi).
+
 ### `speicher_in_residual_enthalten`
 
 Ein AC-gekoppelter Speicher hängt mit eigenem Wechselrichter am Hausnetz; seine Lade- und
@@ -66,8 +77,18 @@ sind unter [Gemeinsame Felder in `devices[]`](device_classes/global.md#gemeinsam
 beschrieben. Vollständige Beispiele stehen auf den drei Klassenseiten.
 
 Geräte werden ausschließlich hier verwaltet — für ein neues Gerät genügen ein Eintrag, die
-zugehörigen HA-Helfer und ein Add-on-Neustart. Ungültige Einträge (fehlendes `name`, unbekannte
-`class`) werden mit einer Fehlermeldung im Log übersprungen; die übrigen Geräte bleiben aktiv.
+zugehörigen HA-Helfer und ein Add-on-Neustart.
+
+Ungültige Einträge werden beim Start **nicht instanziiert**, verschwinden aber nicht mehr im Log:
+sie erscheinen als `inactive_devices` in `/api/status`, mit Geräte-ID, Klasse, Label und den
+konkreten Feldfehlern. Die übrigen Geräte bleiben aktiv. Welche Felder je Klasse Pflicht sind,
+steht auf den drei Klassenseiten; geprüft wird in
+[`app/configuration.py`](../app/configuration.py).
+
+> Das Schema in `config.yaml` markiert die klassenspezifischen Felder bewusst als **optional**.
+> Eine gemischte Objektliste kann keine bedingten Pflichtfelder ausdrücken — eine Pflichtmarkierung
+> für `switch_entity` machte jedes `controllable`-Gerät ungültig. Autoritativ ist deshalb die
+> Anwendung, und sie liefert Oberfläche und Regelung dieselbe Antwort.
 
 > Da das Schema eine Objektliste enthält, zeigt Home Assistant die Optionen als YAML-Editor an.
 > Die Feldbeschreibungen aus `translations/*.yaml` erscheinen in diesem Modus nicht — maßgeblich

@@ -16,6 +16,7 @@ from hypothesis import given, strategies as st
 
 from ems.controller import EMSController
 from ems.devices import BinaryDevice, ControllableDevice
+from test_run_cycle import CTRL_FALLBACKS
 
 from conftest import make_states
 from test_battery_device import battery_states, make_battery
@@ -237,7 +238,7 @@ def test_p7_ohne_speicher_identisch_zum_altverhalten(residual, heizstab_ist, sol
     """Referenzimplementierung des alten _calc_pool gegen den neuen Zyklus."""
     ctrl = EMSController(
         [{"name": "heizstab", "class": "controllable",
-          "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto"}],
+          "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto", **CTRL_FALLBACKS}],
         residual_power_entity="sensor.s",
     )
     states = {

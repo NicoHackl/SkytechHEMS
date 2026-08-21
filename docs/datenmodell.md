@@ -17,7 +17,8 @@ Grundsatz: Konsumenten machen die Identität am `name` fest und zeigen nur das `
 umbenanntes Label darf keine Zuordnung brechen.
 
 Erlaubte Zeichen in `name` und `entity_prefix`: Kleinbuchstaben, Ziffern, Unterstrich — sie fließen
-unverändert in Entitätsnamen ein.
+unverändert in Entitätsnamen ein. Beide müssen je Anlage **eindeutig** sein; zwei Geräte mit
+demselben effektiven Präfix schrieben sonst auf dieselben Helfer.
 
 ## HA-Helfer — Namenskonvention
 
@@ -25,8 +26,14 @@ unverändert in Entitätsnamen ein.
 <domain>.ems_<prefix>_<suffix>
 ```
 
-`<domain>` ist `input_boolean`, `input_select` oder `input_number`. Die Helfer müssen in Home
-Assistant existieren; das Add-on legt sie nicht an.
+`<domain>` ist `input_boolean`, `input_select` oder `input_number`. Das Add-on legt die Helfer
+nicht an.
+
+Für die **Eingangswerte** von `controllable` und `binary` gibt es je ein verpflichtendes Feld in
+der Add-on-Konfiguration, das bei fehlender, nicht verfügbarer oder unbrauchbarer Entität greift —
+siehe [Add-on-Fallbacks](device_classes/global.md#add-on-fallbacks-für-ha-entitäten). Die
+**Ausgabe**-Helfer (`anforderung_*`, `anzahl_phase`) haben keinen Fallback: ein Sollwert lässt sich
+nicht erfinden.
 
 Die Tabellen in diesem Abschnitt sind eine Übersicht. Kanonische Detailreferenz sind die Seiten
 für [globale Werte](device_classes/global.md), [regelbare Geräte](device_classes/controllable.md),
@@ -66,7 +73,7 @@ Ampere. `reserve_w` ist **immer** in Watt.
 | `hoch_regelzeit_s`, `runter_regelzeit_s` | s | Mindestabstand zwischen Regelschritten; bei Defizit wird sofort heruntergeregelt |
 | `max_anderung_pro_schritt_w` / `_a` | W / A | Maximale Änderung je Zyklus |
 | `min_anderung_pro_schritt_w` / `_a` | W / A | Totband — kleinere Änderungen werden nicht geschrieben |
-| `min_umschaltzeit_s` *(optional)* | s | Phasenwechsel-Hysterese; überschreibt `phase_switch_delay_s`. Fehlt beides, gelten 30 s |
+| `min_umschaltzeit_s` | s | Phasenwechsel-Hysterese; Fallback `phase_switch_delay_s`, dann 30 s. Ein gültiger Wert `0` gilt als „keine Sperrzeit" und wird nicht ersetzt |
 | `anforderung_leistung_w` / `_a` **(Ausgabe)** | W / A | Vom EMS geschriebener Sollwert, im Ampere-Modus ganzzahlig abgerundet |
 | `anzahl_phase` **(Ausgabe)** | 1 oder 3 | Gewählte Phasenzahl, nur bei `phases="1,3"` |
 
@@ -158,6 +165,8 @@ Global:
 | `ems_enabled` | bool | Globale Freigabe |
 | `global_mode` | string | Regelmodus |
 | `hard_lockout` | bool | Sperre wegen ungültigem Überschuss-Sensor |
+| `global_mode_configured` | bool | `false`, wenn `global_mode` ein normaler, aber global nicht aktivierter Modus ist — der Zyklus bleibt dann sicher inaktiv |
+| `available_modes` | Liste | Die aktivierten normalen Regelmodi |
 | `residual_sensor_valid` | bool | Sensor lieferte einen brauchbaren Wert |
 | `residual_w`, `pool_w`, `current_deficit_w`, `binary_total_w` | float | Leistungen in Watt |
 | `residual_bereinigt_w` | float | `residual_w` abzüglich der gemessenen Speicherentladung. **Alle Regelentscheidungen laufen darüber**, nicht über `residual_w` |
@@ -170,6 +179,12 @@ Global:
 | `binary_immediate_off` | bool | Notabschaltung binärer Geräte |
 | `timestamp` | string | **Maschinenformat** `JJJJ-MM-TT hh:mm:ss`, nicht zur Anzeige gedacht |
 | `devices` | Liste | siehe unten |
+| `inactive_devices` | Liste | Beim Start übersprungene Geräteeinträge: `index`, `name`, `device_class`, `label`, `errors` (Feldname → deutsche Meldung). Ausdrücklich **ohne** erfundene Ist-, SoC- oder Schaltwerte |
+
+Jedes Gerät trägt zusätzlich `entity_diagnostics`: `{entity_id: {role, state, source}}` mit
+`state` aus `valid`/`missing`/`unavailable`/`invalid` und `source` aus `ha`/`addon`/`internal`.
+Damit ist beantwortbar, welcher Wert gerade wirkt und warum nicht der aus Home Assistant — siehe
+[Doppelte Auflösung](device_classes/global.md#doppelte-auflösung-von-ha-entitäten).
 
 Regelbares Gerät: `type`, `id`, `label`, `priority`, `eligible`, `source`, `actual_w`,
 `anforderung_current_w`, `alloc_w`, `new_w`, `schutz_w`, `geschuetzte_mindestleistung_w`,
@@ -208,6 +223,9 @@ Fallstricke, die schon Fehler verursacht haben:
   gesperrten Ladepfad und trotzdem keinen Fehler.
 - **`off_delay_remaining_s` ist `null`**, wenn keine Abschaltverzögerung läuft — `0` bedeutet
   „läuft ab", nicht „nicht vorhanden".
+- **`eligible: false` ist keine ungültige Konfiguration.** Es ist die aktuelle Freigabeentscheidung
+  dieses Zyklus. Ein Gerät, das wegen fehlender Pflichtfelder gar nicht erst registriert wurde,
+  steht in `inactive_devices` und taucht in `devices` überhaupt nicht auf.
 - Restzeiten sind zum Zyklus-Zeitpunkt gültig. Die Oberfläche zählt zwischen den Zyklen selbst
   herunter, statt eingefrorene Werte zu zeigen.
 

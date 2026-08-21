@@ -345,3 +345,161 @@ def test_spannungssensor_ausserhalb_der_plausibilitaet_faellt_auf_230v():
     )
     d.update_from_ha(make_states({"sensor.spannung_l1": "412"}), 10_000.0, 0.0)
     assert d._voltage_l1 == 230.0
+
+
+# ---- Add-on-Fallbacks: HA gewinnt, sonst der konfigurierte Wert ----
+
+def make_with_fallbacks(**overrides):
+    """Watt-Gerät mit allen sechs verpflichtenden Add-on-Fallbacks."""
+    params = {
+        "technical_minimum": 100.0,
+        "technical_maximum": 4000.0,
+        "increase_delay_s": 60.0,
+        "decrease_delay_s": 90.0,
+        "maximum_step_change": 750.0,
+        "minimum_step_change": 25.0,
+    }
+    params.update(overrides)
+    return ControllableDevice(
+        id="heizstab",
+        allowed_modes=["manuell"],
+        entity_actual_w="sensor.heizstab_ist",
+        entity_anforderung_w="input_number.ems_heizstab_anforderung_leistung_w",
+        **params,
+    )
+
+
+FALLBACK_HELFER = {
+    "input_number.ems_heizstab_min_technisch_w":            "technical_minimum",
+    "input_number.ems_heizstab_max_technisch_w":            "technical_maximum",
+    "input_number.ems_heizstab_hoch_regelzeit_s":           "increase_delay_s",
+    "input_number.ems_heizstab_runter_regelzeit_s":         "decrease_delay_s",
+    "input_number.ems_heizstab_max_anderung_pro_schritt_w": "maximum_step_change",
+    "input_number.ems_heizstab_min_anderung_pro_schritt_w": "minimum_step_change",
+}
+
+
+def read(device, states):
+    device.begin_cycle(10_000.0)
+    device.update_from_ha(states, 10_000.0, 0.0)
+    return device
+
+
+def wirksame_werte(device):
+    return {
+        "technical_minimum":   device.min_technisch_w,
+        "technical_maximum":   device.max_technisch_w,
+        "increase_delay_s":    device.hoch_regelzeit_s,
+        "decrease_delay_s":    device.runter_regelzeit_s,
+        "maximum_step_change": device.max_anderung_pro_schritt_w,
+        "minimum_step_change": device.deadband_w,
+    }
+
+
+def test_gueltiger_ha_wert_schlaegt_den_addon_fallback():
+    d = read(make_with_fallbacks(), ctrl_states(**{
+        "input_number.ems_heizstab_min_technisch_w":            "500",
+        "input_number.ems_heizstab_max_technisch_w":            "3000",
+        "input_number.ems_heizstab_hoch_regelzeit_s":           "10",
+        "input_number.ems_heizstab_runter_regelzeit_s":         "20",
+        "input_number.ems_heizstab_max_anderung_pro_schritt_w": "800",
+        "input_number.ems_heizstab_min_anderung_pro_schritt_w": "5",
+    }))
+    assert wirksame_werte(d) == {
+        "technical_minimum": 500.0, "technical_maximum": 3000.0,
+        "increase_delay_s": 10.0, "decrease_delay_s": 20.0,
+        "maximum_step_change": 800.0, "minimum_step_change": 5.0,
+    }
+    for entity in FALLBACK_HELFER:
+        assert d.entity_diagnostics[entity] == {
+            "role": FALLBACK_HELFER[entity], "state": "valid", "source": "ha",
+        }
+
+
+@pytest.mark.parametrize("fehlerbild,erwarteter_zustand", [
+    ("missing", "missing"),
+    ("unavailable", "unavailable"),
+    ("unknown", "unavailable"),
+    ("kaputt", "invalid"),
+])
+def test_fehlend_unavailable_und_ungueltig_nutzen_denselben_addon_wert(
+        fehlerbild, erwarteter_zustand):
+    """Gleicher Wert, verschiedene Ursache – genau das ist die doppelte Auflösung."""
+    states = ctrl_states()
+    for entity in FALLBACK_HELFER:
+        if fehlerbild == "missing":
+            del states._states[entity]
+        else:
+            states._states[entity]["state"] = fehlerbild
+
+    d = read(make_with_fallbacks(), states)
+    assert wirksame_werte(d) == {
+        "technical_minimum": 100.0, "technical_maximum": 4000.0,
+        "increase_delay_s": 60.0, "decrease_delay_s": 90.0,
+        "maximum_step_change": 750.0, "minimum_step_change": 25.0,
+    }
+    for entity in FALLBACK_HELFER:
+        assert d.entity_diagnostics[entity]["state"] == erwarteter_zustand
+        assert d.entity_diagnostics[entity]["source"] == "addon"
+
+
+def test_gueltige_null_schlaegt_den_addon_fallback():
+    d = read(make_with_fallbacks(), ctrl_states(**{
+        "input_number.ems_heizstab_min_technisch_w":            "0",
+        "input_number.ems_heizstab_hoch_regelzeit_s":           "0",
+        "input_number.ems_heizstab_min_anderung_pro_schritt_w": "0",
+    }))
+    assert d.min_technisch_w == 0.0
+    assert d.hoch_regelzeit_s == 0.0
+    assert d.deadband_w == 0.0
+
+
+def test_negativer_ha_wert_ist_ungueltig_und_faellt_zurueck():
+    d = read(make_with_fallbacks(), ctrl_states(**{
+        "input_number.ems_heizstab_min_technisch_w": "-100",
+    }))
+    assert d.min_technisch_w == 100.0
+    assert d.entity_diagnostics[
+        "input_number.ems_heizstab_min_technisch_w"]["state"] == "invalid"
+
+
+def test_ampere_fallback_wird_nach_watt_umgerechnet():
+    """Der Add-on-Wert liegt in der nativen Einheit – umgerechnet wird erst danach."""
+    d = ControllableDevice(
+        id="wallbox",
+        allowed_modes=["manuell"],
+        entity_actual_w="sensor.wb_ist",
+        entity_anforderung_w="input_number.ems_wallbox_anforderung_leistung_a",
+        output_unit="ampere",
+        allowed_phases=[3],
+        technical_minimum=6.0,
+        technical_maximum=16.0,
+        increase_delay_s=0.0,
+        decrease_delay_s=0.0,
+        maximum_step_change=2.0,
+        minimum_step_change=1.0,
+    )
+    read(d, make_states({"sensor.wb_ist": "0"}))
+    assert d.min_technisch_w == pytest.approx(6 * 3 * 230)
+    assert d.max_technisch_w == pytest.approx(16 * 3 * 230)
+    assert d.max_anderung_pro_schritt_w == pytest.approx(2 * 3 * 230)
+    assert d.deadband_w == pytest.approx(1 * 3 * 230)
+
+
+def test_phasenwechselsperre_gueltige_null_gewinnt_gegen_den_addon_wert():
+    """Vorher verwarf `ha_delay if ha_delay > 0` eine ausdrückliche 0."""
+    d = ControllableDevice(
+        id="wallbox",
+        allowed_modes=["manuell"],
+        entity_actual_w="sensor.wb_ist",
+        entity_anforderung_w="input_number.ems_wallbox_anforderung_leistung_a",
+        entity_prefix="wallbox",
+        output_unit="ampere",
+        allowed_phases=[1, 3],
+        phase_switch_delay_s=300.0,
+    )
+    read(d, make_states({"input_number.ems_wallbox_min_umschaltzeit_s": "0"}))
+    assert d.phase_switch_delay_s == 0.0
+
+    read(d, make_states({}))
+    assert d.phase_switch_delay_s == 300.0

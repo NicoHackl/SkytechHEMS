@@ -169,9 +169,10 @@ def test_prefix_faellt_auf_den_namen_zurueck():
     assert result["devices"][0]["entity_prefix"] == "luft"
 
 
-def test_label_faellt_auf_den_namen_zurueck():
+def test_label_bleibt_leer_wenn_nichts_eingetragen_ist():
+    """Den Anzeige-Fallback wählt der Konsument – Status und Steuerschema anders."""
     result = cfg.normalize_options(options(binary()))
-    assert result["devices"][0]["label"] == "luft"
+    assert result["devices"][0]["label"] == ""
 
 
 def test_unbekannte_klasse_wird_benannt():

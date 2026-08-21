@@ -65,6 +65,20 @@ def _binary(prefix, *, prio=2, power=1000, switch="off", anforderung=None):
     }
 
 
+# Verpflichtende Add-on-Fallbacks. In diesen Tests liefern die HA-Helfer gültige
+# Werte, der Add-on-Wert greift also nie – ohne ihn wäre der Eintrag aber
+# ungültig und das Gerät würde gar nicht erst registriert.
+CTRL_FALLBACKS = {
+    "technical_minimum": 0, "technical_maximum": 100000,
+    "increase_delay_s": 0, "decrease_delay_s": 0,
+    "maximum_step_change": 100000, "minimum_step_change": 0,
+}
+BIN_FALLBACKS = {
+    "power_w": 1000, "on_reserve_w": 0,
+    "min_runtime_s": 0, "min_offtime_s": 0, "off_delay_s": 0,
+}
+
+
 def _op_for(write_ops, entity_id):
     """Findet die Schreiboperation für eine Entität: (domain, service, data) oder None."""
     return next((op for op in write_ops if op[2].get("entity_id") == entity_id), None)
@@ -80,7 +94,7 @@ def test_controllable_runs_at_min_technisch_when_geschuetzt_exceeds_pool():
     # nimmt den Überschuss bis zum Pool auf (1500 W) – der Bug schrieb 0 W.
     ctrl = EMSController(
         [{"name": "heizstab", "class": "controllable",
-          "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto"}],
+          "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto", **CTRL_FALLBACKS}],
         residual_power_entity="sensor.s",
     )
     states = {
@@ -107,7 +121,7 @@ def test_controllable_runs_at_min_technisch_when_geschuetzt_exceeds_pool():
 def test_device_not_eligible_without_both_freigaben(freigabe, technische_freigabe):
     ctrl = EMSController(
         [{"name": "heizstab", "class": "controllable",
-          "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto"}],
+          "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto", **CTRL_FALLBACKS}],
         residual_power_entity="sensor.s",
     )
     states = {
@@ -125,7 +139,7 @@ def test_device_not_eligible_without_both_freigaben(freigabe, technische_freigab
 def test_device_eligible_only_when_both_freigaben_on():
     ctrl = EMSController(
         [{"name": "heizstab", "class": "controllable",
-          "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto"}],
+          "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto", **CTRL_FALLBACKS}],
         residual_power_entity="sensor.s",
     )
     states = {
@@ -142,7 +156,7 @@ def test_device_eligible_only_when_both_freigaben_on():
 def test_controllable_surplus_capped_at_max():
     ctrl = EMSController(
         [{"name": "heizstab", "class": "controllable",
-          "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto"}],
+          "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto", **CTRL_FALLBACKS}],
         residual_power_entity="sensor.s",
     )
     states = {
@@ -161,7 +175,7 @@ def test_controllable_below_min_technisch_stays_off():
     # da Sollwert bereits 0 ist).
     ctrl = EMSController(
         [{"name": "heizstab", "class": "controllable",
-          "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto"}],
+          "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto", **CTRL_FALLBACKS}],
         residual_power_entity="sensor.s",
     )
     states = {
@@ -187,9 +201,9 @@ def test_geschuetzt_protects_power_from_lower_priority_binary():
     # der README dokumentierte Funktion von geschuetzte_mindestleistung.
     cfg = [
         {"name": "heizstab", "class": "controllable",
-         "actual_power_entity": "sensor.hs", "allowed_modes": "auto"},
+         "actual_power_entity": "sensor.hs", "allowed_modes": "auto", **CTRL_FALLBACKS},
         {"name": "luft", "class": "binary",
-         "switch_entity": "switch.luft", "allowed_modes": "auto"},
+         "switch_entity": "switch.luft", "allowed_modes": "auto", **BIN_FALLBACKS},
     ]
 
     def run(geschuetzt):
@@ -219,9 +233,9 @@ def test_extern_erzwungener_binaerverbraucher_blaeht_pool_nicht_auf():
     # nicht als eigener Überschuss gutgeschrieben werden – sonst startet boiler.
     cfg = [
         {"name": "boiler", "class": "binary",
-         "switch_entity": "switch.boiler", "allowed_modes": "auto"},
+         "switch_entity": "switch.boiler", "allowed_modes": "auto", **BIN_FALLBACKS},
         {"name": "luft", "class": "binary",
-         "switch_entity": "switch.luft", "allowed_modes": "auto"},
+         "switch_entity": "switch.luft", "allowed_modes": "auto", **BIN_FALLBACKS},
     ]
     ctrl = EMSController(cfg, residual_power_entity="sensor.s")
     states = {
@@ -242,7 +256,7 @@ def test_extern_erzwungenes_regelbares_geraet_blaeht_pool_nicht_auf():
     # darf nicht in den Pool zurückgerechnet werden.
     ctrl = EMSController(
         [{"name": "heizstab", "class": "controllable",
-          "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto"}],
+          "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto", **CTRL_FALLBACKS}],
         residual_power_entity="sensor.s",
     )
     states = {
@@ -267,7 +281,7 @@ def test_ampere_device_writes_floored_ampere_and_phase():
     ctrl = EMSController(
         [{"name": "wallbox_1", "class": "controllable",
           "actual_power_entity": "sensor.wb", "entity_prefix": "wallbox",
-          "allowed_modes": "auto", "output_unit": "ampere", "phases": "1,3"}],
+          "allowed_modes": "auto", "output_unit": "ampere", "phases": "1,3", **CTRL_FALLBACKS}],
         residual_power_entity="sensor.s",
     )
     states = {
@@ -312,6 +326,8 @@ def _battery_cfg(name, *, prefix=None, capacity=10.0):
         "soc_entity": f"sensor.{name}_soc",
         "charge_power_entity": f"sensor.{name}_lade_w",
         "discharge_power_entity": f"sensor.{name}_entlade_w",
+        "available_charge_power_entity": f"sensor.{name}_lade_limit",
+        "available_discharge_power_entity": f"sensor.{name}_entlade_limit",
         "capacity_kwh": capacity,
     }
 
@@ -362,7 +378,7 @@ def test_pool_ohne_speicher_unveraendert():
     """Regression: ohne konfigurierten Speicher ist die Erweiterung eine
     Identitätsoperation."""
     cfg = [{"name": "heizstab", "class": "controllable",
-            "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto"}]
+            "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto", **CTRL_FALLBACKS}]
     ctrl = EMSController(cfg, residual_power_entity="sensor.s")
     states = {
         **_global(),
@@ -396,7 +412,7 @@ def test_defizit_sichtbar_trotz_entladung():
     """H-2 – deckt der Speicher die Hauslast, darf das Defizit nicht verschwinden."""
     cfg = [_battery_cfg("speicher"),
            {"name": "heizstab", "class": "controllable",
-            "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto"}]
+            "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto", **CTRL_FALLBACKS}]
     ctrl = EMSController(cfg, residual_power_entity="sensor.s")
     states = {
         **_global(),
@@ -413,7 +429,7 @@ def test_hausdefizit_schliesst_hems_lasten_aus():
     """Kernanforderung: der Speicher deckt den Hausverbrauch, nicht den Heizstab."""
     cfg = [_battery_cfg("speicher"),
            {"name": "heizstab", "class": "controllable",
-            "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto"}]
+            "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto", **CTRL_FALLBACKS}]
     ctrl = EMSController(cfg, residual_power_entity="sensor.s")
     states = {
         **_global(),
@@ -431,7 +447,7 @@ def test_heizstab_laeuft_nicht_aus_speicher():
     """Ende-zu-Ende: die Entladeanforderung deckt nur die Hausgrundlast."""
     cfg = [_battery_cfg("speicher"),
            {"name": "heizstab", "class": "controllable",
-            "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto"}]
+            "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto", **CTRL_FALLBACKS}]
     ctrl = EMSController(cfg, residual_power_entity="sensor.s")
     states = {
         **_global(),
@@ -451,7 +467,7 @@ def test_fremdgesteuerter_heizstab_wird_nicht_gedeckt():
     seine volle Istleistung – er bleibt Überschussverbraucher."""
     cfg = [_battery_cfg("speicher"),
            {"name": "heizstab", "class": "controllable",
-            "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto"}]
+            "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto", **CTRL_FALLBACKS}]
     ctrl = EMSController(cfg, residual_power_entity="sensor.s")
     states = {
         **_global(),
@@ -471,7 +487,7 @@ def test_pool_ignoriert_fremdlast_weiterhin():
     """Gegenprobe: die zwei Summen driften nur auf der Entladeseite."""
     cfg = [_battery_cfg("speicher"),
            {"name": "heizstab", "class": "controllable",
-            "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto"}]
+            "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto", **CTRL_FALLBACKS}]
     ctrl = EMSController(cfg, residual_power_entity="sensor.s")
     states = {
         **_global(),
@@ -489,7 +505,7 @@ def test_pool_und_hausdefizit_schliessen_sich_aus():
     """4.4 – die beiden Grössen sind komplementär, auch mit Fremdlast."""
     cfg = [_battery_cfg("speicher"),
            {"name": "heizstab", "class": "controllable",
-            "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto"}]
+            "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto", **CTRL_FALLBACKS}]
     ctrl = EMSController(cfg, residual_power_entity="sensor.s")
     for residual, ist in [(-4000, 0), (-4000, 2000), (0, 0), (3000, 1000), (5000, 0)]:
         states = {
@@ -644,7 +660,7 @@ def test_speicher_prio_1_verdraengt_heizstab():
     """D-B02: der Speicher konkurriert beim Laden in derselben Sortierung."""
     cfg = [_battery_cfg("speicher"),
            {"name": "heizstab", "class": "controllable",
-            "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto"}]
+            "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto", **CTRL_FALLBACKS}]
     ctrl = EMSController(cfg, residual_power_entity="sensor.s")
     states = {
         **_global(),
@@ -661,7 +677,7 @@ def test_speicher_prio_1_verdraengt_heizstab():
 def test_speicher_prio_50_bekommt_rest():
     cfg = [_battery_cfg("speicher"),
            {"name": "heizstab", "class": "controllable",
-            "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto"}]
+            "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto", **CTRL_FALLBACKS}]
     ctrl = EMSController(cfg, residual_power_entity="sensor.s")
     states = {
         **_global(),

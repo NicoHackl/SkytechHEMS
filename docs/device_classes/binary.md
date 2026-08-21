@@ -12,20 +12,34 @@ Zusätzlich zu den hier beschriebenen Feldern und Entitäten gelten die
 | Feld | Pflicht | Default | Funktion beziehungsweise zugehörige Entität |
 |---|---:|---|---|
 | `switch_entity` | ja | – | Vollständige Entity-ID des realen Schalters; wird nur gelesen |
+| `power_w` | ja | Formular `0` | Fallback für `leistung_w`; endlich und `> 0` |
+| `on_reserve_w` | ja | Formular `0` | Fallback für `einschaltreserve_w`; endlich und `>= 0` |
+| `min_runtime_s` | ja | Formular `0` | Fallback für `mindestlaufzeit_s`; endlich und `>= 0` |
+| `min_offtime_s` | ja | Formular `0` | Fallback für `mindestauszeit_s`; endlich und `>= 0` |
+| `off_delay_s` | ja | Formular `0` | Fallback für `abschaltverzogerung_s`; endlich und `>= 0` |
 
-Fehlt `switch_entity`, wird der Geräteeintrag beim Start übersprungen. Für keinen
-klassenspezifischen HA-Helfer eines binären Geräts existiert ein Ersatzwert in der
-Add-on-Konfiguration.
+Fehlt `switch_entity` oder eines der fünf Fallbackfelder, wird der Geräteeintrag beim Start nicht
+instanziiert und erscheint mit seinem konkreten Feldfehler unter `inactive_devices` im Status.
+`power_w: 0` ist ausdrücklich ungültig: eine angenommene Leistung von null macht die Pool-Rechnung
+fachlich unbrauchbar, und genau dieser Fall lief bisher unbemerkt mit.
 
 ## Über Namenskonvention gelesene HA-Helfer
 
-| Entität | Einheit/Werte | Pflicht | Fehlender/ungültiger State | Funktion |
-|---|---|---:|---|---|
-| `input_number.ems_<prefix>_leistung_w` | W | ja | `0` | Angenommene Leistungsaufnahme im EIN-Zustand; Grundlage der Pool-Reservierung |
-| `input_number.ems_<prefix>_einschaltreserve_w` | W | ja | `0` | Gerätespezifischer Hysterese-Aufschlag beim Einschalten, zusätzlich zur globalen Einschaltreserve |
-| `input_number.ems_<prefix>_mindestlaufzeit_s` | s | ja | `0` | Verhindert zu frühes Ausschalten; gilt auch bei Notabschaltung |
-| `input_number.ems_<prefix>_mindestauszeit_s` | s | ja | `0` | Verhindert zu frühes Wiedereinschalten |
-| `input_number.ems_<prefix>_abschaltverzogerung_s` | s | ja | `0` | Verzögert den Aus-Befehl nach Ablauf der Mindestlaufzeit; gilt auch bei Notabschaltung |
+Alle Helfer sind optional. Ein **gültiger** HA-State hat immer Vorrang; fehlt er, ist er
+`unknown`/`unavailable` oder unbrauchbar, greift das gleichnamige Add-on-Feld. Die Ursache steht je
+Entität in `entity_diagnostics`, siehe
+[Doppelte Auflösung](global.md#doppelte-auflösung-von-ha-entitäten).
+
+| Entität | Einheit/Werte | Ersatzwert bei fehlendem/ungültigem State | Funktion |
+|---|---|---|---|
+| `input_number.ems_<prefix>_leistung_w` | W | Add-on-Feld `power_w` | Angenommene Leistungsaufnahme im EIN-Zustand; Grundlage der Pool-Reservierung |
+| `input_number.ems_<prefix>_einschaltreserve_w` | W | Add-on-Feld `on_reserve_w` | Gerätespezifischer Hysterese-Aufschlag beim Einschalten, zusätzlich zur globalen Einschaltreserve |
+| `input_number.ems_<prefix>_mindestlaufzeit_s` | s | Add-on-Feld `min_runtime_s` | Verhindert zu frühes Ausschalten; gilt auch bei Notabschaltung |
+| `input_number.ems_<prefix>_mindestauszeit_s` | s | Add-on-Feld `min_offtime_s` | Verhindert zu frühes Wiedereinschalten |
+| `input_number.ems_<prefix>_abschaltverzogerung_s` | s | Add-on-Feld `off_delay_s` | Verzögert den Aus-Befehl nach Ablauf der Mindestlaufzeit; gilt auch bei Notabschaltung |
+
+Ein negativer Wert ist ungültig und löst den Ersatzwert aus. Ein gültiger Wert `0` ist ein Wert und
+wird nie ersetzt.
 
 Die vier [gemeinsamen HA-Helfer](global.md#gemeinsame-ha-helfer) werden ebenfalls gelesen.
 
@@ -44,17 +58,16 @@ von Home Assistant bereitgestellte Attribut `last_changed`.
 |---|---|---|---|
 | `input_boolean.ems_<prefix>_anforderung_an` | lesen und schreiben | `on`, `off` | HEMS-Anforderung; unterscheidet eine eigene Anforderung von einem extern erzwungenen Schaltzustand |
 
-Der Regelzyklus schreibt diese Anforderung derzeit in jedem Zyklus. Er schreibt niemals direkt auf
+Dieses Schreibziel hat **keinen** Fallback — eine Anforderung lässt sich nicht erfinden. Fehlt der
+Helfer, bleibt der geschriebene Wert wirkungslos.
+
+Der Regelzyklus schreibt diese Anforderung in jedem Zyklus. Er schreibt niemals direkt auf
 `switch_entity`.
 
-## Fallbacks und interne Defaults
+## Weitere Fallbacks
 
 - `entity_prefix` fällt auf `name` zurück und bestimmt nur die Entity-IDs.
-- Für `leistung_w`, Einschaltreserve und Zeitparameter gibt es keine entsprechenden
-  Add-on-Konfigurationsfelder.
-- Fehlende Zahlenwerte werden intern als `0` behandelt. Das ist ein sicherer technischer Fallback,
-  aber kein Ersatz für die Pflicht-Helfer. Insbesondere macht `leistung_w: 0` die Pool-Rechnung
-  fachlich unbrauchbar.
+- `prioritat` behält den internen Fallback `99`.
 - `input_number.ems_einschaltreserve_global_w` wird zusätzlich zur gerätespezifischen
   `einschaltreserve_w` angewandt.
 
@@ -71,11 +84,13 @@ Für beide gelten der [Commit-Vertrag und der Fallback auf die HA-Helfer](global
 
 ## Pflicht für eine funktionsfähige Instanz
 
-- Add-on-Felder `name`, `class: binary` und `switch_entity`
+- Add-on-Felder `name`, `class: binary`, `switch_entity` und die fünf Fallbackfelder
 - alle [gemeinsamen HA-Helfer](global.md#gemeinsame-ha-helfer)
-- alle fünf klassenspezifischen Eingangshelfer
 - `input_boolean.ems_<prefix>_anforderung_an`
 - eine HA-Automation, die `anforderung_an` auf den realen Schalter überträgt
+
+Die fünf klassenspezifischen Eingangshelfer sind dagegen optional: ohne sie regelt das Gerät mit
+den Add-on-Werten weiter.
 
 ## Beispiel
 
@@ -86,4 +101,9 @@ devices:
     class: binary
     allowed_modes: "manuell,nur_heizen"
     switch_entity: switch.heizlufter
+    power_w: 1500
+    on_reserve_w: 200
+    min_runtime_s: 600
+    min_offtime_s: 300
+    off_delay_s: 120
 ```

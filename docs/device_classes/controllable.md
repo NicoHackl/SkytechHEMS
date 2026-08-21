@@ -12,32 +12,52 @@ Zusätzlich zu den hier beschriebenen Feldern und Entitäten gelten die
 | Feld | Pflicht | Default | Funktion beziehungsweise zugehörige Entität |
 |---|---:|---|---|
 | `actual_power_entity` | ja | – | Vollständige Entity-ID des nur gelesenen Ist-Leistungssensors in Watt |
+| `technical_minimum` | ja | Formular `0` | Fallback für `min_technisch_<u>`; endlich und `>= 0` |
+| `technical_maximum` | ja | Formular `0` | Fallback für `max_technisch_<u>`; endlich, `> 0` und `>= technical_minimum` |
+| `increase_delay_s` | ja | Formular `60` | Fallback für `hoch_regelzeit_s`; endlich und `>= 0` |
+| `decrease_delay_s` | ja | Formular `60` | Fallback für `runter_regelzeit_s`; endlich und `>= 0` |
+| `maximum_step_change` | ja | Formular `1000` | Fallback für `max_anderung_pro_schritt_<u>`; endlich und `> 0` |
+| `minimum_step_change` | ja | Formular `0` | Fallback für `min_anderung_pro_schritt_<u>`; endlich, `>= 0`, nicht größer als das Maximum |
 | `output_unit` | nein | `watt` | `watt` verwendet `_w`-Helfer und schreibt Watt; `ampere` verwendet `_a`-Helfer und schreibt ganze Ampere |
-| `phases` | nein | `"1"` | Nur bei `output_unit: ampere`: `"1"`, `"3"` oder `"1,3"`; bei ungültigem Inhalt wird eine Phase verwendet |
+| `phases` | nein | `"1"` | Nur bei `output_unit: ampere`: `"1"`, `"3"` oder `"1,3"` |
 | `phase_switch_delay_s` | nein | `300` | Nur bei `phases: "1,3"`: Fallback für `input_number.ems_<prefix>_min_umschaltzeit_s` |
 | `voltage_l1_entity` | nein | intern `230 V` | Optionaler Spannungssensor für L1; nur im Ampere-Modus gelesen |
 | `voltage_l2_entity` | nein | intern `230 V` | Optionaler Spannungssensor für L2; nur bei dreiphasiger Umrechnung gelesen |
 | `voltage_l3_entity` | nein | intern `230 V` | Optionaler Spannungssensor für L3; nur bei dreiphasiger Umrechnung gelesen |
 
-Fehlt `actual_power_entity`, wird der Geräteeintrag beim Start übersprungen. Liefert der
-konfigurierte Sensor später keinen numerischen Wert, verwendet der Zyklus `0 W`; anders als beim
-globalen Überschuss-Sensor entsteht dadurch kein Hard-Lockout.
+`<u>` ist `w` bei `output_unit: watt` und `a` bei `output_unit: ampere`. **Die sechs
+Fallbackwerte liegen in derselben nativen Einheit wie die zugehörigen Helfer**; die Umrechnung nach
+Watt über Phasenzahl × Spannung erfolgt erst danach.
+
+Fehlt `actual_power_entity` oder eines der sechs Fallbackfelder, wird der Geräteeintrag beim Start
+nicht instanziiert und erscheint mit seinem konkreten Feldfehler unter `inactive_devices` im
+Status. Der Formular-Startwert `0` für `technical_maximum` ist absichtlich ungültig: die reale
+Obergrenze muss eingetragen werden, bevor ein neu angelegtes Gerät gespeichert werden kann.
+
+Liefert der konfigurierte Ist-Sensor später keinen numerischen Wert, verwendet der Zyklus `0 W`;
+anders als beim globalen Überschuss-Sensor entsteht dadurch kein Hard-Lockout.
 
 ## Über Namenskonvention gelesene HA-Helfer
 
-`<u>` ist `w` bei `output_unit: watt` und `a` bei `output_unit: ampere`.
+Alle Helfer sind optional. Ein **gültiger** HA-State hat immer Vorrang; fehlt er, ist er
+`unknown`/`unavailable` oder unbrauchbar, greift der in der Tabelle genannte Ersatzwert. Die
+Ursache steht je Entität in `entity_diagnostics`, siehe
+[Doppelte Auflösung](global.md#doppelte-auflösung-von-ha-entitäten).
 
-| Entität | Einheit | Pflicht | Fehlender/ungültiger State | Funktion |
-|---|---|---:|---|---|
-| `input_number.ems_<prefix>_min_technisch_<u>` | W oder A | ja | `0` | Untere technische Grenze; Werte darunter rasten auf `0` oder auf das Minimum |
-| `input_number.ems_<prefix>_max_technisch_<u>` | W oder A | ja | `0` | Obere technische Grenze; mit `0` kann das Gerät keine Leistung erhalten |
-| `input_number.ems_<prefix>_geschutzte_mindestleistung_<u>` | W oder A | ja | `0` | Reservierter Sockel vor der normalen Überschussverteilung |
-| `input_number.ems_<prefix>_reserve_w` | W | ja | `0` | Gerätespezifischer Zusatzpuffer; auch im Ampere-Modus immer Watt |
-| `input_number.ems_<prefix>_hoch_regelzeit_s` | s | ja | `0` | Mindestabstand beim Erhöhen des Sollwerts |
-| `input_number.ems_<prefix>_runter_regelzeit_s` | s | ja | `0` | Mindestabstand beim normalen Absenken; bei Defizit wird sofort abgesenkt |
-| `input_number.ems_<prefix>_max_anderung_pro_schritt_<u>` | W oder A | ja | `1000` | Maximale Sollwertänderung je Regelzyklus |
-| `input_number.ems_<prefix>_min_anderung_pro_schritt_<u>` | W oder A | ja | `0` | Totband; kleinere Änderungen werden nicht geschrieben |
-| `input_number.ems_<prefix>_min_umschaltzeit_s` | s | nein | Add-on-Feld `phase_switch_delay_s` | Optionale Sperrzeit zwischen Phasenwechseln; nur bei `phases: "1,3"` gelesen |
+| Entität | Einheit | Ersatzwert bei fehlendem/ungültigem State | Funktion |
+|---|---|---|---|
+| `input_number.ems_<prefix>_min_technisch_<u>` | W oder A | Add-on-Feld `technical_minimum` | Untere technische Grenze; Werte darunter rasten auf `0` oder auf das Minimum |
+| `input_number.ems_<prefix>_max_technisch_<u>` | W oder A | Add-on-Feld `technical_maximum` | Obere technische Grenze; mit `0` kann das Gerät keine Leistung erhalten |
+| `input_number.ems_<prefix>_hoch_regelzeit_s` | s | Add-on-Feld `increase_delay_s` | Mindestabstand beim Erhöhen des Sollwerts |
+| `input_number.ems_<prefix>_runter_regelzeit_s` | s | Add-on-Feld `decrease_delay_s` | Mindestabstand beim normalen Absenken; bei Defizit wird sofort abgesenkt |
+| `input_number.ems_<prefix>_max_anderung_pro_schritt_<u>` | W oder A | Add-on-Feld `maximum_step_change` | Maximale Sollwertänderung je Regelzyklus |
+| `input_number.ems_<prefix>_min_anderung_pro_schritt_<u>` | W oder A | Add-on-Feld `minimum_step_change` | Totband; kleinere Änderungen werden nicht geschrieben |
+| `input_number.ems_<prefix>_geschutzte_mindestleistung_<u>` | W oder A | intern `0` | Reservierter Sockel vor der normalen Überschussverteilung |
+| `input_number.ems_<prefix>_reserve_w` | W | intern `0` | Gerätespezifischer Zusatzpuffer; auch im Ampere-Modus immer Watt |
+| `input_number.ems_<prefix>_min_umschaltzeit_s` | s | Add-on-Feld `phase_switch_delay_s`, sonst intern `30` | Sperrzeit zwischen Phasenwechseln; nur bei `phases: "1,3"` gelesen |
+
+Ein negativer Wert ist in allen Feldern oben ungültig und löst den Ersatzwert aus. Ein gültiger
+Wert `0` ist dagegen ein Wert und wird nie ersetzt — auch nicht bei `min_umschaltzeit_s`.
 
 Die vier [gemeinsamen HA-Helfer](global.md#gemeinsame-ha-helfer) werden ebenfalls gelesen.
 
@@ -50,7 +70,9 @@ Die vier [gemeinsamen HA-Helfer](global.md#gemeinsame-ha-helfer) werden ebenfall
 | `voltage_l2_entity` | nein | `180 < U < 260 V` | Umrechnung A → W für L2 |
 | `voltage_l3_entity` | nein | `180 < U < 260 V` | Umrechnung A → W für L3 |
 
-Ein fehlender oder unplausibler Spannungssensor wird einzeln durch `230 V` ersetzt.
+Ein fehlender oder unplausibler Spannungssensor wird einzeln durch `230 V` ersetzt und in der
+Diagnose als `invalid` geführt — ein Wert außerhalb des Fensters ist kein Messwert, sondern ein
+Sensorfehler.
 
 ## Gelesene und geschriebene HA-Helfer
 
@@ -60,23 +82,12 @@ Ein fehlender oder unplausibler Spannungssensor wird einzeln durch `230 V` erset
 | `input_number.ems_<prefix>_anforderung_leistung_a` | `output_unit: ampere` | lesen und schreiben | Sollwert in ganzen Ampere; intern rechnet das HEMS in Watt |
 | `input_number.ems_<prefix>_anzahl_phase` | nur bei `phases: "1,3"` | lesen und schreiben | Zuletzt angeforderte und neu gewählte Phasenzahl `1` oder `3` |
 
+Diese Schreibziele haben **keinen** Fallback — ein Sollwert lässt sich nicht erfinden. Fehlt der
+Helfer, bleibt der geschriebene Wert wirkungslos.
+
 Das HEMS schreibt den Leistungssollwert nur bei einer wirksamen Änderung. Dadurch bleibt
 `last_changed` als Zeitbasis der Rampe nutzbar. Eine HA-Automation oder Geräteintegration muss den
 Helferwert auf das reale Gerät übertragen.
-
-## Fallbacks und interne Defaults
-
-| Primäre Quelle | Fallback | Wirkung |
-|---|---|---|
-| `input_number.ems_<prefix>_min_umschaltzeit_s` mit Wert > `0` | `phase_switch_delay_s`, regulär `300 s` | Einziger unmittelbarer Add-on-Konfigurationsfallback für einen klassenspezifischen HA-Helfer |
-| Konfigurierter Spannungssensor mit plausiblem State | intern `230 V` je Phase | Hält die A/W-Umrechnung bei fehlendem oder unplausiblem Sensor funktionsfähig |
-| `entity_prefix` | `name` | Bestimmt nur die abgeleiteten Entity-IDs, nicht deren States |
-| `output_unit` | `watt` | Bestimmt Suffix und Ausgabeeinheit |
-| `phases` | `"1"` | Deaktiviert die automatische Phasenumschaltung |
-
-Für `min_technisch`, `max_technisch`, Rampenwerte, Reserve und Priorität gibt es keine
-entsprechenden Werte in der Add-on-Konfiguration. Die oben genannten internen Defaults sind nur
-Ausfallsicherheit; die HA-Helfer bleiben Bestandteil des Gerätevertrags.
 
 ## Energy-Pilot-Vorschläge
 
@@ -92,13 +103,14 @@ Im Ampere-Modus wird dieser Watt-Vorschlag nicht übernommen. Für alle Vorschl�
 
 ## Pflicht für eine funktionsfähige Instanz
 
-- Add-on-Felder `name`, `class: controllable` und `actual_power_entity`
+- Add-on-Felder `name`, `class: controllable`, `actual_power_entity` und die sechs Fallbackfelder
 - alle [gemeinsamen HA-Helfer](global.md#gemeinsame-ha-helfer)
-- die klassenspezifischen Eingangshelfer mit zum Gerät passenden Grenzen
 - der zur Ausgabeeinheit passende `anforderung_leistung_*`-Helfer
-- bei `phases: "1,3"` zusätzlich `anzahl_phase`; `min_umschaltzeit_s` ist optional und
-  überschreibt den Add-on-Fallback
+- bei `phases: "1,3"` zusätzlich `anzahl_phase`
 - eine Automation oder Integration, die den Anforderungshelfer auf das reale Gerät überträgt
+
+Die klassenspezifischen Eingangshelfer sind dagegen optional: ohne sie regelt das Gerät mit den
+Add-on-Werten weiter, statt still auf `0` zu fallen.
 
 ## Beispiel
 
@@ -116,4 +128,10 @@ devices:
     voltage_l1_entity: sensor.netzspannung_l1
     voltage_l2_entity: sensor.netzspannung_l2
     voltage_l3_entity: sensor.netzspannung_l3
+    technical_minimum: 6
+    technical_maximum: 16
+    increase_delay_s: 60
+    decrease_delay_s: 60
+    maximum_step_change: 2
+    minimum_step_change: 1
 ```
