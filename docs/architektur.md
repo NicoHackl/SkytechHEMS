@@ -49,7 +49,7 @@ Verbraucher (Heizlüfter) — mit Zeitschutz, Hysterese, Rampenbegrenzung und No
 |---|---|---|
 | `app/main.py` | Add-on-Optionen laden, Scheduler betreiben, HTTP-Routen bereitstellen, Steuerschema aus der Gerätekonfiguration ableiten | Regelentscheidungen treffen |
 | `app/ems/controller.py` | Einen Zyklus orchestrieren: globale Eingaben, Pool, Prioritätskaskade, Statusaufbau | Selbst HTTP sprechen |
-| `app/ems/devices.py` | Verhalten je Gerätetyp: Eligibility, Pool-Verbrauch, Rampe, Zeitschutz, Write-Ops | Auf HA zugreifen (bekommt einen `StateProxy`) |
+| `app/ems/devices.py` | Verhalten je Gerätetyp: Eligibility, Pool-Verbrauch, Rampe, Zeitschutz, Write-Ops. Hierarchie: `Device` → `ControllableDevice` → `BatteryDevice`, daneben `BinaryDevice` | Auf HA zugreifen (bekommt einen `StateProxy`) |
 | `app/ems/state.py` | Lesezugriff auf den State-Schnappschuss, `safe_float`, `parse_ts` | Zustand halten, der einen Zyklus überdauert |
 | `app/ha_client.py` | Einzige Stelle mit HA-REST-Zugriff, Session-Verwaltung, Timeouts | Fachlogik enthalten |
 | `web/` → `app/static/` | Darstellung und Bedienung | Fachlogik doppeln — sie rechnet nur an, was `/api/status` liefert |
@@ -65,20 +65,36 @@ Ein Zyklus (`EMSController.run_cycle()`), ausgelöst alle `interval_s` Sekunden:
    Überschuss-Sensor, Debug-Schalter).
 2. **Eligibility** je Gerät: Der globale Modus muss in `allowed_modes` liegen, `freigabe`,
    `technische_freigabe` und der Gerätemodus müssen passen.
-3. **Pool** berechnen: `residual_w + Σ current_w`, bei Lockout oder EMS aus `0`. `current_w` zählt
+3. **Netz bereinigen:** `residual_bereinigt_w = residual_w − Σ netz_support_w`. Nur Speicher
+   liefern hier etwas; für alle Verbraucher ist `netz_support_w` gleich `0`. Ein Speicher ist kein
+   Verbraucher mit Vorzeichen — seine Entladung erhöht `residual_w`, ist aber kein Überschuss.
+   Erst bereinigen, dann regeln.
+4. **Pool und Hausdefizit** aus zwei Summen: `pool_roh_w = residual_bereinigt_w + Σ current_w`
+   und `entlade_basis_w = residual_bereinigt_w + Σ gemessene_last_w`. Daraus
+   `pool_w = max(pool_roh_w, 0)` und `hausdefizit_w = max(−entlade_basis_w, 0)`; bei Lockout oder
+   EMS aus beide `0`. Die zweite Summe filtert den Force-Modus **nicht** heraus: eine von Hand
+   eingeschaltete HEMS-Last bleibt Überschussverbraucher und wird von keinem Speicher gedeckt.
+   Weil je Gerät `gemessene_last_w ≥ current_w` gilt, schließen `pool_w` und `hausdefizit_w`
+   einander strukturell aus. `current_w` zählt
    nur die **vom EMS angeforderte** Leistung — extern erzwungene Last („Force-Modus") steckt
    bereits in `residual_w` und wird nicht doppelt gutgeschrieben.
-4. **Phasenauswahl** für regelbare Ampere-Geräte mit `phases="1,3"`: höchste Phasenzahl, für die
+5. **Phasenauswahl** für regelbare Ampere-Geräte mit `phases="1,3"`: höchste Phasenzahl, für die
    `floor(pool_w / (phases × U)) ≥ min_technisch_a` gilt, gebremst durch `phase_switch_delay_s`.
-5. **Defizit** ermitteln und prüfen, ob die regelbaren Geräte es allein abregeln können
-   (`binary_immediate_off`).
-6. **Pool nach Priorität verteilen**: regelbare Geräte reservieren ihre Schutzleistung, binäre
+6. **Defizit** aus `residual_bereinigt_w` ermitteln und prüfen, ob die regelbaren Geräte es
+   allein abregeln können (`binary_immediate_off`). Bereinigt, nicht roh: sonst verschwindet das
+   Defizit, sobald ein Speicher die Hauslast deckt, und die Verbraucher liefen faktisch aus der
+   Batterie.
+7. **Pool nach Priorität verteilen**: regelbare Geräte reservieren ihre Schutzleistung, binäre
    Geräte ermitteln ihre hysteresebehaftete Wunschvorgabe.
-7. **Kandidat** je binärem Gerät unter Mindestlaufzeit, Abschaltverzögerung und Mindestauszeit.
-8. **Prioritätskaskade** (Demotion/Promotion) und **One-Change-Limit** anwenden.
-9. **Allocation** der regelbaren Geräte aus dem verbleibenden Pool.
-10. **Rampenbegrenzung** der Sollwerte, bei Defizit sofortiger Run-down.
-11. **Write-Ops** sammeln, bei `output_unit=ampere` von Watt in ganze Ampere abrunden und gegen die
+8. **Kandidat** je binärem Gerät unter Mindestlaufzeit, Abschaltverzögerung und Mindestauszeit.
+9. **Prioritätskaskade** (Demotion/Promotion) und **One-Change-Limit** anwenden.
+10. **Allocation** der regelbaren Geräte aus dem verbleibenden Pool.
+11. **Entladeplanung:** `hausdefizit_w` wird **einmal** über alle entladebereiten Speicher
+    aufgeteilt, strikt nach `entlade_prioritat`. Rechnete jeder Speicher für sich, entladen bei
+    drei Speichern und 2 kW Defizit alle drei mit 2 kW. Muss nach Schritt 10 und vor Schritt 12
+    laufen — der Speicher löst dort seine Richtung auf.
+12. **Rampenbegrenzung** der Sollwerte, bei Defizit sofortiger Run-down.
+13. **Write-Ops** sammeln, bei `output_unit=ampere` von Watt in ganze Ampere abrunden und gegen die
     HA-REST-API ausführen; optional das Post-Cycle-Skript auslösen.
 
 Die Geräteobjekte leben über alle Zyklen hinweg. Dadurch bleiben interne Timer (z. B.
@@ -123,7 +139,13 @@ Zusagen, auf die sich der gesamte Code verlässt. Wer eine davon bricht, bricht 
 4. **Geschrieben werden ausschließlich `input_*`-Helfer.** Reale Geräte schaltet Home Assistant.
 5. **Ein Zyklusfehler schaltet nichts.** Schlägt der Zyklus fehl, bleibt der letzte Sollwert
    stehen; die Anlage fällt nicht in einen undefinierten Zustand.
-6. **Mindestlaufzeit und Abschaltverzögerung gelten auch bei Notabschaltung** — Geräteschutz
+6. **Ein Speicher lädt und entlädt nie gleichzeitig.** Das ist keine nachträgliche Prüfung,
+   sondern eine Eigenschaft der Formeln aus Schritt 4: `pool_w > 0` und `hausdefizit_w > 0`
+   schließen sich mathematisch aus.
+7. **Der sichere Zustand eines Speichers wird aktiv geschrieben.** Bei Lockout, fehlender
+   Freigabe oder unbrauchbaren Messwerten schreibt das HEMS `0 W` und `standby` — es lässt den
+   Sollwert nicht einfach stehen. Sonst entlädt der Speicher nach einem Add-on-Absturz bis leer.
+8. **Mindestlaufzeit und Abschaltverzögerung gelten auch bei Notabschaltung** — Geräteschutz
    schlägt Regelgüte (siehe [design-entscheidungen.md](design-entscheidungen.md)).
 
 ## Start und Betrieb

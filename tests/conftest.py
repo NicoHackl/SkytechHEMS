@@ -5,7 +5,11 @@ from typing import Optional
 from ems.state import StateProxy
 
 
-def make_states(mapping: dict, last_changed: Optional[str] = None) -> StateProxy:
+def make_states(
+    mapping: dict,
+    last_changed: Optional[str] = None,
+    attributes: Optional[dict[str, dict]] = None,
+) -> StateProxy:
     """Baut einen StateProxy aus {entity_id: state}.
 
     `last_changed` (ISO-String) gilt für alle Einträge; None bedeutet Epoch 0,
@@ -16,7 +20,7 @@ def make_states(mapping: dict, last_changed: Optional[str] = None) -> StateProxy
     for eid, val in mapping.items():
         states[eid] = {
             "state": None if val is None else str(val),
-            "attributes": {},
+            "attributes": (attributes or {}).get(eid, {}),
             "last_changed": last_changed,
         }
     return StateProxy(states)

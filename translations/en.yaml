@@ -15,7 +15,7 @@ configuration:
 
       • class (required) – Device class: "controllable" for continuously
       variable consumers (heating rod, wallbox), "binary" for on/off devices
-      (fan heater, pump).
+      (fan heater, pump). "battery" for an AC-coupled battery storage.
 
       • actual_power_entity (controllable only, required) – Sensor entity that
       provides the current actual power draw in watts, e.g.
@@ -59,6 +59,33 @@ configuration:
       For single-phase operation only L1 is used; for three-phase all three
       are used (P = I × (U_L1 + U_L2 + U_L3)). Leave empty if no voltage
       sensors are available.
+      • soc_entity (battery only, required) – Sensor entity providing the
+      state of charge in percent. If it reports "unavailable", that battery
+      drops out of control and goes to standby; the other devices keep running.
+
+      • charge_power_entity / discharge_power_entity (battery only) – actual
+      charge and discharge power in watts, both as positive values.
+      Alternatively power_entity with power_sign if the device only provides a
+      single signed entity.
+
+      • power_sign (battery only, default "positiv_laden") – sign convention of
+      power_entity: "positiv_laden" or "positiv_entladen".
+
+      • available_charge_power_entity / available_discharge_power_entity
+      (battery only, optional) – the device's momentary charge or discharge
+      limit (temperature or cell derating). Takes precedence over the
+      configured maxima.
+
+      • capacity_kwh (battery only, optional) – usable capacity in kWh. Used
+      for display only (stored energy, capacity-weighted average SoC).
+
+      A battery writes ONE signed setpoint to
+      input_number.ems_<prefix>_anforderung_leistung_w (positive = charge,
+      negative = discharge) plus the operating mode to
+      input_select.ems_<prefix>_anforderung_betriebsart. The number helper
+      therefore needs a negative minimum, otherwise Home Assistant clamps every
+      discharge request to 0. Translating this into Modbus or MQTT calls is the
+      job of an HA automation, not the add-on.
   interval_s:
     name: Control interval (seconds)
     description: >-
@@ -92,3 +119,16 @@ configuration:
       calculation. Default:
       sensor.verfugbare_leistung_fur_uberschussverbraucher (Home Assistant
       slugifies umlauts: ü→u, ö→o, ä→a, ß→ss).
+  speicher_in_residual_enthalten:
+    name: Battery power included in surplus sensor
+    description: >-
+      Whether the charge and discharge power of HEMS-controlled batteries is
+      already included in the surplus sensor. For AC-coupled batteries measured
+      at the grid connection point this is the normal case ("on"): the EMS
+      subtracts the measured discharge before computing the pool. Otherwise it
+      reads its own discharge as PV surplus, switches consumers on and empties
+      the battery within a single cycle. Turn "off" if the sensor already
+      excludes the battery. To verify: disable the EMS, force the battery to
+      1 kW discharge – if the sensor value rises by 1 kW, this option belongs
+      "on". Batteries not controlled by HEMS (e.g. a self-regulating hybrid
+      storage system) are not affected.

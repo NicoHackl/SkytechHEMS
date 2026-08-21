@@ -48,25 +48,31 @@ Anlage blockiert.
 ### M4 — AC-gekoppelte Speicher (1…n)
 
 **Ziel:** Speicher werden vom HEMS geladen und entladen — Laden aus PV-Überschuss, Entladen zur
-Deckung des Hausverbrauchs. Entwurf v4 liegt vor
-([`erweiterungen/erweiterung_ac_speicher_1.md`](../erweiterungen/erweiterung_ac_speicher_1.md)),
-implementiert ist **nichts**.
+Deckung des Hausverbrauchs. Entwurf v5:
+[`erweiterungen/erweiterung_ac_speicher_1.md`](../erweiterungen/erweiterung_ac_speicher_1.md).
 
 | Punkt | Status | Verweis |
 |---|---|---|
-| Phase 1 — Speicherwerte nur lesen und anzeigen | offen | Entwurf, Abschnitt Phasenplan |
-| Phase 2 — Ladepfad schreiben | offen | blockiert durch F-2 |
-| Phase 3 — Entladepfad und Watchdog | offen | blockiert durch F-2 und F-11 |
-| Klasse `BatteryDevice`, getrennte Lade-/Entladepriorität | offen | D-B17, D-B18 im Entwurf |
+| Phase 1 — Pool-Bereinigung, `hausdefizit_w`, Anzeige | fertig | D-040 |
+| Phase 2 — Ladepfad mit SoC-Taper und Derating | fertig | D-040 |
+| Phase 3 — Entladepfad, Asymmetrie, sicherer Zustand | fertig | D-040 |
+| Phase 4 — Mehrspeicher, getrennte Lade-/Entladepriorität | fertig | D-040 |
+| Phase 5 — Energy-Pilot-Vorschlagsfelder für Speicher | offen | Entwurf, Abschnitt 13 |
+| Phase 6 — Netzladen mit dynamischen Tarifen | zurückgestellt | Entwurf, Abschnitt 11 |
+| Inbetriebnahme am realen Gerät | offen | F-12, F-13, F-14 |
 
-Die offenen Fragen F-2, F-11 und F-12 stehen in
+Der Code läuft gegen Tests und einen synthetischen HA-Zustand. **Erprobt am Gerät ist er nicht** —
+es gibt noch keinen AC-Speicher. Die verbliebenen Fragen stehen in
 [bekannte-luecken.md](bekannte-luecken.md).
+
+Der vorhandene E3DC ist bewusst **kein** HEMS-Gerät: er regelt sich selbst und steckt im
+Überschuss-Sensor bereits drin (D-040).
 
 ## Zurückgestellt
 
 | Thema | Warum zurückgestellt | Bedingung für Wiederaufnahme |
 |---|---|---|
-| Netzladen mit dynamischen Tarifen | Erst sinnvoll, wenn der Speicher-Schreibpfad steht | M4 Phase 2 abgeschlossen |
+| Netzladen mit dynamischen Tarifen | Erst sinnvoll, wenn ein Speicher real läuft. Die Schnittstellen stehen, `netzladen_aktiv` ist im Code hart auf „aus" geklemmt | M4 am Gerät in Betrieb |
 | Fehlgeschlagene Write-Ops im Status sichtbar machen (B-2) | Kein Datenverlust, nur Diagnose | Sobald ein Fehlerbild darauf zurückgeht |
 
 ---

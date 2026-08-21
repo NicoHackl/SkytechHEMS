@@ -39,7 +39,14 @@ Scheduler.
     "hard_lockout": false,
     "residual_sensor_valid": true,
     "residual_w": 1840.0,
+    "residual_bereinigt_w": 1840.0,
+    "netz_support_w": 0.0,
+    "hems_last_w": 1400.0,
+    "hems_last_gemessen_w": 1400.0,
+    "pool_roh_w": 3240.0,
     "pool_w": 3240.0,
+    "entlade_basis_w": 3240.0,
+    "hausdefizit_w": 0.0,
     "current_deficit_w": 0.0,
     "binary_immediate_off": false,
     "binary_total_w": 2000.0,
@@ -56,6 +63,15 @@ Scheduler.
 Die Felder je Gerät sind in [datenmodell.md](datenmodell.md) beschrieben — sie sind Datenvertrag
 zum Energy Pilot und werden nicht beiläufig umbenannt.
 
+`type` ist `controllable`, `binary` oder `battery`. Die Speicherfelder kamen additiv dazu; ohne
+konfigurierten Speicher ist `netz_support_w` immer `0`, `residual_bereinigt_w` gleich
+`residual_w`, `pool_roh_w` gleich dem alten ungeklemmten Pool und `hausdefizit_w` immer `0`.
+
+**Für Planer wichtig:** Regelentscheidungen beziehen sich auf `residual_bereinigt_w`, nicht auf
+`residual_w`. Und `hausdefizit_w` ist bewusst kleiner als `current_deficit_w`, sobald HEMS-Geräte
+laufen — die Differenz ist deren gemessene Last, die ein Speicher ausdrücklich **nicht** decken
+soll.
+
 `error` ist ein leerer String, solange der letzte Zyklus durchlief; andernfalls die Fehlermeldung.
 
 ### `GET /api/controls`
@@ -70,12 +86,33 @@ Liefert die frischen Zustände aller EMS-Helfer, gefiltert auf die Präfixe
 ### `GET /api/device_controls_schema`
 
 Das Steuerschema der Oberfläche, abgeleitet aus der aktuellen Gerätekonfiguration. Eine Liste von
-Gruppen: zuerst `{"label": "Global", "items": […]}`, danach je Gerät
-`{"name": "<technische ID>", "label": "<Anzeigename>", "items": […]}`.
-Jedes Item ist `{"entity": "<entity_id>", "label": "<deutscher Text>"}`.
+Gruppen: zuerst `{"name": "global", "label": "Global", "schema_version": 2, "items": […]}`,
+danach je Gerät `{"name": "<technische ID>", "label": "<Anzeigename>", "items": […]}`.
+Die bisherige Form bleibt additiv kompatibel. Geräte ergänzen `class`, `entity_prefix`,
+`output_unit`, `allowed_modes`, `control_policy`, `request_entity` sowie je nach Klasse
+`actual_power_entity` oder `switch_entity`. Jedes Item trägt weiterhin `entity` und `label` und
+zusätzlich `key`, `kind`, `unit` (falls vorhanden), `role` und `planning_relevant`.
+
+Ein Speicher (`class: "battery"`) ergänzt `soc_entity`, `charge_power_entity`,
+`discharge_power_entity`, `power_entity`, `power_sign`, `capacity_kwh`, `mode_entity` und
+`request_sign`. `request_entity` trägt beim Speicher **einen signierten Wert**: positiv = laden,
+negativ = entladen. `request_sign: "positiv_laden"` sagt das ausdrücklich, damit niemand raten
+muss.
 
 `name` und `label` sind bewusst getrennt: Konsumenten machen die Identität am `name` fest, `label`
 ist nur Anzeige. Ein Umbenennen des Labels bricht damit keine Zuordnung.
+
+`control_policy = "pv_surplus_only"` bedeutet: HEMS begrenzt die tatsächliche Verbraucherleistung
+bereits auf verfügbaren PV-Überschuss. Ein Planer darf Netzbezug deshalb nicht als kausalen
+Abschaltgrund für diese Verbraucher verwenden.
+
+### EP-Plan-Commit
+
+Vorschläge unter `sensor.ep_<gerät>_<feld>_vorschlag` werden nur übernommen, wenn ihre Attribute
+`plan_id` und `valid_until` zu `sensor.ep_plan_commit` passen. Der Commit-State ist die `plan_id`;
+seine Attribute enthalten `valid_from` und `valid_until`. Fehlt der Commit, stimmen IDs oder
+Gültigkeit nicht überein oder ist das Zeitfenster abgelaufen, nutzt HEMS für das betreffende Feld
+den Nutzerwert. `ep_proposal_status` im Gerätestatus nennt die Ursache.
 
 ### `GET /api/ep`
 

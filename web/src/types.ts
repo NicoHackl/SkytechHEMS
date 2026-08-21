@@ -55,7 +55,56 @@ export interface BinaryDevice extends DeviceBase {
   off_delay_remaining_s: number | null
 }
 
-export type Device = ControllableDevice | BinaryDevice
+/** AC-gekoppelter Speicher. Einziges Gerät, das Leistung auch abgeben kann. */
+export interface BatteryDevice extends DeviceBase {
+  type: 'battery'
+  /** Reihenfolge beim Entladen, unabhängig von priority (= Reihenfolge beim Laden). */
+  entlade_prioritat: number
+  /** false heißt: SoC- oder Leistungssensor liefert nichts — Speicher fällt aus der Regelung. */
+  sensoren_gueltig: boolean
+  soc_prozent: number
+  /** 0 heißt „nicht konfiguriert"; dann fehlt auch energie_kwh. */
+  capacity_kwh: number
+  energie_kwh?: number
+  /** Vom Nutzer bzw. Energy Pilot gewünscht. */
+  betriebsart: 'auto' | 'nur_laden' | 'nur_entladen' | 'standby'
+  /** Was das HEMS diesen Zyklus tatsächlich schreibt. */
+  betriebsart_effektiv: 'laden' | 'entladen' | 'standby'
+  lade_ist_w: number
+  entlade_ist_w: number
+  /** Lade- und Entladeanteil des EINEN signierten Sollwerts, der in HA steht. */
+  lade_anforderung_w: number
+  entlade_anforderung_w: number
+  new_lade_w: number
+  new_entlade_w: number
+  /** + laden / − entladen, so wie der Sollwert nach HA geschrieben wird. */
+  netto_w: number
+  /** Nutzerwert. Die tatsächliche Grenze steht in lade_limit_w / entlade_limit_w. */
+  max_ladeleistung_w: number
+  max_entladeleistung_w: number
+  /** Nach SoC-Taper und Geräte-Derating — nicht mit den Nutzerwerten vergleichen. */
+  lade_limit_w: number
+  entlade_limit_w: number
+  /** Vom Controller zugeteilter Anteil am Hausdefizit. */
+  hausdefizit_anteil_w: number
+  schutz_w: number
+  geschuetzte_mindestleistung_w: number
+  laden_erlaubt: boolean
+  entladen_erlaubt: boolean
+  netzladen_aktiv: boolean
+  soc_min_prozent: number
+  soc_max_prozent: number
+  soc_reserve_prozent: number
+  umschaltsperre_rest_s: number
+  /** Warum gerade nicht geladen wird. */
+  lade_blockiert_grund: string | null
+  /** Warum gerade nicht entladen wird. */
+  entlade_blockiert_grund: string | null
+  /** Grund auf Auflösungsebene: umschaltsperre oder totzone. */
+  blockiert_grund: string | null
+}
+
+export type Device = ControllableDevice | BinaryDevice | BatteryDevice
 
 export interface CycleStatus {
   timestamp: string
@@ -64,7 +113,21 @@ export interface CycleStatus {
   hard_lockout: boolean
   residual_sensor_valid: boolean
   residual_w: number
+  /** residual_w abzüglich der gemessenen Speicherentladung (netz_support_w). */
+  residual_bereinigt_w: number
+  /** Summe der gemessenen Entladeleistung aller Speicher. */
+  netz_support_w: number
+  /** Σ current_w — nur vom HEMS angeforderte Last, Force-Modus gefiltert. */
+  hems_last_w: number
+  /** Σ gemessene_last_w — roher Messwert, Force-Modus enthalten. */
+  hems_last_gemessen_w: number
+  /** Ungeklemmter Pool: positiv = Überschuss, negativ = Entladebedarf. */
+  pool_roh_w: number
   pool_w: number
+  /** Basis der Entladeplanung; weicht bei Fremdsteuerung von pool_roh_w ab. */
+  entlade_basis_w: number
+  /** Hausverbrauchs-Fehlbetrag, den die Speicher decken sollen. */
+  hausdefizit_w: number
   current_deficit_w: number
   binary_immediate_off: boolean
   binary_total_w: number
