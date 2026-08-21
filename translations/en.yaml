@@ -106,11 +106,10 @@ configuration:
       • power_sign (with power_entity only, default "positiv_laden") – Sign
       convention of power_entity: "positiv_laden" or "positiv_entladen".
 
-      • available_charge_power_entity / available_discharge_power_entity
-      (required) – Sensors with the momentarily available charge and discharge
-      power of the inverter in watts. They are the ONLY physical maximum
-      limits. A missing, unavailable or invalid value locks only the affected
-      direction to 0 W; a valid value of 0 deliberately blocks that direction.
+      • available_charge_power_w / available_discharge_power_w (required,
+      each from 0) – Directly configured available charge and discharge power
+      in watts. They are the ONLY physical maximum limits. A value of 0
+      deliberately blocks the respective direction.
 
       • capacity_kwh (optional, default 0) – Usable capacity in kWh. Display
       only, never a control input.

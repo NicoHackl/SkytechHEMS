@@ -1,9 +1,13 @@
 # D-041: Die physische Grenze eines AC-Speichers kommt allein aus den beiden `available_*`-Sensoren
 
 - **Datum:** 21.08.2026
-- **Status:** Aktiv
+- **Status:** In Teilen ersetzt durch D-043
 - **Betrifft:** `app/ems/devices.py` (`BatteryDevice`), `app/main.py` (Steuerschema), `config.yaml`,
   `/api/status`, [device_classes/battery.md](../device_classes/battery.md), Ersetzt Teile von D-040
+
+> **Nachfolgeentscheidung:** D-043 ersetzt die beiden `available_*_entity`-Felder durch direkte
+> Wattwerte in der Add-on-Konfiguration. Die übrigen Vereinfachungen dieser Entscheidung bleiben
+> aktiv. Siehe [D-043](D-043-speichergrenzen-als-wattwerte.md).
 
 ## Kontext
 

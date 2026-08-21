@@ -52,8 +52,8 @@ def battery(**overrides):
         "soc_entity": "sensor.acspeicher1_soc",
         "charge_power_entity": "sensor.acspeicher1_ladeleistung",
         "discharge_power_entity": "sensor.acspeicher1_entladeleistung",
-        "available_charge_power_entity": "sensor.acspeicher1_lade_limit",
-        "available_discharge_power_entity": "sensor.acspeicher1_entlade_limit",
+        "available_charge_power_w": 1500,
+        "available_discharge_power_w": 1500,
     }
     device.update(overrides)
     return device
@@ -257,10 +257,35 @@ def test_unvollstaendige_entity_id_wird_abgelehnt():
 # Speicher
 # ---------------------------------------------------------------------------
 
-def test_speicher_braucht_beide_available_sensoren():
-    for key in ("available_charge_power_entity", "available_discharge_power_entity"):
-        result = cfg.validate_options(options(battery(**{key: ""})))
+def test_speicher_braucht_beide_available_leistungswerte():
+    for key in ("available_charge_power_w", "available_discharge_power_w"):
+        result = cfg.validate_options(options(battery(**{key: None})))
         assert f"devices[0].{key}" in result.field_errors
+
+
+def test_speicher_available_leistung_null_ist_gueltig():
+    result = cfg.validate_options(options(battery(
+        available_charge_power_w=0,
+        available_discharge_power_w=0,
+    )))
+    assert result.valid, result.field_errors
+
+
+def test_speicher_available_leistung_muss_endlich_und_nicht_negativ_sein():
+    for value in (-1, float("inf"), "sensor.acspeicher1_lade_limit"):
+        result = cfg.validate_options(options(battery(available_charge_power_w=value)))
+        assert "devices[0].available_charge_power_w" in result.field_errors
+
+
+def test_alte_available_entity_felder_werden_nicht_als_wattwerte_gedeutet():
+    old = battery()
+    old.pop("available_charge_power_w")
+    old.pop("available_discharge_power_w")
+    old["available_charge_power_entity"] = "sensor.acspeicher1_lade_limit"
+    old["available_discharge_power_entity"] = "sensor.acspeicher1_entlade_limit"
+    result = cfg.validate_options(options(old))
+    assert "devices[0].available_charge_power_w" in result.field_errors
+    assert "devices[0].available_discharge_power_w" in result.field_errors
 
 
 def test_speicher_variante_signiert_ist_gueltig():

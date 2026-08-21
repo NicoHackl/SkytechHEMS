@@ -266,7 +266,7 @@ Zwei Muster, die die Speicherkarte zusätzlich braucht:
   negativ beim Entladen. In der Karte steht `1.760 W (Entladen)`, nicht `-1760 W` — das Vorzeichen
   ist Datenvertrag, keine Anzeigeform.
 - **Technische Sperrgründe übersetzen.** `blockiert_grund` und die beiden Pfad-Felder liefern
-  Schlüssel wie `limit_sensor`. Die Karte bildet sie über eine Map auf deutschen Klartext ab;
+  Schlüssel wie `wr_derating`. Die Karte bildet sie über eine Map auf deutschen Klartext ab;
   ein unbekannter Schlüssel wird unverändert gezeigt, statt zu verschwinden. Dasselbe gilt für
   `inactive_reasons` — dort ist der Unterschied zwischen einem fehlenden Schreibziel und einem
   fehlgeschlagenen Schreibversuch die ganze Information.
@@ -280,6 +280,11 @@ Zwei Muster, die die Speicherkarte zusätzlich braucht:
 - Feldfehler kommen als `Record<string, string>` vom Server, landen in `fieldErrors` und färben
   gezielt das betroffene Feld (`.field.invalid` + `.field-error`). Ein globaler Toast ersetzt keine
   Feldmarkierung.
+- Der API-Client bewahrt bei einer Fehlerantwort den vollständigen JSON-Rumpf als `ApiError.details`
+  auf. Bei `422` gingen `field_errors` sonst verloren. Geänderte Entwürfe werden verzögert über
+  `/api/config/validate` erneut geprüft; eine langsamere alte Antwort darf keine neuere ersetzen.
+- Ein im Geräteformular lokal korrigiertes Feld zeigt seinen alten Serverfehler sofort nicht mehr.
+  Nach **Übernehmen** prüft der Server den gesamten Entwurf erneut und zeigt verbleibende Fehler.
 - Nach dem Speichern: Toast **und** Rücknavigation zur Liste.
 - Formularaufbau folgt dem Server-Schema, wo eines existiert: Feldtyp → Widget. Zwei Quellen für
   „welche Felder hat dieser Datensatz" laufen sonst auseinander.

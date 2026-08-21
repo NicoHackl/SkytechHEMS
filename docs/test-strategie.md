@@ -55,9 +55,9 @@ Für Speicher zusätzlich verpflichtend:
    `test_pool_ohne_speicher_unveraendert` und die Property P7 sind der Beweis, dass die
    Erweiterung wirklich additiv ist.
 9. **Der sichere Zustand wird aktiv geschrieben**, nicht ausgelassen.
-10. **Beide `available_*`-Limits begrenzen getrennt.** Der Ausfall des einen darf die andere
-    Richtung nicht sperren, und ein gültiges Limit `0` ist eine bewusste Sperre, kein Fehler.
-11. **Nach der Rampe nie über dem gültigen WR-Limit.** Ein gesunkenes Limit gilt sofort.
+10. **Beide `available_*_w`-Limits begrenzen getrennt.** Ein konfigurierter Wert `0` sperrt nur
+    die jeweilige Richtung bewusst; negative, fehlende oder nicht endliche Werte sind ungültig.
+11. **Nach der Rampe nie über dem konfigurierten Speicherlimit.**
 
 Für jeden Fallback zusätzlich verpflichtend:
 

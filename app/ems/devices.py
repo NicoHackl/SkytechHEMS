@@ -1140,9 +1140,9 @@ class BatteryDevice(ControllableDevice):
     Betriebsart. Deshalb gibt es genau ein last_changed und damit auch nur eine
     Rampen-Alterung für beide Richtungen.
 
-    Physische Grenze: ausschließlich die beiden `available_*`-Sensoren. Sie sind
-    Pflicht und werden GETRENNT ausgewertet – der Ausfall des einen sperrt nur
-    seine Richtung. Ein gültiger Wert `0` sperrt die Richtung bewusst.
+    Physische Grenze: ausschließlich die beiden statischen `available_*_w`-Werte
+    aus der Add-on-Konfiguration. Sie sind Pflicht und werden getrennt
+    ausgewertet. Ein Wert `0` sperrt die jeweilige Richtung bewusst.
 
     Invariante: _new_lade_w == 0 oder _new_entlade_w == 0.
     """
@@ -1153,8 +1153,8 @@ class BatteryDevice(ControllableDevice):
 
     def __init__(self, id: str, allowed_modes: List[str], *,
                  soc_entity: str,
-                 available_charge_power_entity: str,
-                 available_discharge_power_entity: str,
+                 available_charge_power_w: float,
+                 available_discharge_power_w: float,
                  charge_power_entity: Optional[str] = None,
                  discharge_power_entity: Optional[str] = None,
                  power_entity: Optional[str] = None,
@@ -1180,8 +1180,8 @@ class BatteryDevice(ControllableDevice):
         self.power_sign                       = (power_sign if power_sign in
                                                  ("positiv_laden", "positiv_entladen")
                                                  else "positiv_laden")
-        self.available_charge_power_entity    = available_charge_power_entity
-        self.available_discharge_power_entity = available_discharge_power_entity
+        self.available_charge_power_w    = float(available_charge_power_w)
+        self.available_discharge_power_w = float(available_discharge_power_w)
         self.capacity_kwh                     = float(capacity_kwh or 0.0)
 
         # ---- Statische Add-on-Werte (ersetzen die entfallenen HA-Helfer) ----
@@ -1212,13 +1212,10 @@ class BatteryDevice(ControllableDevice):
         self._lade_anf_w     = 0.0
         self._entlade_anf_w  = 0.0
         self._betriebsart_anf: Optional[str] = None
-        # Momentane WR-Grenzen. `0.0` heißt gesperrt – entweder weil der Sensor
-        # unbrauchbar ist oder weil er ausdrücklich 0 meldet. Welcher Fall
-        # vorliegt, sagt der zugehörige _state.
-        self._wr_lade_limit_w:    float = 0.0
-        self._wr_entlade_limit_w: float = 0.0
-        self._lade_limit_state:    str = STATE_MISSING
-        self._entlade_limit_state: str = STATE_MISSING
+        # Statische Leistungsgrenzen aus der Add-on-Konfiguration. `0.0`
+        # sperrt die betreffende Richtung bewusst.
+        self._wr_lade_limit_w    = self.available_charge_power_w
+        self._wr_entlade_limit_w = self.available_discharge_power_w
         # None = keine Schrittbegrenzung. Bewusst kein magischer Großwert: der
         # landete sonst als Zahl im Status und im JSON.
         self._step_limit_w: Optional[float] = None
@@ -1413,12 +1410,6 @@ class BatteryDevice(ControllableDevice):
         # _actual_w ist die Ladeleistung, nicht die Nettoleistung.
         self._actual_w = self._lade_ist_w
 
-        # --- Momentane WR-Grenzen, getrennt ausgewertet ---
-        self._wr_lade_limit_w, self._lade_limit_state = self._read_available(
-            st, self.available_charge_power_entity, "available_charge_power")
-        self._wr_entlade_limit_w, self._entlade_limit_state = self._read_available(
-            st, self.available_discharge_power_entity, "available_discharge_power")
-
         # --- Signierten Sollwert aufteilen (D-B20) ---
         anf_signed = self._anforderung_current_w
         self._lade_anf_w    = max(anf_signed, 0.0)
@@ -1457,18 +1448,6 @@ class BatteryDevice(ControllableDevice):
             return False, 0.0, 0.0
         return True, max(float(lade.value), 0.0), max(float(entlade.value), 0.0)
 
-    def _read_available(self, st: StateProxy, entity: str, role: str):
-        """Momentane WR-Grenze einer Richtung: (Wert, Zustand).
-
-        Die beiden `available_*`-Sensoren sind die alleinigen physischen Maxima.
-        Fehlt einer, ist er ausgefallen oder unbrauchbar, wird NUR seine Richtung
-        auf `0 W` gesperrt; die andere Richtung bleibt davon unberührt. Ein
-        gültiger Wert `0` sperrt die Richtung ausdrücklich.
-        """
-        resolved = self._note(entity, role,
-                              st.resolve_number(entity, internal=0.0, minimum=0.0))
-        return float(resolved.value), resolved.state
-
     def _update_soc_latch(self) -> None:
         """Hysterese am Ladedeckel: ab soc_max gesperrt, Freigabe erst
         soc_max_hysteresis_percent darunter. Ohne sie flippt der Speicher bei
@@ -1487,10 +1466,9 @@ class BatteryDevice(ControllableDevice):
     def _lade_limit_w(self) -> float:
         """Momentan zulässige Ladeleistung.
 
-        Innerhalb der SoC-Grenzen gilt allein das momentane WR-Limit; an der
+        Innerhalb der SoC-Grenzen gilt allein das konfigurierte Leistungslimit; an der
         Grenze wird die Richtung 0. Ein lineares Drosselband gibt es nicht mehr:
-        die CV-Phase regelt der Wechselrichter, und genau das meldet er über
-        `available_charge_power_entity`.
+        die Leistungsgrenze wird direkt in der Add-on-Konfiguration gepflegt.
         """
         if not self.laden_erlaubt or not self._soc_valid or self._soc_max_latch:
             return 0.0
@@ -1522,7 +1500,6 @@ class BatteryDevice(ControllableDevice):
             (not self.sensoren_gueltig,                        "sensor_ungueltig"),
             (self.betriebsart not in ("auto", "nur_laden"),    "betriebsart"),
             (not self.laden_erlaubt,                           "laden_gesperrt"),
-            (self._lade_limit_state != STATE_VALID,            "limit_sensor"),
             (self._wr_lade_limit_w <= 0,                       "wr_derating"),
             (self._lade_limit_w() <= 0,                        "soc_max"),
         )
@@ -1563,7 +1540,6 @@ class BatteryDevice(ControllableDevice):
             (self.betriebsart not in ("auto", "nur_entladen"),   "betriebsart"),
             (not self.entladen_erlaubt,                          "entladen_gesperrt"),
             (self.netzladen_aktiv,                               "netzladen"),
-            (self._entlade_limit_state != STATE_VALID,           "limit_sensor"),
             (self._soc <= self.soc_min_prozent,                  "soc_min"),
             (self._wr_entlade_limit_w <= 0,                      "wr_derating"),
         )
@@ -1697,7 +1673,7 @@ class BatteryDevice(ControllableDevice):
             self._new_lade_w = self._new_entlade_w = 0.0
 
         # Ein gesunkenes gültiges WR-Limit gilt SOFORT. Die Rampe darf ein Ziel
-        # abbremsen, aber niemals über die momentane physische Grenze hinaus.
+        # abbremsen, aber niemals über die konfigurierte physische Grenze hinaus.
         self._new_lade_w    = min(self._new_lade_w,    self._lade_limit_w())
         self._new_entlade_w = min(self._new_entlade_w, self._entlade_limit_w())
 
@@ -1822,12 +1798,12 @@ class BatteryDevice(ControllableDevice):
             "new_lade_w":            self._new_lade_w,
             "new_entlade_w":         self._new_entlade_w,
             "netto_w":               self._new_lade_w - self._new_entlade_w,
-            # Bestandsschlüssel: sie tragen jetzt den gültigen Momentanwert des
-            # jeweiligen available_*-Sensors – die einzige physische Grenze.
+            # Bestandsschlüssel: sie tragen die statischen Grenzen aus der
+            # Add-on-Konfiguration.
             "max_ladeleistung_w":    self._wr_lade_limit_w,
             "max_entladeleistung_w": self._wr_entlade_limit_w,
-            "lade_limit_gueltig":    self._lade_limit_state == STATE_VALID,
-            "entlade_limit_gueltig": self._entlade_limit_state == STATE_VALID,
+            "lade_limit_gueltig":    True,
+            "entlade_limit_gueltig": True,
             # Effektiv nach Freigaben und SoC-Grenzen.
             "lade_limit_w":          self._lade_limit_w(),
             "entlade_limit_w":       self._entlade_limit_w(),

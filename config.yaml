@@ -31,8 +31,8 @@ description: >-
 
   Nur battery: soc_entity (Pflicht), genau eine Ist-Leistungsvariante
   (charge_power_entity zusammen mit discharge_power_entity ODER power_entity
-  mit power_sign), die beiden verpflichtenden Sensoren
-  available_charge_power_entity und available_discharge_power_entity,
+  mit power_sign), die beiden verpflichtenden Wattwerte
+  available_charge_power_w und available_discharge_power_w,
   capacity_kwh (nur Anzeige) sowie soc_max_hysteresis_percent und
   direction_switch_delay_s.
 
@@ -127,8 +127,8 @@ options:
       soc_entity: sensor.acspeicher1_soc
       charge_power_entity: sensor.acspeicher1_ladeleistung
       discharge_power_entity: sensor.acspeicher1_entladeleistung
-      available_charge_power_entity: sensor.acspeicher1_verfugbare_ladeleistung
-      available_discharge_power_entity: sensor.acspeicher1_verfugbare_entladeleistung
+      available_charge_power_w: 1500
+      available_discharge_power_w: 1500
       capacity_kwh: 12.8
       soc_max_hysteresis_percent: 2
       direction_switch_delay_s: 5
@@ -173,8 +173,8 @@ schema:
       discharge_power_entity: str?
       power_entity: str?
       power_sign: list(positiv_laden|positiv_entladen)?
-      available_charge_power_entity: str?
-      available_discharge_power_entity: str?
+      available_charge_power_w: float?
+      available_discharge_power_w: float?
       capacity_kwh: float?
       soc_max_hysteresis_percent: float?
       direction_switch_delay_s: float?

@@ -97,8 +97,8 @@ def test_schema_kennt_battery_zweig():
             "soc_entity": "sensor.acspeicher1_soc",
             "charge_power_entity": "sensor.acspeicher1_lade_w",
             "discharge_power_entity": "sensor.acspeicher1_entlade_w",
-            "available_charge_power_entity": "sensor.acspeicher1_lade_limit",
-            "available_discharge_power_entity": "sensor.acspeicher1_entlade_limit",
+            "available_charge_power_w": 1500,
+            "available_discharge_power_w": 2000,
             "capacity_kwh": 10.0,
             "allowed_modes": "manuell,nur_laden",
         }]),
@@ -109,6 +109,8 @@ def test_schema_kennt_battery_zweig():
     assert battery["class"] == "battery"
     assert battery["output_unit"] == "watt"
     assert battery["soc_entity"] == "sensor.acspeicher1_soc"
+    assert battery["available_charge_power_w"] == 1500.0
+    assert battery["available_discharge_power_w"] == 2000.0
     assert battery["capacity_kwh"] == 10.0
     # Ein signierter Sollwert plus Betriebsart (D-B20)
     assert battery["request_entity"] == "input_number.ems_acspeicher1_anforderung_leistung_w"
@@ -122,7 +124,7 @@ def test_schema_kennt_battery_zweig():
     assert by_key["min_entladeleistung_w"]["role"] == "technical_constraint"
 
     # Entfallene Helfer dürfen im Steuerschema nicht mehr auftauchen: die
-    # physische Grenze kommt aus den available_*-Sensoren, Notstromreserve,
+    # physische Grenze kommt aus den statischen available_*_w-Werten, Notstromreserve,
     # Drosselband und Entlade-Sofort-Schwelle gibt es nicht mehr, Hysterese und
     # Umschaltsperre sind statische Add-on-Felder.
     assert not {

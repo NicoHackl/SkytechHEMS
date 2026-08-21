@@ -132,14 +132,14 @@ Dazu drei Schalter und eine Auswahlliste:
 | `input_boolean.ems_<prefix>_netzladen_aktiv` | `on`/`off` | Reserviert; bis zur Behebung von [B-4](bekannte-luecken.md#offene-bugs) zwingend `off` |
 | `input_select.ems_<prefix>_betriebsart` | `auto`, `nur_laden`, `nur_entladen`, `standby` | Was das HEMS überhaupt darf |
 
-Externe Sensoren je Speicher: `soc_entity` (Pflicht), **beide** `available_*`-Sensoren (Pflicht)
-und genau eine Ist-Leistungsvariante — entweder `charge_power_entity` **und**
+Externe Sensoren je Speicher: `soc_entity` (Pflicht) und genau eine Ist-Leistungsvariante —
+entweder `charge_power_entity` **und**
 `discharge_power_entity` (beide ≥ 0) oder ein signierter `power_entity` mit `power_sign`. Beide
 Varianten gleichzeitig sind ungültig.
 
-`available_charge_power_entity` und `available_discharge_power_entity` sind die **alleinigen
-physischen Maximalgrenzen**. Sie werden getrennt ausgewertet: der Ausfall des einen sperrt nur
-seine Richtung auf `0 W`; ein gültiger Wert `0` sperrt die Richtung bewusst.
+`available_charge_power_w` und `available_discharge_power_w` sind verpflichtende, direkt in den
+Add-on-Optionen gepflegte Wattwerte und die **alleinigen physischen Maximalgrenzen**. Ein Wert `0`
+sperrt nur die jeweilige Richtung bewusst. Dafür werden keine HA-Entitäten gelesen.
 
 **Entfallen** sind `max_ladeleistung_w`, `max_entladeleistung_w`, `soc_reserve_prozent`,
 `soc_taper_band_prozent`, `soc_max_hysterese_prozent`, `entlade_sofort_schwelle_w` und
@@ -165,7 +165,6 @@ auf `standby`; die übrigen laufen weiter. Ohne Ist-Leistung wäre die Pool-Bere
 | `soc_entity` je Speicher | Ladezustand in Prozent |
 | `charge_power_entity` / `discharge_power_entity` je Speicher | Ist-Leistung in Watt, beide ≥ 0 |
 | `power_entity` + `power_sign` je Speicher | Alternative: eine signierte Entität für beide Richtungen |
-| `available_charge_power_entity` / `available_discharge_power_entity` | **Pflicht.** Momentane physische Lade- bzw. Entladegrenze in Watt |
 
 ## Statusvertrag `/api/status`
 
@@ -238,12 +237,10 @@ Fallstricke, die schon Fehler verursacht haben:
   `geschuetzte_mindestleistung_w` bzw. `_a`. Vergleiche gehören gegen den Rohwert.
 - **`source`** sagt, woher die wirksamen Werte stammen: `aus`, `user` oder `ep`.
 - **`max_ladeleistung_w` ist nicht `lade_limit_w`.** Beide Schlüssel bleiben aus
-  Kompatibilitätsgründen erhalten, tragen aber Neues: `max_ladeleistung_w` und
-  `max_entladeleistung_w` sind jetzt der gültige Momentanwert des jeweiligen
-  `available_*`-Sensors, `lade_limit_w` und `entlade_limit_w` derselbe Wert **nach** Freigaben und
-  SoC-Grenzen. `lade_limit_gueltig` und `entlade_limit_gueltig` sagen, ob der Sensor überhaupt
-  brauchbar war — `0` bei `gueltig: true` ist eine bewusste Sperre, `0` bei `false` ein
-  Sensorfehler.
+  Kompatibilitätsgründen erhalten: `max_ladeleistung_w` und `max_entladeleistung_w` spiegeln die
+  beiden statischen `available_*_w`-Werte, `lade_limit_w` und `entlade_limit_w` denselben Wert
+  **nach** Freigaben und SoC-Grenzen. `lade_limit_gueltig` und `entlade_limit_gueltig` bleiben
+  kompatibel erhalten und sind für eine validierte Konfiguration immer `true`.
 - **`netto_w` ist signiert:** positiv = laden, negativ = entladen. Genauso der geschriebene
   Sollwert `anforderung_leistung_w`.
 - **Drei Sperrgrund-Felder statt einem.** `lade_blockiert_grund` und `entlade_blockiert_grund`

@@ -116,12 +116,10 @@ configuration:
       • power_sign (nur mit power_entity, Standard „positiv_laden") –
       Vorzeichen von power_entity: „positiv_laden" oder „positiv_entladen".
 
-      • available_charge_power_entity / available_discharge_power_entity
-      (Pflicht) – Sensoren mit der momentan verfügbaren Lade- bzw.
-      Entladeleistung des Wechselrichters in Watt. Sie sind die alleinigen
-      physischen Maximalgrenzen. Ein fehlender, ausgefallener oder ungültiger
-      Wert sperrt ausschließlich die betroffene Richtung auf 0 W; ein gültiger
-      Wert 0 sperrt die Richtung bewusst.
+      • available_charge_power_w / available_discharge_power_w (Pflicht,
+      jeweils ab 0) – Direkt eingetragene verfügbare Lade- bzw.
+      Entladeleistung in Watt. Sie sind die alleinigen physischen
+      Maximalgrenzen. Ein Wert 0 sperrt die jeweilige Richtung bewusst.
 
       • capacity_kwh (optional, Standard 0) – Nutzbare Kapazität in kWh.
       Ausschließlich Anzeige (Energieinhalt), keine Regelgröße.

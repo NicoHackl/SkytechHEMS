@@ -93,9 +93,8 @@ export interface BatteryDevice extends DeviceBase {
   new_entlade_w: number
   /** + laden / − entladen, so wie der Sollwert nach HA geschrieben wird. */
   netto_w: number
-  /** Gültiger Momentanwert des jeweiligen available_*-Sensors: die einzige
-      physische Grenze. `0` bei gueltig: false ist ein Sensorfehler, bei
-      gueltig: true eine bewusste Sperre. */
+  /** Statischer available_*_w-Wert aus der Add-on-Konfiguration: die einzige
+      physische Grenze. `0` sperrt die jeweilige Richtung bewusst. */
   max_ladeleistung_w: number
   max_entladeleistung_w: number
   lade_limit_gueltig: boolean
@@ -272,8 +271,8 @@ export interface ConfigDevice {
   discharge_power_entity?: string
   power_entity?: string
   power_sign?: 'positiv_laden' | 'positiv_entladen'
-  available_charge_power_entity?: string
-  available_discharge_power_entity?: string
+  available_charge_power_w?: number | null
+  available_discharge_power_w?: number | null
   capacity_kwh?: number | null
   soc_max_hysteresis_percent?: number | null
   direction_switch_delay_s?: number | null

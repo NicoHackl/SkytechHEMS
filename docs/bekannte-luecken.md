@@ -52,7 +52,7 @@ Dinge, die schon einmal Zeit gekostet haben:
   `config.yaml`.
 - **Neue Pflichtfelder machen Bestandsgeräte inaktiv.** Nach dem Update auf den Entitäts-Fallback-
   Vertrag laufen `controllable`- und `binary`-Geräte ohne ihre neuen Add-on-Felder nicht mehr an,
-  ebenso ein Speicher ohne die beiden `available_*`-Sensoren. Sie verschwinden nicht, sondern
+  ebenso ein Speicher ohne die beiden `available_*_w`-Werte. Sie verschwinden nicht, sondern
   stehen mit ihren Feldfehlern unter `inactive_devices`. Die Migrationsschritte stehen im
   [CHANGELOG.md](../CHANGELOG.md).
 - **Ein Schreibziel hat keinen Fallback.** Fehlt der `anforderung_*`-Helfer, hat er die falsche
@@ -76,7 +76,7 @@ Der Code ist gebaut und getestet; diese Fragen betreffen die **Inbetriebnahme am
 | # | Frage | Blockiert |
 |---|---|---|
 | F-12 | Aus welcher Quelle kommt `residual_power_entity`, und wie weit läuft er dem Batterie-Leistungssensor nach? | Dimensionierung von `hoch_regelzeit_s` und `max_anderung_pro_schritt_w` |
-| F-13 | Welches Gerät wird der AC-Speicher? Liefert `soc_entity`, die Ist-Leistungssensoren, **beide `available_*`-Sensoren** und `capacity_kwh` | Inbetriebnahme, nicht den Code |
+| F-13 | Welches Gerät wird der AC-Speicher? Liefert `soc_entity`, die Ist-Leistungssensoren und `capacity_kwh`; welche festen Lade-/Entladegrenzen werden als `available_*_w` eingetragen? | Inbetriebnahme, nicht den Code |
 | F-14 | Bringt das Gerät eine eigene Nulleinspeisung mit, und lässt sie sich abschalten? Nicht abschaltbar heißt: HEMS und Gerät regeln gegeneinander | Inbetriebnahme |
 
 ## Bewusst nicht umgesetzt

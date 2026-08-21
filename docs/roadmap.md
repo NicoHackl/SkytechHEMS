@@ -57,7 +57,7 @@ Deckung des Hausverbrauchs. Entwurf v5:
 | Punkt | Status | Verweis |
 |---|---|---|
 | Phase 1 — Pool-Bereinigung, `hausdefizit_w`, Anzeige | fertig | D-040 |
-| Phase 2 — Ladepfad mit SoC-Grenzen und momentanem WR-Limit | fertig | D-040, D-041 |
+| Phase 2 — Ladepfad mit SoC-Grenzen und konfiguriertem Leistungslimit | fertig | D-040, D-041, D-043 |
 | Phase 3 — Entladepfad, Rampe, sicherer Zustand | fertig | D-040, D-041 |
 | Phase 4 — Mehrspeicher, getrennte Lade-/Entladepriorität | fertig | D-040 |
 | Phase 5 — Energy-Pilot-Vorschlagsfelder für Speicher | offen | Entwurf, Abschnitt 13 |
@@ -65,8 +65,8 @@ Deckung des Hausverbrauchs. Entwurf v5:
 | Inbetriebnahme am realen Gerät | offen | F-12, F-13, F-14 |
 
 Der Code läuft gegen Tests und einen synthetischen HA-Zustand. **Erprobt am Gerät ist er nicht** —
-es gibt noch keinen AC-Speicher. Seit D-041 ist die physische Grenze allein das momentane
-WR-Limit; beide `available_*`-Sensoren sind damit Voraussetzung für die Inbetriebnahme. Die verbliebenen Fragen stehen in
+es gibt noch keinen AC-Speicher. Seit D-043 sind die physischen Grenzen die direkt konfigurierten
+Wattwerte `available_charge_power_w` und `available_discharge_power_w`. Die verbliebenen Fragen stehen in
 [bekannte-luecken.md](bekannte-luecken.md).
 
 Der vorhandene E3DC ist bewusst **kein** HEMS-Gerät: er regelt sich selbst und steckt im

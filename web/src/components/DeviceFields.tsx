@@ -221,22 +221,22 @@ export function DeviceFieldsBattery({ device, patch, entities, supported, error 
         <div className="card-head"><h2>Physische Grenzen</h2></div>
         <div className="card-body">
           <p className="hint-box">
-            Diese beiden Sensoren sind die <b>alleinigen</b> physischen Maximalgrenzen und deshalb
-            Pflicht. Sie werden getrennt ausgewertet: der Ausfall des einen sperrt nur seine
-            Richtung auf 0 W, ein gültiger Wert 0 sperrt sie bewusst.
+            Diese beiden Wattwerte sind die <b>alleinigen</b> physischen Maximalgrenzen und
+            deshalb Pflicht. Sie werden direkt in der Add-on-Konfiguration gepflegt. Ein Wert
+            von 0 W sperrt die jeweilige Richtung bewusst.
           </p>
           <div className="form-grid">
-            <EntityField
-              label="Verfügbare Ladeleistung" required
-              value={device.available_charge_power_entity ?? ''} entities={entities}
-              domains={['sensor']} error={error('available_charge_power_entity')}
-              onChange={(value) => patch({ available_charge_power_entity: value })}
+            <NumberField
+              label="Verfügbare Ladeleistung" unit="W" required min={0}
+              value={device.available_charge_power_w}
+              error={error('available_charge_power_w')}
+              onChange={(value) => patch({ available_charge_power_w: value })}
             />
-            <EntityField
-              label="Verfügbare Entladeleistung" required
-              value={device.available_discharge_power_entity ?? ''} entities={entities}
-              domains={['sensor']} error={error('available_discharge_power_entity')}
-              onChange={(value) => patch({ available_discharge_power_entity: value })}
+            <NumberField
+              label="Verfügbare Entladeleistung" unit="W" required min={0}
+              value={device.available_discharge_power_w}
+              error={error('available_discharge_power_w')}
+              onChange={(value) => patch({ available_discharge_power_w: value })}
             />
           </div>
         </div>

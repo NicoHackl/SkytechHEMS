@@ -17,8 +17,6 @@ PREFIX = "acspeicher1"
 SOC_ENTITY     = f"sensor.{PREFIX}_soc"
 LADE_ENTITY    = f"sensor.{PREFIX}_ladeleistung"
 ENTLADE_ENTITY = f"sensor.{PREFIX}_entladeleistung"
-LADE_LIMIT     = f"sensor.{PREFIX}_lade_limit"
-ENTLADE_LIMIT  = f"sensor.{PREFIX}_entlade_limit"
 ANF_ENTITY     = f"input_number.ems_{PREFIX}_anforderung_leistung_w"
 ANF_MODE       = f"input_select.ems_{PREFIX}_anforderung_betriebsart"
 
@@ -26,12 +24,12 @@ ANF_MODE       = f"input_select.ems_{PREFIX}_anforderung_betriebsart"
 def make_battery(**kw):
     """Speicher mit getrennten Ist-Sensoren (Variante A aus D-B12).
 
-    Die beiden available_*-Sensoren sind Pflicht: sie sind die alleinigen
-    physischen Maximalgrenzen.
+    Die beiden available_*_w-Werte sind Pflicht: sie sind die alleinigen
+    physischen Maximalgrenzen aus der Add-on-Konfiguration.
     """
     kw.setdefault("soc_entity", SOC_ENTITY)
-    kw.setdefault("available_charge_power_entity", LADE_LIMIT)
-    kw.setdefault("available_discharge_power_entity", ENTLADE_LIMIT)
+    kw.setdefault("available_charge_power_w", 5000)
+    kw.setdefault("available_discharge_power_w", 5000)
     if not kw.get("power_entity"):
         kw.setdefault("charge_power_entity", LADE_ENTITY)
         kw.setdefault("discharge_power_entity", ENTLADE_ENTITY)
@@ -44,7 +42,6 @@ def make_battery(**kw):
 
 def battery_states(*, soc=50, lade_ist=0, entlade_ist=0, sollwert=0,
                    betriebsart="auto", anforderung_betriebsart="standby",
-                   lade_limit=5000, entlade_limit=5000,
                    min_lade=0, min_entlade=0, soc_min=10, soc_max=100,
                    prio=1, entlade_prio=50, totzone=0,
                    hoch=0, runter=0, schritt=100000, deadband=0,
@@ -59,8 +56,6 @@ def battery_states(*, soc=50, lade_ist=0, entlade_ist=0, sollwert=0,
         SOC_ENTITY:     soc,
         LADE_ENTITY:    lade_ist,
         ENTLADE_ENTITY: entlade_ist,
-        LADE_LIMIT:     lade_limit,
-        ENTLADE_LIMIT:  entlade_limit,
         ANF_ENTITY:     sollwert,
         ANF_MODE:       anforderung_betriebsart,
         f"input_select.ems_{PREFIX}_betriebsart":              betriebsart,
@@ -181,14 +176,10 @@ def test_soc_min_stoppt_entladen():
 
 
 def test_kein_soc_taper_mehr():
-    """Innerhalb der SoC-Grenzen gilt allein das momentane WR-Limit.
-
-    Die CV-Phase regelt der Wechselrichter selbst – und genau das meldet er
-    über die available_*-Sensoren. Ein zweites, lineares Drosselband im HEMS
-    hätte dagegengeregelt."""
-    b = prepare(make_battery(), soc=97.5, soc_max=100, lade_limit=4000)
+    """Innerhalb der SoC-Grenzen gilt allein die konfigurierte Leistungsgrenze."""
+    b = prepare(make_battery(available_charge_power_w=4000), soc=97.5, soc_max=100)
     assert b._lade_limit_w() == pytest.approx(4000.0)
-    b = prepare(make_battery(), soc=12.5, soc_min=10, entlade_limit=4000)
+    b = prepare(make_battery(available_discharge_power_w=4000), soc=12.5, soc_min=10)
     assert b._entlade_limit_w() == pytest.approx(4000.0)
 
 
@@ -213,8 +204,8 @@ def test_entladeboden_ist_allein_soc_min():
     assert b._entlade_block == "soc_min"
 
 
-def test_available_sensor_ist_die_ladegrenze():
-    b = prepare(make_battery(), lade_limit=1200)
+def test_konfigurierter_available_wert_ist_die_ladegrenze():
+    b = prepare(make_battery(available_charge_power_w=1200))
     assert b._lade_limit_w() == 1200.0
 
 
@@ -468,10 +459,6 @@ def test_unbekannte_betriebsart_faellt_auf_standby():
     ({"soc": 5, "soc_min": 10},            "_entlade_block", "soc_min"),
     ({"netzladen": "on"},                  "_entlade_block", "netzladen"),
     ({"soc": "unavailable"},               "_lade_block",    "sensor_ungueltig"),
-    ({"lade_limit": "unavailable"},        "_lade_block",    "limit_sensor"),
-    ({"entlade_limit": "unavailable"},     "_entlade_block", "limit_sensor"),
-    ({"lade_limit": 0},                    "_lade_block",    "wr_derating"),
-    ({"entlade_limit": 0},                 "_entlade_block", "wr_derating"),
 ])
 def test_blockiert_grund_je_sperrfall(kwargs, feld, grund):
     b = prepare(make_battery(), **kwargs)
@@ -512,7 +499,7 @@ def test_gesperrter_speicher_reserviert_keinen_pool():
 
 
 # ---------------------------------------------------------------------------
-# Vereinfachter Speichervertrag: available_*-Sensoren, entfallene Helfer
+# Vereinfachter Speichervertrag: statische available_*_w-Werte, entfallene Helfer
 # ---------------------------------------------------------------------------
 
 ENTFALLENE_HELFER = (
@@ -530,52 +517,50 @@ def test_entfallene_helfer_werden_nicht_mehr_gelesen():
     """Sie dürfen weder die Regelung beeinflussen noch in der Diagnose auftauchen."""
     b = prepare(make_battery(), **{entity: 4242 for entity in ENTFALLENE_HELFER})
     assert not set(ENTFALLENE_HELFER) & set(b.entity_diagnostics)
-    assert b._lade_limit_w() == 5000.0          # aus dem available_*-Sensor, nicht 4242
+    assert b._lade_limit_w() == 5000.0          # aus der Add-on-Konfiguration, nicht 4242
     assert b.soc_max_hysteresis_percent == 2.0
     assert b.direction_switch_delay_s == 5.0
 
 
 def test_beide_limits_begrenzen_unabhaengig():
-    b = prepare(make_battery(), lade_limit=1500, entlade_limit=4200)
+    b = prepare(make_battery(
+        available_charge_power_w=1500,
+        available_discharge_power_w=4200,
+    ))
     assert b._lade_limit_w() == 1500.0
     assert b._entlade_limit_w() == 4200.0
 
 
-@pytest.mark.parametrize("fehlerbild", ["unavailable", "unknown", "kaputt"])
-def test_defekter_ladelimit_sensor_sperrt_nur_den_ladepfad(fehlerbild):
-    b = prepare(make_battery(), lade_limit=fehlerbild, entlade_limit=4000)
+def test_ladelimit_null_sperrt_nur_den_ladepfad():
+    b = prepare(make_battery(
+        available_charge_power_w=0,
+        available_discharge_power_w=4000,
+    ))
     assert b._lade_limit_w() == 0.0
     assert b._darf_laden() is False
-    assert b._lade_block == "limit_sensor"
+    assert b._lade_block == "wr_derating"
     assert b.entlade_kapazitaet_w() == 4000.0
 
 
-@pytest.mark.parametrize("fehlerbild", ["unavailable", "unknown", "kaputt"])
-def test_defekter_entladelimit_sensor_sperrt_nur_den_entladepfad(fehlerbild):
-    b = prepare(make_battery(), lade_limit=4000, entlade_limit=fehlerbild)
+def test_entladelimit_null_sperrt_nur_den_entladepfad():
+    b = prepare(make_battery(
+        available_charge_power_w=4000,
+        available_discharge_power_w=0,
+    ))
     assert b.entlade_kapazitaet_w() == 0.0
-    assert b._entlade_block == "limit_sensor"
+    assert b._entlade_block == "wr_derating"
     assert b._darf_laden() is True
 
 
-def test_fehlender_limit_sensor_sperrt_nur_seine_richtung():
-    states = battery_states()
-    del states._states[LADE_LIMIT]
-    b = make_battery()
-    b.begin_cycle(10_000.0)
-    b.update_from_ha(states, 10_000.0, 0.0)
-    assert b._darf_laden() is False
-    assert b.entlade_kapazitaet_w() == 5000.0
-    assert b.entity_diagnostics[LADE_LIMIT]["state"] == "missing"
-
-
-def test_gueltige_null_sperrt_die_richtung_bewusst():
-    b = prepare(make_battery(), lade_limit=0, entlade_limit=0)
+def test_konfigurierte_null_sperrt_beide_richtungen_bewusst():
+    b = prepare(make_battery(
+        available_charge_power_w=0,
+        available_discharge_power_w=0,
+    ))
     assert b._darf_laden() is False
     assert b._lade_block == "wr_derating"
     assert b.entlade_kapazitaet_w() == 0.0
     assert b._entlade_block == "wr_derating"
-    assert b.entity_diagnostics[LADE_LIMIT]["state"] == "valid"
 
 
 def test_defaults_der_statischen_speicherfelder():
@@ -664,13 +649,15 @@ def test_sicherheitsgruende_stoppen_sofort_ohne_rampe(kwargs):
 
 
 def test_gesunkenes_wr_limit_wird_nach_der_rampe_nie_ueberschritten():
-    """Die Rampe darf bremsen, aber nie über die momentane physische Grenze."""
-    b = prepare(make_battery(), sollwert=-4000, entlade_limit=800, schritt=100)
+    """Die Rampe darf bremsen, aber nie über die konfigurierte physische Grenze."""
+    b = prepare(make_battery(available_discharge_power_w=800),
+                sollwert=-4000, schritt=100)
     b.set_discharge_target(4000.0)
     b.calculate_ramp(0.0)
     assert b.new_entlade_w <= 800.0
 
-    b = prepare(make_battery(), sollwert=4000, lade_limit=600, schritt=100)
+    b = prepare(make_battery(available_charge_power_w=600),
+                sollwert=4000, schritt=100)
     b._alloc_w = 4000.0
     b.calculate_ramp(0.0)
     assert b.new_lade_w <= 600.0
@@ -680,9 +667,9 @@ def test_gesunkenes_wr_limit_wird_nach_der_rampe_nie_ueberschritten():
 
 def test_ep_maximalvorschlaege_werden_ignoriert():
     """Der Energy Pilot darf physische WR-Limits nicht überschreiben."""
-    b = make_battery()
+    b = make_battery(available_charge_power_w=1500, available_discharge_power_w=1500)
     b.source = "ep"
-    prepare(b, lade_limit=1500, entlade_limit=1500, **{
+    prepare(b, **{
         f"sensor.ep_{PREFIX}_lade_max_w_vorschlag": 9000,
         f"sensor.ep_{PREFIX}_entlade_max_w_vorschlag": 9000,
     })

@@ -16,8 +16,8 @@ Zusätzlich zu den hier beschriebenen Feldern und Entitäten gelten die
 | `discharge_power_entity` | zusammen mit `charge_power_entity` in Variante A | – | Ist-Entladeleistung in W, immer ≥ `0` |
 | `power_entity` | anstelle von Variante A | – | Ein signierter Ist-Leistungssensor für beide Richtungen |
 | `power_sign` | nur zusammen mit `power_entity` sinnvoll | `positiv_laden` | `positiv_laden` oder `positiv_entladen` beschreibt das Vorzeichen von `power_entity` |
-| `available_charge_power_entity` | ja | nicht begrenzt | Optionales momentanes WR-Ladelimit; ein gültiger Wert hat Vorrang vor dem HA-Maximum |
-| `available_discharge_power_entity` | ja | nicht begrenzt | Optionales momentanes WR-Entladelimit; ein gültiger Wert hat Vorrang vor dem HA-Maximum |
+| `available_charge_power_w` | ja | – | Direkt gepflegte verfügbare Ladeleistung in Watt; `0` sperrt Laden |
+| `available_discharge_power_w` | ja | – | Direkt gepflegte verfügbare Entladeleistung in Watt; `0` sperrt Entladen |
 | `capacity_kwh` | nein | `0` | Nutzbare Kapazität, ausschließlich für Energieanzeige und kapazitätsgewichteten SoC |
 
 Es muss genau eine Leistungssensor-Variante vollständig konfiguriert sein:
@@ -25,9 +25,9 @@ Es muss genau eine Leistungssensor-Variante vollständig konfiguriert sein:
 - **Variante A:** `charge_power_entity` und `discharge_power_entity`
 - **Variante B:** `power_entity`, optional mit `power_sign`
 
-Fehlen `soc_entity` oder eine vollständige Leistungsvariante, wird der Geräteeintrag beim Start
-übersprungen. Werden beide Varianten angegeben, verwendet der aktuelle Code `power_entity`; eine
-doppelte Konfiguration sollte deshalb vermieden werden.
+Fehlen `soc_entity`, eine vollständige Leistungsvariante oder einer der beiden
+`available_*_w`-Werte, wird der Geräteeintrag beim Start übersprungen. Beide
+Ist-Leistungsvarianten gleichzeitig sind ungültig.
 
 ## Über Namenskonvention gelesene HA-Helfer
 
@@ -44,9 +44,9 @@ doppelte Konfiguration sollte deshalb vermieden werden.
 | Entität | Einheit | Pflicht | Fehlender/ungültiger State | Funktion | Kommentar von Admin|
 |---|---|---:|---|---|---|
 | `input_number.ems_<prefix>_entlade_prioritat` | – | ja | `50` | Unabhängige Entladereihenfolge; kleinere Zahl entlädt zuerst |
-| `input_number.ems_<prefix>_max_ladeleistung_w` | W | ja | `0` | Maximale Ladeleistung vor SoC-Taper und optionalem WR-Derating | -> wird gelöscht und wird durch `available_charge_power_entity`ersetzt (Addon/App Config)
+| `input_number.ems_<prefix>_max_ladeleistung_w` | W | ja | `0` | Maximale Ladeleistung vor SoC-Taper und optionalem WR-Derating | -> wird gelöscht und wird durch `available_charge_power_w` ersetzt (Addon/App Config)
 | `input_number.ems_<prefix>_min_ladeleistung_w` | W | nein | `0` | Untere Ladegrenze; kleinere Anforderungen rasten auf `0` |
-| `input_number.ems_<prefix>_max_entladeleistung_w` | W | ja | `0` | Maximale Entladeleistung vor SoC-Taper und optionalem WR-Derating | -> wird gelöscht und wird durch `available_discharge_power_entity`ersetzt (Addon/App Config)
+| `input_number.ems_<prefix>_max_entladeleistung_w` | W | ja | `0` | Maximale Entladeleistung vor SoC-Taper und optionalem WR-Derating | -> wird gelöscht und wird durch `available_discharge_power_w` ersetzt (Addon/App Config)
 | `input_number.ems_<prefix>_min_entladeleistung_w` | W | nein | `0` | Untere Entladegrenze; kleinere Anforderungen rasten auf `0` |
 
 ### SoC-Grenzen
@@ -89,8 +89,6 @@ zum Speichervertrag und müssen nicht angelegt werden.
 | `charge_power_entity` | Ladeleistung ≥ `0 W` | Einer der beiden Sensoren ungültig: Speicher geht in den sicheren Zustand |
 | `discharge_power_entity` | Entladeleistung ≥ `0 W` | Einer der beiden Sensoren ungültig: Speicher geht in den sicheren Zustand |
 | `power_entity` | signierte Leistung gemäß `power_sign` | Ungültiger State: Speicher geht in den sicheren Zustand |
-| `available_charge_power_entity` | momentanes Limit ≥ `0 W` | Ungültiger State: optionales Limit wird ignoriert |
-| `available_discharge_power_entity` | momentanes Limit ≥ `0 W` | Ungültiger State: optionales Limit wird ignoriert |
 
 Ein ungültiger Speicher blockiert nicht die übrigen Speicher.
 
@@ -110,8 +108,8 @@ vom Wechselrichter verlangten Reihenfolge nach Modbus, MQTT oder eine andere Sch
 
 - Für keinen speicherspezifischen HA-Helfer gibt es einen Wert in der Add-on-Konfiguration.
 - `capacity_kwh` ist ein statischer Anzeigewert und ersetzt keinen SoC- oder Leistungssensor.
-- Ein ungültiges optionales WR-Limit fällt auf das jeweilige HA-Maximum
-  `max_ladeleistung_w` beziehungsweise `max_entladeleistung_w` zurück.
+- `available_charge_power_w` und `available_discharge_power_w` sind verpflichtende statische
+  Grenzen ohne HA-Fallback; ein Wert `0` sperrt die jeweilige Richtung.
 - `entity_prefix` fällt auf `name`, `power_sign` auf `positiv_laden` und `capacity_kwh` auf `0`
   zurück.
 - Fehlende Freigaben werden sicher als `off`, fehlende Maximalleistungen als `0 W` behandelt.
@@ -146,8 +144,6 @@ sensor.ep_<prefix>_geschutzte_mindestleistung_w_vorschlag
 sensor.ep_<prefix>_entlade_prio_vorschlag
 sensor.ep_<prefix>_soc_ziel_prozent_vorschlag
 sensor.ep_<prefix>_soc_min_prozent_vorschlag
-sensor.ep_<prefix>_lade_max_w_vorschlag
-sensor.ep_<prefix>_entlade_max_w_vorschlag
 sensor.ep_<prefix>_betriebsart_vorschlag
 ```
 
@@ -166,7 +162,8 @@ Die einmalige, systemweite Funktion dieses Helfers sowie die Option
 
 ## Pflicht für eine funktionsfähige Instanz
 
-- Add-on-Felder `name`, `class: battery` und `soc_entity`
+- Add-on-Felder `name`, `class: battery`, `soc_entity`, `available_charge_power_w` und
+  `available_discharge_power_w`
 - entweder beide Felder `charge_power_entity` und `discharge_power_entity` oder `power_entity`
 - alle [gemeinsamen HA-Helfer](global.md#gemeinsame-ha-helfer)
 - alle unterstützten speicherspezifischen Eingangshelfer aus den Tabellen oben
@@ -193,5 +190,7 @@ devices:
     soc_entity: sensor.acspeicher1_soc
     charge_power_entity: sensor.acspeicher1_ladeleistung
     discharge_power_entity: sensor.acspeicher1_entladeleistung
+    available_charge_power_w: 1500
+    available_discharge_power_w: 1500
     capacity_kwh: 12.8
 ```

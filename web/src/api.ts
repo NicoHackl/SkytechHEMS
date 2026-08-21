@@ -31,11 +31,16 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   if (!response.ok) {
     // Das Add-on meldet Fehler als {"error": "…"}; Fremdschichten (Ingress) als Text.
-    const detail = isJson ? (body as { error?: unknown }).error : body
-    const message = typeof detail === 'string' && detail
-      ? detail
+    const errorBody = isJson && typeof body === 'object' && body !== null
+      ? body as Record<string, unknown>
+      : undefined
+    const errorText = errorBody?.error ?? body
+    const message = typeof errorText === 'string' && errorText
+      ? errorText
       : `Anfrage fehlgeschlagen (${response.status}).`
-    throw new ApiError(message, response.status, detail)
+    // Der vollständige JSON-Rumpf enthält bei 422 die Feldfehler. Nur den
+    // Fehlertext weiterzugeben ließ die UI genau diese Information verlieren.
+    throw new ApiError(message, response.status, errorBody ?? body)
   }
   return body as T
 }

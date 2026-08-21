@@ -320,7 +320,8 @@ def test_ampere_device_writes_floored_ampere_and_phase():
 # hausdefizit_w tragen das gesamte Risiko der Speicher-Erweiterung. Die Tests
 # hier fahren sie über den vollständigen Zyklus.
 
-def _battery_cfg(name, *, prefix=None, capacity=10.0):
+def _battery_cfg(name, *, prefix=None, capacity=10.0,
+                 lade_limit=5000, entlade_limit=5000):
     return {
         "name": name,
         "class": "battery",
@@ -329,23 +330,21 @@ def _battery_cfg(name, *, prefix=None, capacity=10.0):
         "soc_entity": f"sensor.{name}_soc",
         "charge_power_entity": f"sensor.{name}_lade_w",
         "discharge_power_entity": f"sensor.{name}_entlade_w",
-        "available_charge_power_entity": f"sensor.{name}_lade_limit",
-        "available_discharge_power_entity": f"sensor.{name}_entlade_limit",
+        "available_charge_power_w": lade_limit,
+        "available_discharge_power_w": entlade_limit,
         "capacity_kwh": capacity,
     }
 
 
 def _battery(name, *, prefix=None, soc=50, lade_ist=0, entlade_ist=0, sollwert=0,
              betriebsart="auto", anforderung_betriebsart="standby",
-             prio=1, entlade_prio=50, lade_limit=5000, entlade_limit=5000,
+             prio=1, entlade_prio=50,
              min_lade=0, min_entlade=0, soc_min=10, soc_max=100):
     p = prefix or name
     return {
         f"sensor.{name}_soc":       soc,
         f"sensor.{name}_lade_w":    lade_ist,
         f"sensor.{name}_entlade_w": entlade_ist,
-        f"sensor.{name}_lade_limit":    lade_limit,
-        f"sensor.{name}_entlade_limit": entlade_limit,
         f"input_number.ems_{p}_anforderung_leistung_w":       sollwert,
         f"input_select.ems_{p}_anforderung_betriebsart":      anforderung_betriebsart,
         f"input_boolean.ems_{p}_freigabe":                    "on",
@@ -530,12 +529,12 @@ def test_speicher_in_residual_false():
 
 def test_zwei_speicher_teilen_hausdefizit():
     """H-3: die Summe deckt das Defizit einmal, nicht je Speicher einmal."""
-    cfg = [_battery_cfg("sp1"), _battery_cfg("sp2")]
+    cfg = [_battery_cfg("sp1", entlade_limit=2000), _battery_cfg("sp2")]
     ctrl = EMSController(cfg, residual_power_entity="sensor.s")
     states = {
         **_global(),
-        **_battery("sp1", entlade_prio=10, entlade_limit=2000),
-        **_battery("sp2", entlade_prio=20, entlade_limit=5000),
+        **_battery("sp1", entlade_prio=10),
+        **_battery("sp2", entlade_prio=20),
         "sensor.s": -2500,
         "input_number.ems_ac_speicher_entlade_abschlag_w": 0,
     }
@@ -548,13 +547,14 @@ def test_zwei_speicher_teilen_hausdefizit():
 
 
 def test_drei_speicher_entlade_prioritaetsreihenfolge():
-    cfg = [_battery_cfg("sp1"), _battery_cfg("sp2"), _battery_cfg("sp3")]
+    cfg = [_battery_cfg("sp1"), _battery_cfg("sp2", entlade_limit=2000),
+           _battery_cfg("sp3")]
     ctrl = EMSController(cfg, residual_power_entity="sensor.s")
     states = {
         **_global(),
-        **_battery("sp1", entlade_prio=20, entlade_limit=5000),
-        **_battery("sp2", entlade_prio=10, entlade_limit=2000),
-        **_battery("sp3", entlade_prio=30, entlade_limit=5000),
+        **_battery("sp1", entlade_prio=20),
+        **_battery("sp2", entlade_prio=10),
+        **_battery("sp3", entlade_prio=30),
         "sensor.s": -2480,
         "input_number.ems_ac_speicher_entlade_abschlag_w": 0,
     }
@@ -574,8 +574,8 @@ def test_entlade_prio_unabhaengig_von_lade_prio():
     ctrl = EMSController(cfg, residual_power_entity="sensor.s")
     states = {
         **_global(),
-        **_battery("sp1", prio=1, entlade_prio=90, entlade_limit=5000),
-        **_battery("sp2", prio=90, entlade_prio=1, entlade_limit=5000),
+        **_battery("sp1", prio=1, entlade_prio=90),
+        **_battery("sp2", prio=90, entlade_prio=1),
         "sensor.s": -1000,
         "input_number.ems_ac_speicher_entlade_abschlag_w": 0,
     }
@@ -587,12 +587,12 @@ def test_entlade_prio_unabhaengig_von_lade_prio():
 
 def test_entlade_prio_gleichstand_config_reihenfolge():
     """Stabile Sortierung: bei Gleichstand entscheidet die Konfiguration."""
-    cfg = [_battery_cfg("sp1"), _battery_cfg("sp2")]
+    cfg = [_battery_cfg("sp1", entlade_limit=1000), _battery_cfg("sp2")]
     ctrl = EMSController(cfg, residual_power_entity="sensor.s")
     states = {
         **_global(),
-        **_battery("sp1", entlade_prio=50, entlade_limit=1000),
-        **_battery("sp2", entlade_prio=50, entlade_limit=5000),
+        **_battery("sp1", entlade_prio=50),
+        **_battery("sp2", entlade_prio=50),
         "sensor.s": -1500,
         "input_number.ems_ac_speicher_entlade_abschlag_w": 0,
     }
@@ -605,12 +605,12 @@ def test_entlade_prio_gleichstand_config_reihenfolge():
 
 def test_entlade_abschlag_wirkt_einmal_systemweit():
     """10.3: bei n Speichern wäre ein Abschlag je Gerät n-fach wirksam."""
-    cfg = [_battery_cfg("sp1"), _battery_cfg("sp2")]
+    cfg = [_battery_cfg("sp1", entlade_limit=1000), _battery_cfg("sp2")]
     ctrl = EMSController(cfg, residual_power_entity="sensor.s")
     states = {
         **_global(),
-        **_battery("sp1", entlade_prio=10, entlade_limit=1000),
-        **_battery("sp2", entlade_prio=20, entlade_limit=5000),
+        **_battery("sp1", entlade_prio=10),
+        **_battery("sp2", entlade_prio=20),
         "sensor.s": -2000,
         "input_number.ems_ac_speicher_entlade_abschlag_w": 20,
     }
@@ -621,12 +621,12 @@ def test_entlade_abschlag_wirkt_einmal_systemweit():
 
 
 def test_zu_kleine_zuteilung_rastet_auf_null_im_zyklus():
-    cfg = [_battery_cfg("sp1"), _battery_cfg("sp2")]
+    cfg = [_battery_cfg("sp1", entlade_limit=1000), _battery_cfg("sp2")]
     ctrl = EMSController(cfg, residual_power_entity="sensor.s")
     states = {
         **_global(),
-        **_battery("sp1", entlade_prio=10, entlade_limit=1000),
-        **_battery("sp2", entlade_prio=20, entlade_limit=5000, min_entlade=800),
+        **_battery("sp1", entlade_prio=10),
+        **_battery("sp2", entlade_prio=20, min_entlade=800),
         "sensor.s": -1200,
         "input_number.ems_ac_speicher_entlade_abschlag_w": 0,
     }
@@ -662,7 +662,7 @@ def test_speicher_prio_1_verdraengt_heizstab():
     ctrl = EMSController(cfg, residual_power_entity="sensor.s")
     states = {
         **_global(),
-        **_battery("speicher", prio=1, lade_limit=5000),
+        **_battery("speicher", prio=1),
         **_controllable_w("heizstab", prio=50, min_w=500, max_w=3000),
         "sensor.s": 4000,
         "sensor.heizstab_ist": 0,
@@ -679,7 +679,7 @@ def test_speicher_prio_50_bekommt_rest():
     ctrl = EMSController(cfg, residual_power_entity="sensor.s")
     states = {
         **_global(),
-        **_battery("speicher", prio=50, lade_limit=5000),
+        **_battery("speicher", prio=50),
         **_controllable_w("heizstab", prio=1, min_w=500, max_w=3000),
         "sensor.s": 4000,
         "sensor.heizstab_ist": 0,
@@ -695,8 +695,8 @@ def test_defekter_speicher_blockiert_flotte_nicht():
     ctrl = EMSController(cfg, residual_power_entity="sensor.s")
     states = {
         **_global(),
-        **_battery("sp1", entlade_prio=10, entlade_limit=5000),
-        **_battery("sp2", entlade_prio=20, entlade_limit=5000),
+        **_battery("sp1", entlade_prio=10),
+        **_battery("sp2", entlade_prio=20),
         "sensor.sp1_soc": "unavailable",
         "sensor.s": -1000,
         "input_number.ems_ac_speicher_entlade_abschlag_w": 0,
