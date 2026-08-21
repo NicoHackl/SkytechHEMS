@@ -1207,6 +1207,7 @@ class BatteryDevice(ControllableDevice):
         self._soc            = 0.0
         self._soc_valid      = False
         self._power_valid    = False
+        self._battery_residual_sensor_valid = True
         self._lade_ist_w     = 0.0
         self._entlade_ist_w  = 0.0
         self._lade_anf_w     = 0.0
@@ -1271,6 +1272,21 @@ class BatteryDevice(ControllableDevice):
     @property
     def sensoren_gueltig(self) -> bool:
         return self._soc_valid and self._power_valid
+
+    @property
+    def battery_residual_sensor_valid(self) -> bool:
+        """Ist die globale Hausleistungsbilanz für diesen Zyklus brauchbar?"""
+        return self._battery_residual_sensor_valid
+
+    def set_battery_residual_sensor_valid(self, valid: bool) -> None:
+        """Übernimmt die globale Sensorprüfung des Controllers.
+
+        Die Hausleistungsbilanz ist für die sichere Richtungsentscheidung eines
+        AC-Speichers zwingend. Fehlt sie, geht der gesamte Speicher aktiv auf
+        Standby; ein weiterlaufender Ladepfad könnte sonst gegen eine gerade
+        nicht sichtbare Unterdeckung arbeiten.
+        """
+        self._battery_residual_sensor_valid = valid
 
     # ------------------------------------------------------------------
     # Zyklusstart
@@ -1498,6 +1514,8 @@ class BatteryDevice(ControllableDevice):
         gruende = (
             (not self.eligible,                                "nicht_freigegeben"),
             (not self.sensoren_gueltig,                        "sensor_ungueltig"),
+            (not self.battery_residual_sensor_valid,
+             "hausleistungsbilanz_sensor_ungueltig"),
             (self.betriebsart not in ("auto", "nur_laden"),    "betriebsart"),
             (not self.laden_erlaubt,                           "laden_gesperrt"),
             (self._wr_lade_limit_w <= 0,                       "wr_derating"),
@@ -1537,6 +1555,8 @@ class BatteryDevice(ControllableDevice):
         gruende = (
             (not self.eligible,                                  "nicht_freigegeben"),
             (not self.sensoren_gueltig,                          "sensor_ungueltig"),
+            (not self.battery_residual_sensor_valid,
+             "hausleistungsbilanz_sensor_ungueltig"),
             (self.betriebsart not in ("auto", "nur_entladen"),   "betriebsart"),
             (not self.entladen_erlaubt,                          "entladen_gesperrt"),
             (self.netzladen_aktiv,                               "netzladen"),
@@ -1628,7 +1648,13 @@ class BatteryDevice(ControllableDevice):
         """
         umschaltsperre = totzone = False
 
-        if not self.eligible or not self.sensoren_gueltig or self.betriebsart == "standby":
+        if (not self.eligible or not self.sensoren_gueltig
+                or not self.battery_residual_sensor_valid
+                or self.betriebsart == "standby"):
+            if not self.battery_residual_sensor_valid:
+                self._lade_block = self._entlade_block = (
+                    "hausleistungsbilanz_sensor_ungueltig"
+                )
             self._new_lade_w = self._new_entlade_w = 0.0
             self._new_betriebsart = self._sicherer_zustand()
             self._blockiert_grund = None
@@ -1787,6 +1813,7 @@ class BatteryDevice(ControllableDevice):
             "inactive_reasons":      self.inactive_reasons,
             "write_error":           self._write_error or None,
             "sensoren_gueltig":      self.sensoren_gueltig,
+            "battery_residual_sensor_valid": self.battery_residual_sensor_valid,
             "soc_prozent":           round(self._soc, 1),
             "capacity_kwh":          self.capacity_kwh,
             "betriebsart":           self.betriebsart,

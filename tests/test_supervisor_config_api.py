@@ -91,6 +91,8 @@ class FakeWriter:
 def options(*devices, **globals_):
     raw = {"devices": list(devices)}
     raw.update(globals_)
+    if any(device.get("class") == "battery" for device in raw["devices"]):
+        raw.setdefault("battery_residual_power_entity", "sensor.hausleistungsbilanz")
     return raw
 
 
@@ -333,6 +335,20 @@ def test_globale_aenderung_deaktiviert_alle_altgeraete_in_sicherer_reihenfolge()
     assert [op.data["entity_id"] for op in writer.ops] == [
         "input_boolean.ems_luft_anforderung_an",
         # Speicher: erst Leistung 0, dann standby
+        "input_number.ems_acspeicher1_anforderung_leistung_w",
+        "input_select.ems_acspeicher1_anforderung_betriebsart",
+    ]
+
+
+def test_geaenderte_hausleistungsbilanz_deaktiviert_altgeraete_vor_neustart():
+    alt = options(binary(), battery())
+    neu = options(binary(), battery(),
+                  battery_residual_power_entity="sensor.hausleistungsbilanz_neu")
+    writer = FakeWriter()
+    svc = service(neu, loaded=alt, supervisor=FakeSupervisor(neu), writer=writer)
+    run(_mit_neustart(svc))
+    assert [op.data["entity_id"] for op in writer.ops] == [
+        "input_boolean.ems_luft_anforderung_an",
         "input_number.ems_acspeicher1_anforderung_leistung_w",
         "input_select.ems_acspeicher1_anforderung_betriebsart",
     ]

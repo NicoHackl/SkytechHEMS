@@ -163,6 +163,16 @@ configuration:
       calculation. Default:
       sensor.verfugbare_leistung_fur_uberschussverbraucher (Home Assistant
       slugifies umlauts: ü→u, ö→o, ä→a, ß→ss).
+  battery_residual_power_entity:
+    name: House power balance for AC batteries
+    description: >-
+      HA sensor entity used for discharge planning of all AC batteries.
+      Negative means grid import or shortfall; positive means export. The value
+      must combine grid power and the power of the self-regulating E3DC battery.
+      It is used only for discharging; charging continues to use the surplus
+      sensor. This field is required when an AC battery is configured. If the
+      sensor reports unknown, unavailable or a non-numeric value, all AC
+      batteries safely enter standby.
   speicher_in_residual_enthalten:
     name: Battery power included in surplus sensor
     description: >-

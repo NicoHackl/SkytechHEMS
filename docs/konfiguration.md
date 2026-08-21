@@ -63,6 +63,60 @@ werden abgeschaltet. Der Lockout prüft bewusst den **Rohwert** — er ist eine
 Sensor-Plausibilitätsprüfung, keine Regelgröße, und eine Bereinigung würde einen defekten Sensor
 kaschieren.
 
+### Hausleistungsbilanz für AC-Speicher
+
+Sobald mindestens ein AC-Speicher (`class: battery`) konfiguriert ist, ist
+`battery_residual_power_entity` ein Pflichtfeld. Dieser zweite Sensor steuert ausschließlich die
+**Entladung** der AC-Speicher. Das Laden und die Verteilung an alle Verbraucher verwenden weiterhin
+`residual_power_entity`.
+
+Sein Vorzeichenvertrag ist:
+
+- **negativ:** Netzbezug beziehungsweise Unterdeckung;
+- **positiv:** Netzeinspeisung.
+
+In dieser Anlage enthält die Bilanz die Leistung am Netzübergabepunkt und die Leistung der
+selbstregelnden E3DC-Batterie. Für die verwendeten E3DC-Entitäten lautet die Template-Formel:
+
+```text
+hausleistungsbilanz_w = −e3dc_leistung_netz
+                        + e3dc_leistung_batterie_laden
+                        − e3dc_leistung_batterie_entladen
+```
+
+Dabei liefert `sensor.e3dc_leistung_netz` positiv den Netzbezug. Die vollständige, mit
+`availability` abgesicherte Vorlage steht in
+[`erweiterungen/zusatz_sensor_für_speicher_null_einspeisung/ueberschusssensor_von_ha.yaml`](../erweiterungen/zusatz_sensor_für_speicher_null_einspeisung/ueberschusssensor_von_ha.yaml).
+
+| Situation bei PV `0 W` | Hausleistungsbilanz | HEMS-Entladeziel vor Abschlag |
+|---|---:|---:|
+| Hauslast `700 W`, E3DC entlädt `700 W`, AC-Speicher steht | `−700 W` | `700 W` |
+| Hauslast `700 W`, AC-Speicher entlädt bereits `700 W` | `0 W` | `700 W` |
+| Hauslast `700 W`, AC-Speicher lädt bereits `700 W` | `−1400 W` | `700 W` |
+
+Das HEMS rechnet die eigene AC-Entladung heraus und die gemessenen HEMS-Lasten zurück:
+
+```text
+battery_residual_bereinigt_w = battery_residual_w − Σ netz_support_w
+entlade_basis_w               = battery_residual_bereinigt_w + Σ gemessene_last_w
+hausdefizit_w                 = max(−entlade_basis_w, 0)
+```
+
+Danach zieht es `input_number.ems_ac_speicher_entlade_abschlag_w` **einmal systemweit** vom
+gesamten Entladeziel ab und verteilt den Rest nach `entlade_prioritat`. Der Abschlag ist kein Wert
+pro Speicher.
+
+Der E3DC ist absichtlich kein HEMS-Gerät. Erkennt das HEMS bei einer E3DC-Entladung einen
+negativen Bilanzwert, fordert es den AC-Speicher an; der E3DC regelt anschließend selbst zurück.
+Die Betriebsannahme dieser Anlage ist eine E3DC-Reaktion in unter zwei Sekunden bei einem
+HEMS-Zyklus von drei Sekunden. Reagiert die Anlage langsamer oder oszilliert sie, müssen
+`hoch_regelzeit_s` und die Schrittbegrenzung entsprechend größer gewählt werden.
+
+Ein ausgefallener Bilanzsensor löst **keinen** Hard-Lockout der gesamten Anlage aus. Stattdessen
+schreibt das HEMS für alle AC-Speicher aktiv `0 W` und `standby`; die Überschussverbraucher laufen
+weiter über den primären Überschuss-Sensor. `speicher_in_residual_enthalten` betrifft nur diesen
+primären Sensor und hat auf die Hausleistungsbilanz keine Wirkung.
+
 ### `available_modes`
 
 Legt fest, welche der drei normalen Regelmodi (`manuell`, `nur_heizen`, `nur_laden`) in dieser

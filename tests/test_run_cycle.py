@@ -371,6 +371,116 @@ def _battery(name, *, prefix=None, soc=50, lade_ist=0, entlade_ist=0, sollwert=0
     }
 
 
+@pytest.mark.parametrize(
+    ("hausbilanz", "lade_ist", "entlade_ist", "sollwert", "bereinigt"),
+    [
+        # PV 0 W, Hauslast 700 W, E3DC entlädt 700 W, AC-Speicher steht.
+        (-700, 0, 0, 0, -700),
+        # PV 0 W, Hauslast 700 W, AC-Speicher liefert bereits 700 W.
+        (0, 0, 700, -700, -700),
+        # PV 0 W, Hauslast 700 W, AC-Speicher lädt bereits mit 700 W.
+        (-1400, 700, 0, 700, -1400),
+    ],
+)
+def test_hausleistungsbilanz_bildet_die_drei_e3dc_beispiele_ab(
+        hausbilanz, lade_ist, entlade_ist, sollwert, bereinigt):
+    """Die separate Bilanz steuert nur die AC-Entladung, nicht den PV-Pool."""
+    ctrl = EMSController(
+        [_battery_cfg("speicher")],
+        residual_power_entity="sensor.ueberschuss",
+        battery_residual_power_entity="sensor.hausleistungsbilanz",
+    )
+    states = {
+        **_global(),
+        **_battery("speicher", lade_ist=lade_ist, entlade_ist=entlade_ist,
+                   sollwert=sollwert),
+        "sensor.ueberschuss": 0,
+        "sensor.hausleistungsbilanz": hausbilanz,
+        "input_number.ems_ac_speicher_entlade_abschlag_w": 0,
+    }
+    res = ctrl.run_cycle(make_states(states))
+    status = res["status"]
+    speicher = _dev(res, "speicher")
+
+    assert status["battery_residual_sensor_valid"] is True
+    assert status["battery_residual_w"] == pytest.approx(hausbilanz)
+    assert status["battery_residual_bereinigt_w"] == pytest.approx(bereinigt)
+    assert status["entlade_basis_w"] == pytest.approx(-700)
+    assert status["hausdefizit_w"] == pytest.approx(700)
+    assert speicher["netto_w"] == pytest.approx(-700)
+
+
+def test_hausleistungsbilanz_beeinflusst_nicht_den_ueberschuss_pool():
+    """Laden und Verbraucher-Verteilung bleiben am separaten Überschuss-Sensor."""
+    ctrl = EMSController(
+        [_battery_cfg("speicher")],
+        residual_power_entity="sensor.ueberschuss",
+        battery_residual_power_entity="sensor.hausleistungsbilanz",
+    )
+    states = {
+        **_global(),
+        **_battery("speicher", betriebsart="nur_entladen"),
+        "sensor.ueberschuss": 2400,
+        "sensor.hausleistungsbilanz": -700,
+        "input_number.ems_ac_speicher_entlade_abschlag_w": 0,
+    }
+    status = ctrl.run_cycle(make_states(states))["status"]
+    assert status["pool_w"] == pytest.approx(2400)
+    assert status["hausdefizit_w"] == pytest.approx(700)
+
+
+def test_ungueltige_hausleistungsbilanz_schickt_ac_speicher_in_standby():
+    """Ein defekter Bilanzsensor sperrt nur den Speicher; Verbraucher laufen weiter."""
+    cfg = [_battery_cfg("speicher"), _heizstab_cfg()]
+    ctrl = EMSController(
+        cfg,
+        residual_power_entity="sensor.ueberschuss",
+        battery_residual_power_entity="sensor.hausleistungsbilanz",
+    )
+    states = {
+        **_global(),
+        **_battery("speicher", sollwert=-700, anforderung_betriebsart="entladen"),
+        **_controllable_w("heizstab", min_w=500, max_w=3000),
+        "sensor.ueberschuss": 3000,
+        "sensor.hausleistungsbilanz": "unavailable",
+        "sensor.heizstab_ist": 0,
+    }
+    res = ctrl.run_cycle(make_states(states))
+    speicher = _dev(res, "speicher")
+
+    assert res["status"]["battery_residual_sensor_valid"] is False
+    assert speicher["battery_residual_sensor_valid"] is False
+    assert speicher["betriebsart_effektiv"] == "standby"
+    assert _op_for(res["write_ops"],
+                   "input_number.ems_speicher_anforderung_leistung_w")[2]["value"] == 0.0
+    assert _op_for(res["write_ops"],
+                   "input_select.ems_speicher_anforderung_betriebsart")[2]["option"] == "standby"
+    assert _op_for(res["write_ops"],
+                   "input_number.ems_heizstab_anforderung_leistung_w")[2]["value"] == pytest.approx(3000)
+
+
+def test_entlade_abschlag_wirkt_auch_auf_die_hausleistungsbilanz_nur_einmal():
+    """Der globale Abschlag bleibt eine Systemgröße, auch mit separatem Sensor."""
+    cfg = [_battery_cfg("sp1", entlade_limit=1000), _battery_cfg("sp2")]
+    ctrl = EMSController(
+        cfg,
+        residual_power_entity="sensor.ueberschuss",
+        battery_residual_power_entity="sensor.hausleistungsbilanz",
+    )
+    states = {
+        **_global(),
+        **_battery("sp1", entlade_prio=10),
+        **_battery("sp2", entlade_prio=20),
+        "sensor.ueberschuss": 0,
+        "sensor.hausleistungsbilanz": -2000,
+        "input_number.ems_ac_speicher_entlade_abschlag_w": 20,
+    }
+    res = ctrl.run_cycle(make_states(states))
+    v1 = _op_for(res["write_ops"], "input_number.ems_sp1_anforderung_leistung_w")[2]["value"]
+    v2 = _op_for(res["write_ops"], "input_number.ems_sp2_anforderung_leistung_w")[2]["value"]
+    assert v1 + v2 == pytest.approx(-1980)
+
+
 def test_pool_ohne_speicher_unveraendert():
     """Regression: ohne konfigurierten Speicher ist die Erweiterung eine
     Identitätsoperation."""

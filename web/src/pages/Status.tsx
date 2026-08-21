@@ -116,6 +116,9 @@ export function Status() {
               {!cycle.residual_sensor_valid && !cycle.hard_lockout
                 ? <span className="pill warn">Überschuss-Sensor liefert keinen Wert</span>
                 : null}
+              {batteries.length && !cycle.battery_residual_sensor_valid
+                ? <span className="pill err">Hausleistungsbilanz ungültig – Speicher im Standby</span>
+                : null}
             </div>
 
             <div className="tiles">
@@ -156,6 +159,18 @@ export function Status() {
                     <h3>Speicher netto</h3>
                     <div className={speicherNettoW < 0 ? 'num ok' : 'num'}>{fmtW(speicherNettoW)}</div>
                     <p>{speicherNettoW < 0 ? 'Speicher liefert' : speicherNettoW > 0 ? 'Speicher lädt' : 'Standby'}</p>
+                  </div>
+                  <div className="tile static">
+                    <div className="tile-icon"><Icon name="battery" /></div>
+                    <h3>Hausleistungsbilanz</h3>
+                    <div className={cycle.battery_residual_w < 0 ? 'num warn' : 'num ok'}>
+                      {fmtW(cycle.battery_residual_w)}
+                    </div>
+                    <p>
+                      {cycle.battery_residual_sensor_valid
+                        ? `Für Entladung · bereinigt ${fmtW(cycle.battery_residual_bereinigt_w)}`
+                        : 'Kein gültiger Sensorwert'}
+                    </p>
                   </div>
                   <div className="tile static">
                     <div className="tile-icon"><Icon name="battery" /></div>
@@ -374,6 +389,7 @@ function remainingRow(label: string, remaining: number, doneLabel = 'erfüllt') 
 const BLOCK_LABELS: Record<string, string> = {
   nicht_freigegeben: 'keine Freigabe',
   sensor_ungueltig: 'Sensor liefert nichts',
+  hausleistungsbilanz_sensor_ungueltig: 'Hausleistungsbilanz liefert nichts',
   betriebsart: 'Betriebsart',
   laden_gesperrt: 'Laden gesperrt',
   entladen_gesperrt: 'Entladen gesperrt',
@@ -406,6 +422,7 @@ function limitText(value: number, gueltig: boolean): string {
 
 function BatteryCard({ device, elapsed }: { device: BatteryDevice; elapsed: number }) {
   const state: CardState = !device.eligible || !device.runtime_active || !device.sensoren_gueltig
+    || !device.battery_residual_sensor_valid
     ? 'off'
     : device.new_lade_w > 0
       ? 'charge'
@@ -443,6 +460,9 @@ function BatteryCard({ device, elapsed }: { device: BatteryDevice; elapsed: numb
       <RuntimeRow device={device} />
       {!device.sensoren_gueltig ? (
         <KeyValue label="Messwerte" value="unvollständig – aus der Regelung" tone="err" />
+      ) : null}
+      {!device.battery_residual_sensor_valid ? (
+        <KeyValue label="Hausleistungsbilanz" value="ungültig – Standby" tone="err" />
       ) : null}
       <KeyValue
         label="Betriebsart"

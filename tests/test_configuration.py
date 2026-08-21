@@ -62,6 +62,8 @@ def battery(**overrides):
 def options(*devices, **globals_):
     raw = {"devices": list(devices)}
     raw.update(globals_)
+    if any(device.get("class") == "battery" for device in raw["devices"]):
+        raw.setdefault("battery_residual_power_entity", "sensor.hausleistungsbilanz")
     return raw
 
 
@@ -121,6 +123,7 @@ def test_globale_defaults_werden_gesetzt():
     assert result["interval_s"] == 30
     assert result["log_level"] == "info"
     assert result["residual_power_entity"] == cfg.DEFAULT_RESIDUAL_ENTITY
+    assert result["battery_residual_power_entity"] == ""
     assert result["speicher_in_residual_enthalten"] is True
 
 
@@ -140,6 +143,22 @@ def test_post_cycle_script_muss_ein_skript_sein():
 def test_leerer_ueberschuss_sensor_ist_ein_fehler():
     result = cfg.validate_options(options(residual_power_entity=""))
     assert "residual_power_entity" in result.field_errors
+
+
+def test_hausleistungsbilanz_ist_ohne_ac_speicher_optional():
+    result = cfg.validate_options(options(battery_residual_power_entity=""))
+    assert result.valid, result.field_errors
+
+
+def test_hausleistungsbilanz_ist_mit_ac_speicher_ein_pflichtfeld():
+    result = cfg.validate_options(options(battery(), battery_residual_power_entity=""))
+    assert "battery_residual_power_entity" in result.field_errors
+
+
+def test_hausleistungsbilanz_muss_eine_sensor_entity_sein():
+    result = cfg.validate_options(options(
+        battery(), battery_residual_power_entity="switch.hausleistungsbilanz"))
+    assert "battery_residual_power_entity" in result.field_errors
 
 
 # ---------------------------------------------------------------------------
@@ -401,6 +420,7 @@ def test_neues_geraet_erfordert_keine_deaktivierung():
 
 def test_globale_aenderung_deaktiviert_vorsorglich_alle_altgeraete():
     for key, value in (("residual_power_entity", "sensor.anders"),
+                       ("battery_residual_power_entity", "sensor.hausbilanz_anders"),
                        ("speicher_in_residual_enthalten", False),
                        ("available_modes", "manuell")):
         old = options(binary(), controllable())

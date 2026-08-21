@@ -8,9 +8,7 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
-> **Brechende Konfigurationsänderung.** Vor dem nächsten Release ist die **MAJOR**-Stelle in
-> `config.yaml` anzuheben (siehe [docs/git-workflow.md](docs/git-workflow.md)). Bestandsanlagen
-> müssen ihre Add-on-Optionen ergänzen, sonst laufen betroffene Geräte nicht mehr an.
+## [2.0.0] - 22.08.2026
 
 ### Behoben
 
@@ -42,8 +40,26 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
    regelbaren Gerät bleibt `min_umschaltzeit_s` als Phasenwechsel-Sperre erhalten.
 6. Die Add-on-Optionen lassen sich jetzt im Ingress-Panel unter **Konfiguration** pflegen —
    dieselbe Quelle, die auch die native Add-on-Seite schreibt.
+7. **AC-Speicher** brauchen zusätzlich `battery_residual_power_entity`: eine `sensor.<name>`-
+   Entity für die signierte Hausleistungsbilanz (negativ = Unterdeckung, positiv = Einspeisung).
+   Der Sensor muss Netzleistung und E3DC-Batterieleistung zusammenführen. Ohne ihn bleiben
+   AC-Speicher nach dem Neustart sicher in `standby`; Laden und übrige Verbraucher verwenden
+   weiterhin `residual_power_entity`.
 
 ### Hinzugefügt
+- **Separate Hausleistungsbilanz für AC-Speicher (D-044).** Die globale Add-on-Option
+  `battery_residual_power_entity` steuert ausschließlich die Entladeplanung: negativ =
+  Netzbezug/Unterdeckung, positiv = Einspeisung. Sie führt Netzleistung und E3DC-Batterieleistung
+  zusammen, während der bestehende Überschuss-Sensor unverändert für PV-Laden und Verbraucher
+  bleibt.
+  - Das HEMS zieht die bereits gemessene AC-Entladung aus der Bilanz heraus, rechnet gemessene
+    HEMS-Lasten zurück und zieht `input_number.ems_ac_speicher_entlade_abschlag_w` einmal für die
+    gesamte Speicherflotte ab.
+  - Ein fehlender, `unknown`, `unavailable` oder nicht numerischer Bilanzwert schickt alle
+    AC-Speicher aktiv auf `0 W` und `standby`, löst aber keinen Hard-Lockout der Verbraucher aus.
+  - Ingress-Konfiguration, native Add-on-Übersetzungen, Statusvertrag und Steuerungsschema
+    zeigen die zusätzliche Entity und ihren Zustand. Die HA-Template-Vorlage und die Tests
+    bilden die drei geprüften `700-W`-Fälle für E3DC und AC-Speicher ab.
 - **Doppelte Fallback-Auflösung mit Ursache und Quelle.** `StateProxy` kann jetzt zwischen
   `missing` (Entity-ID im HA-Schnappschuss nicht vorhanden), `unavailable` (Entität da, State
   `unknown`/`unavailable`/`null`), `invalid` (State da, aber falscher Typ, nicht endlich oder
@@ -168,18 +184,14 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
   - **Der Pool wird bereinigt, bevor er verteilt wird.** Ein Speicher ist der erste Teilnehmer,
     der den Messwert verfälscht, auf dem das HEMS aufbaut: seine Entladung erhöht den
     Überschuss-Sensor, ist aber kein Überschuss. `residual_bereinigt_w` zieht die gemessene
-    Entladung ab; erst darauf laufen Pool und Defizit. Ohne das läse das HEMS die eigene
+    Entladung ab; erst darauf laufen Pool und Verbraucher-Defizit. Ohne das läse das HEMS die eigene
     Entladung als Überschuss, schaltete Verbraucher zu — und der Speicher wäre in einem Zyklus
     leer.
-  - **Die weggeworfene Hälfte des Pools ist der Entladebedarf.** Bisher klemmte
-    `max(residual + Σ current_w, 0)` alles Negative weg. Diese Hälfte heißt jetzt
-    `hausdefizit_w` und ist das Entladeziel. Die Überschussverbraucher sind per Konstruktion
-    draußen, weil ihre Leistung zurückaddiert wird — es braucht dafür keine Sonderregel.
-  - **Zwei Summen statt einer.** `current_w` filtert den Force-Modus heraus, `gemessene_last_w`
-    filtert nichts. Ein von Hand eingeschalteter Heizstab bleibt damit Überschussverbraucher und
-    wird vom Speicher nicht gedeckt. Weil je Gerät `gemessene_last_w ≥ current_w` gilt,
-    schließen Pool und Hausdefizit einander **strukturell** aus: „nie gleichzeitig laden und
-    entladen" ist eine Eigenschaft der Formeln, keine nachträgliche Prüfung.
+  - **Das Hausdefizit stammt aus der separaten Bilanz.** `gemessene_last_w` rechnet alle
+    HEMS-Lasten zurück; ein von Hand eingeschalteter Heizstab bleibt damit Überschussverbraucher
+    und wird vom Speicher nicht gedeckt. Pool und Hausdefizit können diagnostisch gleichzeitig
+    positiv sein; ein einzelner signierter Sollwert verhindert trotzdem gleichzeitiges Laden und
+    Entladen.
   - **Getrennte Lade- und Entladepriorität.** `prioritat` gilt fürs Laden,
     `entlade_prioritat` fürs Entladen. „Lade mich zuletzt, entlade mich zuerst" ist damit
     konfigurierbar — mit einer Zahl wäre es nicht ausdrückbar.
@@ -204,8 +216,8 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
   - **Ohne konfigurierten Speicher bleibt das Verhalten unverändert.** `netz_support_w` ist
     dann 0, die Bereinigung eine Identitätsoperation und die Entladeplanung läuft über eine
     leere Liste. Abgesichert durch `test_pool_ohne_speicher_unveraendert` und die Property P7.
-  - Neue Add-on-Option `speicher_in_residual_enthalten` (Default `an`) und acht optionale
-    Gerätefelder. Bestehende Konfigurationen bleiben gültig.
+  - Neue Add-on-Optionen `speicher_in_residual_enthalten` (Default `an`) und
+    `battery_residual_power_entity`; die zweite ist bei AC-Speichern ein Pflichtfeld.
 - **Versionierter Gerätevertrag für den Energy Pilot (D-039, 1.0.25 → 1.1.0).**
   `/api/device_controls_schema` bleibt in seiner bisherigen Listen-/Gruppenform kompatibel und
   ergänzt Geräteklasse, Entitätspräfix, Einheit, erlaubte Modi, Überschuss-Regelprinzip,

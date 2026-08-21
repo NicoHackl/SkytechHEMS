@@ -22,7 +22,7 @@ from configuration import (
 )
 
 from .ops import WriteOp, WriteResult
-from .state import StateProxy, safe_float
+from .state import STATE_VALID, StateProxy, safe_float
 from .devices import Device, ControllableDevice, BinaryDevice, BatteryDevice
 
 log = logging.getLogger(__name__)
@@ -143,6 +143,7 @@ class EMSController:
 
     def __init__(self, device_configs: List[dict],
                  residual_power_entity: Optional[str] = None,
+                 battery_residual_power_entity: Optional[str] = None,
                  speicher_in_residual_enthalten: bool = True,
                  available_modes: Optional[object] = None):
         # Die globalen Felder prüft der Aufrufer; hier interessiert nur, welche
@@ -152,9 +153,20 @@ class EMSController:
             else parse_modes(available_modes if isinstance(available_modes, str)
                              else ",".join(available_modes))
         )
+        self._residual_entity = (residual_power_entity or "").strip() or DEFAULT_RESIDUAL_ENTITY
+        # `None` ist nur die abwärtskompatible Python-API: direkte Konsumenten
+        # des Controllers behalten damit den bisherigen einen Sensor. Die
+        # Add-on-Konfiguration übergibt immer einen String; ein leerer String
+        # sperrt AC-Speicher sicher, statt auf den Überschuss-Sensor zu fallen.
+        self._battery_residual_entity = (
+            self._residual_entity if battery_residual_power_entity is None
+            else battery_residual_power_entity.strip()
+        )
         validated = validate_options({
             "devices": device_configs,
             "available_modes": serialize_modes(self._available_modes),
+            "residual_power_entity": self._residual_entity,
+            "battery_residual_power_entity": self._battery_residual_entity,
         })
         self._device_configs: List[Dict] = validated.devices
         self._devices: List[Device] = _build_devices(validated.devices)
@@ -171,14 +183,16 @@ class EMSController:
         # Zyklus und gilt genau einen Zyklus: das Gerät fährt dann seinen
         # sicheren Zustand. Klappt das, ist es im Zyklus darauf wieder aktiv.
         self._write_failures: Dict[str, str] = {}
-        self._residual_entity = (residual_power_entity or "").strip() or DEFAULT_RESIDUAL_ENTITY
         # Ist die Speicherleistung im Überschuss-Sensor enthalten (Messpunkt an
         # der Netzübergabe, Normalfall bei AC-Kopplung), muss sie herausgerechnet
         # werden – sonst liest das EMS die eigene Entladung als PV-Überschuss.
         self._speicher_in_residual = bool(speicher_in_residual_enthalten)
+        self._last_battery_residual_problem: Optional[str] = None
         log.info("EMSController bereit – %d Geräte registriert, Überschuss-Sensor='%s', "
-                 "Speicher im Überschuss-Sensor=%s.",
-                 len(self._devices), self._residual_entity, self._speicher_in_residual)
+                 "Hausleistungsbilanz='%s', Speicher im Überschuss-Sensor=%s.",
+                 len(self._devices), self._residual_entity,
+                 self._battery_residual_entity or "nicht konfiguriert",
+                 self._speicher_in_residual)
 
     def report_write_results(self, results: List[WriteResult]) -> None:
         """Ordnet fehlgeschlagene Schreiboperationen ihrem Gerät zu (behebt B-2).
@@ -215,6 +229,11 @@ class EMSController:
     def residual_power_entity(self) -> str:
         """Öffentliche, aufgelöste Entität des Überschusssensors für den API-Vertrag."""
         return self._residual_entity
+
+    @property
+    def battery_residual_power_entity(self) -> str:
+        """Entität der Hausleistungsbilanz für die AC-Speicher-Entladung."""
+        return self._battery_residual_entity
 
     # ------------------------------------------------------------------
     # Öffentlicher Einstiegspunkt
@@ -268,6 +287,17 @@ class EMSController:
             log.warning("EMS LOCKOUT: residual=%.0fW <= %.0fW",
                         residual_w, HARD_LOCKOUT_THRESHOLD_W)
 
+        battery_residual = (
+            st.resolve_number(self._battery_residual_entity)
+            if self._battery_residual_entity else None
+        )
+        battery_residual_sensor_valid = (
+            battery_residual is not None and battery_residual.state == STATE_VALID
+        )
+        battery_residual_w = (
+            float(battery_residual.value) if battery_residual_sensor_valid else 0.0
+        )
+
         # ── 2. Alle Geräte aus HA aktualisieren ─────────────────────────
         for device in self._devices:
             device.begin_cycle(now_ts)
@@ -283,6 +313,19 @@ class EMSController:
             device.check_runtime_health(st, self._write_failures.get(device.id, ""))
             if not device.runtime_active:
                 device.eligible = False
+
+        batteries = [d for d in self._devices if isinstance(d, BatteryDevice)]
+        for battery in batteries:
+            battery.set_battery_residual_sensor_valid(battery_residual_sensor_valid)
+
+        if batteries and not battery_residual_sensor_valid:
+            problem = self._battery_residual_entity or "nicht konfiguriert"
+            if problem != self._last_battery_residual_problem:
+                log.error("EMS Speicher-Standby: Hausleistungsbilanz '%s' liefert keinen "
+                          "brauchbaren Wert.", problem)
+            self._last_battery_residual_problem = problem
+        else:
+            self._last_battery_residual_problem = None
 
         # ── 3. Netz-Bereinigung ─────────────────────────────────────────
         # Ein Speicher ist kein Verbraucher mit Vorzeichen: seine Entladung
@@ -302,8 +345,26 @@ class EMSController:
         hems_last_w          = sum(d.current_w        for d in self._devices)
         hems_last_gemessen_w = sum(d.gemessene_last_w for d in self._devices)
 
-        pool_roh_w      = residual_bereinigt_w + hems_last_w
-        entlade_basis_w = residual_bereinigt_w + hems_last_gemessen_w
+        pool_roh_w = residual_bereinigt_w + hems_last_w
+
+        # Die Entladeplanung des AC-Speichers nutzt bewusst eine eigene,
+        # signierte Hausleistungsbilanz. Sie rechnet Netz und E3DC-Batterie
+        # zusammen, während der Überschuss-Sensor konservativ für Verbraucher
+        # und Laden bleibt. Die gemessene AC-Entladung muss immer heraus: Bei
+        # 0 W Bilanz hält der Speicher sonst seinen bereits nötigen Sollwert
+        # nicht, sondern würde fälschlich auf 0 W zurückfallen.
+        if batteries and battery_residual_sensor_valid:
+            battery_residual_bereinigt_w = battery_residual_w - netz_support_w
+            entlade_basis_w = (
+                battery_residual_bereinigt_w + hems_last_gemessen_w
+            )
+        elif batteries:
+            battery_residual_bereinigt_w = 0.0
+            entlade_basis_w = 0.0
+        else:
+            # Ohne Speicher bleibt der bisherige Statusvertrag unverändert.
+            battery_residual_bereinigt_w = 0.0
+            entlade_basis_w = residual_bereinigt_w + hems_last_gemessen_w
 
         # Bewusst nicht max(x, 0.0): das liefert bei x == -0.0 ein negatives Null
         # zurueck, und die Oberflaeche zeigte dann "-0 W".
@@ -311,7 +372,11 @@ class EMSController:
             pool_w = hausdefizit_w = 0.0
         else:
             pool_w        = pool_roh_w if pool_roh_w > 0 else 0.0
-            hausdefizit_w = -entlade_basis_w if entlade_basis_w < 0 else 0.0
+            hausdefizit_w = (
+                -entlade_basis_w
+                if (not batteries or battery_residual_sensor_valid) and entlade_basis_w < 0
+                else 0.0
+            )
 
         # ── 5. Defizit ──────────────────────────────────────────────────
         current_deficit_w    = (-residual_bereinigt_w
@@ -375,7 +440,6 @@ class EMSController:
         # ── 10. Entladeplanung ──────────────────────────────────────────
         # MUSS nach der Verbraucher-Allokation und vor calculate_ramp laufen:
         # der Speicher löst dort seine Richtung auf (D-B07).
-        batteries = [d for d in self._devices if isinstance(d, BatteryDevice)]
         entlade_abschlag_w = safe_float(st.get(HA_AC_SPEICHER_ENTLADE_ABSCHLAG_W))
         self._allocate_discharge(batteries, hausdefizit_w, entlade_abschlag_w)
 
@@ -401,6 +465,9 @@ class EMSController:
             "residual_sensor_valid": residual_sensor_valid,
             "residual_w":            residual_w,
             "residual_bereinigt_w":  residual_bereinigt_w,
+            "battery_residual_sensor_valid": battery_residual_sensor_valid,
+            "battery_residual_w":    battery_residual_w,
+            "battery_residual_bereinigt_w": battery_residual_bereinigt_w,
             "netz_support_w":        netz_support_w,
             "hems_last_w":           hems_last_w,
             "hems_last_gemessen_w":  hems_last_gemessen_w,

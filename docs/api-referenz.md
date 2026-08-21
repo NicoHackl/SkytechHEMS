@@ -40,6 +40,9 @@ Scheduler.
     "residual_sensor_valid": true,
     "residual_w": 1840.0,
     "residual_bereinigt_w": 1840.0,
+    "battery_residual_sensor_valid": true,
+    "battery_residual_w": -700.0,
+    "battery_residual_bereinigt_w": -700.0,
     "netz_support_w": 0.0,
     "hems_last_w": 1400.0,
     "hems_last_gemessen_w": 1400.0,
@@ -70,10 +73,13 @@ zum Energy Pilot und werden nicht beiläufig umbenannt.
 konfigurierten Speicher ist `netz_support_w` immer `0`, `residual_bereinigt_w` gleich
 `residual_w`, `pool_roh_w` gleich dem alten ungeklemmten Pool und `hausdefizit_w` immer `0`.
 
-**Für Planer wichtig:** Regelentscheidungen beziehen sich auf `residual_bereinigt_w`, nicht auf
-`residual_w`. Und `hausdefizit_w` ist bewusst kleiner als `current_deficit_w`, sobald HEMS-Geräte
-laufen — die Differenz ist deren gemessene Last, die ein Speicher ausdrücklich **nicht** decken
-soll.
+**Für Planer wichtig:** Pool und Verbraucher-Defizit beziehen sich auf `residual_bereinigt_w`,
+nicht auf `residual_w`. Die AC-Entladeplanung verwendet dagegen ausschließlich die separate
+`battery_residual_w` beziehungsweise `battery_residual_bereinigt_w`. `hausdefizit_w` ist bewusst
+kleiner als `current_deficit_w`, sobald HEMS-Geräte laufen — die Differenz ist deren gemessene
+Last, die ein Speicher ausdrücklich **nicht** decken soll. Ist die Hausleistungsbilanz ungültig,
+ist `battery_residual_sensor_valid: false`, `hausdefizit_w: 0` und jeder AC-Speicher fährt auf
+`standby`; andere Verbraucher regeln weiter.
 
 `error` ist ein leerer String, solange der letzte Zyklus durchlief; andernfalls die Fehlermeldung.
 Ein einzelnes Gerät mit kaputtem Schreibziel macht den Zyklus **nicht** fehlerhaft — es steht in
@@ -98,6 +104,10 @@ Die bisherige Form bleibt additiv kompatibel. Geräte ergänzen `class`, `entity
 `output_unit`, `allowed_modes`, `control_policy`, `request_entity` sowie je nach Klasse
 `actual_power_entity` oder `switch_entity`. Jedes Item trägt weiterhin `entity` und `label` und
 zusätzlich `key`, `kind`, `unit` (falls vorhanden), `role` und `planning_relevant`.
+
+Die globale Gruppe enthält außerdem `residual_power_entity` und
+`battery_residual_power_entity`. Letztere Entity wird nur für die Entladeplanung von
+AC-Speichern verwendet.
 
 Ein Speicher (`class: "battery"`) ergänzt `soc_entity`, `charge_power_entity`,
 `discharge_power_entity`, `power_entity`, `power_sign`, `available_charge_power_w`,

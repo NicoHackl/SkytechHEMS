@@ -68,22 +68,32 @@ ist das eine Design-Entscheidung → [design-entscheidungen.md](design-entscheid
 Ein Zyklus (`EMSController.run_cycle()`), ausgelöst alle `interval_s` Sekunden:
 
 1. **Globale Eingaben** aus HA lesen (Freigabe, Regelmodus, globaler Puffer, Einschaltreserve,
-   Überschuss-Sensor, Debug-Schalter).
+   Überschuss-Sensor, Hausleistungsbilanz für AC-Speicher, Debug-Schalter).
 2. **Eligibility** je Gerät: Der globale Modus muss in `allowed_modes` liegen, `freigabe`,
    `technische_freigabe` und der Gerätemodus müssen passen.
 3. **Netz bereinigen:** `residual_bereinigt_w = residual_w − Σ netz_support_w`. Nur Speicher
    liefern hier etwas; für alle Verbraucher ist `netz_support_w` gleich `0`. Ein Speicher ist kein
    Verbraucher mit Vorzeichen — seine Entladung erhöht `residual_w`, ist aber kein Überschuss.
    Erst bereinigen, dann regeln.
-4. **Pool und Hausdefizit** aus zwei Summen: `pool_roh_w = residual_bereinigt_w + Σ current_w`
-   und `entlade_basis_w = residual_bereinigt_w + Σ gemessene_last_w`. Daraus
-   `pool_w = max(pool_roh_w, 0)` und `hausdefizit_w = max(−entlade_basis_w, 0)`; bei Lockout oder
-   EMS aus beide `0`. Die zweite Summe filtert den Force-Modus **nicht** heraus: eine von Hand
-   eingeschaltete HEMS-Last bleibt Überschussverbraucher und wird von keinem Speicher gedeckt.
-   Weil je Gerät `gemessene_last_w ≥ current_w` gilt, schließen `pool_w` und `hausdefizit_w`
-   einander strukturell aus. `current_w` zählt
+4. **Pool und Hausdefizit aus getrennten Sensoren:** Der PV-Pool bleibt
+   `pool_roh_w = residual_bereinigt_w + Σ current_w`, daraus `pool_w = max(pool_roh_w, 0)`.
+   Das Hausdefizit für `battery` stammt dagegen aus der separaten,
+   vorzeichenbehafteten Hausleistungsbilanz:
+
+   ```text
+   battery_residual_bereinigt_w = battery_residual_w − Σ netz_support_w
+   entlade_basis_w               = battery_residual_bereinigt_w + Σ gemessene_last_w
+   hausdefizit_w                 = max(−entlade_basis_w, 0)
+   ```
+
+   Die zweite Summe filtert den Force-Modus **nicht** heraus: eine von Hand eingeschaltete
+   HEMS-Last bleibt Überschussverbraucher und wird von keinem Speicher gedeckt. `current_w` zählt
    nur die **vom EMS angeforderte** Leistung — extern erzwungene Last („Force-Modus") steckt
-   bereits in `residual_w` und wird nicht doppelt gutgeschrieben.
+   bereits im Überschuss-Sensor und wird nicht doppelt gutgeschrieben. Weil Pool und Entladung
+   unterschiedliche Sensorverträge haben, können `pool_w` und `hausdefizit_w` diagnostisch
+   gleichzeitig positiv sein; die Richtungsauflösung eines Speichers schreibt trotzdem immer nur
+   einen signierten Sollwert. Liefert die Hausleistungsbilanz keinen gültigen Zahlenwert, fahren
+   alle AC-Speicher sicher auf `standby`; der Pool für übrige Verbraucher bleibt verfügbar.
 5. **Phasenauswahl** für regelbare Ampere-Geräte mit `phases="1,3"`: höchste Phasenzahl, für die
    `floor(pool_w / (phases × U)) ≥ min_technisch_a` gilt, gebremst durch `phase_switch_delay_s`.
 6. **Defizit** aus `residual_bereinigt_w` ermitteln und prüfen, ob die regelbaren Geräte es
@@ -158,9 +168,10 @@ Zusagen, auf die sich der gesamte Code verlässt. Wer eine davon bricht, bricht 
 4. **Geschrieben werden ausschließlich `input_*`-Helfer.** Reale Geräte schaltet Home Assistant.
 5. **Ein Zyklusfehler schaltet nichts.** Schlägt der Zyklus fehl, bleibt der letzte Sollwert
    stehen; die Anlage fällt nicht in einen undefinierten Zustand.
-6. **Ein Speicher lädt und entlädt nie gleichzeitig.** Das ist keine nachträgliche Prüfung,
-   sondern eine Eigenschaft der Formeln aus Schritt 4: `pool_w > 0` und `hausdefizit_w > 0`
-   schließen sich mathematisch aus.
+6. **Ein Speicher lädt und entlädt nie gleichzeitig.** Sein einzelner signierter Sollwert und die
+   Richtungsauflösung wählen stets genau `laden`, `entladen` oder `standby`. Pool und
+   Hausdefizit nutzen bewusst unterschiedliche Sensoren und können im Status gleichzeitig
+   positiv sein; das ist kein zweiter Leistungspfad.
 7. **Der sichere Zustand eines Speichers wird aktiv geschrieben.** Bei Lockout, fehlender
    Freigabe oder unbrauchbaren Messwerten schreibt das HEMS `0 W` und `standby` — es lässt den
    Sollwert nicht einfach stehen. Sonst entlädt der Speicher nach einem Add-on-Absturz bis leer.

@@ -177,6 +177,17 @@ configuration:
       zurückrechnet. Standard:
       sensor.verfugbare_leistung_fur_uberschussverbraucher (Home Assistant
       slugifiziert Umlaute: ü→u, ö→o, ä→a, ß→ss).
+  battery_residual_power_entity:
+    name: Hausleistungsbilanz für AC-Speicher
+    description: >-
+      HA-Sensor-Entität für die Entladeplanung aller AC-Speicher. Negativ
+      bedeutet Netzbezug beziehungsweise Unterdeckung, positiv Einspeisung.
+      Der Wert muss Netzleistung und die Leistung der selbstregelnden
+      E3DC-Batterie zusammenführen. Er wird ausschließlich für die Entladung
+      benutzt; das Laden bleibt am Überschuss-Sensor. Bei einem konfigurierten
+      AC-Speicher ist dieses Feld Pflicht. Liefert der Sensor unknown,
+      unavailable oder keinen Zahlenwert, gehen alle AC-Speicher sicher in
+      Standby.
   speicher_in_residual_enthalten:
     name: Speicherleistung im Überschuss-Sensor enthalten
     description: >-

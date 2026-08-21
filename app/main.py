@@ -298,6 +298,7 @@ def _build_device_controls_schema(
     *,
     residual_power_entity: str,
     interval_s: int,
+    battery_residual_power_entity: str = "",
 ) -> list[dict]:
     """Baut den abwärtskompatiblen HEMS-Vertrag für UI und Energy Pilot."""
     schema: list[dict] = [{
@@ -306,6 +307,7 @@ def _build_device_controls_schema(
         "schema_version": 2,
         "control_policy": "pv_surplus_only",
         "residual_power_entity": residual_power_entity,
+        "battery_residual_power_entity": battery_residual_power_entity,
         "interval_s": interval_s,
         "items": _GLOBAL_CTRL_ITEMS,
     }]
@@ -403,6 +405,7 @@ class HEMSApp:
         self.ems = EMSController(
             options["devices"],
             residual_power_entity=str(option("residual_power_entity")),
+            battery_residual_power_entity=str(option("battery_residual_power_entity")),
             speicher_in_residual_enthalten=bool(options["speicher_in_residual_enthalten"]),
             available_modes=options["available_modes"],
         )
@@ -494,6 +497,7 @@ class HEMSApp:
             self._device_configs,
             residual_power_entity=self.ems.residual_power_entity,
             interval_s=self.interval_s,
+            battery_residual_power_entity=self.ems.battery_residual_power_entity,
         )
         return web.json_response(schema)
 
