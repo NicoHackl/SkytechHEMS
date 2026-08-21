@@ -131,6 +131,7 @@ der Oberfläche laufen als explizite Nutzeraktion über `/api/set`.
 | Add-on-Feld | Richtung | Pflicht | Funktion |
 |---|---|---:|---|
 | `residual_power_entity` | lesen | ja, Feld hat einen Default | Überschuss-Sensor und zentrale Messgröße des Regelzyklus |
+| `battery_residual_power_entity` | lesen | bedingt: bei `class: battery` | Signierte Hausleistungsbilanz ausschließlich für die Entladeplanung der AC-Speicher |
 | `post_cycle_script` | `script.turn_on` aufrufen | nein | Nach jedem erfolgreichen Zyklus ausgeführtes HA-Skript; ein Fehler wird geloggt und macht den Regelzyklus nicht nachträglich ungültig |
 
 #### Überschuss-Sensor
@@ -144,6 +145,25 @@ Der über `residual_power_entity` konfigurierte Sensor wird global gelesen:
 Der Sensor muss die bereits laufenden HEMS-Lasten enthalten. Die genaue Messpunktsemantik steht
 in [konfiguration.md](../konfiguration.md#semantik-des-überschuss-sensors).
 
+#### Hausleistungsbilanz für AC-Speicher
+
+Der über `battery_residual_power_entity` konfigurierte Sensor ist bei mindestens einem
+`class: battery` Pflicht. Er wird **nicht** für den PV-Pool, binäre Verbraucher oder das Laden
+verwendet, sondern nur für die Entladeplanung der AC-Speicher:
+
+- negativer Wert: Netzbezug beziehungsweise Unterdeckung;
+- positiver Wert: Einspeisung;
+- er enthält die Netzleistung und die Leistung der selbstregelnden E3DC-Batterie;
+- fehlt die Entität oder ist ihr Wert `unknown`, `unavailable` oder nicht numerisch, fahren alle
+  AC-Speicher aktiv auf `0 W` und `standby`. Die übrigen Verbraucher laufen über den
+  Überschuss-Sensor weiter; es ist kein globaler Hard-Lockout.
+
+Die zugehörige HA-Template-Vorlage, die in dieser Anlage aus E3DC-Netz- und Batterieleistung die
+Bilanz bildet, liegt unter
+[`erweiterungen/zusatz_sensor_für_speicher_null_einspeisung/ueberschusssensor_von_ha.yaml`](../../erweiterungen/zusatz_sensor_für_speicher_null_einspeisung/ueberschusssensor_von_ha.yaml).
+Formeln, Vorzeichen und die Rückkopplung mit dem E3DC stehen in
+[konfiguration.md](../konfiguration.md#hausleistungsbilanz-für-ac-speicher).
+
 ## Globale Add-on-Optionen
 
 | Feld | Pflicht im Schema | Laufzeit-Default | Für welches Gerät | Funktion beziehungsweise Bezug zu HA |
@@ -152,6 +172,7 @@ in [konfiguration.md](../konfiguration.md#semantik-des-überschuss-sensors).
 | `log_level` | ja | `info` | alle | Prozess-Log-Level; unabhängig von `input_boolean.ems_pyems_debug_output` |
 | `post_cycle_script` | nein | leer | alle | Optionales `script.<name>`, das nach einem erfolgreichen Regelzyklus gestartet wird |
 | `residual_power_entity` | nein | `sensor.verfugbare_leistung_fur_uberschussverbraucher` | alle | Vollständige Entity-ID des Überschuss-Sensors; dies ist eine Entity-Zuordnung, kein Ersatzwert für einen HA-State |
+| `battery_residual_power_entity` | bedingt: bei `battery` | leer | `battery` | Vollständige `sensor.<name>`-Entity der signierten Hausleistungsbilanz für die Entladeplanung; kein Ersatzwert für einen HA-State |
 | `speicher_in_residual_enthalten` | nein | `true` | `battery` | Legt fest, ob gemessene Speicherentladung vor der Pool-Berechnung vom Überschuss-Sensor abgezogen wird |
 | `available_modes` | nein | alle drei normalen Modi | alle | Kommagetrennte Teilmenge aus `manuell`, `nur_heizen` und `nur_laden`; legt fest, welche normalen Regelmodi in dieser Anlage überhaupt verwendet werden |
 | `devices` | ja | Manifest enthält Beispielgeräte; Laufzeit ohne Feld: leere Liste | alle | Liste der Geräteinstanzen und ihrer klassenspezifischen Felder |

@@ -58,10 +58,14 @@ Für Speicher zusätzlich verpflichtend:
 10. **Beide `available_*_w`-Limits begrenzen getrennt.** Ein konfigurierter Wert `0` sperrt nur
     die jeweilige Richtung bewusst; negative, fehlende oder nicht endliche Werte sind ungültig.
 11. **Nach der Rampe nie über dem konfigurierten Speicherlimit.**
+12. **Separate Hausleistungsbilanz:** Die drei E3DC/AC-Speicher-Fälle (`−700 W`, `0 W`,
+    `−1400 W`) ergeben jeweils das erwartete Entladeziel. Ein ausgefallener Bilanzsensor schreibt
+    den Speicher aktiv auf `0 W` und `standby`, ohne den Verbraucher-Pool zu sperren; der globale
+    Entlade-Abschlag wirkt weiterhin genau einmal.
 
 Für jeden Fallback zusätzlich verpflichtend:
 
-12. **Die volle Matrix je Feld:** gültiger HA-Wert, gültiger HA-Nullwert, fehlende Entität,
+13. **Die volle Matrix je Feld:** gültiger HA-Wert, gültiger HA-Nullwert, fehlende Entität,
     `unavailable`, `unknown` und nicht numerischer Wert. Wert und Diagnose werden getrennt
     geprüft — `missing` und `unavailable` liefern denselben Wert, aber verschiedene Ursachen.
 

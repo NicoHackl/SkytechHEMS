@@ -23,6 +23,12 @@ Dinge, die schon einmal Zeit gekostet haben:
 - **Semantik des Überschuss-Sensors.** Der Sensor muss den Netz-Überschuss liefern, in dem die
   EMS-Lasten noch enthalten sind. Liefert er den bereits bereinigten freien Überschuss, kommt es zu
   Doppelzählung und Aufschwingen — siehe [konfiguration.md](konfiguration.md).
+- **Hausleistungsbilanz ist ein zweiter Vertrag.** `battery_residual_power_entity` ersetzt den
+  Überschuss-Sensor nicht: negativ bedeutet Unterdeckung, positiv Einspeisung und die Bilanz
+  enthält Netz- plus E3DC-Batterieleistung. Sie steuert nur die AC-Entladung. Fehlt ihr Wert,
+  gehen die AC-Speicher auf `standby`; Verbraucher laufen über `residual_power_entity` weiter.
+  Formel und die drei `700-W`-Kontrollfälle stehen in
+  [konfiguration.md](konfiguration.md#hausleistungsbilanz-für-ac-speicher).
 - **Verwaiste EP-Vorschläge.** Wird im Energy Pilot ein Quellsensor getauscht, bleibt die alte
   `sensor.ep_*`-Entität mit eingefrorenem Wert in HA stehen. Die Oberfläche filtert doppelt
   (abgelaufen; je Feld nur der frischere) — wer diese Filter entfernt, holt die Altwerte zurück.
@@ -35,7 +41,7 @@ Dinge, die schon einmal Zeit gekostet haben:
   `ems_speicher_soc_mindestwert_1/2` und `input_boolean.ems_speicher_regelung_stufe_1_aktiv`. Der
   AC-Speicher des HEMS benutzt deshalb `acspeicher1` als Präfix, sein globaler Helfer heißt
   `input_number.ems_ac_speicher_entlade_abschlag_w`. Der E3DC ist **kein** HEMS-Gerät: er regelt
-  sich selbst und ist im Überschuss-Sensor bereits verrechnet.
+  sich selbst, ist aber bewusst in der Hausleistungsbilanz für die AC-Entladung enthalten.
 - **Der Sollwert des Speichers ist signiert.** `input_number.ems_<prefix>_anforderung_leistung_w`
   trägt „+ laden / − entladen" in einer Entität. Der HA-Helfer braucht ein **negatives Minimum** —
   steht dort `min: 0`, klemmt Home Assistant jede Entladeanforderung serverseitig auf 0 und der
@@ -75,7 +81,6 @@ Der Code ist gebaut und getestet; diese Fragen betreffen die **Inbetriebnahme am
 
 | # | Frage | Blockiert |
 |---|---|---|
-| F-12 | Aus welcher Quelle kommt `residual_power_entity`, und wie weit läuft er dem Batterie-Leistungssensor nach? | Dimensionierung von `hoch_regelzeit_s` und `max_anderung_pro_schritt_w` |
 | F-13 | Welches Gerät wird der AC-Speicher? Liefert `soc_entity`, die Ist-Leistungssensoren und `capacity_kwh`; welche festen Lade-/Entladegrenzen werden als `available_*_w` eingetragen? | Inbetriebnahme, nicht den Code |
 | F-14 | Bringt das Gerät eine eigene Nulleinspeisung mit, und lässt sie sich abschalten? Nicht abschaltbar heißt: HEMS und Gerät regeln gegeneinander | Inbetriebnahme |
 

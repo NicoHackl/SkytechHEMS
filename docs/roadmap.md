@@ -56,21 +56,21 @@ Deckung des Hausverbrauchs. Entwurf v5:
 
 | Punkt | Status | Verweis |
 |---|---|---|
-| Phase 1 — Pool-Bereinigung, `hausdefizit_w`, Anzeige | fertig | D-040 |
+| Phase 1 — Pool-Bereinigung, getrennte Hausleistungsbilanz, `hausdefizit_w`, Anzeige | fertig | D-040, D-044 |
 | Phase 2 — Ladepfad mit SoC-Grenzen und konfiguriertem Leistungslimit | fertig | D-040, D-041, D-043 |
 | Phase 3 — Entladepfad, Rampe, sicherer Zustand | fertig | D-040, D-041 |
 | Phase 4 — Mehrspeicher, getrennte Lade-/Entladepriorität | fertig | D-040 |
 | Phase 5 — Energy-Pilot-Vorschlagsfelder für Speicher | offen | Entwurf, Abschnitt 13 |
 | Phase 6 — Netzladen mit dynamischen Tarifen | zurückgestellt | Entwurf, Abschnitt 11; B-4 |
-| Inbetriebnahme am realen Gerät | offen | F-12, F-13, F-14 |
+| Inbetriebnahme am realen Gerät | offen | F-13, F-14 |
 
 Der Code läuft gegen Tests und einen synthetischen HA-Zustand. **Erprobt am Gerät ist er nicht** —
 es gibt noch keinen AC-Speicher. Seit D-043 sind die physischen Grenzen die direkt konfigurierten
 Wattwerte `available_charge_power_w` und `available_discharge_power_w`. Die verbliebenen Fragen stehen in
 [bekannte-luecken.md](bekannte-luecken.md).
 
-Der vorhandene E3DC ist bewusst **kein** HEMS-Gerät: er regelt sich selbst und steckt im
-Überschuss-Sensor bereits drin (D-040).
+Der vorhandene E3DC ist bewusst **kein** HEMS-Gerät: Er regelt sich selbst; seine Leistung fließt
+aber bewusst in die separate Hausleistungsbilanz für die AC-Entladung ein (D-044).
 
 ## Zurückgestellt
 

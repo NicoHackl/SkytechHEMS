@@ -159,6 +159,7 @@ auf `standby`; die übrigen laufen weiter. Ohne Ist-Leistung wäre die Pool-Bere
 | Entität | Funktion |
 |---|---|
 | Überschuss-Sensor (`residual_power_entity`) | **Pflicht.** PV-Überschuss in Watt; `unavailable`/`unknown` oder ≤ −50 000 W löst Hard-Lockout aus. Semantik: [konfiguration.md](konfiguration.md) |
+| Hausleistungsbilanz (`battery_residual_power_entity`) | **Pflicht bei `class: battery`.** Signiert: negativ = Unterdeckung, positiv = Einspeisung. Steuert ausschließlich die AC-Speicher-Entladung; ein ungültiger Wert schickt diese Speicher auf `standby`, ohne den übrigen Zyklus zu sperren. |
 | `actual_power_entity` je regelbarem Gerät | Ist-Leistung in Watt |
 | `switch_entity` je binärem Gerät | Tatsächlicher Schaltzustand |
 | `voltage_l1/l2/l3_entity` | Phasenspannungen in Volt, Fallback je 230 V |
@@ -182,13 +183,16 @@ Global:
 | `available_modes` | Liste | Die aktivierten normalen Regelmodi |
 | `residual_sensor_valid` | bool | Sensor lieferte einen brauchbaren Wert |
 | `residual_w`, `pool_w`, `current_deficit_w`, `binary_total_w` | float | Leistungen in Watt |
-| `residual_bereinigt_w` | float | `residual_w` abzüglich der gemessenen Speicherentladung. **Alle Regelentscheidungen laufen darüber**, nicht über `residual_w` |
+| `residual_bereinigt_w` | float | `residual_w` abzüglich der gemessenen Speicherentladung. Grundlage für Pool und Verbraucher-Defizit, nicht für die AC-Entladeplanung |
+| `battery_residual_sensor_valid` | bool | Separate Hausleistungsbilanz lieferte einen brauchbaren Wert; ohne `battery` nur Diagnose und nicht regelrelevant |
+| `battery_residual_w` | float | Rohe Hausleistungsbilanz: negativ = Unterdeckung, positiv = Einspeisung |
+| `battery_residual_bereinigt_w` | float | `battery_residual_w` abzüglich der gemessenen AC-Entladung (`netz_support_w`) |
 | `netz_support_w` | float | Σ gemessene Entladeleistung aller Speicher |
 | `hems_last_w` | float | Σ `current_w` — nur vom HEMS angeforderte Last, Force-Modus gefiltert |
 | `hems_last_gemessen_w` | float | Σ `gemessene_last_w` — roher Messwert, Force-Modus enthalten |
-| `pool_roh_w` | float | Ungeklemmter Pool. Positiv = Überschuss, negativ = Entladebedarf |
-| `entlade_basis_w` | float | Basis der Entladeplanung; weicht bei Fremdsteuerung von `pool_roh_w` ab |
-| `hausdefizit_w` | float | Hausverbrauchs-Fehlbetrag, den die Speicher decken sollen. **Enthält keine HEMS-Gerätelast**, auch keine fremdgesteuerte |
+| `pool_roh_w` | float | Ungeklemmter Pool aus dem Überschuss-Sensor. Positiv = verteilter Überschuss, negativ = kein verteilter Überschuss |
+| `entlade_basis_w` | float | Basis der Entladeplanung aus der separaten Hausleistungsbilanz; enthält die gemessenen HEMS-Lasten zurückgerechnet |
+| `hausdefizit_w` | float | Hausverbrauchs-Fehlbetrag, den die Speicher decken sollen. **Enthält keine HEMS-Gerätelast**, auch keine fremdgesteuerte; bei ungültiger Hausleistungsbilanz `0` |
 | `binary_immediate_off` | bool | Notabschaltung binärer Geräte |
 | `timestamp` | string | **Maschinenformat** `JJJJ-MM-TT hh:mm:ss`, nicht zur Anzeige gedacht |
 | `devices` | Liste | siehe unten |
@@ -220,7 +224,7 @@ Binäres Gerät: `type`, `id`, `label`, `priority`, `eligible`, `source`, `power
 `min_runtime_s`, `min_offtime_s`, `off_delay_remaining_s`.
 
 Speicher (`type: "battery"`): `id`, `label`, `priority` (Laden), `entlade_prioritat`, `eligible`,
-`source`, `ep_proposal_status`, `sensoren_gueltig`, `soc_prozent`, `capacity_kwh`, `betriebsart`,
+`source`, `ep_proposal_status`, `sensoren_gueltig`, `battery_residual_sensor_valid`, `soc_prozent`, `capacity_kwh`, `betriebsart`,
 `betriebsart_effektiv`, `lade_ist_w`, `entlade_ist_w`, `lade_anforderung_w`,
 `entlade_anforderung_w`, `new_lade_w`, `new_entlade_w`, `netto_w`, `max_ladeleistung_w`,
 `max_entladeleistung_w`, `lade_limit_w`, `entlade_limit_w`, `hausdefizit_anteil_w`, `schutz_w`,
@@ -243,6 +247,9 @@ Fallstricke, die schon Fehler verursacht haben:
   kompatibel erhalten und sind für eine validierte Konfiguration immer `true`.
 - **`netto_w` ist signiert:** positiv = laden, negativ = entladen. Genauso der geschriebene
   Sollwert `anforderung_leistung_w`.
+- **Die Hausleistungsbilanz ersetzt den Überschuss-Sensor nicht.** `battery_residual_w` ist nur
+  die Entladegröße der AC-Speicher. `pool_w` und `current_deficit_w` bleiben am
+  `residual_power_entity`; eine ungültige Bilanz sperrt daher nur die Speicher.
 - **Drei Sperrgrund-Felder statt einem.** `lade_blockiert_grund` und `entlade_blockiert_grund`
   beantworten je Pfad „warum passiert gerade nichts", `blockiert_grund` trägt nur die Gründe der
   Richtungsauflösung (`umschaltsperre`, `totzone`). Ein Speicher in `nur_entladen` hat einen

@@ -76,6 +76,8 @@ export interface BatteryDevice extends DeviceBase {
   entlade_prioritat: number
   /** false heißt: SoC- oder Leistungssensor liefert nichts — Speicher fällt aus der Regelung. */
   sensoren_gueltig: boolean
+  /** false heißt: Die globale Hausleistungsbilanz liefert keinen brauchbaren Wert. */
+  battery_residual_sensor_valid: boolean
   soc_prozent: number
   /** 0 heißt „nicht konfiguriert"; dann fehlt auch energie_kwh. */
   capacity_kwh: number
@@ -134,6 +136,12 @@ export interface CycleStatus {
   residual_w: number
   /** residual_w abzüglich der gemessenen Speicherentladung (netz_support_w). */
   residual_bereinigt_w: number
+  /** Separate Hausleistungsbilanz für die Entladeplanung der AC-Speicher. */
+  battery_residual_sensor_valid: boolean
+  /** Negativ = Netzbezug/Unterdeckung, positiv = Einspeisung. */
+  battery_residual_w: number
+  /** battery_residual_w abzüglich der gemessenen AC-Entladung. */
+  battery_residual_bereinigt_w: number
   /** Summe der gemessenen Entladeleistung aller Speicher. */
   netz_support_w: number
   /** Σ current_w — nur vom HEMS angeforderte Last, Force-Modus gefiltert. */
@@ -283,6 +291,7 @@ export interface ConfigOptions {
   log_level: string
   post_cycle_script: string
   residual_power_entity: string
+  battery_residual_power_entity: string
   speicher_in_residual_enthalten: boolean
   /** Kommagetrennte Teilmenge der normalen Regelmodi. */
   available_modes: string

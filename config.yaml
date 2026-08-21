@@ -36,9 +36,11 @@ description: >-
   capacity_kwh (nur Anzeige) sowie soc_max_hysteresis_percent und
   direction_switch_delay_s.
 
-  Global: residual_power_entity legt den Überschuss-Sensor fest,
-  speicher_in_residual_enthalten sagt, ob die Speicherleistung darin steckt,
-  available_modes schaltet die normalen Regelmodi frei.
+  Global: residual_power_entity legt den Überschuss-Sensor fest.
+  battery_residual_power_entity ist bei AC-Speichern die signierte
+  Hausleistungsbilanz für deren Entladeplanung; speicher_in_residual_enthalten
+  sagt, ob die Speicherleistung im Überschuss-Sensor steckt, available_modes
+  schaltet die normalen Regelmodi frei.
 version: "1.3.0"
 slug: "skytech_hems"
 init: false
@@ -67,6 +69,7 @@ options:
   log_level: "info"
   post_cycle_script: ""
   residual_power_entity: "sensor.verfugbare_leistung_fur_uberschussverbraucher"
+  battery_residual_power_entity: "sensor.hausleistungsbilanz_fur_ac_speicher"
   speicher_in_residual_enthalten: true
   available_modes: "manuell,nur_heizen,nur_laden"
   devices:
@@ -141,6 +144,7 @@ schema:
   log_level: list(debug|info|warning|error)
   post_cycle_script: str?
   residual_power_entity: str?
+  battery_residual_power_entity: str?
   speicher_in_residual_enthalten: bool?
   available_modes: str?
   devices:

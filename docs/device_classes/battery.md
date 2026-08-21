@@ -203,8 +203,18 @@ input_number.ems_ac_speicher_entlade_abschlag_w
 
 Der Abschlag ist eine **Systemgröße**: er wird einmal vom gesamten Hausdefizit abgezogen, bevor
 dieses nach `entlade_prioritat` auf alle entladebereiten Speicher verteilt wird — kein Wert je
-Speicher. Details und die Option `speicher_in_residual_enthalten` stehen in
-[global.md](global.md#globale-ha-helfer).
+Speicher.
+
+Zusätzlich ist die Add-on-Option `battery_residual_power_entity` für jede Instanz mit
+`class: battery` Pflicht. Sie verweist auf die signierte **Hausleistungsbilanz für AC-Speicher**:
+negativ = Netzbezug/Unterdeckung, positiv = Einspeisung. Das HEMS nutzt sie nur für die
+Entladeplanung; PV-Laden und Verbraucher-Verteilung bleiben am Überschuss-Sensor. Fehlt der
+Sensor oder liefert er keinen brauchbaren Zahlenwert, gehen alle AC-Speicher aktiv auf `0 W` und
+`standby`, ohne die übrigen Verbraucher stillzulegen. Details, Formeln und die E3DC-Vorlage stehen
+in [konfiguration.md](../konfiguration.md#hausleistungsbilanz-für-ac-speicher).
+
+Die Option `speicher_in_residual_enthalten` betrifft weiterhin nur die Pool-Berechnung aus dem
+Überschuss-Sensor; sie verändert die Hausleistungsbilanz nicht.
 
 ## Pflicht für eine funktionsfähige Instanz
 
@@ -213,7 +223,8 @@ Speicher. Details und die Option `speicher_in_residual_enthalten` stehen in
 - entweder beide Felder `charge_power_entity` und `discharge_power_entity` oder `power_entity`
 - alle [gemeinsamen HA-Helfer](global.md#gemeinsame-ha-helfer)
 - beide Anforderungshelfer: negatives Minimum beim Sollwert, drei Optionen bei der Betriebsart
-- globaler Entlade-Abschlag und korrekt geprüfte Option `speicher_in_residual_enthalten`
+- globale Hausleistungsbilanz (`battery_residual_power_entity`), Entlade-Abschlag und korrekt
+  geprüfte Option `speicher_in_residual_enthalten`
 - eine Geräteautomation sowie ein unabhängiger Watchdog, der bei ausbleibenden HEMS-Aktualisierungen
   `0 W` und `standby` setzt
 
@@ -224,6 +235,7 @@ nicht als `battery` eingetragen.
 ## Beispiel
 
 ```yaml
+battery_residual_power_entity: sensor.hausleistungsbilanz_fur_ac_speicher
 speicher_in_residual_enthalten: true
 
 devices:

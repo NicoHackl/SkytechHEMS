@@ -7,7 +7,7 @@ import {
 } from '../components/ConfigFields'
 import { KonfigurationNav } from '../components/KonfigurationNav'
 
-/* Globale Add-on-Optionen. Sechs Felder plus die Freischaltung der normalen
+/* Globale Add-on-Optionen. Sieben Felder plus die Freischaltung der normalen
    Regelmodi — mehr gibt es auf dieser Ebene nicht. */
 
 export function KonfigurationGlobal() {
@@ -32,6 +32,7 @@ export function KonfigurationGlobal() {
   const betroffeneGeraete = (mode: string) => draft.devices
     .filter((device) => device.allowed_modes.split(',').map((m) => m.trim()).includes(mode))
     .map((device) => device.label || device.name)
+  const hasBattery = draft.devices.some((device) => device.class === 'battery')
 
   /* Wird ein globaler Modus abgewählt, nennt die UI die betroffenen Geräte und
      entfernt ihn nach Bestätigung aus deren allowed_modes — sonst wäre die
@@ -95,7 +96,7 @@ export function KonfigurationGlobal() {
 
         <section className="card">
           <div className="card-head">
-            <h2>Überschuss-Sensor</h2>
+            <h2>Leistungssensoren</h2>
             <div className="spacer" />
           </div>
           <div className="card-body">
@@ -106,6 +107,14 @@ export function KonfigurationGlobal() {
               hint="Positiver Wert = Einspeisung, negativer = Netzbezug. Die bereits vom HEMS
                     geschalteten Lasten müssen darin noch enthalten sein."
               onChange={(value) => patch({ residual_power_entity: value })}
+            />
+            <EntityField
+              label="Hausleistungsbilanz für AC-Speicher" required={hasBattery}
+              value={draft.battery_residual_power_entity} entities={entities} domains={['sensor']}
+              error={fieldErrors.battery_residual_power_entity}
+              hint={'Nur für AC-Speicher: negativ = Netzbezug/Unterdeckung, positiv = Einspeisung. '
+                    + 'Sie muss Netzleistung und E3DC-Batterieleistung enthalten; sie steuert nur die Entladung.'}
+              onChange={(value) => patch({ battery_residual_power_entity: value })}
             />
             <label className="switch">
               <input

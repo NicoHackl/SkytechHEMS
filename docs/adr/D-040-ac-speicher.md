@@ -1,7 +1,7 @@
 # D-040: AC-gekoppelte Speicher als eigene Geräteklasse, mit bereinigtem Pool und getrennter Entladepriorität
 
 - **Datum:** 20.08.2026
-- **Status:** Aktiv
+- **Status:** Aktiv, Entladequelle teilweise ersetzt durch D-044
 - **Betrifft:** [`app/ems/devices.py`](../../app/ems/devices.py),
   [`app/ems/controller.py`](../../app/ems/controller.py),
   [`app/main.py`](../../app/main.py), [`config.yaml`](../../config.yaml),
@@ -10,6 +10,10 @@
 > Diese ADR fasst die Entscheidungen D-B01 bis D-B22 aus
 > [`erweiterungen/erweiterung_ac_speicher_1.md`](../../erweiterungen/erweiterung_ac_speicher_1.md)
 > zusammen. Die dortigen IDs bleiben als Referenz erhalten; nach außen gilt D-040.
+
+> **Fortschreibung:** [D-044](D-044-hausleistungsbilanz-ac-speicher.md) ersetzt die Quelle für
+> `entlade_basis_w` und `hausdefizit_w` durch eine separate Hausleistungsbilanz. Pool-Bereinigung,
+> Ladepfad, Prioritäten und der signierte Speicher-Sollwert aus dieser ADR gelten weiter.
 
 ## Kontext
 
@@ -62,23 +66,27 @@ sich selbst regelt.
    **ohne** Force-Modus-Filter). Daraus im Zyklus:
 
    ```
-   residual_bereinigt_w = residual_w − Σ netz_support_w
-   pool_roh_w           = residual_bereinigt_w + Σ current_w
-   entlade_basis_w      = residual_bereinigt_w + Σ gemessene_last_w
-   pool_w               = max(pool_roh_w, 0)
-   hausdefizit_w        = max(−entlade_basis_w, 0)
+   residual_bereinigt_w         = residual_w − Σ netz_support_w
+   pool_roh_w                   = residual_bereinigt_w + Σ current_w
+   pool_w                       = max(pool_roh_w, 0)
+
+   # Seit D-044 für AC-Speicher:
+   battery_residual_bereinigt_w = battery_residual_w − Σ netz_support_w
+   entlade_basis_w              = battery_residual_bereinigt_w + Σ gemessene_last_w
+   hausdefizit_w                = max(−entlade_basis_w, 0)
    ```
 
-   Die bisherige `max(…, 0)`-Klemme warf die negative Hälfte weg — **genau sie ist der
-   Entladebedarf.** Die Überschussverbraucher sind per Konstruktion draußen, weil ihre Leistung
-   zurückaddiert wird. Es braucht dafür keine Heuristik.
+   Die bisherige `max(…, 0)`-Klemme warf die negative Hälfte des **Pool-Sensors** weg. Bis D-044
+   war sie der Entladebedarf; seither kommt dieser aus der eigenen Hausleistungsbilanz. Die
+   Rückrechnung der Überschussverbraucher über `gemessene_last_w` bleibt erhalten, damit sie nicht
+   vom Speicher gedeckt werden.
 
 2. **Zwei Summen statt einer.** `current_w` filtert den Force-Modus heraus — richtig für den Pool,
    falsch für die Entladung: ein von Hand eingeschalteter Heizstab landete sonst im Hausverbrauch
-   und würde vom Speicher gedeckt. `gemessene_last_w` filtert nichts. Weil je Gerät
-   `gemessene_last_w ≥ current_w` gilt, folgt `entlade_basis_w ≥ pool_roh_w` und damit
-   **strukturell**, dass Pool und Hausdefizit sich ausschließen — „nie gleichzeitig laden und
-   entladen" ist keine nachträgliche Prüfung, sondern eine Eigenschaft der Formeln.
+   und würde vom Speicher gedeckt. `gemessene_last_w` filtert nichts. D-044 führt dafür einen
+   zweiten Sensorvertrag ein; Pool und Hausdefizit können deshalb diagnostisch gleichzeitig positiv
+   sein. Der einzelne signierte Sollwert und die Richtungsauflösung verhindern trotzdem, dass ein
+   Speicher gleichzeitig lädt und entlädt.
 
 3. **Getrennte Lade- und Entladepriorität.** Ein Speicher hat zwei Rollen, die nichts miteinander
    zu tun haben. „Lade mich zuletzt, entlade mich zuerst" ist eine sinnvolle Konfiguration
@@ -91,9 +99,9 @@ sich selbst regelt.
 5. **Der sichere Zustand ist immer `standby`,** und er wird **aktiv geschrieben.** „Nichts tun"
    ließe den letzten Sollwert stehen, und der Speicher entlädt bis leer weiter.
 
-6. **Der vorhandene E3DC ist kein HEMS-Gerät.** Er regelt sich selbst und ist im Überschuss-Sensor
-   bereits verrechnet. Er bekommt keine `BatteryDevice`-Instanz und wird nicht bereinigt — sonst
-   zöge man dieselbe Leistung zweimal ab.
+6. **Der vorhandene E3DC ist kein HEMS-Gerät.** Er regelt sich selbst und bekommt keine
+   `BatteryDevice`-Instanz. Seit D-044 ist seine Leistung bewusst Teil der separaten
+   Hausleistungsbilanz; er wird nie als HEMS-Speicher abgezogen oder angesteuert.
 
 Gegen Option A spricht der Skalierungseinwand allein schon zwingend. Option C wird erst
 interessant, wenn die Overrides ausufern; heute trägt die Vererbung den kompletten Ladepfad
@@ -111,10 +119,9 @@ inklusive 2-Pass-Allokation, Rampe, Deadband und Schutzleistung ohne eine Zeile 
   ein Regelfehler aus — die Statuskachel benennt es deshalb ausdrücklich. Der Verschleiß verteilt
   sich ungleich, weil strikt nach Priorität entladen wird; einziger Hebel ist
   `entlade_prioritat`. Und ohne autonome Rückfallebene kostet ein Add-on-Ausfall Netzbezug.
-- **Aufwand:** Rund 30 geänderte Zeilen im Bestandscode, der Rest additiv. Vier Formeln in
-  [`controller.py`](../../app/ems/controller.py) tragen das gesamte Risiko:
-  `residual_bereinigt_w`, `pool_roh_w`, `entlade_basis_w`, `hausdefizit_w`. Dazu rund 31 neue
-  HA-Helfer je Speicher und ein globaler.
+- **Aufwand:** Der ursprüngliche Speicherpfad ergänzte die Poolformeln und die Speicherhelfer.
+  D-044 erweitert ihn um einen zweiten globalen Sensorvertrag für `entlade_basis_w` und
+  `hausdefizit_w`.
 
 ## Rücknahmebedingung
 

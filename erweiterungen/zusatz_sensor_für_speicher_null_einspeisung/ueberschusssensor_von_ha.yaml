@@ -44,3 +44,22 @@
         {% endif %}
 
         {{([erg_max, erg_voll, erg_1, erg_2] | max)}}
+
+    # Separate Bilanz für die Entladeplanung von AC-Speichern.
+    # Negativ = Netzbezug/Unterdeckung, positiv = Einspeisung. Der E3DC-Akku
+    # wird bewusst einbezogen: Liefert er Hauslast, fordert das HEMS die
+    # AC-Speicher an und der E3DC regelt anschließend wieder zurück.
+    - name: "Hausleistungsbilanz für AC-Speicher"
+      unique_id: "hausleistungsbilanz_fur_ac_speicher"
+      unit_of_measurement: "W"
+      device_class: power
+      state_class: measurement
+      availability: >
+        {{ has_value('sensor.e3dc_leistung_netz')
+           and has_value('sensor.e3dc_leistung_batterie_laden')
+           and has_value('sensor.e3dc_leistung_batterie_entladen') }}
+      state: >
+        {% set netz = states('sensor.e3dc_leistung_netz') | float(0) %}
+        {% set batterie_laden = states('sensor.e3dc_leistung_batterie_laden') | float(0) %}
+        {% set batterie_entladen = states('sensor.e3dc_leistung_batterie_entladen') | float(0) %}
+        {{ ((netz * -1) + batterie_laden - batterie_entladen) | round(0) }}

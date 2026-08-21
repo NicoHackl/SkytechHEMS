@@ -94,6 +94,9 @@ GLOBAL_DEFAULTS: Dict[str, Any] = {
     "log_level": "info",
     "post_cycle_script": "",
     "residual_power_entity": DEFAULT_RESIDUAL_ENTITY,
+    # Nur für AC-Speicher: Die Hausleistungsbilanz ist absichtlich nicht
+    # derselbe Wert wie der konservativ geglättete Überschuss-Sensor.
+    "battery_residual_power_entity": "",
     "speicher_in_residual_enthalten": True,
 }
 
@@ -101,6 +104,7 @@ GLOBAL_DEFAULTS: Dict[str, Any] = {
 # ALLE alten Geräte sicher deaktiviert – ihre Zuteilung hing daran.
 GLOBAL_KEYS_FORCING_SHUTDOWN: Tuple[str, ...] = (
     "residual_power_entity",
+    "battery_residual_power_entity",
     "speicher_in_residual_enthalten",
     "available_modes",
 )
@@ -318,6 +322,21 @@ def _validate_global(options: Dict[str, Any], result: ValidationResult) -> None:
     elif not _ENTITY_RE.match(residual):
         result.field_errors["residual_power_entity"] = "Vollständige Entity-ID erwartet, z. B. sensor.ueberschuss."
     options["residual_power_entity"] = residual
+
+    battery_residual = _as_text(options.get("battery_residual_power_entity"))
+    has_battery = any(device.get("class") == "battery" for device in options["devices"])
+    if not battery_residual and has_battery:
+        result.field_errors["battery_residual_power_entity"] = (
+            "Bei einem AC-Speicher ist die Hausleistungsbilanz ein Pflichtfeld."
+        )
+    elif battery_residual and (
+        not battery_residual.startswith("sensor.")
+        or not _ENTITY_RE.match(battery_residual)
+    ):
+        result.field_errors["battery_residual_power_entity"] = (
+            "Vollständige Sensor-Entity-ID erwartet, z. B. sensor.hausleistungsbilanz."
+        )
+    options["battery_residual_power_entity"] = battery_residual
 
     options["speicher_in_residual_enthalten"] = bool(options.get("speicher_in_residual_enthalten"))
 

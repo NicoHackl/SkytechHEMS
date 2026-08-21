@@ -12,7 +12,10 @@ from test_run_cycle import BIN_FALLBACKS, CTRL_FALLBACKS
 
 
 def _valid(devices):
-    result = validate_options({"devices": devices})
+    options = {"devices": devices}
+    if any(device.get("class") == "battery" for device in devices):
+        options["battery_residual_power_entity"] = "sensor.hausleistungsbilanz"
+    result = validate_options(options)
     assert not result.field_errors, result.field_errors
     return result.devices
 
@@ -38,6 +41,7 @@ def _schema():
         ]),
         residual_power_entity="sensor.ueberschuss",
         interval_s=3,
+        battery_residual_power_entity="sensor.hausleistungsbilanz",
     )
 
 
@@ -49,6 +53,7 @@ def test_schema_keeps_legacy_shape_and_adds_explicit_metadata():
     assert global_group["schema_version"] == 2
     assert global_group["control_policy"] == "pv_surplus_only"
     assert global_group["residual_power_entity"] == "sensor.ueberschuss"
+    assert global_group["battery_residual_power_entity"] == "sensor.hausleistungsbilanz"
     debug = next(item for item in global_group["items"] if item["key"] == "debug_output")
     assert debug["planning_relevant"] is False
 
@@ -104,6 +109,7 @@ def test_schema_kennt_battery_zweig():
         }]),
         residual_power_entity="sensor.ueberschuss",
         interval_s=3,
+        battery_residual_power_entity="sensor.hausleistungsbilanz",
     )
     battery = schema[1]
     assert battery["class"] == "battery"
