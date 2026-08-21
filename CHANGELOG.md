@@ -8,9 +8,7 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
-> **Brechende Konfigurationsänderung.** Vor dem nächsten Release ist die **MAJOR**-Stelle in
-> `config.yaml` anzuheben (siehe [docs/git-workflow.md](docs/git-workflow.md)). Bestandsanlagen
-> müssen ihre Add-on-Optionen ergänzen, sonst laufen betroffene Geräte nicht mehr an.
+## [2.0.0] - 22.08.2026
 
 ### Behoben
 

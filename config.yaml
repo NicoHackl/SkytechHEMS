@@ -41,7 +41,7 @@ description: >-
   Hausleistungsbilanz für deren Entladeplanung; speicher_in_residual_enthalten
   sagt, ob die Speicherleistung im Überschuss-Sensor steckt, available_modes
   schaltet die normalen Regelmodi frei.
-version: "1.3.0"
+version: "2.0.0"
 slug: "skytech_hems"
 init: false
 arch:
