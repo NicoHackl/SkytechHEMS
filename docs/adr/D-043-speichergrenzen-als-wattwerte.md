@@ -42,8 +42,9 @@ Option B. Ein Speicher braucht die beiden Add-on-Felder:
 
 Beide sind endliche Zahlen ab `0 W` und verpflichtend. Ein Wert `0` sperrt nur die betreffende
 Richtung. Ein fehlender, negativer oder nicht endlicher Wert macht den Geräteeintrag ungültig; es
-gibt dafür keinen HA- oder internen Laufzeit-Fallback. Neue Formulare starten sicher mit `0 W`,
-aber der User kann jede Grenze direkt ändern.
+gibt dafür keinen HA- oder internen Laufzeit-Fallback. Neue Formulare starten mit leeren Feldern,
+damit die reale Gerätegrenze ausdrücklich eingetragen werden muss. Eine bewusst eingegebene `0`
+bleibt gültig.
 
 Die Felder `available_charge_power_entity` und `available_discharge_power_entity` werden aus
 Manifest, API, Steuerschema, UI, Regelung und aktueller Dokumentation entfernt. Die

@@ -226,8 +226,8 @@ Neue beziehungsweise verbleibende statische Felder:
 |---|---|---|
 | `power_sign` | Default `positiv_laden` | `positiv_laden` oder `positiv_entladen` für `power_entity` |
 | `capacity_kwh` | optional, Default `0` | ausschließlich Anzeige |
-| `available_charge_power_w` | Pflicht, Formularstart `0` | statische Ladegrenze in Watt; `0` sperrt Laden |
-| `available_discharge_power_w` | Pflicht, Formularstart `0` | statische Entladegrenze in Watt; `0` sperrt Entladen |
+| `available_charge_power_w` | Pflicht, Formularstart leer | statische Ladegrenze in Watt; `0` sperrt Laden |
+| `available_discharge_power_w` | Pflicht, Formularstart leer | statische Entladegrenze in Watt; `0` sperrt Entladen |
 | `soc_max_hysteresis_percent` | Pflicht mit Default `2` | ersetzt den HA-Helfer `soc_max_hysterese_prozent` |
 | `direction_switch_delay_s` | Pflicht mit Default `5` | ersetzt den HA-Helfer `min_umschaltzeit_s` des Speichers |
 

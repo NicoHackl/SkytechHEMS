@@ -201,7 +201,9 @@ export function ConfigDraftProvider({ children }: { children: ReactNode }) {
         options: structuredClone(draft!),
         stored_revision: result.stored_revision,
         restart_required: result.restart_required ?? true,
+        errors: [],
         field_errors: {},
+        inactive_devices: [],
         valid: true,
       } : current))
     }
