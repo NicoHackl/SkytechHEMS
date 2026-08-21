@@ -32,6 +32,12 @@ Fehlt `SUPERVISOR_TOKEN`, läuft das Add-on außerhalb von Home Assistant: die K
 schaltet dann sichtbar in einen **Nur-Lese-Modus**. Es wird niemals vorgetäuscht, ein
 Supervisor-Schreibvorgang sei erfolgreich gewesen.
 
+Das Add-on-Manifest fordert für die drei Schreibaktionen `hassio_role: manager` an. Eine bereits
+installierte ältere Version mit `hassio_role: default` kann die Optionen zwar lesen, bekommt beim
+Speichern aber `HTTP 403`. In diesem Fall muss das Add-on auf den korrigierten Stand aktualisiert
+oder neu gebaut und danach neu gestartet werden; ein bloßes Neuladen der Ingress-Seite ändert die
+vom Supervisor vergebene Rolle nicht.
+
 ## Add-on-Optionen
 
 Die kanonische Tabelle aller globalen Optionen und Laufzeit-Defaults steht unter
@@ -100,6 +106,11 @@ sie erscheinen als `inactive_devices` in `/api/status`, mit Geräte-ID, Klasse, 
 konkreten Feldfehlern. Die übrigen Geräte bleiben aktiv. Welche Felder je Klasse Pflicht sind,
 steht auf den drei Klassenseiten; geprüft wird in
 [`app/configuration.py`](../app/configuration.py).
+
+„Beim Start übersprungen“ beschreibt dabei immer den Stand des **laufenden Prozesses**. Ein im
+Entwurf korrigiertes Gerät wird erst nach erfolgreichem Speichern und Neustart instanziiert. In der
+Geräteliste trägt ein fehlerfreier, noch nicht gespeicherter Eintrag deshalb „Gültiger Entwurf“;
+die Statusseite bleibt bis zum Neustart beim tatsächlichen Laufzeitstand.
 
 > Das Schema in `config.yaml` markiert die klassenspezifischen Felder bewusst als **optional**.
 > Eine gemischte Objektliste kann keine bedingten Pflichtfelder ausdrücken — eine Pflichtmarkierung

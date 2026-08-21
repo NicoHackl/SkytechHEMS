@@ -5,8 +5,9 @@ Geschrieben wird über `http://supervisor/addons/self/…` – dieselbe Quelle, 
 auch die native Add-on-Konfigurationsseite bedient. Eine zweite
 Konfigurationsdatei gäbe es sonst, und die beiden liefen auseinander.
 
-Die `self`-Endpunkte sind laut Supervisor-Sicherheitsvertrag für das eigene
-Add-on freigegeben; eine Manager- oder Admin-Rolle ist dafür nicht nötig.
+Die Informationsaufrufe sind mit der Default-Rolle erlaubt. Änderungen der
+eigenen Optionen und der eigene Neustart brauchen die Manager-Rolle; das
+Manifest fordert sie ausdrücklich an.
 
 Referenzen:
 - https://developers.home-assistant.io/docs/api/supervisor/endpoints/
@@ -37,6 +38,10 @@ class SupervisorUnavailable(RuntimeError):
 
 class SupervisorRejected(RuntimeError):
     """Der Supervisor hat die Anfrage fachlich abgelehnt."""
+
+
+class SupervisorPermissionDenied(SupervisorRejected):
+    """Der Supervisor verweigert einen Aufruf wegen der Add-on-Rolle."""
 
 
 class SupervisorClient:
@@ -117,6 +122,16 @@ class SupervisorClient:
             ) as response:
                 body = await self._read_body(response)
                 if response.status >= 400 or body.get("result") == "error":
+                    if response.status == 403:
+                        message = (
+                            "Der Supervisor verweigert den Zugriff (HTTP 403). "
+                            "Das installierte Add-on besitzt nicht die erforderliche "
+                            "Supervisor-Rolle 'manager'. Bitte das Add-on aktualisieren "
+                            "oder neu bauen und danach neu starten."
+                        )
+                        log.warning("Supervisor %s %s wegen fehlender Berechtigung abgelehnt.",
+                                    method, path)
+                        raise SupervisorPermissionDenied(message)
                     message = str(body.get("message") or f"HTTP {response.status}")
                     # Bewusst nur die Meldung, niemals der gesendete Rumpf.
                     log.warning("Supervisor %s %s abgelehnt: %s", method, path, message)

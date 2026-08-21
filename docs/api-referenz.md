@@ -162,9 +162,10 @@ Sie bedienen den Bereich **Konfiguration** der Oberfläche. Geschrieben wird aus
 Supervisor-API — es gibt keine zweite Konfigurationsdatei und kein direktes Schreiben nach
 `/data/options.json`.
 
-Fehlercodes durchgehend: `400` unlesbarer Request, `409` Revisionskonflikt, `422` Feldvalidierung,
-`502` Supervisor nicht erreichbar, `503` kein Supervisor-Zugang oder Neustart nicht auslösbar.
-Fehlertexte für den User sind deutsch; technische Details stehen bereinigt im Log.
+Fehlercodes durchgehend: `400` unlesbarer Request, `403` fehlende Supervisor-Schreibberechtigung,
+`409` Revisionskonflikt, `422` Feldvalidierung, `502` Supervisor nicht erreichbar, `503` kein
+Supervisor-Zugang oder Neustart nicht auslösbar. Fehlertexte für den User sind deutsch; technische
+Details stehen bereinigt im Log.
 
 ### `GET /api/config`
 
@@ -248,7 +249,7 @@ Vom Add-on genutzte Endpunkte von Home Assistant:
 |---|---|---|---|
 | Home Assistant | `GET /api/states` | Kompletter State-Schnappschuss je Zyklus, Timeout 10 s | Zyklus wird abgebrochen und in `/api/status.error` gemeldet; die zuletzt geschriebenen Sollwerte bleiben stehen |
 | Supervisor | `GET /addons/self/info` | Gespeicherte Add-on-Optionen lesen, Timeout 10 s | `GET /api/config` fällt auf die lokal gelesene Konfiguration zurück, Speichern und Neustarten sind gesperrt |
-| Supervisor | `POST /addons/self/options/validate` | Optionen gegen das Manifest-Schema prüfen, Timeout 10 s | Ablehnung wird als `422` mit der Supervisor-Meldung durchgereicht |
-| Supervisor | `POST /addons/self/options` | Optionen speichern, Timeout 10 s | Fehler als `502`; es wird nie vorgetäuscht, das Speichern sei gelungen |
+| Supervisor | `POST /addons/self/options/validate` | Optionen gegen das Manifest-Schema prüfen, Timeout 10 s | Fachliche Ablehnung wird als `422` mit der Supervisor-Meldung durchgereicht; fehlende Manager-Rolle als erklärendes `403` |
+| Supervisor | `POST /addons/self/options` | Optionen speichern, Timeout 10 s | Fehlende Manager-Rolle als erklärendes `403`, Verbindungsfehler als `502`; es wird nie vorgetäuscht, das Speichern sei gelungen |
 | Supervisor | `POST /addons/self/restart` | Eigenes Add-on neu starten, Timeout 30 s | Wird erst nach der ausgelieferten `202`-Antwort angestoßen |
 | Home Assistant | `POST /api/services/<domain>/<service>` | Sollwerte, Schaltanforderungen, Post-Cycle-Skript, Timeout 5 s | Eine fehlgeschlagene Write-Op wird ihrem Gerät zugeordnet, geloggt und im Status sichtbar gemacht; das Gerät fährt im nächsten Zyklus nur noch seinen sicheren Zustand, die übrigen regeln weiter. Das Post-Cycle-Skript wirft und wird als Warnung gemeldet |

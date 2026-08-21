@@ -8,21 +8,35 @@ Statuscodes.
 
 import asyncio
 import logging
+import re
+from pathlib import Path
 
 import pytest
 
 import configuration as cfg
 from config_service import (
-    ConfigConflict, ConfigInvalid, ConfigReadOnly, ConfigService, ConfigUnavailable,
+    ConfigConflict, ConfigInvalid, ConfigPermissionDenied, ConfigReadOnly, ConfigService,
+    ConfigUnavailable,
 )
 from ems.ops import WriteResult
-from supervisor_client import SupervisorRejected, SupervisorUnavailable
+from supervisor_client import (
+    SupervisorClient,
+    SupervisorPermissionDenied,
+    SupervisorRejected,
+    SupervisorUnavailable,
+)
 
 from test_configuration import battery, binary, controllable
 
 
 def run(coro):
     return asyncio.run(coro)
+
+
+def test_manifest_fordert_manager_rolle_fuer_supervisor_schreibzugriffe():
+    manifest = (Path(__file__).resolve().parents[1] / "config.yaml").read_text(encoding="utf-8")
+    assert re.search(r"(?m)^hassio_api: true$", manifest)
+    assert re.search(r"(?m)^hassio_role: manager$", manifest)
 
 
 # ---------------------------------------------------------------------------
@@ -450,12 +464,55 @@ def test_weder_token_noch_optionen_erscheinen_in_fehlern_oder_logs(caplog):
 
 
 def test_supervisor_client_loggt_keine_rohdaten(caplog):
-    from supervisor_client import SupervisorClient
     client = SupervisorClient(token="", base_url="http://supervisor")
     assert client.available is False
     with pytest.raises(SupervisorUnavailable):
         run(client.get_self_info())
     assert "Bearer" not in caplog.text
+
+
+def test_supervisor_client_erklaert_403_als_fehlende_manager_rolle():
+    class ForbiddenResponse:
+        status = 403
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def json(self, **kwargs):
+            return {"result": "error"}
+
+    class ForbiddenSession:
+        closed = False
+
+        def request(self, *args, **kwargs):
+            return ForbiddenResponse()
+
+        async def close(self):
+            self.closed = True
+
+    client = SupervisorClient(token="test", base_url="http://supervisor")
+    client._session = ForbiddenSession()
+
+    with pytest.raises(SupervisorPermissionDenied) as fehler:
+        run(client.save_self_options(options(binary())))
+
+    assert "HTTP 403" in str(fehler.value)
+    assert "manager" in str(fehler.value)
+    run(client.close())
+
+
+def test_fehlende_manager_rolle_bleibt_ein_403_fuer_die_oberflaeche():
+    async def verweigert():
+        raise SupervisorPermissionDenied("Supervisor-Rolle 'manager' fehlt.")
+
+    with pytest.raises(ConfigPermissionDenied) as fehler:
+        run(ConfigService._call_supervisor(verweigert()))
+
+    assert fehler.value.status == 403
+    assert "manager" in fehler.value.message
 
 
 def test_supervisor_rejected_traegt_nur_die_meldung():

@@ -12,6 +12,15 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 > `config.yaml` anzuheben (siehe [docs/git-workflow.md](docs/git-workflow.md)). Bestandsanlagen
 > müssen ihre Add-on-Optionen ergänzen, sonst laufen betroffene Geräte nicht mehr an.
 
+### Behoben
+
+- **Speichern aus der Ingress-Konfiguration scheiterte mit `HTTP 403`.** Das Manifest verwendete
+  `hassio_role: default`, obwohl diese Rolle nur Supervisor-Informationsaufrufe erlaubt. Das Add-on
+  fordert jetzt die für Optionsvalidierung, Speichern und Neustart erforderliche Manager-Rolle an.
+  Ein 403 erklärt außerdem verständlich, dass eine ältere Installation aktualisiert oder neu
+  gebaut werden muss. Bereits beim Start übersprungene Geräte bleiben bis zum erfolgreichen
+  Speichern und Neustart bewusst als Laufzeitstatus sichtbar.
+
 ### Migration bestehender Anlagen
 
 1. **Regelbare Geräte** brauchen sechs neue Felder: `technical_minimum`, `technical_maximum`,
@@ -106,8 +115,8 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
   - **Nur-Lese-Modus ohne Supervisor.** Läuft das Add-on außerhalb von Home Assistant, ist die
     Konfiguration weiterhin sichtbar, `can_save` und `can_restart` sind `false` und die Oberfläche
     erklärt warum. Es wird nie vorgetäuscht, ein Schreibvorgang sei gelungen.
-  - `config.yaml` erhält dafür `hassio_api: true`, ausdrücklich `hassio_role: default` — die
-    `self`-Endpunkte brauchen keine Manager-Rolle — und `panel_admin: true`.
+  - `config.yaml` erhält dafür `hassio_api: true`, ausdrücklich `hassio_role: manager` für die
+    Supervisor-Schreibaufrufe und `panel_admin: true`.
 - **Zentrales Konfigurationsmodell `app/configuration.py`.** Normalisierung, Validierung mit
   Feldpfaden (`devices[2].technical_maximum`) und deutschen Meldungen, stabiler Parser und
   Serializer für Modus-Listen, Eindeutigkeitsprüfung von Gerätename und Präfix, kanonischer

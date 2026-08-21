@@ -39,7 +39,11 @@ from configuration import (
     validate_options,
 )
 from ems.ops import safe_shutdown_ops
-from supervisor_client import SupervisorRejected, SupervisorUnavailable
+from supervisor_client import (
+    SupervisorPermissionDenied,
+    SupervisorRejected,
+    SupervisorUnavailable,
+)
 
 log = logging.getLogger(__name__)
 
@@ -76,6 +80,10 @@ class ConfigReadOnly(ConfigProblem):
 
 class ConfigUnavailable(ConfigProblem):
     status = 502
+
+
+class ConfigPermissionDenied(ConfigProblem):
+    status = 403
 
 
 class ConfigService:
@@ -334,6 +342,8 @@ class ConfigService:
         """Übersetzt Supervisor-Fehler in fachliche Fehler mit passendem Status."""
         try:
             return await awaitable
+        except SupervisorPermissionDenied as exc:
+            raise ConfigPermissionDenied(str(exc)) from exc
         except SupervisorUnavailable as exc:
             raise ConfigUnavailable(str(exc)) from exc
         except SupervisorRejected as exc:
