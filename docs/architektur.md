@@ -47,10 +47,11 @@ Verbraucher (Heizlüfter) — mit Zeitschutz, Hysterese, Rampenbegrenzung und No
 
 | Komponente | Verantwortung | Darf nicht |
 |---|---|---|
-| `app/main.py` | Add-on-Optionen laden, Scheduler betreiben, HTTP-Routen bereitstellen, Steuerschema aus der Gerätekonfiguration ableiten | Regelentscheidungen treffen |
+| `app/main.py` | Add-on-Optionen laden, Scheduler betreiben, HTTP-Routen bereitstellen, Steuerschema aus der Gerätekonfiguration ableiten | Regelentscheidungen treffen, Optionen selbst prüfen |
+| `app/configuration.py` | Add-on-Optionen normalisieren und validieren, Modus-Listen parsen und stabil serialisieren, Revisions-Hash bilden, Diff für die sichere Deaktivierung liefern | HA oder den Supervisor ansprechen, Zustand halten |
 | `app/ems/controller.py` | Einen Zyklus orchestrieren: globale Eingaben, Pool, Prioritätskaskade, Statusaufbau | Selbst HTTP sprechen |
 | `app/ems/devices.py` | Verhalten je Gerätetyp: Eligibility, Pool-Verbrauch, Rampe, Zeitschutz, Write-Ops. Hierarchie: `Device` → `ControllableDevice` → `BatteryDevice`, daneben `BinaryDevice` | Auf HA zugreifen (bekommt einen `StateProxy`) |
-| `app/ems/state.py` | Lesezugriff auf den State-Schnappschuss, `safe_float`, `parse_ts` | Zustand halten, der einen Zyklus überdauert |
+| `app/ems/state.py` | Lesezugriff auf den State-Schnappschuss, Resolve-Vertrag (`has`, `availability`, `resolve_number/bool/select`), `safe_float`, `parse_ts` | Zustand halten, der einen Zyklus überdauert; klassenspezifische Defaultwerte kennen |
 | `app/ha_client.py` | Einzige Stelle mit HA-REST-Zugriff, Session-Verwaltung, Timeouts | Fachlogik enthalten |
 | `web/` → `app/static/` | Darstellung und Bedienung | Fachlogik doppeln — sie rechnet nur an, was `/api/status` liefert |
 
@@ -113,12 +114,13 @@ Details zu Endpunkten: [api-referenz.md](api-referenz.md).
 ├── translations/           Feldbeschreibungen der Add-on-Optionen (de, en)
 ├── app/
 │   ├── main.py             Scheduler, HTTP-Routen, Steuerschema
+│   ├── configuration.py    Optionen normalisieren, validieren, Revision und Diff
 │   ├── ha_client.py        HA-REST-Client
 │   ├── requirements.txt    Laufzeit-Abhängigkeiten des Containers
 │   ├── ems/
 │   │   ├── controller.py   EMSController, config-getriebene Geräte-Registry
 │   │   ├── devices.py      Device / ControllableDevice / BinaryDevice
-│   │   └── state.py        StateProxy, safe_float, parse_ts
+│   │   └── state.py        StateProxy, Resolve-Vertrag, safe_float, parse_ts
 │   └── static/             gebautes SPA-Bundle (eingecheckt, D-035)
 ├── web/                    Quellen der Oberfläche (React + TypeScript + Vite)
 ├── tests/                  pytest, inklusive Hypothesis-Property-Tests
@@ -147,6 +149,10 @@ Zusagen, auf die sich der gesamte Code verlässt. Wer eine davon bricht, bricht 
    Sollwert nicht einfach stehen. Sonst entlädt der Speicher nach einem Add-on-Absturz bis leer.
 8. **Mindestlaufzeit und Abschaltverzögerung gelten auch bei Notabschaltung** — Geräteschutz
    schlägt Regelgüte (siehe [design-entscheidungen.md](design-entscheidungen.md)).
+9. **Ein gültiger Wert `0` wird nie durch einen Ersatzwert verdrängt.** Jede Auflösung eines
+   HA-States läuft über den Resolve-Vertrag in [`app/ems/state.py`](../app/ems/state.py) und meldet
+   neben dem Wert auch Ursache (`valid`, `missing`, `unavailable`, `invalid`) und Quelle (`ha`,
+   `addon`, `internal`). Wahrheitswert-Ausdrücke wie `wert or fallback` sind damit ausgeschlossen.
 
 ## Start und Betrieb
 

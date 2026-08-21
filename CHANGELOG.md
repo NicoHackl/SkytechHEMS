@@ -9,6 +9,28 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 ## [Unreleased]
 
 ### Hinzugefügt
+- **Doppelte Fallback-Auflösung mit Ursache und Quelle.** `StateProxy` kann jetzt zwischen
+  `missing` (Entity-ID im HA-Schnappschuss nicht vorhanden), `unavailable` (Entität da, State
+  `unknown`/`unavailable`/`null`), `invalid` (State da, aber falscher Typ, nicht endlich oder
+  außerhalb eines zwingenden Bereichs) und `valid` unterscheiden. Jeder aufgelöste Wert meldet
+  zusätzlich seine Quelle: `ha`, `addon` oder `internal`. Die neuen Methoden `has()`,
+  `availability()`, `resolve_number()`, `resolve_bool()` und `resolve_select()` sind ab sofort der
+  einzige Weg, einen HA-State in einen Regelwert zu verwandeln.
+  - **Ein gültiger Wert `0` wird nie mehr verworfen.** Wahrheitswert-Ausdrücke wie
+    `wert or fallback` konnten eine ausdrücklich eingetragene Null nicht von „kein Wert"
+    unterscheiden. Zahlen laufen zusätzlich durch `math.isfinite`, damit `NaN` und `±inf` nicht als
+    Regelgröße in die Anlage gelangen.
+  - **Fehlend und ausgefallen sind trennbar.** `resolve_bool()` kennt dafür einen eigenen
+    `missing_fallback` — eine gar nicht angelegte Freigabe darf anders behandelt werden als eine
+    ausgefallene.
+- **Zentrales Konfigurationsmodell `app/configuration.py`.** Normalisierung, Validierung mit
+  Feldpfaden (`devices[2].technical_maximum`) und deutschen Meldungen, stabiler Parser und
+  Serializer für Modus-Listen, Eindeutigkeitsprüfung von Gerätename und Präfix, kanonischer
+  Revisions-Hash über die rohen Optionen und der Diff, der vor einem Neustart sagt, welche alten
+  Geräte sicher zu deaktivieren sind. Die gemischte Objektliste im Supervisor-Schema kann keine
+  bedingten Pflichtfelder je Geräteklasse ausdrücken — die Anwendung ist deshalb die autoritative
+  Validierung, und Oberfläche wie Controller bekommen dieselbe Antwort auf „ist dieser Eintrag
+  gültig".
 - **Geräteklassen-Referenz unter `docs/device_classes/`.** Je eine Seite für `controllable`,
   `binary`, `battery` und globale Werte dokumentiert den tatsächlichen HA-Lese-/Schreibvertrag,
   Pflichtfelder der Add-on-Konfiguration, externe Entitätszuordnungen, Defaults und echte
