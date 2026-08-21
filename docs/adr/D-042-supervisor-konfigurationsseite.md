@@ -46,9 +46,11 @@ Option C. `/data/options.json` wird nur noch **gelesen**. Geschrieben wird aussc
 
 Dazu gehören vier Festlegungen:
 
-- **`hassio_role: default`.** Die `self`-Endpunkte sind laut Supervisor-Sicherheitsvertrag für das
-  eigene Add-on freigegeben. Eine Manager- oder Admin-Rolle wäre deutlich mehr Zugriff, als die
-  Aufgabe braucht.
+- **`hassio_role: manager`.** Die Rolle `default` erlaubt nur Informationsaufrufe. Der reale
+  Supervisor beantwortet das Validieren und Schreiben der eigenen Optionen damit mit `HTTP 403`.
+  Die Manager-Rolle ist daher für `POST /addons/self/options/validate`,
+  `POST /addons/self/options` und `POST /addons/self/restart` erforderlich. Die noch umfassendere
+  Admin-Rolle wird nicht angefordert.
 - **Revisions-Hash über die ROHEN Optionen.** Nicht über die normalisierten: nur so fällt auch eine
   Änderung an einem Feld auf, das diese Oberfläche gar nicht anzeigt. Weicht die Revision beim
   Speichern ab, antwortet der Server mit `409`, statt die fremde Änderung zu überschreiben.
@@ -70,13 +72,13 @@ Webserver testbar, und `main.py` wüchse weiter zu.
 
 - **Positiv:** Eine Optionsquelle, dieselbe Schema-Prüfung wie die native Seite, keine neue
   Persistenz. Feldfehler mit Pfaden und deutschen Meldungen erscheinen dort, wo sie entstehen.
-- **Negativ:** Das Add-on braucht `hassio_api`. Außerhalb von Home Assistant ist die Konfiguration
-  schreibgeschützt — die Oberfläche sagt das ausdrücklich, statt einen Erfolg vorzutäuschen.
+- **Negativ:** Das Add-on braucht `hassio_api` und die erweiterte Manager-Rolle. Außerhalb von Home
+  Assistant ist die Konfiguration schreibgeschützt — die Oberfläche sagt das ausdrücklich, statt
+  einen Erfolg vorzutäuschen.
 - **Aufwand:** `config.yaml` erhält `hassio_api`, `hassio_role` und `panel_admin`.
 
 ## Rücknahmebedingung
 
-Wenn der Supervisor die `self`-Endpunkte für Add-ons ohne Manager-Rolle schließt oder das
-Antwortformat unangekündigt bricht. Erkennbar an einem `403` auf `POST /addons/self/options`, das
-nicht auf eine Fehlkonfiguration zurückgeht. Dann bleibt nur die native Add-on-Seite, und die
-eigene Konfigurationsseite fällt dauerhaft in den Nur-Lese-Modus, den sie heute schon kennt.
+Wenn der Supervisor die benötigten `self`-Endpunkte auch mit Manager-Rolle schließt oder das
+Antwortformat unangekündigt bricht. Dann bleibt nur die native Add-on-Seite, und die eigene
+Konfigurationsseite fällt dauerhaft in den Nur-Lese-Modus, den sie heute schon kennt.

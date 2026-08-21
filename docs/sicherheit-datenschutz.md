@@ -77,9 +77,11 @@ eine Design-Entscheidung → [design-entscheidungen.md](design-entscheidungen.md
 Für den Konfigurationsbereich der eigenen Oberfläche verwendet das Add-on die
 `self`-Endpunkte des Supervisors:
 
-- `config.yaml` setzt `hassio_api: true` und **ausdrücklich** `hassio_role: default`. Die
-  `self`-Endpunkte sind laut Supervisor-Sicherheitsvertrag für das eigene Add-on freigegeben; eine
-  Manager- oder Admin-Rolle wäre deutlich mehr Zugriff, als die Aufgabe braucht.
+- `config.yaml` setzt `hassio_api: true` und **ausdrücklich** `hassio_role: manager`. Die
+  Default-Rolle erlaubt nur Informationsaufrufe; das Validieren und Schreiben der eigenen
+  Add-on-Optionen sowie der eigene Neustart werden damit vom Supervisor mit `HTTP 403` abgelehnt.
+  Die Manager-Rolle ermöglicht diese Schreibaufrufe. Die noch weiter reichende Admin-Rolle wird
+  nicht angefordert.
 - `panel_admin: true` markiert das Panel als Administratorenaufgabe — es schreibt Add-on-Optionen.
 - Der Token kommt ausschließlich aus `SUPERVISOR_TOKEN` und wird nur als
   `Authorization`-Header gesetzt. Er erscheint nie in einem Log, einer Fehlermeldung oder einer

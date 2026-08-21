@@ -50,11 +50,11 @@ arch:
   - i386
 homeassistant_api: true
 # Für den Konfigurationsbereich der eigenen Oberfläche: das Add-on liest und
-# schreibt seine EIGENEN Optionen über http://supervisor/addons/self/… . Diese
-# self-Endpunkte sind laut Supervisor-Sicherheitsvertrag ohne Manager- oder
-# Admin-Rolle freigegeben, deshalb bleibt hassio_role auf default.
+# schreibt seine EIGENEN Optionen über http://supervisor/addons/self/… . Die
+# Informationsaufrufe sind mit der Default-Rolle erlaubt, das Speichern und der
+# Neustart brauchen laut Supervisor-Rollenmodell die Manager-Rolle.
 hassio_api: true
-hassio_role: default
+hassio_role: manager
 ingress: true
 ingress_port: 8099
 # Die Konfigurationsseite schreibt Add-on-Optionen – das ist eine
