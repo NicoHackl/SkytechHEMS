@@ -540,3 +540,65 @@ table.data tbody tr:hover { background: var(--surface-2); cursor: pointer; }
 .switch { position: relative; }
 .switch input { display: block; position: absolute; left: 0; top: 0; width: 42px; height: 24px; margin: 0; opacity: 0; cursor: pointer; }
 .switch input:focus-visible + .track { box-shadow: 0 0 0 3px var(--primary-ring); }
+
+/* =========================================================================
+   Konfigurationsbereich
+   Jede Klasse hier wird von mindestens zwei Seiten benutzt. Ausschliesslich
+   Tokens, keine Literalfarbe, keine gestaltenden Inline-Styles.
+   ========================================================================= */
+
+/* ---------- Aktionsleiste: Zustand links, Aktionen rechts ---------- */
+.form-footer { flex-wrap: wrap; align-items: center; }
+.form-footer .spacer { flex: 1; }
+.config-state { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.config-state .pill svg { flex-shrink: 0; }
+
+/* ---------- Umschalter zwischen den Konfigurationsansichten ---------- */
+.config-tabs .btn.active {
+  border-color: var(--primary); color: var(--primary); background: var(--primary-soft);
+}
+
+/* ---------- Modus-Checkboxen (global und je Geraet) ---------- */
+.mode-checks { border: none; padding: 0; margin-bottom: 18px; }
+.mode-checks legend { padding: 0; margin-bottom: 8px; }
+.mode-checks legend span { font-weight: 600; font-size: 13.5px; }
+.mode-check-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.mode-check {
+  display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  padding: 8px 12px; font-size: 14px; background: var(--surface);
+  transition: background .12s, border-color .12s;
+}
+.mode-check:hover { background: var(--surface-2); }
+.mode-check input { width: 16px; height: 16px; margin: 0; accent-color: var(--primary); }
+.mode-check:has(input:checked) { border-color: var(--primary); background: var(--primary-soft); }
+.mode-check:has(input:disabled) { opacity: .5; cursor: not-allowed; }
+.mode-checks.invalid .mode-check { border-color: var(--danger); }
+
+/* ---------- Entitaetsauswahl ---------- */
+.entity-warn { display: flex; align-items: center; gap: 6px; color: var(--warn); }
+.entity-warn svg { flex-shrink: 0; }
+
+/* ---------- Abgeleitete HA-Helfer mit Zustand ---------- */
+.helper-body { padding: 0; }
+.helper-body .hint-box, .helper-body .alert { margin: 16px 20px; }
+.helper-list .ctrl-row:first-child { border-top: none; }
+.helper-list .ctrl-row .k { display: flex; flex-direction: column; gap: 2px; }
+.helper-entity { color: var(--text-3); overflow-wrap: anywhere; }
+
+/* ---------- Nicht interaktiver Neustartzustand ---------- */
+.restart-modal { max-width: 420px; text-align: center; }
+.restart-modal .modal-body { padding: 28px 26px 30px; }
+.restart-modal .center { min-height: 60px; }
+.restart-modal h2 { font-size: 16px; margin-bottom: 8px; }
+.restart-modal p { color: var(--text-3); font-size: 13.5px; }
+
+@media (max-width: 620px) {
+  /* Bei 375px muessen alle drei Aktionen erreichbar bleiben, ohne dass die
+     Primaeraktion aus dem Bild rutscht. */
+  .form-footer { flex-direction: column; align-items: stretch; }
+  .form-footer .btn { width: 100%; justify-content: center; }
+  .form-footer .spacer { display: none; }
+  .config-state { justify-content: space-between; }
+  .mode-check { flex: 1 1 auto; justify-content: center; }
+}

@@ -236,9 +236,15 @@ erfindet keine Synonyme (`.button`, `.panel`, `.chip` gibt es nicht).
 | `.field` | Ein Feld: Label, Eingabe, optional `small` als Hilfetext |
 | `.field.invalid` + `.field-error` | Fehlerzustand: roter Rand, roter Hinweistext darunter |
 | `.form-grid` (bzw. `.grid-2`) | Zweispaltiges Formular; `.wide` überspannt beide Spalten |
-| `.form-footer` | Klebrige Fußzeile mit Abbrechen + Speichern |
+| `.form-footer` | Klebrige Fußzeile. Mit `.spacer` links Zustand, rechts Aktionen; unter 620px stapeln alle Aktionen auf volle Breite |
 | `.hint-box` | Gestrichelter Kasten: fehlende Voraussetzung plus Weg dorthin |
 | `.advanced-card` | `<details>`-Karte für selten gebrauchte Felder |
+| `.mode-checks` / `.mode-check-row` / `.mode-check` | Checkbox-Gruppe für Regelmodi. Der ausgewählte Eintrag trägt Rand und Fläche in der Akzentfarbe, ein global gesperrter ist ausgegraut |
+| `.entity-warn` | Warnzeile unter einer Entitätsauswahl: der gespeicherte Wert existiert gerade nicht |
+| `.config-state` | Zustandsanzeige links in der Aktionsleiste (Pill plus „Verwerfen") |
+| `.config-tabs` | Umschalter zwischen Konfigurationsansichten; `.btn.active` markiert den aktuellen |
+| `.helper-list` / `.helper-entity` | Abgeleitete HA-Helfer mit Zustand; die Entity-ID darunter in `--mono` |
+| `.restart-modal` | Modifier für `.modal`: nicht interaktiver Neustartzustand |
 
 Pflichtfelder werden am Label markiert (`*` in `--primary`), nicht durch Farbe des Eingabefelds.
 

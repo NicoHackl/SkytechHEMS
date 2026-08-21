@@ -112,18 +112,55 @@ Seitenwechsel nicht neu montiert werden.
     <Route path="/" element={<Status />} />
     <Route path="/steuerung" element={<Steuerung />} />
     <Route path="/energy-pilot" element={<EnergyPilot />} />
+    <Route path="/konfiguration/global" element={<KonfigurationGlobal />} />
+    <Route path="/konfiguration/geraete" element={<KonfigurationGeraete />} />
+    <Route path="/konfiguration/geraete/neu" element={<KonfigurationGeraet mode="create" />} />
+    <Route path="/konfiguration/geraete/:index" element={<KonfigurationGeraet mode="edit" />} />
     <Route path="*" element={<div className="content"><div className="empty">Seite nicht gefunden.</div></div>} />
   </Route>
 </Routes>
 ```
 
-Dieses Projekt zeigt nur an und stellt Helfer ein — es gibt keine Datensätze und damit keine
-Liste/Anlegen/Bearbeiten-Trias. Kommt später ein Datentyp dazu, gilt das Muster der Vorlage:
-**Liste** (`/x`), **Anlegen** (`/x/new`), **Bearbeiten** (`/x/:id`), wobei Anlegen und Bearbeiten
-sich eine Komponente mit `mode: 'create' | 'edit'` teilen.
+Die Geräteliste ist der einzige Datentyp der Anwendung und folgt dem Muster der Vorlage:
+**Liste** (`/konfiguration/geraete`), **Anlegen** (`.../neu`), **Bearbeiten** (`.../:index`), wobei
+Anlegen und Bearbeiten sich eine Komponente mit `mode: 'create' | 'edit'` teilen. Der Index ist
+dabei ausdrücklich nur die **Entwurfsposition** — die fachliche Identität bleibt `name`.
 
 Zugriffsschutz gibt es im Frontend nicht: Die Anmeldung erledigt der HA-Ingress, bevor die Seite
 überhaupt ausgeliefert wird — siehe [sicherheit-datenschutz.md](sicherheit-datenschutz.md).
+
+## Konfigurationsentwurf
+
+Der Entwurf der Add-on-Optionen ist der einzige Zustand, den sich mehrere Seiten teilen. Er liegt
+in `components/ConfigDraft.tsx` als React-Context — kein State-Paket, dafür ist ein Objekt zu
+wenig. Verbindlich daran:
+
+- Der Provider steht in `main.tsx` **über** dem Layout. Sonst verwürfe ein Seitenwechsel den
+  Entwurf, und die Navigation könnte nicht vor ungespeicherten Änderungen warnen.
+- Geladen wird erst, wenn eine Konfigurationsseite `ensureLoaded()` ruft. Wer nur den Status
+  ansieht, löst keinen zusätzlichen Abruf aus.
+- `dirty` speist drei Dinge: einen Punkt am Navigationseintrag, den `beforeunload`-Hinweis des
+  Browsers und die Rückfrage vor „Neu starten".
+- Ein `409` verwirft den Entwurf **nicht**. `conflict` schaltet eine `.alert` frei, die erklärt,
+  was passiert ist, und gezieltes Neuladen anbietet.
+- Nach einem ausgelösten Neustart pollt der Provider `/api/status`, bis eine **andere**
+  `instance_id` antwortet. Solange liegt ein nicht interaktiver Neustartzustand über der Seite.
+
+Die Formularbausteine (`Field`, `NumberField`, `TextField`, `SelectField`, `EntityField`,
+`ModeChecks`) stehen in `components/ConfigFields.tsx`, die klassenspezifischen Abschnitte in
+`components/DeviceFields.tsx`, die Aktionsleiste in `components/ConfigActions.tsx` und die
+Zustandsliste der abgeleiteten Helfer in `components/HelferStatus.tsx`. Ohne diese Aufteilung
+wüchse allein das Geräteformular weit über 150 Zeilen.
+
+Zwei Muster, die dabei nicht verhandelbar sind:
+
+- **Die Entitätsauswahl ist ein `datalist`, kein eigenes Widget.** Die Eingabe bleibt frei, damit
+  eine noch nicht angelegte Entität eintragbar ist; Tastatur und Screenreader funktionieren ohne
+  Zutun. Ein gespeicherter Wert, den es aktuell nicht gibt, wird **mit Warnung angezeigt** und
+  niemals stillschweigend gelöscht.
+- **Abgeleitete Entity-IDs kommen vom Server.** `HelferStatus` liest sie aus
+  `/api/device_controls_schema`, nicht aus einer im Frontend nachgebauten Namenskonvention — zwei
+  Quellen dafür liefen auseinander.
 
 ## API-Client
 
@@ -213,6 +250,12 @@ Drei Gerätetypen, drei Karten in `pages/Status.tsx`, unterschieden über das di
 | `controllable` | `ControllableCard` | `off` / `active` / `idle` |
 | `binary` | `BinaryCard` | `off` / `active` / `idle` |
 | `battery` | `BatteryCard` | `off` / `charge` / `discharge` / `idle` |
+
+**Drei verschiedene „inaktiv" auseinanderhalten.** `eligible: false` ist die Freigabeentscheidung
+dieses Zyklus und darf nicht wie ein Fehler aussehen. `runtime_active: false` heißt „technisch
+nicht regelbar" — Schreibziel fehlt oder Schreiben schlug fehl — und bekommt den Grund aus
+`inactive_reasons` als Klartext. Ein Eintrag aus `inactive_devices` wurde beim Start gar nicht
+erst registriert; für ihn werden **keine** Leistungs-, SoC- oder Schaltwerte erfunden.
 
 Der Abschnitt „Speicher" steht **vor** „Regelbare Verbraucher": der Speicher beeinflusst die
 Pool-Rechnung, beim Debuggen will man ihn zuerst sehen.

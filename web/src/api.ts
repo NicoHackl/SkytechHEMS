@@ -1,4 +1,7 @@
-import type { ControlGroup, HaEntities, StatusResponse } from './types'
+import type {
+  ConfigOptions, ConfigResponse, ConfigSaveResult, ConfigValidation,
+  ControlGroup, EntityOption, HaEntities, StatusResponse,
+} from './types'
 
 /* Einziger Ort im Frontend, an dem fetch aufgerufen wird. Basis-Pfad, Header und
    Fehlerbehandlung liegen damit an genau einer Stelle.
@@ -47,5 +50,30 @@ export const api = {
     request<{ ok: boolean }>('/set', {
       method: 'POST',
       body: JSON.stringify({ entity_id: entityId, value }),
+    }),
+
+  /* Konfiguration der Add-on-Optionen. Geschrieben wird serverseitig über die
+     Supervisor-API — dieselbe Quelle wie die native Add-on-Seite. */
+  config: () => request<ConfigResponse>('/config'),
+  configEntities: (domains?: string[]) =>
+    request<{ entities: EntityOption[] }>(
+      domains?.length ? `/config/entities?domains=${domains.join(',')}` : '/config/entities',
+    ),
+  validateConfig: (options: ConfigOptions) =>
+    request<ConfigValidation>('/config/validate', {
+      method: 'POST',
+      body: JSON.stringify({ options }),
+    }),
+  saveConfig: (options: ConfigOptions, storedRevision: string) =>
+    request<ConfigSaveResult>('/config', {
+      method: 'PUT',
+      body: JSON.stringify({ options, stored_revision: storedRevision }),
+    }),
+  restartAddon: () =>
+    request<ConfigSaveResult>('/config/restart', { method: 'POST' }),
+  saveAndRestartAddon: (options: ConfigOptions, storedRevision: string) =>
+    request<ConfigSaveResult>('/config/save-and-restart', {
+      method: 'POST',
+      body: JSON.stringify({ options, stored_revision: storedRevision }),
     }),
 }

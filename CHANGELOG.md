@@ -23,6 +23,26 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
   - **Fehlend und ausgefallen sind trennbar.** `resolve_bool()` kennt dafür einen eigenen
     `missing_fallback` — eine gar nicht angelegte Freigabe darf anders behandelt werden als eine
     ausgefallene.
+- **Neuer Bereich „Konfiguration" in der Oberfläche.** Globale Einstellungen und Geräte lassen
+  sich jetzt bedienbar pflegen, statt nur im YAML-Editor der Add-on-Seite.
+  - **Geräteliste** mit Klasse, Name, Präfix, erlaubten Modi, Validität, Laufzeitstatus,
+    Bearbeiten, Löschen und Hoch/Runter. Die Reihenfolge bleibt erhalten — sie entscheidet bei
+    gleicher Priorität.
+  - **Ein Formular für Anlegen und Bearbeiten**, mit bedingten Abschnitten je Geräteklasse. Ein
+    leeres `allowed_modes` wird als **Nur Energy Pilot** gekennzeichnet, Pflichtfelder sind am
+    Label markiert, und Server-Feldfehler stehen direkt am betroffenen Feld.
+  - **Entitätsauswahl mit Suche** aus dem laufenden HA-Schnappschuss, gefiltert nach Domain. Ein
+    gespeicherter Wert, den es gerade nicht gibt, wird mit Warnung angezeigt statt gelöscht.
+  - **Abgeleitete HA-Helfer mit Zustand:** vorhanden, fehlt, nicht verfügbar, ungültig oder
+    Schreiben fehlgeschlagen — dazu, ob gerade der HA-Wert, der Add-on-Wert oder ein interner
+    Default wirkt.
+  - **Drei getrennte Aktionen** in einer klebrigen Leiste: Speichern, Neu starten sowie als
+    einzige Primäraktion Speichern und neu starten. Ungespeicherte Änderungen sind sichtbar, warnen
+    vor Navigation und Neuladen und werden vor einem Neustart erst nach Bestätigung verworfen.
+    Nach reinem Speichern bleibt sichtbar, dass die laufende Regelung erst nach einem Neustart
+    wechselt.
+  - Wird ein globaler Regelmodus deaktiviert, nennt die Oberfläche die betroffenen Geräte und
+    entfernt ihn erst nach Bestätigung aus deren `allowed_modes`.
 - **Add-on-Optionen sind jetzt aus dem Ingress-Panel heraus pflegbar.** Neue Endpunkte
   `GET /api/config`, `GET /api/config/entities`, `POST /api/config/validate`, `PUT /api/config`,
   `POST /api/config/restart` und `POST /api/config/save-and-restart`. Geschrieben wird

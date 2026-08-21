@@ -1,7 +1,8 @@
-import { useState, type ReactNode } from 'react'
+import { useState, type MouseEvent, type ReactNode } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { Icon } from './Icon'
 import { ThemeSwitch } from './Theme'
+import { useConfigDraft } from './ConfigDraft'
 
 /* App-Gerüst: Sidebar + Hauptspalte. Das Layout ist Elternroute mit <Outlet />,
    damit Navigation und Kopfzeile beim Seitenwechsel nicht neu montiert werden. */
@@ -11,6 +12,16 @@ const navClass = ({ isActive }: { isActive: boolean }) => `nav-item${isActive ? 
 export function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const closeMobile = () => setMobileOpen(false)
+  const { dirty } = useConfigDraft()
+
+  /* Wer den Konfigurationsbereich mit ungespeichertem Entwurf verlaesst, wird
+     gefragt — innerhalb des Bereichs bleibt der Entwurf ohnehin erhalten. */
+  const guard = (event: MouseEvent<HTMLAnchorElement>, to: string) => {
+    if (!dirty || to.startsWith('/konfiguration')) return
+    if (!window.confirm('Es gibt ungespeicherte Änderungen an der Konfiguration. Trotzdem wechseln?')) {
+      event.preventDefault()
+    }
+  }
 
   return (
     <div className="shell">
@@ -23,11 +34,17 @@ export function Layout() {
         </div>
 
         <nav className="nav" onClick={closeMobile}>
-          <NavLink to="/" end className={navClass}><Icon name="dashboard" /><span>Status</span></NavLink>
-          <NavLink to="/steuerung" className={navClass}><Icon name="sliders" /><span>Steuerung</span></NavLink>
+          <NavLink to="/" end className={navClass} onClick={(event) => guard(event, '/')}><Icon name="dashboard" /><span>Status</span></NavLink>
+          <NavLink to="/steuerung" className={navClass} onClick={(event) => guard(event, '/steuerung')}><Icon name="sliders" /><span>Steuerung</span></NavLink>
 
           <div className="nav-label">Vorausschau</div>
-          <NavLink to="/energy-pilot" className={navClass}><Icon name="spark" /><span>Energy Pilot</span></NavLink>
+          <NavLink to="/energy-pilot" className={navClass} onClick={(event) => guard(event, '/energy-pilot')}><Icon name="spark" /><span>Energy Pilot</span></NavLink>
+
+          <div className="nav-label">Einrichtung</div>
+          <NavLink to="/konfiguration/global" className={navClass}>
+            <Icon name="settings" /><span>Konfiguration</span>
+            {dirty ? <span className="count">•</span> : null}
+          </NavLink>
         </nav>
 
         <div className="sidebar-foot">

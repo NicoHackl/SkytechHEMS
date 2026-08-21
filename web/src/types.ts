@@ -11,6 +11,20 @@ interface DeviceBase {
   eligible: boolean
   /** Woher die wirksamen Werte stammen: aus, Nutzer-Helfer oder Energy Pilot. */
   source: 'aus' | 'user' | 'ep'
+  /** Je gelesener Entität: welcher Wert wirkt gerade, und warum nicht der aus HA. */
+  entity_diagnostics: Record<string, EntityDiagnostic>
+  /** false heißt „technisch nicht regelbar" — nicht dasselbe wie eligible: false. */
+  runtime_active: boolean
+  inactive_reasons: string[]
+  /** Bereinigte Meldung des letzten fehlgeschlagenen Schreibversuchs. */
+  write_error: string | null
+}
+
+/** Ursache und Quelle eines gelesenen HA-States. */
+export interface EntityDiagnostic {
+  role: string
+  state: 'valid' | 'missing' | 'unavailable' | 'invalid' | 'write_failed'
+  source: 'ha' | 'addon' | 'internal'
 }
 
 export interface ControllableDevice extends DeviceBase {
@@ -131,7 +145,14 @@ export interface CycleStatus {
   current_deficit_w: number
   binary_immediate_off: boolean
   binary_total_w: number
+  /** false: der gemeldete Modus ist global nicht aktiviert — Zyklus sicher inaktiv. */
+  global_mode_configured: boolean
+  available_modes: string[]
   devices: Device[]
+  /** Beim Start übersprungene Einträge — ohne erfundene Ist-, SoC- oder Schaltwerte. */
+  inactive_devices: InactiveDeviceIssue[]
+  /** Geräte-IDs, die diesen Zyklus technisch nicht regelbar waren. */
+  devices_inactive_runtime: string[]
 }
 
 export interface StatusResponse {
@@ -141,6 +162,8 @@ export interface StatusResponse {
   cycle_count: number
   error: string
   interval_s: number
+  /** Je Prozessstart neu. Erst eine ANDERE Kennung heißt „Neustart fertig". */
+  instance_id: string
 }
 
 /** Zustand einer HA-Entität, so wie /api/controls und /api/ep sie liefern. */
@@ -171,11 +194,158 @@ export type HaEntities = Record<string, HaEntity>
 export interface ControlItem {
   entity: string
   label: string
+  /** Stabiler Schlüssel ohne Suffix-Raten. */
+  key?: string
+  kind?: 'bool' | 'number' | 'select' | 'auto'
+  role?: string
+  unit?: string
+  planning_relevant?: boolean
 }
 
 export interface ControlGroup {
   /** Technische Geräte-ID; fehlt bei der Gruppe „Global". */
   name?: string
   label: string
+  class?: DeviceClass
+  entity_prefix?: string
+  /** Vom HEMS geschriebene Anforderung. */
+  request_entity?: string
+  /** Nur beim Speicher: die zusätzlich geschriebene Betriebsart. */
+  mode_entity?: string
   items: ControlItem[]
+}
+
+/* ---------------------------------------------------------------------------
+   Konfiguration der Add-on-Optionen
+
+   Spiegelt die Endpunkte aus docs/api-referenz.md#konfigurations-endpunkte.
+   Die Feldnamen sind die der Add-on-Optionen und bleiben deshalb unverändert —
+   sie sind Datenvertrag zur nativen Add-on-Seite.
+   --------------------------------------------------------------------------- */
+
+export type DeviceClass = 'controllable' | 'binary' | 'battery'
+
+/** Ein Geräteeintrag im Entwurf. Klassenspezifische Felder sind optional,
+    weil eine Liste alle drei Klassen gemischt trägt — verpflichtend sind sie
+    trotzdem, und zwar je nach `class` (siehe docs/device_classes/). */
+export interface ConfigDevice {
+  name: string
+  class: DeviceClass | ''
+  label: string
+  entity_prefix: string
+  /** Kommagetrennt. Leer heißt „nur Energy Pilot" und ist gültig. */
+  allowed_modes: string
+
+  /* controllable */
+  actual_power_entity?: string
+  output_unit?: 'watt' | 'ampere'
+  phases?: string
+  phase_switch_delay_s?: number | null
+  voltage_l1_entity?: string
+  voltage_l2_entity?: string
+  voltage_l3_entity?: string
+  /** In der zu `output_unit` passenden Einheit, nicht in Watt. */
+  technical_minimum?: number | null
+  technical_maximum?: number | null
+  increase_delay_s?: number | null
+  decrease_delay_s?: number | null
+  maximum_step_change?: number | null
+  minimum_step_change?: number | null
+
+  /* binary */
+  switch_entity?: string
+  power_w?: number | null
+  on_reserve_w?: number | null
+  min_runtime_s?: number | null
+  min_offtime_s?: number | null
+  off_delay_s?: number | null
+
+  /* battery */
+  soc_entity?: string
+  charge_power_entity?: string
+  discharge_power_entity?: string
+  power_entity?: string
+  power_sign?: 'positiv_laden' | 'positiv_entladen'
+  available_charge_power_entity?: string
+  available_discharge_power_entity?: string
+  capacity_kwh?: number | null
+  soc_max_hysteresis_percent?: number | null
+  direction_switch_delay_s?: number | null
+}
+
+export interface ConfigOptions {
+  interval_s: number
+  log_level: string
+  post_cycle_script: string
+  residual_power_entity: string
+  speicher_in_residual_enthalten: boolean
+  /** Kommagetrennte Teilmenge der normalen Regelmodi. */
+  available_modes: string
+  devices: ConfigDevice[]
+}
+
+/** Ein Eintrag, der beim Start nicht instanziiert würde. */
+export interface InactiveDeviceIssue {
+  index: number
+  name: string
+  device_class: string
+  label: string
+  /** Feldname ohne Pfadpräfix → deutsche Meldung. */
+  errors: Record<string, string>
+}
+
+/** Wertebereiche und Formular-Startwerte — eine Quelle für Server und UI. */
+export interface ConfigSupported {
+  modes: string[]
+  special_modes: string[]
+  device_classes: DeviceClass[]
+  log_levels: string[]
+  output_units: string[]
+  phases: string[]
+  power_signs: string[]
+  global_defaults: Record<string, string | number | boolean>
+  device_defaults: Record<DeviceClass, Record<string, number>>
+}
+
+export interface ConfigValidation {
+  valid: boolean
+  errors: string[]
+  /** Feldpfad („devices[2].technical_maximum") → deutsche Meldung. */
+  field_errors: Record<string, string>
+  inactive_devices: InactiveDeviceIssue[]
+}
+
+export interface ConfigResponse extends ConfigValidation {
+  options: ConfigOptions
+  /** Hash der gespeicherten rohen Optionen — Schutz gegen Paralleländerung. */
+  stored_revision: string
+  /** Stand, mit dem der laufende Controller instanziiert wurde. */
+  loaded_revision: string
+  restart_required: boolean
+  can_save: boolean
+  can_restart: boolean
+  supervisor_available: boolean
+  supervisor_error: string
+  instance_id: string
+  supported: ConfigSupported
+}
+
+/** Antwort auf Speichern, Neustart und Speichern-und-neu-starten. */
+export interface ConfigSaveResult {
+  stored_revision: string
+  loaded_revision?: string
+  restart_required?: boolean
+  /** false bei „gespeichert, aber nicht neu gestartet". */
+  restarting?: boolean
+  instance_id?: string
+  deactivation_failed?: string[]
+  message?: string
+}
+
+/** Eintrag der Entitätssuche — bewusst ohne die vollständigen Attribute. */
+export interface EntityOption {
+  entity_id: string
+  domain: string
+  state: string
+  friendly_name: string
 }
