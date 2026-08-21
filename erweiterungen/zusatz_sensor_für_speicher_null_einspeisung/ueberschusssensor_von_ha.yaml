@@ -1,0 +1,46 @@
+- sensor:
+    #Verfügbare Leistung für Überschussverbraucher berechnen (Mindesleistung / SOC und voller Speicher)
+    - name: "Verfügbare Leistung für Überschusverbraucher"
+      unique_id: "verfuegbare_leistung_fuer_ueberschussverbraucher"
+      unit_of_measurement: "W"
+      state: >
+        {% set soc = states('sensor.e3dc_batterie_soc')|float(0) %}
+        {% set soc_min_1 = states('input_number.ems_speicher_soc_mindestwert_1')|float(0) %}
+        {% set soc_min_2 = states('input_number.ems_speicher_soc_mindestwert_2')|float(0) %}
+        {% set bool_regelstufe_1_aktiv = states('input_boolean.ems_speicher_regelung_stufe_1_aktiv')%}
+        {% set batt_laden = states('sensor.e3dc_leistung_batterie_laden')|float(0) %}
+        {% set batt_laden_stabil = is_state('binary_sensor.e3dc_batterie_ladt_stabil', 'on') %}
+        {% set batterie_entladen = states('sensor.e3dc_leistung_batterie_entladen')|float(0) %}
+        {% set ertrag = states('sensor.e3dc_leistung_ertrag_gesamt')|float(0) %}
+        {% set hausverbrauch = states('sensor.e3dc_leistung_haus')|float(0) %}
+        {% set mindestladung_1 = states('input_number.ems_speicher_mindesladeleistung_1')|float(0) %}
+        {% set mindestladung_2 = states('input_number.ems_speicher_mindesladeleistung_2')|float(0) %}
+        {% set netz = states('sensor.e3dc_leistung_netz')|float(0) %}
+        {% set netzhysterese = states('input_number.e3dc_netzhysterese')|float(0) %}
+        {% set netz_einspeisung = states('sensor.e3dc_leistung_netz_einspeisung')|float(0) %}
+
+        {% if  ( soc < soc_min_1 and bool_regelstufe_1_aktiv == 'on' ) or ( soc < soc_min_2 )%}
+          {% set erg_max = ([(batt_laden - 6000),0] | max) + ( (netz * -1 ) - netzhysterese - batterie_entladen) %}
+        {% else %}
+          {% set erg_max = -100000 %}
+        {% endif %}
+
+        {% if (not batt_laden_stabil) and ertrag > 400 and soc > soc_min_1 and soc > soc_min_2 %}
+          {% set erg_voll = ( netz * -1 ) - batterie_entladen - 75 %}
+        {% else %}
+          {% set erg_voll = -100000 %}
+        {% endif %}
+
+        {% if soc >= soc_min_1 and bool_regelstufe_1_aktiv == 'on' %}
+          {% set erg_1 = ([(batt_laden - mindestladung_1),0] | max) + ( (netz * -1 ) - netzhysterese - batterie_entladen) %}
+        {% else %}
+          {% set erg_1 = -100000 %}
+        {% endif %}
+
+        {% if soc >= soc_min_2 %}
+          {% set erg_2 = ([(batt_laden - mindestladung_2),0] | max) + ( (netz * -1 ) - netzhysterese - batterie_entladen) %}
+        {% else %}
+          {% set erg_2 = -100000 %}
+        {% endif %}
+
+        {{([erg_max, erg_voll, erg_1, erg_2] | max)}}
