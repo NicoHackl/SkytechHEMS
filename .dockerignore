@@ -2,12 +2,23 @@
 .github
 .gitignore
 .dockerignore
+.cursor
+.claude
 README.md
-Claude-Analyse.md
-icon.png
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+CONTRIBUTING.md
+CHANGELOG.md
+docs/
+erweiterungen/
+# Quellen der Oberfläche: ins Image kommt nur das gebaute Bundle in app/static/.
+web/
+node_modules/
 tests/
 **/__pycache__/
 *.pyc
 *.pyo
 .ruff_cache/
 .pytest_cache/
+.hypothesis/

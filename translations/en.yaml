@@ -2,63 +2,134 @@ configuration:
   devices:
     name: Device list
     description: >-
-      List of consumers managed by the EMS. Fields per entry:
+      List of devices managed by the HEMS. Fields per entry:
 
-      • name (required) – Technical identifier, used directly as the prefix for
-      all HA helper entities. Example: name=heizstab →
-      input_boolean.ems_heizstab_freigabe, input_number.ems_heizstab_prioritat
-      etc. Use only lowercase letters, digits and underscores.
+      • name (required) – Technical identifier; without entity_prefix it is
+      used directly as the prefix for all HA helper entities. Example:
+      name=heizstab → input_boolean.ems_heizstab_freigabe,
+      input_number.ems_heizstab_prioritat etc. Lowercase letters, digits and
+      underscores only, and unique per installation.
 
-      • label (optional) – Display name shown in the web UI and Steuerung tab.
-      May contain umlauts, spaces and special characters (e.g. "Fan Living
-      Room"). Has no effect on entity names.
+      • label (optional) – Display name in the web UI and the Steuerung tab.
+      May contain umlauts, spaces and special characters. Has no effect on
+      entity names.
 
       • class (required) – Device class: "controllable" for continuously
       variable consumers (heating rod, wallbox), "binary" for on/off devices
-      (fan heater, pump).
-
-      • actual_power_entity (controllable only, required) – Sensor entity that
-      provides the current actual power draw in watts, e.g.
-      sensor.elwa_modbus_istleistung.
-
-      • switch_entity (binary only, required) – Switch entity of the real
-      device, e.g. switch.heizlufter. The EMS reads the actual state and
-      switch age from this entity.
+      (fan heater, pump), "battery" for an AC-coupled battery storage.
 
       • entity_prefix (optional) – Overrides the HA entity prefix when it
-      differs from name. Needed if HA helpers were already created with a
-      different prefix. Example: name=wallbox_1 but helpers are named
-      ems_wallbox_* → entity_prefix=wallbox.
+      differs from name. Needed if HA helpers already exist with a different
+      prefix. Must be unique as well.
 
-      • allowed_modes (optional, default "auto") – Comma-separated list of
-      global EMS modes in which this device participates. Possible values:
-      auto, nur_heizen, nur_laden. Example: "auto,nur_heizen".
+      • allowed_modes (required, may be empty) – Comma-separated list of global
+      control modes in which normal user rules apply to this device. Valid
+      values are manuell, nur_heizen and nur_laden, each a subset of the global
+      available_modes option. The legacy value "auto" is mapped to "manuell"
+      automatically. An empty value is valid and means "Energy Pilot only":
+      normal user rules will not activate the device.
 
-      • output_unit (optional, controllable only, default "watt") – Unit of
-      the output value. "watt" writes Watts to the setpoint entity. "ampere"
-      converts the internally calculated Watts to Ampere (integer, always
-      rounded down) — required for wallboxes and similar devices.
+      CONTROLLABLE DEVICES (class: controllable)
 
-      • phases (optional, controllable + ampere only, default "1") –
-      Comma-separated phase configuration. Allowed values: "1" (single-phase),
-      "3" (three-phase) or "1,3" (automatic phase switching). With "1,3" the
-      EMS automatically selects 3-phase charging when the PV pool is sufficient
-      (floor(pool ÷ (3 × U)) ≥ min_technisch_a), otherwise 1-phase.
-      Conversion formula: I = floor(P ÷ (phases × U)).
+      • actual_power_entity (required) – Sensor entity providing the current
+      actual power draw in watts. Without it the entry is skipped at startup
+      and shown as an inactive device in the UI.
 
-      • phase_switch_delay_s (optional, controllable + ampere + phases="1,3"
-      only, default 300) – Hysteresis lock time in seconds between two phase
-      switches. Prevents rapid oscillation during power fluctuations.
-      Recommendation: 300 s (5 minutes).
+      • output_unit (optional, default "watt") – Unit of the output value.
+      "watt" writes watts to the setpoint entity; "ampere" converts the
+      internally calculated watts to whole amperes (always rounded down) and
+      uses the _a helpers.
+
+      • phases (optional, ampere only, default "1") – "1", "3" or "1,3" for
+      automatic phase switching.
+
+      • phase_switch_delay_s (optional, phases "1,3" only, default 300) –
+      Lockout in seconds between two phase changes. Fallback for the optional
+      helper input_number.ems_<prefix>_min_umschaltzeit_s.
 
       • voltage_l1_entity / voltage_l2_entity / voltage_l3_entity (optional,
-      controllable + ampere only) – HA sensors for the current phase
-      voltages L1-N, L2-N and L3-N in Volts (e.g.
-      sensor.wallbox_voltage_l1). Plausibility range 180–260 V per phase;
-      outside this range or when unavailable, 230 V is used as fallback.
-      For single-phase operation only L1 is used; for three-phase all three
-      are used (P = I × (U_L1 + U_L2 + U_L3)). Leave empty if no voltage
-      sensors are available.
+      ampere only) – HA sensors for the phase voltages in volts. Plausibility
+      range 180–260 V per phase; outside that range or without a sensor, 230 V
+      is used.
+
+      • technical_minimum / technical_maximum (required) – Lower and upper
+      technical limit in the unit matching output_unit (W or A).
+      technical_minimum from 0, technical_maximum greater than 0 and at least
+      as large as the minimum. Both are fallbacks for the helpers
+      min_technisch_<w|a> and max_technisch_<w|a>: a valid HA state wins, a
+      missing or unavailable one is replaced by this value.
+
+      • increase_delay_s / decrease_delay_s (required, from 0) – Minimum
+      distance in seconds between control steps upwards and during normal
+      down-regulation. Fallbacks for hoch_regelzeit_s and runter_regelzeit_s.
+      A grid deficit always causes immediate down-regulation regardless.
+
+      • maximum_step_change / minimum_step_change (required) – Maximum setpoint
+      change per cycle (greater than 0) and write deadband (from 0, at most the
+      maximum), both in the unit from output_unit. Fallbacks for
+      max_anderung_pro_schritt_<w|a> and min_anderung_pro_schritt_<w|a>.
+
+      If any of these six fields is missing, the device is not registered and
+      is shown as an inactive device with the specific field error.
+
+      BINARY DEVICES (class: binary)
+
+      • switch_entity (required) – Switch entity of the real device. Read only;
+      it provides the actual state and, via last_changed, the on/off age.
+
+      • power_w (required, greater than 0) – Assumed power draw in the ON state
+      in watts. Basis of the pool reservation.
+
+      • on_reserve_w (required, from 0) – Device-specific hysteresis margin on
+      switch-on, in addition to the global switch-on reserve.
+
+      • min_runtime_s / min_offtime_s / off_delay_s (required, from 0) –
+      Minimum runtime, minimum off time and switch-off delay in seconds.
+      Minimum runtime and switch-off delay apply even during an emergency
+      shutdown – device protection beats control quality.
+
+      All five are fallbacks for the helpers leistung_w, einschaltreserve_w,
+      mindestlaufzeit_s, mindestauszeit_s and abschaltverzogerung_s. If any is
+      missing, the device is not registered.
+
+      AC BATTERY STORAGE (class: battery)
+
+      • soc_entity (required) – Sensor entity with the state of charge in
+      percent. If it reports "unavailable", this storage drops out of control
+      and goes to standby; the other devices keep running.
+
+      • charge_power_entity + discharge_power_entity OR power_entity (required)
+      – Exactly one complete actual-power variant: either two unsigned sensors
+      for charge and discharge power in watts, or one signed sensor. Both
+      variants at once is invalid.
+
+      • power_sign (with power_entity only, default "positiv_laden") – Sign
+      convention of power_entity: "positiv_laden" or "positiv_entladen".
+
+      • available_charge_power_w / available_discharge_power_w (required,
+      each from 0) – Directly configured available charge and discharge power
+      in watts. They are the ONLY physical maximum limits. A value of 0
+      deliberately blocks the respective direction.
+
+      • capacity_kwh (optional, default 0) – Usable capacity in kWh. Display
+      only, never a control input.
+
+      • soc_max_hysteresis_percent (default 2) – Distance below soc_max before
+      charging is released again after the maximum was reached. Without it the
+      storage flips between charging and standby at 100 %.
+
+      • direction_switch_delay_s (default 5) – Lockout in seconds after a
+      direction change. During the lockout standby is requested rather than
+      continuing the old direction.
+
+      A storage writes ONE signed setpoint to
+      input_number.ems_<prefix>_anforderung_leistung_w (positive = charge,
+      negative = discharge) plus the operating mode to
+      input_select.ems_<prefix>_anforderung_betriebsart. The number helper
+      therefore needs a negative minimum, otherwise Home Assistant clamps every
+      discharge request to 0. The select helper needs the options laden,
+      entladen and standby. Translating this into Modbus or MQTT calls is the
+      job of an HA automation, not the add-on.
   interval_s:
     name: Control interval (seconds)
     description: >-
@@ -71,8 +142,10 @@ configuration:
       Verbosity of the add-on logs. „info" is sufficient for normal
       operation. „debug" additionally logs all control decisions (pool,
       deficit, device candidates) and is useful for troubleshooting.
-      The log level can also be toggled at runtime via the HA helper
-      „input_boolean.ems_pyems_debug_output" without restarting the add-on.
+      Independently of this setting, the additional control-decision
+      logging can be toggled at runtime via the HA helper
+      „input_boolean.ems_pyems_debug_output" without restarting the
+      add-on; the log level configured here is not affected.
   post_cycle_script:
     name: Post-cycle script (optional)
     description: >-
@@ -90,3 +163,37 @@ configuration:
       calculation. Default:
       sensor.verfugbare_leistung_fur_uberschussverbraucher (Home Assistant
       slugifies umlauts: ü→u, ö→o, ä→a, ß→ss).
+  battery_residual_power_entity:
+    name: House power balance for AC batteries
+    description: >-
+      HA sensor entity used for discharge planning of all AC batteries.
+      Negative means grid import or shortfall; positive means export. The value
+      must combine grid power and the power of the self-regulating E3DC battery.
+      It is used only for discharging; charging continues to use the surplus
+      sensor. This field is required when an AC battery is configured. If the
+      sensor reports unknown, unavailable or a non-numeric value, all AC
+      batteries safely enter standby.
+  speicher_in_residual_enthalten:
+    name: Battery power included in surplus sensor
+    description: >-
+      Whether the charge and discharge power of HEMS-controlled batteries is
+      already included in the surplus sensor. For AC-coupled batteries measured
+      at the grid connection point this is the normal case ("on"): the EMS
+      subtracts the measured discharge before computing the pool. Otherwise it
+      reads its own discharge as PV surplus, switches consumers on and empties
+      the battery within a single cycle. Turn "off" if the sensor already
+      excludes the battery. To verify: disable the EMS, force the battery to
+      1 kW discharge – if the sensor value rises by 1 kW, this option belongs
+      "on". Batteries not controlled by HEMS (e.g. a self-regulating hybrid
+      storage system) are not affected.
+  available_modes:
+    name: Enabled control modes
+    description: >-
+      Comma-separated list of the normal control modes actually used in this
+      installation. Valid values are manuell, nur_heizen and nur_laden; the
+      default is all three. The special modes "auto" (Energy Pilot) and "aus"
+      do not belong in this list and are always supported. Each device's
+      allowed_modes must be a subset of this list. If
+      input_select.ems_regelmodus reports a normal mode that is not enabled
+      here, the cycle is safely inactive — the add-on never creates or changes
+      the options of the HA helper.

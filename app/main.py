@@ -7,13 +7,28 @@ import asyncio
 import datetime
 import json
 import logging
+import os
 import signal
+import uuid
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from aiohttp import web
 
+from config_service import ConfigProblem, ConfigService
+from configuration import GLOBAL_DEFAULTS, parse_modes, validate_options
 from ha_client import HAClient
 from ems import EMSController, StateProxy
+from supervisor_client import SupervisorClient
+
+# Alle für Menschen lesbaren Zeitangaben laufen über diese Zone und dieses
+# Format – Datum TT.MM.JJJJ, Uhrzeit Berliner Zeit ohne Offset oder Kürzel.
+BERLIN = ZoneInfo("Europe/Berlin")
+DISPLAY_TIME_FORMAT = "%d.%m.%Y %H:%M:%S"
+
+# Gebaute Oberfläche. Die Quellen liegen in web/ und werden mit `npm run build`
+# hierher geschrieben; das Ergebnis ist eingecheckt (D-035).
+_STATIC_DIR = Path(__file__).parent / "static"
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -30,62 +45,329 @@ log = logging.getLogger(__name__)
 # Konfiguration
 # ---------------------------------------------------------------------------
 
-def _load_config() -> dict:
-    path = Path("/data/options.json")
-    if path.exists():
+# Vom Supervisor erzeugte Laufzeitkonfiguration. Sie wird nur GELESEN – geschrieben
+# werden Add-on-Optionen ausschließlich über die Supervisor-API. Der Pfad ist für
+# die lokale Entwicklung außerhalb des Containers überschreibbar.
+OPTIONS_PATH = Path(os.environ.get("HEMS_OPTIONS_PATH", "/data/options.json"))
+
+
+def _load_raw_options() -> dict:
+    """Liest die rohen Add-on-Optionen. Fehlt die Datei, gilt die leere Konfiguration."""
+    if OPTIONS_PATH.exists():
         try:
-            with open(path) as f:
+            with open(OPTIONS_PATH) as f:
                 return json.load(f)
         except Exception as exc:
-            log.warning("Could not read /data/options.json: %s", exc)
-    return {"interval_s": 30, "log_level": "info"}
+            log.warning("Add-on-Optionen konnten nicht gelesen werden: %s", exc)
+    return {}
 
 
 # ---------------------------------------------------------------------------
 # Steuerung-Tab: Kontroll-Schema aus Geräte-Konfiguration erzeugen
 # ---------------------------------------------------------------------------
 
+def _control_item(
+    entity: str,
+    label: str,
+    key: str,
+    role: str,
+    *,
+    unit: str = "",
+    planning_relevant: bool = True,
+) -> dict:
+    """Beschreibt einen HEMS-Helfer stabil und ohne Suffix-Raten für API-Konsumenten."""
+    domain = entity.split(".", 1)[0]
+    kind = {
+        "input_boolean": "bool",
+        "input_number": "number",
+        "input_select": "select",
+    }.get(domain, "auto")
+    item = {
+        "entity": entity,
+        "label": label,
+        "key": key,
+        "kind": kind,
+        "role": role,
+        "planning_relevant": planning_relevant,
+    }
+    if unit:
+        item["unit"] = unit
+    return item
+
+
 _GLOBAL_CTRL_ITEMS = [
-    {"entity": "input_boolean.ems_pv_regelung_aktiv",        "label": "EMS aktiv"},
-    {"entity": "input_select.ems_regelmodus",                "label": "Regelmodus"},
-    {"entity": "input_number.ems_globaler_puffer_w",         "label": "Globaler Puffer"},
-    {"entity": "input_number.ems_einschaltreserve_global_w", "label": "Einschaltreserve global"},
+    _control_item(
+        "input_boolean.ems_pv_regelung_aktiv", "EMS aktiv", "pv_regelung_aktiv", "user_control"
+    ),
+    _control_item(
+        "input_select.ems_regelmodus", "Regelmodus", "regelmodus", "user_control"
+    ),
+    _control_item(
+        "input_number.ems_globaler_puffer_w", "Globaler Puffer", "globaler_puffer_w",
+        "user_preference", unit="W",
+    ),
+    _control_item(
+        "input_number.ems_einschaltreserve_global_w", "Einschaltreserve global",
+        "einschaltreserve_global_w", "user_preference", unit="W",
+    ),
+    _control_item(
+        "input_number.ems_ac_speicher_entlade_abschlag_w", "Entlade-Abschlag Speicher",
+        "ac_speicher_entlade_abschlag_w", "control_tuning", unit="W",
+    ),
+    _control_item(
+        "input_boolean.ems_pyems_debug_output", "Debug-Ausgabe", "debug_output",
+        "diagnostic_control", planning_relevant=False,
+    ),
 ]
 
 
 def _ctrl_items_controllable(p: str, output_unit: str = 'watt') -> list:
     suf = 'a' if output_unit == 'ampere' else 'w'
+    unit = 'A' if output_unit == 'ampere' else 'W'
     items = [
-        {"entity": f"input_boolean.ems_{p}_freigabe",                        "label": "Freigabe"},
-        {"entity": f"input_boolean.ems_{p}_technische_freigabe",             "label": "Technische Freigabe"},
-        {"entity": f"input_select.ems_{p}_modus",                            "label": "Modus"},
-        {"entity": f"input_number.ems_{p}_prioritat",                        "label": "Priorität"},
-        {"entity": f"input_number.ems_{p}_geschutzte_mindestleistung_{suf}", "label": "Geschützte Mindestleistung"},
-        {"entity": f"input_number.ems_{p}_min_technisch_{suf}",              "label": "Min. Leistung technisch"},
-        {"entity": f"input_number.ems_{p}_max_technisch_{suf}",              "label": "Max. Leistung"},
-        {"entity": f"input_number.ems_{p}_reserve_w",                        "label": "Reserve"},
-        {"entity": f"input_number.ems_{p}_hoch_regelzeit_s",                 "label": "Hoch-Regelzeit"},
-        {"entity": f"input_number.ems_{p}_runter_regelzeit_s",               "label": "Runter-Regelzeit"},
-        {"entity": f"input_number.ems_{p}_max_anderung_pro_schritt_{suf}",   "label": "Max. Änderung/Schritt"},
-        {"entity": f"input_number.ems_{p}_min_anderung_pro_schritt_{suf}",   "label": "Totband (Deadband)"},
+        _control_item(f"input_boolean.ems_{p}_freigabe", "Freigabe", "freigabe", "user_control"),
+        _control_item(
+            f"input_boolean.ems_{p}_technische_freigabe", "Technische Freigabe",
+            "technische_freigabe", "technical_gate",
+        ),
+        _control_item(f"input_select.ems_{p}_modus", "Modus", "modus", "user_control"),
+        _control_item(
+            f"input_number.ems_{p}_prioritat", "Priorität", "prioritat", "user_preference"
+        ),
+        _control_item(
+            f"input_number.ems_{p}_geschutzte_mindestleistung_{suf}",
+            "Geschützte Mindestleistung", "geschutzte_mindestleistung", "user_preference",
+            unit=unit,
+        ),
+        _control_item(
+            f"input_number.ems_{p}_min_technisch_{suf}", "Min. Leistung technisch",
+            "min_technisch", "technical_constraint", unit=unit,
+        ),
+        _control_item(
+            f"input_number.ems_{p}_max_technisch_{suf}", "Max. Leistung",
+            "max_technisch", "technical_constraint", unit=unit,
+        ),
+        _control_item(
+            f"input_number.ems_{p}_reserve_w", "Reserve", "reserve_w", "user_preference",
+            unit="W",
+        ),
+        _control_item(
+            f"input_number.ems_{p}_hoch_regelzeit_s", "Hoch-Regelzeit", "hoch_regelzeit_s",
+            "control_tuning", unit="s", planning_relevant=False,
+        ),
+        _control_item(
+            f"input_number.ems_{p}_runter_regelzeit_s", "Runter-Regelzeit",
+            "runter_regelzeit_s", "control_tuning", unit="s", planning_relevant=False,
+        ),
+        _control_item(
+            f"input_number.ems_{p}_max_anderung_pro_schritt_{suf}", "Max. Änderung/Schritt",
+            "max_anderung_pro_schritt", "control_tuning", unit=unit,
+            planning_relevant=False,
+        ),
+        _control_item(
+            f"input_number.ems_{p}_min_anderung_pro_schritt_{suf}", "Totband (Deadband)",
+            "min_anderung_pro_schritt", "control_tuning", unit=unit,
+            planning_relevant=False,
+        ),
     ]
     if output_unit == 'ampere':
-        items.append({"entity": f"input_number.ems_{p}_min_umschaltzeit_s",  "label": "Phasenwechsel-Mindestzeit"})
+        items.append(_control_item(
+            f"input_number.ems_{p}_min_umschaltzeit_s", "Phasenwechsel-Mindestzeit",
+            "min_umschaltzeit_s", "control_tuning", unit="s", planning_relevant=False,
+        ))
     return items
 
 
 def _ctrl_items_binary(p: str) -> list:
     return [
-        {"entity": f"input_boolean.ems_{p}_freigabe",             "label": "Freigabe"},
-        {"entity": f"input_boolean.ems_{p}_technische_freigabe",  "label": "Technische Freigabe"},
-        {"entity": f"input_select.ems_{p}_modus",                 "label": "Modus"},
-        {"entity": f"input_number.ems_{p}_prioritat",             "label": "Priorität"},
-        {"entity": f"input_number.ems_{p}_leistung_w",            "label": "Leistung"},
-        {"entity": f"input_number.ems_{p}_einschaltreserve_w",    "label": "Einschaltreserve"},
-        {"entity": f"input_number.ems_{p}_mindestlaufzeit_s",     "label": "Mindestlaufzeit"},
-        {"entity": f"input_number.ems_{p}_mindestauszeit_s",      "label": "Mindestauszeit"},
-        {"entity": f"input_number.ems_{p}_abschaltverzogerung_s", "label": "Abschaltverzögerung"},
+        _control_item(f"input_boolean.ems_{p}_freigabe", "Freigabe", "freigabe", "user_control"),
+        _control_item(
+            f"input_boolean.ems_{p}_technische_freigabe", "Technische Freigabe",
+            "technische_freigabe", "technical_gate",
+        ),
+        _control_item(f"input_select.ems_{p}_modus", "Modus", "modus", "user_control"),
+        _control_item(
+            f"input_number.ems_{p}_prioritat", "Priorität", "prioritat", "user_preference"
+        ),
+        _control_item(
+            f"input_number.ems_{p}_leistung_w", "Leistung", "leistung_w",
+            "technical_constraint", unit="W",
+        ),
+        _control_item(
+            f"input_number.ems_{p}_einschaltreserve_w", "Einschaltreserve",
+            "einschaltreserve_w", "user_preference", unit="W",
+        ),
+        _control_item(
+            f"input_number.ems_{p}_mindestlaufzeit_s", "Mindestlaufzeit",
+            "mindestlaufzeit_s", "timing_guard", unit="s",
+        ),
+        _control_item(
+            f"input_number.ems_{p}_mindestauszeit_s", "Mindestauszeit",
+            "mindestauszeit_s", "timing_guard", unit="s",
+        ),
+        _control_item(
+            f"input_number.ems_{p}_abschaltverzogerung_s", "Abschaltverzögerung",
+            "abschaltverzogerung_s", "timing_guard", unit="s",
+        ),
     ]
+
+
+def _ctrl_items_battery(p: str) -> list:
+    """Helfer eines AC-Speichers. Reihenfolge: Freigaben, Prioritäten,
+    Leistungsgrenzen, SoC, Regelverhalten – so wird die Karte lesbar.
+
+    Nicht mehr enthalten: max_lade-/max_entladeleistung_w (ersetzt durch die
+    beiden statischen available_*_w-Felder), soc_reserve_prozent und soc_taper_band_prozent
+    (Funktion entfällt), soc_max_hysterese_prozent und min_umschaltzeit_s
+    (jetzt statische Add-on-Felder) sowie entlade_sofort_schwelle_w."""
+    return [
+        _control_item(f"input_boolean.ems_{p}_freigabe", "Freigabe", "freigabe", "user_control"),
+        _control_item(
+            f"input_boolean.ems_{p}_technische_freigabe", "Technische Freigabe",
+            "technische_freigabe", "technical_gate",
+        ),
+        _control_item(f"input_select.ems_{p}_modus", "Modus", "modus", "user_control"),
+        _control_item(
+            f"input_select.ems_{p}_betriebsart", "Betriebsart", "betriebsart", "user_control"
+        ),
+        _control_item(
+            f"input_boolean.ems_{p}_laden_erlaubt", "Laden erlaubt", "laden_erlaubt",
+            "user_control",
+        ),
+        _control_item(
+            f"input_boolean.ems_{p}_entladen_erlaubt", "Entladen erlaubt", "entladen_erlaubt",
+            "user_control",
+        ),
+        _control_item(
+            f"input_number.ems_{p}_prioritat", "Priorität Laden", "prioritat", "user_preference"
+        ),
+        _control_item(
+            f"input_number.ems_{p}_entlade_prioritat", "Priorität Entladen",
+            "entlade_prioritat", "user_preference",
+        ),
+        _control_item(
+            f"input_number.ems_{p}_min_ladeleistung_w", "Min. Ladeleistung",
+            "min_ladeleistung_w", "technical_constraint", unit="W",
+        ),
+        _control_item(
+            f"input_number.ems_{p}_min_entladeleistung_w", "Min. Entladeleistung",
+            "min_entladeleistung_w", "technical_constraint", unit="W",
+        ),
+        _control_item(
+            f"input_number.ems_{p}_soc_min_prozent", "SoC Minimum", "soc_min_prozent",
+            "user_preference", unit="%",
+        ),
+        _control_item(
+            f"input_number.ems_{p}_soc_max_prozent", "SoC Maximum", "soc_max_prozent",
+            "user_preference", unit="%",
+        ),
+        _control_item(
+            f"input_number.ems_{p}_geschutzte_mindestleistung_w",
+            "Geschützte Mindestleistung", "geschutzte_mindestleistung", "user_preference",
+            unit="W",
+        ),
+        _control_item(
+            f"input_number.ems_{p}_reserve_w", "Reserve", "reserve_w", "user_preference",
+            unit="W",
+        ),
+        _control_item(
+            f"input_number.ems_{p}_umschalt_totzone_w", "Totzone um Null",
+            "umschalt_totzone_w", "control_tuning", unit="W", planning_relevant=False,
+        ),
+        _control_item(
+            f"input_number.ems_{p}_hoch_regelzeit_s", "Hoch-Regelzeit", "hoch_regelzeit_s",
+            "control_tuning", unit="s", planning_relevant=False,
+        ),
+        _control_item(
+            f"input_number.ems_{p}_runter_regelzeit_s", "Runter-Regelzeit",
+            "runter_regelzeit_s", "control_tuning", unit="s", planning_relevant=False,
+        ),
+        _control_item(
+            f"input_number.ems_{p}_max_anderung_pro_schritt_w", "Max. Änderung/Schritt",
+            "max_anderung_pro_schritt", "control_tuning", unit="W", planning_relevant=False,
+        ),
+        _control_item(
+            f"input_number.ems_{p}_min_anderung_pro_schritt_w", "Totband (Deadband)",
+            "min_anderung_pro_schritt", "control_tuning", unit="W", planning_relevant=False,
+        ),
+    ]
+
+
+def _build_device_controls_schema(
+    device_configs: list,
+    *,
+    residual_power_entity: str,
+    interval_s: int,
+    battery_residual_power_entity: str = "",
+) -> list[dict]:
+    """Baut den abwärtskompatiblen HEMS-Vertrag für UI und Energy Pilot."""
+    schema: list[dict] = [{
+        "name": "global",
+        "label": "Global",
+        "schema_version": 2,
+        "control_policy": "pv_surplus_only",
+        "residual_power_entity": residual_power_entity,
+        "battery_residual_power_entity": battery_residual_power_entity,
+        "interval_s": interval_s,
+        "items": _GLOBAL_CTRL_ITEMS,
+    }]
+    for cfg in device_configs:
+        name = cfg["name"]
+        cls = cfg["class"]
+        prefix = cfg["entity_prefix"]
+        label = cfg["label"] or name.replace("_", " ").title()
+        base = {
+            "name": name,
+            "label": label,
+            "class": cls,
+            "entity_prefix": prefix,
+            "allowed_modes": parse_modes(cfg.get("allowed_modes")),
+            "control_policy": "pv_surplus_only",
+        }
+        if cls == "controllable":
+            output_unit = cfg["output_unit"]
+            suffix = "a" if output_unit == "ampere" else "w"
+            base.update({
+                "output_unit": output_unit,
+                "actual_power_entity": cfg["actual_power_entity"],
+                "request_entity": f"input_number.ems_{prefix}_anforderung_leistung_{suffix}",
+                "allowed_phases": [int(value) for value in cfg["phases"].split(",")],
+                "voltage_entities": [
+                    value for key in ("voltage_l1_entity", "voltage_l2_entity", "voltage_l3_entity")
+                    if (value := cfg[key])
+                ],
+                "items": _ctrl_items_controllable(prefix, output_unit),
+            })
+            schema.append(base)
+        elif cls == "binary":
+            base.update({
+                "output_unit": "watt",
+                "switch_entity": cfg["switch_entity"],
+                "request_entity": f"input_boolean.ems_{prefix}_anforderung_an",
+                "items": _ctrl_items_binary(prefix),
+            })
+            schema.append(base)
+        elif cls == "battery":
+            # request_entity trägt EINEN signierten Wert: + laden, - entladen.
+            # Der HA-Helfer braucht deshalb ein negatives Minimum, sonst kommt
+            # nie eine Entladeanforderung an.
+            base.update({
+                "output_unit": "watt",
+                "soc_entity": cfg["soc_entity"],
+                "charge_power_entity": cfg["charge_power_entity"],
+                "discharge_power_entity": cfg["discharge_power_entity"],
+                "power_entity": cfg["power_entity"],
+                "power_sign": cfg["power_sign"],
+                "available_charge_power_w": cfg["available_charge_power_w"],
+                "available_discharge_power_w": cfg["available_discharge_power_w"],
+                "capacity_kwh": cfg["capacity_kwh"],
+                "request_entity": f"input_number.ems_{prefix}_anforderung_leistung_w",
+                "request_sign": "positiv_laden",
+                "mode_entity": f"input_select.ems_{prefix}_anforderung_betriebsart",
+                "items": _ctrl_items_battery(prefix),
+            })
+            schema.append(base)
+    return schema
 
 
 # ---------------------------------------------------------------------------
@@ -94,21 +376,56 @@ def _ctrl_items_binary(p: str) -> list:
 
 class HEMSApp:
     def __init__(self):
-        cfg = _load_config()
-        self.interval_s: int = int(cfg.get("interval_s", 30))
-        self.post_cycle_script: str = (cfg.get("post_cycle_script") or "").strip()
-        residual_entity: str = (cfg.get("residual_power_entity") or "").strip()
+        # Eine je Prozessstart neue Kennung. Die Oberfläche erkennt daran, dass
+        # nach einem Neustart wirklich eine NEUE Instanz antwortet – eine sehr
+        # kurze Unterbrechung sähe sonst wie ein abgeschlossener Neustart aus.
+        self.instance_id: str = uuid.uuid4().hex
+        self._raw_options = _load_raw_options()
+        validated = validate_options(self._raw_options)
+        options = validated.options
 
-        log_level = cfg.get("log_level", "info").upper()
-        logging.getLogger().setLevel(getattr(logging, log_level, logging.INFO))
+        # Ein ungültiger globaler Wert darf den Start nicht verhindern: er fällt
+        # auf den dokumentierten Default zurück und bleibt als Feldfehler sichtbar.
+        def option(key: str):
+            return (GLOBAL_DEFAULTS[key] if key in validated.field_errors
+                    else options[key])
 
-        self._device_configs: list = cfg.get("devices", [])
+        self.interval_s: int = int(option("interval_s"))
+        self.post_cycle_script: str = str(option("post_cycle_script"))
+
+        logging.getLogger().setLevel(
+            getattr(logging, str(option("log_level")).upper(), logging.INFO))
+
         self.ha  = HAClient()
-        self.ems = EMSController(self._device_configs, residual_power_entity=residual_entity)
+        self.supervisor = SupervisorClient()
+        # Die VOLLSTÄNDIGE Geräteliste, auch die ungültigen Einträge: der
+        # Controller ist die eine autoritative Validierung und macht daraus
+        # sowohl die Registry als auch die inactive_devices im Status. Filterte
+        # main.py hier vor, bliebe die Liste im Status immer leer.
+        self.ems = EMSController(
+            options["devices"],
+            residual_power_entity=str(option("residual_power_entity")),
+            battery_residual_power_entity=str(option("battery_residual_power_entity")),
+            speicher_in_residual_enthalten=bool(options["speicher_in_residual_enthalten"]),
+            available_modes=options["available_modes"],
+        )
+        # Helfer-Karten im Steuerung-Tab nur für tatsächlich registrierte Geräte.
+        self._device_configs: list = self.ems.device_configs
+
+        self.config = ConfigService(
+            supervisor=self.supervisor,
+            write_ops=self.ha.execute_write_ops,
+            local_options=self._raw_options,
+            loaded_options=self._raw_options,
+            instance_id=self.instance_id,
+            entity_snapshot=lambda: self._last_states,
+        )
 
         # Gemeinsamer Zustand – vom Scheduler geschrieben, vom Web-Handler gelesen
+        self._last_states: dict = {}
         self._last_status: dict = {}
-        self._last_cycle_at: str = ""
+        self._last_cycle_at: str = ""      # Anzeigeformat: TT.MM.JJJJ hh:mm:ss (Berliner Zeit)
+        self._last_cycle_at_iso: str = ""  # Maschinenformat, unverändert für Bestandskonsumenten
         self._last_error: str = ""
         self._cycle_count: int = 0
 
@@ -119,19 +436,27 @@ class HEMSApp:
     async def _run_cycle(self) -> None:
         try:
             states = await self.ha.fetch_all_states()
+            # Für die Entitätsauswahl der Konfigurationsseite vorhalten: sie
+            # braucht denselben Schnappschuss, nicht einen eigenen HA-Abruf.
+            self._last_states = states
             st     = StateProxy(states)
             result = self.ems.run_cycle(st)
-            await self.ha.execute_write_ops(result["write_ops"])
+            write_results = await self.ha.execute_write_ops(result["write_ops"])
+            # Ergebnis zurückmelden: der Controller ordnet einen Fehlschlag dem
+            # verursachenden Gerät zu und macht ihn im Status sichtbar (B-2).
+            self.ems.report_write_results(write_results)
             if self.post_cycle_script:
                 try:
                     await self.ha.call_service("script", "turn_on",
                                                {"entity_id": self.post_cycle_script})
                 except Exception as exc:
                     log.warning("Post-cycle script '%s' failed: %s", self.post_cycle_script, exc)
-            self._last_status   = result["status"]
-            self._last_error    = ""
-            self._cycle_count  += 1
-            self._last_cycle_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            now = datetime.datetime.now(BERLIN)
+            self._last_status       = result["status"]
+            self._last_error        = ""
+            self._cycle_count      += 1
+            self._last_cycle_at     = now.strftime(DISPLAY_TIME_FORMAT)
+            self._last_cycle_at_iso = now.replace(microsecond=0).isoformat()
             log.debug("Cycle %d completed.", self._cycle_count)
         except Exception as exc:
             self._last_error = str(exc)
@@ -148,36 +473,32 @@ class HEMSApp:
     # ------------------------------------------------------------------
 
     async def _handle_index(self, request: web.Request) -> web.Response:
-        tmpl = Path(__file__).parent / "templates" / "index.html"
-        return web.FileResponse(tmpl)
+        """Liefert die gebaute Oberfläche aus app/static (Quellen: web/, siehe D-035)."""
+        return web.FileResponse(_STATIC_DIR / "index.html")
 
     async def _handle_status(self, request: web.Request) -> web.Response:
         return web.json_response({
-            "status":        self._last_status,
-            "last_cycle_at": self._last_cycle_at,
-            "cycle_count":   self._cycle_count,
-            "error":         self._last_error,
-            "interval_s":    self.interval_s,
+            "status":            self._last_status,
+            # Anzeigeformat nach eiserner Regel 9; das Maschinenformat bleibt
+            # zusätzlich erhalten, damit Bestandskonsumenten weiterlesen können (D-037).
+            "last_cycle_at":     self._last_cycle_at,
+            "last_cycle_at_iso": self._last_cycle_at_iso,
+            "cycle_count":       self._cycle_count,
+            "error":             self._last_error,
+            "interval_s":        self.interval_s,
+            # Wechselt bei jedem Prozessstart – so erkennt die Oberfläche einen
+            # abgeschlossenen Neustart zuverlässig.
+            "instance_id":       self.instance_id,
         })
 
     async def _handle_device_controls_schema(self, request: web.Request) -> web.Response:
         """Liefert das Steuerung-Tab-Kontrollschema, abgeleitet aus den konfigurierten Geräten."""
-        schema = [{"label": "Global", "items": _GLOBAL_CTRL_ITEMS}]
-        for cfg in self._device_configs:
-            name   = (cfg.get("name")          or "").strip()
-            cls    = (cfg.get("class")         or "").strip()
-            prefix = (cfg.get("entity_prefix") or "").strip() or name
-            label  = (cfg.get("label")         or "").strip() or name.replace("_", " ").title()
-            # `name` = technischer Bezeichner (stabile Geräte-ID, deckt sich mit der
-            # `id` in `/api/status`), `label` = reiner Anzeigename. Beide getrennt
-            # ausliefern, damit Konsumenten (Energy Pilot) die Identität am `name`
-            # festmachen und `label` nur anzeigen – ein Label-Rename bricht so keine
-            # Geräte-Zuordnung mehr.
-            if cls == "controllable":
-                output_unit = (cfg.get("output_unit") or "watt").strip()
-                schema.append({"name": name, "label": label, "items": _ctrl_items_controllable(prefix, output_unit)})
-            elif cls == "binary":
-                schema.append({"name": name, "label": label, "items": _ctrl_items_binary(prefix)})
+        schema = _build_device_controls_schema(
+            self._device_configs,
+            residual_power_entity=self.ems.residual_power_entity,
+            interval_s=self.interval_s,
+            battery_residual_power_entity=self.ems.battery_residual_power_entity,
+        )
         return web.json_response(schema)
 
     async def _handle_controls(self, request: web.Request) -> web.Response:
@@ -240,6 +561,77 @@ class HEMSApp:
             return web.json_response({"error": str(exc)}, status=500)
 
     # ------------------------------------------------------------------
+    # Konfigurations-Handler – dünn: die Fachlogik liegt in ConfigService
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _problem(exc: ConfigProblem) -> web.Response:
+        return web.json_response({"error": exc.message, **exc.payload}, status=exc.status)
+
+    @staticmethod
+    async def _draft(request: web.Request) -> tuple:
+        """Liest Entwurf und Revision aus dem Rumpf. Wirft bei Unlesbarem."""
+        try:
+            body = await request.json()
+        except Exception as exc:
+            raise ConfigProblem("Der Anfragerumpf ist kein gültiges JSON.") from exc
+        if not isinstance(body, dict):
+            raise ConfigProblem("Erwartet wird ein JSON-Objekt.")
+        options = body.get("options")
+        if not isinstance(options, dict):
+            raise ConfigProblem("Feld 'options' fehlt oder ist kein Objekt.")
+        return options, str(body.get("stored_revision") or "")
+
+    async def _handle_config_get(self, request: web.Request) -> web.Response:
+        try:
+            return web.json_response(await self.config.read())
+        except ConfigProblem as exc:
+            return self._problem(exc)
+
+    async def _handle_config_entities(self, request: web.Request) -> web.Response:
+        raw = request.query.get("domains", "")
+        domains = [d.strip() for d in raw.split(",") if d.strip()] or None
+        return web.json_response({"entities": self.config.entities(domains)})
+
+    async def _handle_config_validate(self, request: web.Request) -> web.Response:
+        try:
+            options, _ = await self._draft(request)
+        except ConfigProblem as exc:
+            return web.json_response({"error": exc.message}, status=400)
+        return web.json_response(self.config.validate(options))
+
+    async def _handle_config_put(self, request: web.Request) -> web.Response:
+        try:
+            options, stored_revision = await self._draft(request)
+        except ConfigProblem as exc:
+            return web.json_response({"error": exc.message}, status=400)
+        try:
+            return web.json_response(await self.config.save(options, stored_revision))
+        except ConfigProblem as exc:
+            return self._problem(exc)
+
+    async def _handle_config_restart(self, request: web.Request) -> web.Response:
+        try:
+            # 202: angenommen, läuft. Der eigentliche Neustart folgt erst, wenn
+            # diese Antwort den Browser erreicht hat.
+            return web.json_response(await self.config.restart(), status=202)
+        except ConfigProblem as exc:
+            return self._problem(exc)
+
+    async def _handle_config_save_and_restart(self, request: web.Request) -> web.Response:
+        try:
+            options, stored_revision = await self._draft(request)
+        except ConfigProblem as exc:
+            return web.json_response({"error": exc.message}, status=400)
+        try:
+            result = await self.config.save_and_restart(options, stored_revision)
+        except ConfigProblem as exc:
+            return self._problem(exc)
+        # Gespeichert, aber ohne Neustart, ist kein Fehler – nur ein anderer
+        # Zustand. Er bekommt deshalb 200 statt 202 und benennt sich selbst.
+        return web.json_response(result, status=202 if result.get("restarting") else 200)
+
+    # ------------------------------------------------------------------
     # Ausführung
     # ------------------------------------------------------------------
 
@@ -252,10 +644,18 @@ class HEMSApp:
         app.router.add_get("/api/ep",                      self._handle_ep)
         app.router.add_get("/api/device_controls_schema", self._handle_device_controls_schema)
         app.router.add_post("/api/set",                   self._handle_set)
+        app.router.add_get("/api/config",                 self._handle_config_get)
+        app.router.add_get("/api/config/entities",        self._handle_config_entities)
+        app.router.add_post("/api/config/validate",       self._handle_config_validate)
+        app.router.add_put("/api/config",                 self._handle_config_put)
+        app.router.add_post("/api/config/restart",        self._handle_config_restart)
+        app.router.add_post("/api/config/save-and-restart",
+                            self._handle_config_save_and_restart)
 
-        # Statische Assets (CSS/JS) aus dem static-Verzeichnis ausliefern
-        static_dir = Path(__file__).parent / "static"
-        app.router.add_static("/static/", static_dir, name="static")
+        # Gebündelte Assets der Oberfläche. Vite legt sie unter assets/ ab; die
+        # Pfade in index.html sind relativ, damit sie auch unter dem
+        # Ingress-Präfix auflösen (D-036).
+        app.router.add_static("/assets/", _STATIC_DIR / "assets", name="assets")
 
         runner = web.AppRunner(app)
         await runner.setup()
@@ -284,6 +684,7 @@ class HEMSApp:
             except asyncio.CancelledError:
                 pass
             await self.ha.close()
+            await self.supervisor.close()
             await runner.cleanup()
 
 

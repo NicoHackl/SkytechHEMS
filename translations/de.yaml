@@ -2,63 +2,145 @@ configuration:
   devices:
     name: Geräteliste
     description: >-
-      Liste der vom EMS geregelten Verbraucher. Felder je Eintrag:
+      Liste der vom HEMS geregelten Geräte. Felder je Eintrag:
 
-      • name (Pflicht) – Technischer Bezeichner, wird direkt als Präfix für
-      alle HA-Helfer-Entitäten verwendet. Beispiel: name=heizstab →
-      input_boolean.ems_heizstab_freigabe, input_number.ems_heizstab_prioritat
-      usw. Nur Kleinbuchstaben, Ziffern und Unterstriche verwenden.
+      • name (Pflicht) – Technischer Bezeichner, wird ohne entity_prefix direkt
+      als Präfix für alle HA-Helfer-Entitäten verwendet. Beispiel:
+      name=heizstab → input_boolean.ems_heizstab_freigabe,
+      input_number.ems_heizstab_prioritat usw. Nur Kleinbuchstaben, Ziffern und
+      Unterstriche, und je Anlage eindeutig.
 
-      • label (optional) – Anzeigename in der Web-UI und im Steuerung-Tab.
-      Kann Umlaute, Leerzeichen und Sonderzeichen enthalten (z. B. „Heizlüfter
+      • label (optional) – Anzeigename in der Web-UI und im Steuerung-Tab. Kann
+      Umlaute, Leerzeichen und Sonderzeichen enthalten (z. B. „Heizlüfter
       Wohnzimmer"). Hat keinen Einfluss auf die Entitätsnamen.
 
       • class (Pflicht) – Geräteklasse: „controllable" für stufenlos regelbare
       Verbraucher (Heizstab, Wallbox), „binary" für AN/AUS-Geräte (Heizlüfter,
-      Pumpe).
-
-      • actual_power_entity (nur controllable, Pflicht) – Sensor-Entität die
-      die aktuelle Ist-Leistung des Geräts in Watt liefert, z. B.
-      sensor.elwa_modbus_istleistung.
-
-      • switch_entity (nur binary, Pflicht) – Schalt-Entität des realen Geräts,
-      z. B. switch.heizlufter. Das EMS liest daraus den Ist-Zustand und die
-      Schaltdauer.
+      Pumpe), „battery" für einen AC-gekoppelten Speicher.
 
       • entity_prefix (optional) – Überschreibt den HA-Entitätspräfix, wenn
-      dieser vom name abweicht. Nötig wenn die HA-Helfer bereits mit einem
-      anderen Präfix angelegt wurden. Beispiel: name=wallbox_1 aber Helfer
-      heißen ems_wallbox_* → entity_prefix=wallbox.
+      dieser vom name abweicht. Nötig, wenn die HA-Helfer bereits mit einem
+      anderen Präfix angelegt wurden. Beispiel: name=wallbox_1, aber die Helfer
+      heißen ems_wallbox_* → entity_prefix=wallbox. Muss ebenfalls eindeutig
+      sein.
 
-      • allowed_modes (optional, Standard „auto") – Kommagetrennte Liste der
-      globalen Regelmodi, in denen das Gerät aktiv ist. Mögliche Werte: auto,
-      nur_heizen, nur_laden. Beispiel: „auto,nur_heizen".
+      • allowed_modes (Pflicht, darf leer sein) – Kommagetrennte Liste der
+      globalen Regelmodi, in denen normale Nutzerregeln auf dieses Gerät
+      wirken. Zulässig sind manuell, nur_heizen und nur_laden, jeweils als
+      Teilmenge der globalen Option available_modes. Der Alt-Wert „auto" wird
+      automatisch auf „manuell" abgebildet. Ein leerer Wert ist gültig und
+      bedeutet „nur Energy Pilot": normale Nutzerregeln aktivieren das Gerät
+      dann nicht.
 
-      • output_unit (optional, nur controllable, Standard „watt") – Einheit
-      des Ausgabewerts. „watt" schreibt Watt in die Anforderungs-Entität.
-      „ampere" konvertiert intern berechnete Watt in Ampere (ganzzahlig,
-      immer abgerundet) – benötigt von Wallboxen und ähnlichen Geräten.
+      REGELBARE GERÄTE (class: controllable)
 
-      • phases (optional, nur controllable + ampere, Standard „1") –
-      Kommagetrennte Phasenkonfiguration. Erlaubte Werte: „1" (einphasig),
-      „3" (dreiphasig) oder „1,3" (automatische Phasenumschaltung). Bei „1,3"
-      wählt das EMS automatisch 3-phasiges Laden wenn der PV-Pool ausreicht
-      (floor(pool ÷ (3 × U)) ≥ min_technisch_a), sonst 1-phasig.
-      Umrechnungsformel: I = floor(P ÷ (Phasen × U)).
+      • actual_power_entity (Pflicht) – Sensor-Entität mit der aktuellen
+      Ist-Leistung des Geräts in Watt, z. B. sensor.elwa_modbus_istleistung.
+      Fehlt sie, wird der Eintrag beim Start übersprungen und in der
+      Oberfläche als inaktives Gerät angezeigt.
 
-      • phase_switch_delay_s (optional, nur controllable + ampere + phases=„1,3",
-      Standard 300) – Hysterese-Sperrzeit in Sekunden zwischen zwei
-      Phasenwechseln. Verhindert schnelles Hin- und Herschalten bei
-      Leistungsschwankungen. Empfehlung: 300 s (5 Minuten).
+      • output_unit (optional, Standard „watt") – Einheit des Ausgabewerts.
+      „watt" schreibt Watt in die Anforderungs-Entität. „ampere" rechnet die
+      intern berechneten Watt in ganze Ampere um (immer abgerundet) und nutzt
+      die _a-Helfer – benötigt von Wallboxen und ähnlichen Geräten.
+
+      • phases (optional, nur bei output_unit=ampere, Standard „1") –
+      Kommagetrennte Phasenkonfiguration. Erlaubt sind „1" (einphasig), „3"
+      (dreiphasig) oder „1,3" (automatische Phasenumschaltung). Bei „1,3"
+      wählt das HEMS dreiphasiges Laden, sobald der PV-Pool ausreicht
+      (floor(Pool ÷ (Phasen × U)) ≥ technical_minimum), sonst einphasig.
+
+      • phase_switch_delay_s (optional, nur bei phases „1,3", Standard 300) –
+      Sperrzeit in Sekunden zwischen zwei Phasenwechseln. Fallback für den
+      optionalen Helfer input_number.ems_<präfix>_min_umschaltzeit_s.
 
       • voltage_l1_entity / voltage_l2_entity / voltage_l3_entity (optional,
-      nur controllable + ampere) – HA-Sensoren für die aktuellen
-      Phasenspannungen L1-N, L2-N und L3-N in Volt (z. B.
-      sensor.wallbox_spannung_l1). Plausibilitätsbereich 180–260 V je Phase;
-      außerhalb oder bei fehlendem Sensor wird automatisch 230 V verwendet.
-      Bei 1-phasigem Betrieb wird nur L1 herangezogen, bei 3-phasigem alle
-      drei (P = I × (U_L1 + U_L2 + U_L3)). Leer lassen wenn kein Sensor
-      vorhanden.
+      nur bei output_unit=ampere) – HA-Sensoren für die Phasenspannungen L1-N,
+      L2-N und L3-N in Volt. Plausibilitätsbereich 180–260 V je Phase;
+      außerhalb oder bei fehlendem Sensor werden 230 V verwendet.
+
+      • technical_minimum / technical_maximum (Pflicht) – Untere und obere
+      technische Grenze in der zu output_unit passenden Einheit (W oder A).
+      technical_minimum ab 0, technical_maximum größer als 0 und mindestens so
+      groß wie das Minimum. Beide sind Fallback für die gleichnamigen Helfer
+      min_technisch_<w|a> und max_technisch_<w|a>: ein gültiger HA-Wert hat
+      Vorrang, ein fehlender oder ausgefallener wird durch diesen Wert ersetzt.
+
+      • increase_delay_s / decrease_delay_s (Pflicht) – Mindestabstand in
+      Sekunden zwischen zwei Regelschritten nach oben bzw. beim normalen
+      Absenken, ab 0. Fallback für hoch_regelzeit_s und runter_regelzeit_s.
+      Bei einem Netzdefizit wird unabhängig davon sofort abgeregelt.
+
+      • maximum_step_change / minimum_step_change (Pflicht) – Maximale
+      Sollwertänderung je Regelzyklus (größer als 0) und Schreib-Totband (ab 0,
+      höchstens so groß wie das Maximum), beide in der Einheit aus output_unit.
+      Fallback für max_anderung_pro_schritt_<w|a> und
+      min_anderung_pro_schritt_<w|a>.
+
+      Fehlt eines dieser sechs Felder, wird das Gerät beim Start nicht
+      registriert und mit dem konkreten Feldfehler als inaktives Gerät
+      angezeigt.
+
+      BINÄRE GERÄTE (class: binary)
+
+      • switch_entity (Pflicht) – Schalt-Entität des realen Geräts, z. B.
+      switch.heizlufter. Sie wird nur gelesen; daraus stammen der Ist-Zustand
+      und über last_changed die Lauf- und Auszeit.
+
+      • power_w (Pflicht) – Angenommene Leistungsaufnahme im EIN-Zustand in
+      Watt, größer als 0. Grundlage der Pool-Reservierung.
+
+      • on_reserve_w (Pflicht, ab 0) – Gerätespezifischer Hysterese-Aufschlag
+      beim Einschalten, zusätzlich zur globalen Einschaltreserve.
+
+      • min_runtime_s / min_offtime_s / off_delay_s (Pflicht, jeweils ab 0) –
+      Mindestlaufzeit, Mindestauszeit und Abschaltverzögerung in Sekunden.
+      Mindestlaufzeit und Abschaltverzögerung gelten auch bei einer
+      Notabschaltung – Geräteschutz schlägt Regelgüte.
+
+      Alle fünf Felder sind Fallback für die gleichnamigen HA-Helfer
+      leistung_w, einschaltreserve_w, mindestlaufzeit_s, mindestauszeit_s und
+      abschaltverzogerung_s. Fehlt eines, wird das Gerät nicht registriert.
+
+      AC-SPEICHER (class: battery)
+
+      • soc_entity (Pflicht) – Sensor-Entität mit dem Ladezustand in Prozent.
+      Liefert sie „unavailable", fällt dieser Speicher aus der Regelung und
+      geht auf Standby; die übrigen Geräte laufen weiter.
+
+      • charge_power_entity + discharge_power_entity ODER power_entity
+      (Pflicht) – Genau eine vollständige Ist-Leistungsvariante. Entweder zwei
+      vorzeichenlose Sensoren für Lade- und Entladeleistung in Watt oder ein
+      signierter Sensor. Beide Varianten gleichzeitig sind ungültig.
+
+      • power_sign (nur mit power_entity, Standard „positiv_laden") –
+      Vorzeichen von power_entity: „positiv_laden" oder „positiv_entladen".
+
+      • available_charge_power_w / available_discharge_power_w (Pflicht,
+      jeweils ab 0) – Direkt eingetragene verfügbare Lade- bzw.
+      Entladeleistung in Watt. Sie sind die alleinigen physischen
+      Maximalgrenzen. Ein Wert 0 sperrt die jeweilige Richtung bewusst.
+
+      • capacity_kwh (optional, Standard 0) – Nutzbare Kapazität in kWh.
+      Ausschließlich Anzeige (Energieinhalt), keine Regelgröße.
+
+      • soc_max_hysteresis_percent (Standard 2) – Abstand unter soc_max, bevor
+      Laden nach Erreichen des Maximums wieder freigegeben wird. Ohne diese
+      Hysterese flippt der Speicher bei 100 % im Takt zwischen Laden und
+      Standby.
+
+      • direction_switch_delay_s (Standard 5) – Sperrzeit in Sekunden nach
+      einem Richtungswechsel. Währenddessen wird Standby angefordert, nicht die
+      alte Richtung fortgesetzt.
+
+      Ein Speicher schreibt EINEN signierten Sollwert nach
+      input_number.ems_<präfix>_anforderung_leistung_w (positiv = laden,
+      negativ = entladen) und die Betriebsart nach
+      input_select.ems_<präfix>_anforderung_betriebsart. Der Zahlen-Helfer
+      braucht deshalb ein negatives Minimum, sonst klemmt Home Assistant jede
+      Entladeanforderung auf 0. Der Auswahl-Helfer braucht die Optionen laden,
+      entladen und standby. Die Übersetzung in Modbus- oder MQTT-Aufrufe
+      übernimmt eine HA-Automation, nicht das Add-on.
   interval_s:
     name: Regelintervall (Sekunden)
     description: >-
@@ -72,9 +154,11 @@ configuration:
       Detaillierungsgrad der Add-on-Protokolle. „info" ist für den
       Normalbetrieb ausreichend. „debug" gibt zusätzlich alle
       Regelentscheidungen (Pool, Defizit, Geräte-Kandidaten) aus –
-      nützlich zur Fehlersuche. Der Log-Level kann auch zur Laufzeit über
-      den HA-Helfer „input_boolean.ems_pyems_debug_output" umgeschaltet
-      werden, ohne das Add-on neu zu starten.
+      nützlich zur Fehlersuche. Unabhängig davon lässt sich das
+      zusätzliche Regelentscheidungs-Logging zur Laufzeit über den
+      HA-Helfer „input_boolean.ems_pyems_debug_output" ein- und
+      ausschalten, ohne das Add-on neu zu starten; der hier eingestellte
+      Log-Level bleibt davon unberührt.
   post_cycle_script:
     name: Post-Cycle-Skript (optional)
     description: >-
@@ -93,3 +177,39 @@ configuration:
       zurückrechnet. Standard:
       sensor.verfugbare_leistung_fur_uberschussverbraucher (Home Assistant
       slugifiziert Umlaute: ü→u, ö→o, ä→a, ß→ss).
+  battery_residual_power_entity:
+    name: Hausleistungsbilanz für AC-Speicher
+    description: >-
+      HA-Sensor-Entität für die Entladeplanung aller AC-Speicher. Negativ
+      bedeutet Netzbezug beziehungsweise Unterdeckung, positiv Einspeisung.
+      Der Wert muss Netzleistung und die Leistung der selbstregelnden
+      E3DC-Batterie zusammenführen. Er wird ausschließlich für die Entladung
+      benutzt; das Laden bleibt am Überschuss-Sensor. Bei einem konfigurierten
+      AC-Speicher ist dieses Feld Pflicht. Liefert der Sensor unknown,
+      unavailable oder keinen Zahlenwert, gehen alle AC-Speicher sicher in
+      Standby.
+  speicher_in_residual_enthalten:
+    name: Speicherleistung im Überschuss-Sensor enthalten
+    description: >-
+      Ob die Lade- und Entladeleistung der vom HEMS geregelten Speicher im
+      Überschuss-Sensor bereits enthalten ist. Bei AC-gekoppelten Speichern mit
+      Messpunkt an der Netzübergabe ist das der Normalfall („an"): das EMS
+      rechnet die gemessene Entladung heraus, bevor es den Pool bildet.
+      Andernfalls liest es die eigene Entladung als PV-Überschuss, schaltet
+      Verbraucher zu und der Speicher ist in einem Zyklus leer. Auf „aus"
+      stellen, wenn der Sensor den Speicher bereits herausrechnet. Prüfen:
+      EMS deaktivieren, Speicher von Hand auf 1 kW Entladung zwingen – steigt
+      der Sensorwert um 1 kW, gehört diese Option auf „an". Speicher, die das
+      HEMS nicht regelt (z. B. ein selbstregelnder Hybridspeicher), sind davon
+      nicht betroffen.
+  available_modes:
+    name: Aktivierte Regelmodi
+    description: >-
+      Kommagetrennte Liste der normalen Regelmodi, die in dieser Anlage
+      überhaupt verwendet werden. Zulässig sind manuell, nur_heizen und
+      nur_laden; Standard sind alle drei. Die Sondermodi „auto" (Energy Pilot)
+      und „aus" gehören nicht in diese Liste und bleiben immer unterstützt.
+      Die Auswahl je Gerät (allowed_modes) muss eine Teilmenge davon sein.
+      Meldet input_select.ems_regelmodus einen normalen, hier nicht aktivierten
+      Modus, ist der Zyklus sicher inaktiv – die Optionen des HA-Helfers legt
+      oder ändert das Add-on nicht.

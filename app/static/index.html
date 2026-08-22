@@ -1,0 +1,35 @@
+<!doctype html>
+<!-- data-design="ha": Designsprache Home Assistant, Akzent #18BCF2 (AGENTS.md,
+     eiserne Regel 10). Der Wert steht fest — er wird nicht zur Laufzeit
+     umgeschaltet. data-theme setzt das Skript unten und danach der ThemeProvider. -->
+<html lang="de" data-design="ha">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f4f5f7" />
+    <!-- Interne Oberflaeche hinter dem HA-Ingress: gehoert nicht in Suchmaschinen. -->
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Skytech HEMS</title>
+    <script>
+      /* Hell/Dunkel vor dem ersten Frame festlegen. Laeuft React erst spaeter an,
+         blitzt sonst die helle Oberflaeche auf. Faellt localStorage aus (privater
+         Modus), bleibt data-theme leer und styles.css folgt der Systemvorgabe. */
+      (function () {
+        try {
+          var stored = localStorage.getItem('theme')
+          var theme = stored === 'light' || stored === 'dark'
+            ? stored
+            : window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+          document.documentElement.dataset.theme = theme
+        } catch (error) {
+          /* bewusst leer — die Systemvorgabe im CSS greift */
+        }
+      })()
+    </script>
+    <script type="module" crossorigin src="./assets/index-BvEfN2Vj.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-D31Fj9qi.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

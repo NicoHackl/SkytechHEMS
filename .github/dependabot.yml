@@ -11,3 +11,11 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+
+  # Oberfläche: Nach einem Update muss das Bündel neu gebaut und mitcommittet
+  # werden (D-035) – sonst schlägt der Drift-Check in der CI fehl.
+  - package-ecosystem: "npm"
+    directory: "/web"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
