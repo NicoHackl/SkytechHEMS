@@ -41,6 +41,15 @@ description: >-
   Hausleistungsbilanz für deren Entladeplanung; speicher_in_residual_enthalten
   sagt, ob die Speicherleistung im Überschuss-Sensor steckt, available_modes
   schaltet die normalen Regelmodi frei.
+
+  Formel-basierte Sensorwerte (optional, bequemer über den Bereich „Sensoren"
+  im Ingress-Panel): residual_formula_variables/battery_residual_formula_variables
+  sind Listen aus name (Pflicht, gültiger Bezeichner) und entity (Pflicht,
+  Entity-ID); residual_formula_code/battery_residual_formula_code ist ein
+  eingeschränkter Python-Ausdruck, der diese Namen verwenden und der Variable
+  ueberschuss bzw. hausbilanz einen Wert zuweisen kann. Liefert der Code einen
+  gültigen Wert, ersetzt er die jeweilige Entität oben vollständig; leerer Code
+  lässt das Verhalten unverändert.
 version: "2.0.0"
 slug: "skytech_hems"
 init: false
@@ -72,6 +81,10 @@ options:
   battery_residual_power_entity: "sensor.hausleistungsbilanz_fur_ac_speicher"
   speicher_in_residual_enthalten: true
   available_modes: "manuell,nur_heizen,nur_laden"
+  residual_formula_variables: []
+  residual_formula_code: ""
+  battery_residual_formula_variables: []
+  battery_residual_formula_code: ""
   devices:
     - name: heizstab
       label: "Heizstab"
@@ -147,6 +160,14 @@ schema:
   battery_residual_power_entity: str?
   speicher_in_residual_enthalten: bool?
   available_modes: str?
+  residual_formula_variables:
+    - name: str
+      entity: str
+  residual_formula_code: str?
+  battery_residual_formula_variables:
+    - name: str
+      entity: str
+  battery_residual_formula_code: str?
   devices:
     - name: str
       label: str?

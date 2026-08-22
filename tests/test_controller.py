@@ -39,6 +39,114 @@ def test_empty_residual_entity_falls_back_to_default():
     assert ctrl._residual_entity == DEFAULT_RESIDUAL_ENTITY
 
 
+# ---- Formel-basierte Sensorwerte (D-045) ----
+
+def test_ohne_formel_bleibt_verhalten_unveraendert():
+    """Regressionsanker zuerst: leere Formel-Felder – der Standardfall jeder
+    Bestandsanlage – dürfen das Verhalten in keinem Byte verändern."""
+    ctrl = EMSController([], residual_power_entity="sensor.s")
+    st = make_states({
+        "input_boolean.ems_pv_regelung_aktiv": "on",
+        "input_select.ems_regelmodus": "auto",
+        "sensor.s": "3000",
+    })
+    res = ctrl.run_cycle(st)
+    assert res["status"]["residual_w"] == 3000.0
+    assert res["status"]["residual_source"] == "ha"
+
+
+def test_gueltige_formel_ersetzt_ueberschuss_entitaet():
+    ctrl = EMSController(
+        [], residual_power_entity="sensor.s",
+        residual_formula_variables=[{"name": "pv", "entity": "sensor.pv"}],
+        residual_formula_code="ueberschuss = pv * 2",
+    )
+    st = make_states({
+        "input_boolean.ems_pv_regelung_aktiv": "on",
+        "input_select.ems_regelmodus": "auto",
+        "sensor.s": "1",  # würde ohne Formel einen ganz anderen Wert liefern
+        "sensor.pv": "1500",
+    })
+    res = ctrl.run_cycle(st)
+    assert res["status"]["residual_w"] == 3000.0
+    assert res["status"]["residual_source"] == "formula"
+    assert res["status"]["pool_w"] == 3000.0
+
+
+def test_ungueltige_formel_faellt_auf_ueberschuss_entitaet_zurueck():
+    """Ein Zyklus bricht an einer kaputten Formel nie ab (Invariante 5)."""
+    ctrl = EMSController(
+        [], residual_power_entity="sensor.s",
+        residual_formula_variables=[{"name": "pv", "entity": "sensor.pv"}],
+        residual_formula_code="ueberschuss = pv / 0",
+    )
+    st = make_states({
+        "input_boolean.ems_pv_regelung_aktiv": "on",
+        "input_select.ems_regelmodus": "auto",
+        "sensor.s": "3000",
+        "sensor.pv": "1500",
+    })
+    res = ctrl.run_cycle(st)
+    assert res["status"]["residual_w"] == 3000.0
+    assert res["status"]["residual_source"] == "ha"
+
+
+def test_hard_lockout_greift_auch_bei_formelwert():
+    ctrl = EMSController(
+        [], residual_power_entity="sensor.s",
+        residual_formula_variables=[{"name": "pv", "entity": "sensor.pv"}],
+        residual_formula_code="ueberschuss = pv",
+    )
+    st = make_states({
+        "input_boolean.ems_pv_regelung_aktiv": "on",
+        "input_select.ems_regelmodus": "auto",
+        "sensor.s": "3000",
+        "sensor.pv": "-60000",
+    })
+    res = ctrl.run_cycle(st)
+    assert res["status"]["residual_source"] == "formula"
+    assert res["status"]["hard_lockout"] is True
+    assert res["status"]["pool_w"] == 0.0
+
+
+def test_gueltige_formel_ersetzt_hausleistungsbilanz():
+    ctrl = EMSController(
+        [], residual_power_entity="sensor.s",
+        battery_residual_power_entity="sensor.hb",
+        battery_residual_formula_variables=[{"name": "netz", "entity": "sensor.netz"}],
+        battery_residual_formula_code="hausbilanz = netz",
+    )
+    st = make_states({
+        "input_boolean.ems_pv_regelung_aktiv": "on",
+        "input_select.ems_regelmodus": "auto",
+        "sensor.s": "3000",
+        "sensor.hb": "0",  # würde ohne Formel gelten
+        "sensor.netz": "-700",
+    })
+    res = ctrl.run_cycle(st)
+    assert res["status"]["battery_residual_w"] == -700.0
+    assert res["status"]["battery_residual_source"] == "formula"
+
+
+def test_ungueltige_hausbilanz_formel_faellt_auf_entitaet_zurueck():
+    ctrl = EMSController(
+        [], residual_power_entity="sensor.s",
+        battery_residual_power_entity="sensor.hb",
+        battery_residual_formula_variables=[{"name": "netz", "entity": "sensor.netz"}],
+        battery_residual_formula_code="hausbilanz = netz / 0",
+    )
+    st = make_states({
+        "input_boolean.ems_pv_regelung_aktiv": "on",
+        "input_select.ems_regelmodus": "auto",
+        "sensor.s": "3000",
+        "sensor.hb": "-500",
+        "sensor.netz": "-700",
+    })
+    res = ctrl.run_cycle(st)
+    assert res["status"]["battery_residual_w"] == -500.0
+    assert res["status"]["battery_residual_source"] == "ha"
+
+
 # ---- Globalzustände ----
 
 def test_ems_disabled_yields_empty_pool():

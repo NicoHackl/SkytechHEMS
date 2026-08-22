@@ -162,6 +162,116 @@ def test_hausleistungsbilanz_muss_eine_sensor_entity_sein():
 
 
 # ---------------------------------------------------------------------------
+# Formel-basierte Sensorwerte (D-045)
+# ---------------------------------------------------------------------------
+
+def test_formel_defaults_sind_leer():
+    result = cfg.normalize_options({})
+    assert result["residual_formula_variables"] == []
+    assert result["residual_formula_code"] == ""
+    assert result["battery_residual_formula_variables"] == []
+    assert result["battery_residual_formula_code"] == ""
+
+
+def test_leere_formel_ist_gueltig_ohne_geraete():
+    assert cfg.validate_options(options()).valid
+
+
+def test_gueltige_formel_ist_gueltig():
+    result = cfg.validate_options(options(
+        residual_formula_variables=[{"name": "pv", "entity": "sensor.pv"}],
+        residual_formula_code="ueberschuss = pv",
+    ))
+    assert result.valid, result.field_errors
+
+
+def test_formel_zeilenname_muss_gueltiger_bezeichner_sein():
+    result = cfg.validate_options(options(
+        residual_formula_variables=[{"name": "123", "entity": "sensor.pv"}]))
+    assert "residual_formula_variables[0].name" in result.field_errors
+
+
+def test_formel_zeilenname_darf_kein_python_schluesselwort_sein():
+    result = cfg.validate_options(options(
+        residual_formula_variables=[{"name": "for", "entity": "sensor.pv"}]))
+    assert "residual_formula_variables[0].name" in result.field_errors
+
+
+def test_formel_zeilenname_darf_nicht_die_ausgabevariable_sein():
+    result = cfg.validate_options(options(
+        residual_formula_variables=[{"name": "ueberschuss", "entity": "sensor.pv"}]))
+    assert "residual_formula_variables[0].name" in result.field_errors
+
+
+def test_formel_zeilenname_darf_keine_whitelist_funktion_sein():
+    result = cfg.validate_options(options(
+        residual_formula_variables=[{"name": "abs", "entity": "sensor.pv"}]))
+    assert "residual_formula_variables[0].name" in result.field_errors
+
+
+def test_doppelter_formel_zeilenname_wird_erkannt():
+    result = cfg.validate_options(options(residual_formula_variables=[
+        {"name": "pv", "entity": "sensor.a"},
+        {"name": "pv", "entity": "sensor.b"},
+    ]))
+    assert "residual_formula_variables[1].name" in result.field_errors
+
+
+def test_formel_zeile_ohne_entity_ist_ein_fehler():
+    result = cfg.validate_options(options(
+        residual_formula_variables=[{"name": "pv", "entity": ""}]))
+    assert "residual_formula_variables[0].entity" in result.field_errors
+
+
+def test_formel_code_mit_syntaxfehler_wird_abgelehnt():
+    result = cfg.validate_options(options(
+        residual_formula_variables=[{"name": "pv", "entity": "sensor.pv"}],
+        residual_formula_code="ueberschuss = (",
+    ))
+    assert "residual_formula_code" in result.field_errors
+
+
+def test_formel_code_ohne_zuweisung_an_ueberschuss_wird_abgelehnt():
+    result = cfg.validate_options(options(
+        residual_formula_variables=[{"name": "pv", "entity": "sensor.pv"}],
+        residual_formula_code="x = pv",
+    ))
+    assert "residual_formula_code" in result.field_errors
+
+
+def test_hausbilanz_formel_muss_hausbilanz_zuweisen_nicht_ueberschuss():
+    result = cfg.validate_options(options(
+        battery_residual_formula_variables=[{"name": "netz", "entity": "sensor.netz"}],
+        battery_residual_formula_code="ueberschuss = netz",  # falsche Ausgabevariable
+    ))
+    assert "battery_residual_formula_code" in result.field_errors
+
+
+def test_formel_zwei_taps_haben_getrennte_namensraeume():
+    """Derselbe Zeilenname ist in Überschuss und Hausbilanz unabhängig gültig."""
+    result = cfg.validate_options(options(
+        residual_formula_variables=[{"name": "x", "entity": "sensor.a"}],
+        residual_formula_code="ueberschuss = x",
+        battery_residual_formula_variables=[{"name": "x", "entity": "sensor.b"}],
+        battery_residual_formula_code="hausbilanz = x",
+    ))
+    assert result.valid, result.field_errors
+
+
+def test_formel_aenderung_deaktiviert_vorsorglich_alle_altgeraete():
+    for key, value in (
+        ("residual_formula_variables", [{"name": "pv", "entity": "sensor.pv"}]),
+        ("residual_formula_code", "ueberschuss = pv"),
+        ("battery_residual_formula_variables", [{"name": "netz", "entity": "sensor.netz"}]),
+        ("battery_residual_formula_code", "hausbilanz = netz"),
+    ):
+        old = options(binary())
+        new = dict(old)
+        new[key] = value
+        assert cfg.devices_needing_shutdown(old, new) == cfg.normalize_options(old)["devices"], key
+
+
+# ---------------------------------------------------------------------------
 # Identität und Eindeutigkeit
 # ---------------------------------------------------------------------------
 

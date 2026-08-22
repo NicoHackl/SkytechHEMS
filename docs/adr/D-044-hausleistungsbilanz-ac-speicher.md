@@ -1,5 +1,10 @@
 # D-044: Separate Hausleistungsbilanz steuert die AC-Speicherentladung
 
+> **Ergänzung:** [D-045](D-045-formel-basierte-sensorwerte.md) erlaubt zusätzlich eine im
+> Ingress-Panel gepflegte, intern ausgewertete Formel als Alternative zu der hier beschriebenen
+> externen HA-Vorlage. Diese Entscheidung bleibt unverändert gültig — die externe Vorlage
+> funktioniert weiter.
+
 - **Datum:** 21.08.2026
 - **Status:** Aktiv
 - **Betrifft:** [`app/configuration.py`](../../app/configuration.py),

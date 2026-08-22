@@ -86,6 +86,35 @@ export function TextField({
   )
 }
 
+/** Mehrzeiliges Textfeld, z. B. für Formel-Code (D-045). Bewusst ein einfaches
+    `<textarea>` ohne Syntax-Highlighting — ein Editor-Paket wäre eine neue
+    UI-Bibliothek und damit nach Regel 8 nicht zulässig. */
+export function TextAreaField({
+  label, value, onChange, required, hint, error, placeholder, rows, wide,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  required?: boolean
+  hint?: string
+  error?: string
+  placeholder?: string
+  rows?: number
+  wide?: boolean
+}) {
+  return (
+    <Field label={label} required={required} hint={hint} error={error} wide={wide}>
+      <textarea
+        className="mono"
+        rows={rows ?? 8}
+        value={value}
+        placeholder={placeholder}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </Field>
+  )
+}
+
 /** Auswahlfeld aus einer festen Werteliste. */
 export function SelectField({
   label, value, options, onChange, required, hint, error, labels, wide,

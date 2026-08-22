@@ -36,6 +36,8 @@ const paths: Record<string, JSX.Element> = {
   battery: <><rect x="2" y="7" width="17" height="10" rx="2" /><path d="M22 10v4" /><path d="M11 9.5 8.5 13H12l-2 3.5" /></>,
   /* Warndreieck — Defizit, Sperre. */
   warning: <><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" /><path d="M12 9v4M12 17h.01" /></>,
+  /* Pulslinie — Sensoren, gemessener Wert. */
+  pulse: <path d="M3 12h4l2-7 4 14 3-9 2 2h4" />,
 }
 
 export function Icon({ name, size = 18, ...props }: { name: string; size?: number } & SVGProps<SVGSVGElement>) {

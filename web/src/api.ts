@@ -1,6 +1,6 @@
 import type {
   ConfigOptions, ConfigResponse, ConfigSaveResult, ConfigValidation,
-  ControlGroup, EntityOption, HaEntities, StatusResponse,
+  ControlGroup, EntityOption, FormulaTestResult, FormulaVariable, HaEntities, StatusResponse,
 } from './types'
 
 /* Einziger Ort im Frontend, an dem fetch aufgerufen wird. Basis-Pfad, Header und
@@ -80,5 +80,13 @@ export const api = {
     request<ConfigSaveResult>('/config/save-and-restart', {
       method: 'POST',
       body: JSON.stringify({ options, stored_revision: storedRevision }),
+    }),
+
+  /* Formel-basierte Sensorwerte (D-045): Testlauf gegen den aktuellen
+     HA-Schnappschuss, ohne zu speichern. */
+  testSensorFormula: (kind: 'residual' | 'battery_residual', variables: FormulaVariable[], code: string) =>
+    request<FormulaTestResult>('/config/sensors/test', {
+      method: 'POST',
+      body: JSON.stringify({ kind, variables, code }),
     }),
 }

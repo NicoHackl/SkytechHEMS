@@ -188,6 +188,37 @@ configuration:
       AC-Speicher ist dieses Feld Pflicht. Liefert der Sensor unknown,
       unavailable oder keinen Zahlenwert, gehen alle AC-Speicher sicher in
       Standby.
+  residual_formula_variables:
+    name: Überschuss – Formel-Variablen (D-045)
+    description: >-
+      Optionale Liste benannter HA-Entitäten für eine Formel, die den
+      Überschuss-Sensor oben ersetzen kann. Jeder Eintrag hat name (gültiger
+      Bezeichner, z. B. „pv") und entity (vollständige Entity-ID). Bequemer zu
+      pflegen im Bereich „Sensoren" des Ingress-Panels statt hier als YAML.
+      Ohne zugehörigen Code (residual_formula_code) ohne Wirkung.
+  residual_formula_code:
+    name: Überschuss – Formel-Code (D-045)
+    description: >-
+      Eingeschränkter Python-Ausdruck, der die oben benannten Variablen
+      verwenden und der Variable „ueberschuss" einen Wert zuweisen kann. Für
+      jeden Namen „<n>" steht zusätzlich „<n>_valid" zur Verfügung. Liefert der
+      Code einen gültigen, endlichen Wert, ersetzt er residual_power_entity
+      vollständig; leer oder ungültig lässt das Verhalten unverändert. Erlaubt
+      sind Zuweisungen, Arithmetik, Vergleiche, boolesche Verknüpfungen und
+      if/else – keine Schleifen, Funktionsdefinitionen, Imports oder
+      Attributzugriffe. Bequemer zu pflegen und mit einem Testlauf gegen den
+      aktuellen HA-Stand zu prüfen im Bereich „Sensoren" des Ingress-Panels.
+  battery_residual_formula_variables:
+    name: Hausleistungsbilanz – Formel-Variablen (D-045)
+    description: >-
+      Wie residual_formula_variables, aber für die Hausleistungsbilanz. Ohne
+      zugehörigen Code (battery_residual_formula_code) ohne Wirkung.
+  battery_residual_formula_code:
+    name: Hausleistungsbilanz – Formel-Code (D-045)
+    description: >-
+      Wie residual_formula_code, aber die Variable heißt „hausbilanz" und ein
+      gültiges Ergebnis ersetzt battery_residual_power_entity statt
+      residual_power_entity.
   speicher_in_residual_enthalten:
     name: Speicherleistung im Überschuss-Sensor enthalten
     description: >-

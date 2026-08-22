@@ -199,6 +199,71 @@ def test_validate_speichert_nichts():
     assert sup.saved == []
 
 
+def test_put_config_lehnt_ungueltigen_formel_code_ab():
+    sup = FakeSupervisor(options())
+    svc = service(supervisor=sup)
+    ergebnis = svc.validate(options(
+        residual_formula_variables=[{"name": "pv", "entity": "sensor.pv"}],
+        residual_formula_code="import os",
+    ))
+    assert ergebnis["valid"] is False
+    assert "residual_formula_code" in ergebnis["field_errors"]
+
+
+# ---------------------------------------------------------------------------
+# Formel-Testlauf (D-045)
+# ---------------------------------------------------------------------------
+
+def test_formel_testlauf_erfolgreich_gegen_den_letzten_schnappschuss():
+    svc = service(snapshot={"sensor.pv": {"state": "1500", "attributes": {}}})
+    ergebnis = svc.test_formula(
+        "residual", [{"name": "pv", "entity": "sensor.pv"}], "ueberschuss = pv * 2")
+    assert ergebnis["valid"] is True
+    assert ergebnis["value"] == 3000.0
+    assert ergebnis["error"] is None
+    assert ergebnis["variables"][0] == {
+        "name": "pv", "entity": "sensor.pv", "value": 1500.0,
+        "valid": True, "state": "valid", "source": "ha",
+    }
+
+
+def test_formel_testlauf_meldet_syntaxfehler_statt_zu_werfen():
+    svc = service()
+    ergebnis = svc.test_formula("residual", [], "ueberschuss = (")
+    assert ergebnis["valid"] is False
+    assert "Syntaxfehler" in ergebnis["error"]
+
+
+def test_formel_testlauf_meldet_verbotenes_konstrukt():
+    svc = service()
+    ergebnis = svc.test_formula("residual", [], "import os\nueberschuss = 1")
+    assert ergebnis["valid"] is False
+    assert ergebnis["error"] is not None
+
+
+def test_formel_testlauf_meldet_laufzeitfehler():
+    svc = service(snapshot={"sensor.pv": {"state": "10", "attributes": {}}})
+    ergebnis = svc.test_formula(
+        "residual", [{"name": "pv", "entity": "sensor.pv"}], "ueberschuss = pv / 0")
+    assert ergebnis["valid"] is False
+    assert "0" in ergebnis["error"]
+
+
+def test_formel_testlauf_hausbilanz_erwartet_die_richtige_ausgabevariable():
+    svc = service(snapshot={"sensor.netz": {"state": "-700", "attributes": {}}})
+    ergebnis = svc.test_formula(
+        "battery_residual", [{"name": "netz", "entity": "sensor.netz"}], "hausbilanz = netz")
+    assert ergebnis["valid"] is True
+    assert ergebnis["value"] == -700.0
+
+
+def test_formel_testlauf_speichert_nichts():
+    sup = FakeSupervisor(options())
+    svc = service(supervisor=sup)
+    svc.test_formula("residual", [{"name": "pv", "entity": "sensor.pv"}], "ueberschuss = pv")
+    assert sup.saved == []
+
+
 # ---------------------------------------------------------------------------
 # Speichern
 # ---------------------------------------------------------------------------

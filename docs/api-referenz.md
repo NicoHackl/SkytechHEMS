@@ -38,9 +38,11 @@ Scheduler.
     "global_mode": "manuell",
     "hard_lockout": false,
     "residual_sensor_valid": true,
+    "residual_source": "ha",
     "residual_w": 1840.0,
     "residual_bereinigt_w": 1840.0,
     "battery_residual_sensor_valid": true,
+    "battery_residual_source": "formula",
     "battery_residual_w": -700.0,
     "battery_residual_bereinigt_w": -700.0,
     "netz_support_w": 0.0,
@@ -209,6 +211,49 @@ Attribute.
 
 Prüft einen Entwurf, ohne zu speichern. **Rumpf** `{"options": { … }}`.
 **Antwort `200`** `{"valid": …, "errors": [ … ], "field_errors": { … }, "inactive_devices": [ … ]}`.
+Prüft dabei auch die vier Formel-Felder (D-045): ungültiger Zeilenname, doppelter Name, ungültige
+Entity-ID oder ungültiger Code landen als `field_errors["residual_formula_code"]` bzw. unter
+`residual_formula_variables[i].name`/`.entity` (analog für `battery_residual_*`).
+
+### `POST /api/config/sensors/test`
+
+Formel-basierte Sensorwerte (D-045): führt einen Formel-**Entwurf** live gegen den aktuellen
+HA-Schnappschuss aus, ohne zu speichern — der „Testen"-Knopf im Sensoren-Formular. Bewusst kein
+`{"options": {…}}`-Rumpf wie bei `/validate`: geprüft wird eine einzelne Zeilenliste plus Code, noch
+bevor sie Teil des Konfigurationsentwurfs sind.
+
+**Rumpf**
+
+```json
+{
+  "kind": "residual",
+  "variables": [{"name": "pv", "entity": "sensor.pv_leistung"}],
+  "code": "ueberschuss = pv if pv_valid else 0"
+}
+```
+
+`kind` ist `"residual"` oder `"battery_residual"` und legt nur fest, welche Ausgabevariable erwartet
+wird (`ueberschuss` bzw. `hausbilanz`).
+
+**Antwort `200`** — immer 200, ein Diagnosewerkzeug wie `/api/config/validate`; eine ungültige
+Formel ist kein HTTP-Fehler:
+
+```json
+{
+  "valid": true,
+  "value": 1500.0,
+  "error": null,
+  "error_line": null,
+  "variables": [
+    {"name": "pv", "entity": "sensor.pv_leistung", "value": 1500.0,
+     "valid": true, "state": "valid", "source": "ha"}
+  ]
+}
+```
+
+Bei ungültigem Code: `"valid": false`, `"value": null`, `"error"` als deutsche Meldung, `"error_line"`
+sofern zutreffend. `400` nur bei kaputtem Anfragerumpf (kein JSON, `kind` fehlt/unbekannt,
+`variables` keine Liste) — nicht bei einer inhaltlich ungültigen Formel.
 
 ### `PUT /api/config`
 

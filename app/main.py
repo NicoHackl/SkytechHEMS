@@ -408,6 +408,10 @@ class HEMSApp:
             battery_residual_power_entity=str(option("battery_residual_power_entity")),
             speicher_in_residual_enthalten=bool(options["speicher_in_residual_enthalten"]),
             available_modes=options["available_modes"],
+            residual_formula_variables=option("residual_formula_variables"),
+            residual_formula_code=str(option("residual_formula_code")),
+            battery_residual_formula_variables=option("battery_residual_formula_variables"),
+            battery_residual_formula_code=str(option("battery_residual_formula_code")),
         )
         # Helfer-Karten im Steuerung-Tab nur für tatsächlich registrierte Geräte.
         self._device_configs: list = self.ems.device_configs
@@ -600,6 +604,33 @@ class HEMSApp:
             return web.json_response({"error": exc.message}, status=400)
         return web.json_response(self.config.validate(options))
 
+    async def _handle_sensors_test(self, request: web.Request) -> web.Response:
+        """Führt einen Formel-Entwurf (D-045) live aus, ohne zu speichern.
+
+        Bewusst kein _draft(): der Rumpf ist kein {"options": {...}}, sondern
+        {"kind", "variables", "code"} – die Zeilenliste und der Code eines
+        einzelnen Sensoren-Tabs, noch bevor sie Teil des Konfigurationsentwurfs
+        sind. Antwortet immer mit 200 (Diagnosewerkzeug wie /api/config/validate):
+        eine ungültige Formel ist kein HTTP-Fehler, sondern trägt valid: false.
+        """
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response(
+                {"error": "Der Anfragerumpf ist kein gültiges JSON."}, status=400)
+        if not isinstance(body, dict):
+            return web.json_response({"error": "Erwartet wird ein JSON-Objekt."}, status=400)
+        kind = body.get("kind")
+        if kind not in ("residual", "battery_residual"):
+            return web.json_response(
+                {"error": "Feld 'kind' muss 'residual' oder 'battery_residual' sein."}, status=400)
+        variables = body.get("variables")
+        if not isinstance(variables, list):
+            return web.json_response(
+                {"error": "Feld 'variables' fehlt oder ist keine Liste."}, status=400)
+        code = str(body.get("code") or "")
+        return web.json_response(self.config.test_formula(kind, variables, code))
+
     async def _handle_config_put(self, request: web.Request) -> web.Response:
         try:
             options, stored_revision = await self._draft(request)
@@ -647,6 +678,7 @@ class HEMSApp:
         app.router.add_get("/api/config",                 self._handle_config_get)
         app.router.add_get("/api/config/entities",        self._handle_config_entities)
         app.router.add_post("/api/config/validate",       self._handle_config_validate)
+        app.router.add_post("/api/config/sensors/test",   self._handle_sensors_test)
         app.router.add_put("/api/config",                 self._handle_config_put)
         app.router.add_post("/api/config/restart",        self._handle_config_restart)
         app.router.add_post("/api/config/save-and-restart",

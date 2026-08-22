@@ -117,6 +117,42 @@ schreibt das HEMS für alle AC-Speicher aktiv `0 W` und `standby`; die Überschu
 weiter über den primären Überschuss-Sensor. `speicher_in_residual_enthalten` betrifft nur diesen
 primären Sensor und hat auf die Hausleistungsbilanz keine Wirkung.
 
+### Formel statt Einzel-Entität
+
+Wer Rohsensoren erst kombinieren muss (wie in der obigen Hausleistungsbilanz-Formel), muss das
+nicht zwingend außerhalb des Add-ons als HA-Template pflegen: Der Bereich **Sensoren** im
+Ingress-Panel (Tabs „Überschuss" und „Hausbilanz") erlaubt dieselbe Kombination direkt im Add-on
+(D-045, [ADR](adr/D-045-formel-basierte-sensorwerte.md)).
+
+Pro Tab werden beliebig viele Zeilen aus Variablenname und HA-Entität gepflegt
+(`residual_formula_variables` bzw. `battery_residual_formula_variables`), darunter ein
+eingeschränkter Python-Ausdruck (`residual_formula_code` bzw. `battery_residual_formula_code`), der
+diese Namen verwendet und der Variable `ueberschuss` bzw. `hausbilanz` einen Wert zuweisen muss. Für
+jede Zeile `<name>` stehen im Code sowohl `<name>` (der Wert, oder `None` wenn die Entität gerade
+nichts Brauchbares liefert) als auch `<name>_valid` (`True`/`False`) zur Verfügung — eine Formel
+sollte `_valid` prüfen, bevor sie mit dem Wert rechnet, z. B. `ueberschuss = pv if pv_valid else 0`.
+
+**Vorrang:** Die Formel wird vor der oben konfigurierten Einzel-Entität ausgewertet. Liefert sie
+einen gültigen, endlichen Wert, ersetzt dieser die Entität vollständig — für den gesamten
+restlichen Regelzyklus verhält sich das exakt so, als stünde der berechnete Wert im Sensor. Ist der
+Code leer, syntaktisch ungültig, verwendet ein nicht erlaubtes Konstrukt oder wirft zur Laufzeit
+einen Fehler (z. B. Division durch 0, oder eine ungeprüfte `_valid`-Referenz), greift **unverändert**
+der bisherige Pfad über die konfigurierte Entität — ein Zyklus bricht an einer kaputten Formel nie
+ab. Welche Quelle gerade wirkt, steht als `residual_source`/`battery_residual_source`
+(`"ha"`/`"formula"`/…) in `/api/status` und wird im Sensoren-Formular sowie auf der Status-Seite
+angezeigt (Lehre aus D-041: ein zweiter Mechanismus für denselben Wert muss sichtbar sein, welcher
+gerade greift).
+
+Der Code läuft über einen selbstgebauten, eingeschränkten Interpreter (`app/formula.py`) — keine
+Schleifen, Funktionsdefinitionen, Imports oder Attributzugriffe, siehe
+[sicherheit-datenschutz.md](sicherheit-datenschutz.md#nutzerdefinierte-sensor-formeln-d-045). Ein
+„Testen"-Knopf im Formular (`POST /api/config/sensors/test`,
+[api-referenz.md](api-referenz.md#post-apiconfigsensorstest)) führt den Entwurf live gegen den
+aktuellen HA-Schnappschuss aus, bevor gespeichert wird.
+
+Beide Formel-Felder sind vollständig optional und standardmäßig leer — ohne gepflegte Formel ist das
+Verhalten jeder Bestandsanlage unverändert.
+
 ### `available_modes`
 
 Legt fest, welche der drei normalen Regelmodi (`manuell`, `nur_heizen`, `nur_laden`) in dieser

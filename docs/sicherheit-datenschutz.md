@@ -35,6 +35,45 @@ darf schreiben.
 - Es gibt keine Datenbank und keine Dateipfade aus Nutzereingaben, damit weder SQL-Injection noch
   Directory-Traversal.
 
+## Nutzerdefinierte Sensor-Formeln (D-045)
+
+Der Bereich **Sensoren** im Ingress-Panel lässt den Nutzer eigenen Code hinterlegen, der
+`ueberschuss` bzw. `hausbilanz` aus benannten HA-Entitäten berechnet
+([konfiguration.md](konfiguration.md#formel-statt-einzel-entität),
+[ADR](adr/D-045-formel-basierte-sensorwerte.md)). Das ist eine neue Angriffs- und Fehlerfläche, die
+vor D-045 nirgends im Projekt existierte, und wird deshalb hier ausdrücklich dokumentiert statt
+stillschweigend vorausgesetzt.
+
+- **Kein `eval`/`exec` auf kompiliertem Python.** `app/formula.py` implementiert einen eigenen,
+  baumwandelnden Auswerter über eine feste AST-Whitelist: nur Zuweisungen, Arithmetik, Vergleiche,
+  boolesche Verknüpfungen und `if`/`else` sind erlaubt. Schleifen, Funktionsdefinitionen, `import`,
+  `lambda`, Attributzugriffe (`.`), Indexzugriffe (`[…]`) und alle Container-Typen sind ausdrücklich
+  verboten — nicht nur die Ausführung, schon das **Vorkommen** dieser Konstrukte im Quelltext wird
+  vor jeder Ausführung abgelehnt.
+- **Kein Netzwerk-, Datei- oder Prozesszugriff möglich**, strukturell — nicht weil er verboten
+  wurde, sondern weil die Sprache keinen Import, keinen Attributzugriff und keinen Aufruf
+  außerhalb der festen Funktions-Whitelist (`abs`, `min`, `max`, `round`) ausdrücken kann. Der
+  `SUPERVISOR_TOKEN` und alle Umgebungsvariablen sind aus einer Formel heraus nicht erreichbar.
+- **Kein Absturz, keine Blockade.** Der Regelzyklus läuft synchron in einem einzigen
+  asyncio-Prozess (`app/main.py`); hängender Code würde dort auch die Notabschaltung blockieren.
+  Ohne Schleifen ist die Ausführung strukturell auf die Anzahl der Ausdrucksbausteine im Quelltext
+  beschränkt — kein Timeout, kein Thread- oder Prozesswechsel nötig. Jeder Fehler (Syntax, verbotenes
+  Konstrukt, Laufzeitfehler, NaN/Unendlich) kommt als `valid: false` zurück statt eine Exception nach
+  außen zu werfen; ein Regelzyklus bricht an einer kaputten Formel nie ab.
+- **Zahlen bleiben durchgängig `float`.** Python-`int` hat beliebige Genauigkeit; wiederholtes
+  Multiplizieren ganz ohne Schleife (`a = a * a`, wenige Dutzend Zuweisungen) ließe eine Ganzzahl auf
+  eine Zahl mit Milliarden Stellen anwachsen. `float` ist IEEE 754 mit fester Breite und läuft bei
+  Überlauf kontrolliert in `inf`.
+- **Bezug zu „Grenzen für KI-Agenten" oben:** Die dortige Regel „Kein von einer KI erzeugter Code
+  wird ungeprüft ausgeführt" bleibt unverändert gültig und betrifft einen anderen Fall — frei
+  formulierten Code, den eine KI vorschlägt. Eine Formel hier ist **strukturell eingeschränkter
+  Code, den der Nutzer selbst einträgt** und der vor jeder Ausführung gegen die Whitelist geprüft
+  wird; das eine ersetzt das andere nicht.
+- **Vertrauensgrenze bleibt dieselbe wie für jedes andere Konfigurationsfeld:** Wer den Ingress
+  passiert, darf die Formel ändern — genau wie jede HA-Entity-Zuordnung. Es gibt keine zusätzliche
+  Isolation gegenüber der übrigen Konfiguration, und keine wird gebraucht: die Sprache selbst kann
+  nichts außerhalb der Berechnung eines einzelnen Sensorwerts bewirken.
+
 ## Personenbezogene Daten
 
 | Datenart | Wird verarbeitet? | Wo gespeichert | Löschfrist |
