@@ -71,7 +71,8 @@ INACTIVE_REASON_TEXTS: Dict[str, str] = {
 # ---------------------------------------------------------------------------
 
 def build_config_payload(options: Dict[str, Any], controls_schema: List[Dict[str, Any]],
-                         addon_version: str, erzeugt_am: str) -> Dict[str, Any]:
+                         addon_version: str, erzeugt_am: str,
+                         interval_s: int = 30) -> Dict[str, Any]:
     """Layout, Anlagenwerte und Geraeteliste nach kontrakt.md, Abschnitt 3.
 
     `controls_schema` ist die Ausgabe von `_build_device_controls_schema` und
@@ -119,6 +120,9 @@ def build_config_payload(options: Dict[str, Any], controls_schema: List[Dict[str
             "ems_enabled_entity": "input_boolean.ems_pv_regelung_aktiv",
             "regelmodus_entity": "input_select.ems_regelmodus",
             "panel_pfad": PANEL_PATH,
+            # Ohne das Regelintervall kann die Karte nicht beurteilen, ab wann
+            # ihre Statusdaten veraltet sind. Additiv, erhoeht schema_version nicht.
+            "interval_s": interval_s,
         },
     }
     payload["revision"] = revision(payload)
@@ -364,13 +368,15 @@ class FlowPublisher:
 
     async def publish(self, *, options: Dict[str, Any], controls_schema: List[Dict[str, Any]],
                       status: Dict[str, Any], states: Dict[str, Any],
-                      cycle_count: int, addon_version: str, now: str) -> None:
+                      cycle_count: int, addon_version: str, now: str,
+                      interval_s: int = 30) -> None:
         """Ein Veroeffentlichungslauf. Wirft nie."""
         try:
             if not options.get("flow_publish"):
                 return
 
-            config_payload = build_config_payload(options, controls_schema, addon_version, now)
+            config_payload = build_config_payload(
+                options, controls_schema, addon_version, now, interval_s)
             status_payload = build_status_payload(status, cycle_count, now)
 
             # Per POST /api/states erzeugte Entitaeten ueberleben keinen

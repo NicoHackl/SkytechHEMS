@@ -30,6 +30,9 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
     Darstellung; ein geändertes Icon schaltet kein Gerät ab (D-048).
   - Neuer Diagnoseendpunkt `GET api/flow/preview` zeigt beide Nutzlasten und je Verweis, ob er
     gerade trägt.
+  - Die Konfigurationsentität trägt zusätzlich das Regelintervall. Ohne diesen Wert könnte die
+    Karte nicht beurteilen, ab wann ihre Statusdaten veraltet sind — die Regel stand im Vertrag,
+    die Größe dazu fehlte. Additiv, ohne Sprung der Schemaversion.
   - Neuer Sidebar-Bereich „Flow Card" im Panel: Veröffentlichung ein- und ausschalten, Erzeugung,
     Netz, Haus und Batterie pflegen, je Gerät Sichtbarkeit, Symbol und Farbe setzen, dazu die
     Anzeigeoptionen. Die Vorschau zeigt auf Knopfdruck, welcher Verweis gerade trägt und welcher

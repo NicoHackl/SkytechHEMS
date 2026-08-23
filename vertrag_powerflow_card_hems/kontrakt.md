@@ -166,10 +166,16 @@ einem Regelintervall wieder vollständig.
   "hems": {
     "ems_enabled_entity": "input_boolean.ems_pv_regelung_aktiv",
     "regelmodus_entity": "input_select.ems_regelmodus",
-    "panel_pfad": "/hassio/ingress/skytech_hems"   // string, für „Im HEMS öffnen"-Verweise
+    "panel_pfad": "/hassio/ingress/skytech_hems",  // string, für „Im HEMS öffnen"-Verweise
+    "interval_s": 30                               // int, Regelintervall; Grundlage von „veraltet"
   }
 }
 ```
+
+`hems.interval_s` ist **additiv ergänzt** (23.08.2026) und erhöht `schema_version` nicht. Ohne
+diesen Wert könnte die Karte die Regel „älter als 5 × Regelintervall" aus Abschnitt 6 gar nicht
+anwenden — sie stand im Vertrag, die Größe dazu fehlte. Fehlt das Feld (älterer Erzeuger), nimmt
+die Karte `30` an.
 
 **Vorzeichenkonventionen, verbindlich:**
 
@@ -326,7 +332,7 @@ Auflösungsreihenfolge je Gerät:
 | `standard.pv_power_entities` leer | Kein PV-Knoten, kein Fehler. |
 | `hard_lockout: true` | Abzeichen „HEMS gesperrt" am Kartenkopf. Werte werden weiter gezeichnet. |
 | `ems_enabled: false` | Abzeichen „HEMS aus". Werte werden weiter gezeichnet. |
-| Statusentität älter als 5 × Regelintervall | Abzeichen „HEMS-Daten veraltet" mit Zeitpunkt. |
+| Statusentität älter als 5 × Regelintervall (`hems.interval_s`, sonst 30 s) | Abzeichen „HEMS-Daten veraltet" mit Zeitpunkt. Gemessen wird am `last_updated` der Entität, nicht am formatierten Zeitstempel — der ist für Menschen, nicht zum Rechnen. |
 
 ---
 
@@ -431,7 +437,8 @@ Heizlüftern.
   "hems": {
     "ems_enabled_entity": "input_boolean.ems_pv_regelung_aktiv",
     "regelmodus_entity": "input_select.ems_regelmodus",
-    "panel_pfad": "/hassio/ingress/skytech_hems"
+    "panel_pfad": "/hassio/ingress/skytech_hems",
+    "interval_s": 30
   }
 }
 ```

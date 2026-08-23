@@ -482,6 +482,7 @@ class HEMSApp:
                 cycle_count=self._cycle_count,
                 addon_version=self._addon_version,
                 now=self._last_cycle_at,
+                interval_s=self.interval_s,
             )
             self._last_cycle_at_iso = now.replace(microsecond=0).isoformat()
             log.debug("Cycle %d completed.", self._cycle_count)
@@ -634,7 +635,8 @@ class HEMSApp:
         """
         options = self._flow_options
         config_payload = flow_publisher.build_config_payload(
-            options, self._controls_schema(), self._addon_version, self._last_cycle_at)
+            options, self._controls_schema(), self._addon_version, self._last_cycle_at,
+            self.interval_s)
         status_payload = flow_publisher.build_status_payload(
             self._last_status, self._cycle_count, self._last_cycle_at)
         return web.json_response({

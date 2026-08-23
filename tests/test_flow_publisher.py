@@ -371,3 +371,15 @@ def test_vorschau_listet_leere_felder_nicht_auf():
     paths = [path for path, _ in fp.collect_references(_config([], **STANDARD))]
     assert "standard.grid_import_entity" not in paths
     assert "standard.grid_power_entity" in paths
+
+
+def test_regelintervall_steht_in_der_nutzlast():
+    # Ohne diesen Wert koennte die Karte "aelter als 5 x Regelintervall"
+    # nicht anwenden -- die Regel stand im Vertrag, die Groesse fehlte.
+    result = _options(**STANDARD)
+    schema = _build_device_controls_schema(
+        result.devices, residual_power_entity=result.options["residual_power_entity"],
+        interval_s=3,
+        battery_residual_power_entity=result.options["battery_residual_power_entity"])
+    payload = fp.build_config_payload(result.options, schema, "2.0.1", NOW, 3)
+    assert payload["hems"]["interval_s"] == 3
