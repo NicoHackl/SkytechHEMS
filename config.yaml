@@ -125,6 +125,7 @@ options:
       min_runtime_s: 600
       min_offtime_s: 300
       off_delay_s: 120
+      power_actual_entity: ""
     - name: heizlufter_2
       label: "Heizlüfter 2"
       class: binary
@@ -193,6 +194,7 @@ schema:
       min_runtime_s: float?
       min_offtime_s: float?
       off_delay_s: float?
+      power_actual_entity: str?
       soc_entity: str?
       charge_power_entity: str?
       discharge_power_entity: str?

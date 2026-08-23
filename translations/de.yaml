@@ -102,6 +102,10 @@ configuration:
       leistung_w, einschaltreserve_w, mindestlaufzeit_s, mindestauszeit_s und
       abschaltverzogerung_s. Fehlt eines, wird das Gerät nicht registriert.
 
+      • power_actual_entity (optional) – Sensor mit der tatsächlichen Ist-Leistung.
+      Reine Datenquelle für spätere Ausbaustufen, ohne Wirkung auf die aktuelle
+      Regelung.
+
       AC-SPEICHER (class: battery)
 
       • soc_entity (Pflicht) – Sensor-Entität mit dem Ladezustand in Prozent.

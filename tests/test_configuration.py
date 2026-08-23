@@ -382,6 +382,17 @@ def test_unvollstaendige_entity_id_wird_abgelehnt():
     assert "devices[0].switch_entity" in result.field_errors
 
 
+def test_power_actual_entity_ist_optional():
+    result = cfg.validate_options(options(binary()))
+    assert result.valid, result.field_errors
+    assert "devices[0].power_actual_entity" not in result.field_errors
+
+
+def test_power_actual_entity_mit_falschem_format_wird_abgelehnt():
+    result = cfg.validate_options(options(binary(power_actual_entity="heizluefter_leistung")))
+    assert "devices[0].power_actual_entity" in result.field_errors
+
+
 # ---------------------------------------------------------------------------
 # Speicher
 # ---------------------------------------------------------------------------

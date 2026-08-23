@@ -17,6 +17,7 @@ Zusätzlich zu den hier beschriebenen Feldern und Entitäten gelten die
 | `min_runtime_s` | ja | Formular `0` | Fallback für `mindestlaufzeit_s`; endlich und `>= 0` |
 | `min_offtime_s` | ja | Formular `0` | Fallback für `mindestauszeit_s`; endlich und `>= 0` |
 | `off_delay_s` | ja | Formular `0` | Fallback für `abschaltverzogerung_s`; endlich und `>= 0` |
+| `power_actual_entity` | nein | – | Ist-Leistungssensor als reine Datenquelle für spätere Ausbaustufen; aktuell ohne Wirkung auf die Regelung |
 
 Fehlt `switch_entity` oder eines der fünf Fallbackfelder, wird der Geräteeintrag beim Start nicht
 instanziiert und erscheint mit seinem konkreten Feldfehler unter `inactive_devices` im Status.
@@ -43,14 +44,16 @@ wird nie ersetzt.
 
 Die vier [gemeinsamen HA-Helfer](global.md#gemeinsame-ha-helfer) werden ebenfalls gelesen.
 
-## Externe, nur gelesene Entität
+## Externe, nur gelesene Entitäten
 
 | Add-on-Feld | Erwarteter State | Funktion |
 |---|---|---|
 | `switch_entity` | `on` oder `off` | Liefert den tatsächlichen Zustand und über `last_changed` die aktuelle Lauf- beziehungsweise Auszeit |
+| `power_actual_entity` | numerischer Wert in Watt | Optional. Reine Datenquelle für spätere Ausbaustufen — erscheint als `power_actual_w` im Status, sofern konfiguriert und gültig. Ohne Wirkung auf die Regelung |
 
 Ein fehlender oder anderer State wird wie `off` behandelt. Die Laufzeitberechnung benötigt das
-von Home Assistant bereitgestellte Attribut `last_changed`.
+von Home Assistant bereitgestellte Attribut `last_changed`. Ein fehlender oder ungültiger
+`power_actual_entity`-State lässt lediglich `power_actual_w` im Status entfallen.
 
 ## Gelesener und geschriebener HA-Helfer
 

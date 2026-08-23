@@ -916,10 +916,14 @@ class BinaryDevice(Device):
                  on_reserve_w: Optional[float] = None,
                  min_runtime_s: Optional[float] = None,
                  min_offtime_s: Optional[float] = None,
-                 off_delay_s: Optional[float] = None):
+                 off_delay_s: Optional[float] = None,
+                 power_actual_entity: Optional[str] = None):
         super().__init__(id, allowed_modes, entity_prefix, label)
         self.entity_switch         = entity_switch
         self.entity_anforderung_an = entity_anforderung_an
+        # Reine Datenquelle für spätere Ausbaustufen (optional, kein Fallback,
+        # ohne jede Wirkung auf Pool, Hysterese oder Zeitschutz).
+        self.power_actual_entity   = power_actual_entity
 
         # ---- Verpflichtende Add-on-Fallbacks (Watt bzw. Sekunden) ----
         # Ein fehlender Helfer ließ ein binäres Gerät bisher still mit
@@ -941,6 +945,9 @@ class BinaryDevice(Device):
         self._actual_on       = False
         self._anforderung_an  = False
         self._switch_age_s    = 0.0
+        # None heißt „kein Sensor konfiguriert oder aktuell kein gültiger Wert" –
+        # nie ein Pflichtfehler, nie ein Grund für inactive_reasons.
+        self.power_actual_w: Optional[float] = None
 
         # ---- Interner persistenter Zustand (überlebt über Zyklen hinweg) ----
         self._off_since_ts: float = 0.0
@@ -1025,6 +1032,16 @@ class BinaryDevice(Device):
             st.get(self.entity_switch + ".last_changed")
         )
 
+        # Ist-Leistung: reine Datenquelle für spätere Ausbaustufen, analog zu
+        # _read_voltage – direkter Sensor ohne Add-on-/Internal-Fallback-Kette,
+        # weil es kein Namenskonvention-Helfer ist.
+        if self.power_actual_entity:
+            resolved = st.resolve_number(self.power_actual_entity, internal=None)
+            self._note(self.power_actual_entity, "power_actual", resolved)
+            self.power_actual_w = None if resolved.value is None else float(resolved.value)
+        else:
+            self.power_actual_w = None
+
     def consume_from_pool(self, remaining_w: float,
                           global_einschaltreserve_w: float) -> float:
         """Bestimmt den Wunschzustand per Hysterese; verbraucht power_w wenn gewünscht an."""
@@ -1094,7 +1111,7 @@ class BinaryDevice(Device):
             off_delay_remaining = round(
                 max(0.0, self.off_delay_s - (self._now_ts - self._off_since_ts))
             )
-        return {
+        d: Dict = {
             "type":                 "binary",
             "id":                   self.id,
             "label":                self.label,
@@ -1118,6 +1135,9 @@ class BinaryDevice(Device):
             "min_offtime_s":        self.min_offtime_s,
             "off_delay_remaining_s": off_delay_remaining,
         }
+        if self.power_actual_w is not None:
+            d["power_actual_w"] = self.power_actual_w
+        return d
 
 
 # =============================================================================

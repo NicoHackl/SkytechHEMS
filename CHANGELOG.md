@@ -24,6 +24,11 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
     Attributzugriffe möglich; ein Fehler in der Formel bricht einen Regelzyklus nie ab.
   - Rein additiv: ohne gepflegte Formel ist das Verhalten jeder Bestandsanlage unverändert, keine
     Migration nötig. Ergänzt die externe HA-Vorlage aus D-044, ersetzt sie nicht.
+- **Optionaler Ist-Leistungssensor bei binären Geräten.** Neues Add-on-Feld `power_actual_entity`
+  (`class: binary`): Entity-ID eines Sensors mit der tatsächlichen Ist-Leistung. Rein optional und
+  ohne jede Wirkung auf Pool-Reservierung, Hysterese oder Zeitschutz — reine Datenquelle für
+  spätere Ausbaustufen. Ist der Sensor konfiguriert und liefert er einen gültigen Wert, erscheint
+  er zusätzlich als `power_actual_w` in `/api/status`.
 
 ## [2.0.0] - 22.08.2026
 

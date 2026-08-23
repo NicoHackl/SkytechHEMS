@@ -271,6 +271,7 @@ def _normalize_device(raw: Dict[str, Any]) -> Dict[str, Any]:
             device[key] = _as_float(raw.get(key), None) if key in raw else None
     elif cls == "binary":
         device["switch_entity"] = _as_text(raw.get("switch_entity"))
+        device["power_actual_entity"] = _as_text(raw.get("power_actual_entity"))
         for key in BINARY_FALLBACK_DEFAULTS:
             device[key] = _as_float(raw.get(key), None) if key in raw else None
     elif cls == "battery":
@@ -526,6 +527,7 @@ def _validate_controllable(device: Dict[str, Any], fail) -> None:
 
 def _validate_binary(device: Dict[str, Any], fail) -> None:
     _require_entity(device, "switch_entity", fail)
+    _optional_entity(device, "power_actual_entity", fail)
     _number(device, "power_w", fail, exclusive_minimum=0.0,
             text="Pflichtfeld: endliche Zahl über 0 W.")
     for key in ("on_reserve_w", "min_runtime_s", "min_offtime_s", "off_delay_s"):

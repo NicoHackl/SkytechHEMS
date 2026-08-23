@@ -92,6 +92,10 @@ configuration:
       mindestlaufzeit_s, mindestauszeit_s and abschaltverzogerung_s. If any is
       missing, the device is not registered.
 
+      • power_actual_entity (optional) – sensor with the device's actual power
+      draw. Pure data source for future expansion stages, no effect on current
+      control.
+
       AC BATTERY STORAGE (class: battery)
 
       • soc_entity (required) – Sensor entity with the state of charge in

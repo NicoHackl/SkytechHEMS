@@ -163,6 +163,7 @@ auf `standby`; die übrigen laufen weiter. Ohne Ist-Leistung wäre die Pool-Bere
 | Formel-Zeilen (`residual_formula_variables`/`battery_residual_formula_variables`) | **Optional (D-045).** Beliebig viele benannte HA-Entitäten, die der zugehörige Formel-Code kombiniert. Liefert der Code einen gültigen Wert, ersetzt er die beiden Entitäten oben vollständig — siehe [konfiguration.md](konfiguration.md#formel-statt-einzel-entität) |
 | `actual_power_entity` je regelbarem Gerät | Ist-Leistung in Watt |
 | `switch_entity` je binärem Gerät | Tatsächlicher Schaltzustand |
+| `power_actual_entity` je binärem Gerät (optional) | Ist-Leistung in Watt, reine Datenquelle ohne Regelwirkung |
 | `voltage_l1/l2/l3_entity` | Phasenspannungen in Volt, Fallback je 230 V |
 | `soc_entity` je Speicher | Ladezustand in Prozent |
 | `charge_power_entity` / `discharge_power_entity` je Speicher | Ist-Leistung in Watt, beide ≥ 0 |
@@ -224,7 +225,8 @@ Regelbares Gerät: `type`, `id`, `label`, `priority`, `eligible`, `source`, `act
 
 Binäres Gerät: `type`, `id`, `label`, `priority`, `eligible`, `source`, `power_w`, `actual_on`,
 `anforderung_an`, `desired_on`, `candidate_on`, `final_on`, `in_min_runtime`, `switch_age_s`,
-`min_runtime_s`, `min_offtime_s`, `off_delay_remaining_s`.
+`min_runtime_s`, `min_offtime_s`, `off_delay_remaining_s`. Dazu `power_actual_w`, sofern
+`power_actual_entity` konfiguriert ist und der Sensor einen gültigen Wert liefert.
 
 Speicher (`type: "battery"`): `id`, `label`, `priority` (Laden), `entlade_prioritat`, `eligible`,
 `source`, `ep_proposal_status`, `sensoren_gueltig`, `battery_residual_sensor_valid`, `soc_prozent`, `capacity_kwh`, `betriebsart`,

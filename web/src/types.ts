@@ -55,6 +55,9 @@ export interface ControllableDevice extends DeviceBase {
 export interface BinaryDevice extends DeviceBase {
   type: 'binary'
   power_w: number
+  /** Nur vorhanden, wenn `power_actual_entity` konfiguriert ist und der Sensor
+      einen gültigen Wert liefert. Reine Datenquelle, keine Regelgröße. */
+  power_actual_w?: number
   actual_on: boolean
   /** Vom EMS geschriebene Anforderung. Schalter an ohne Anforderung = Fremdsteuerung. */
   anforderung_an: boolean
@@ -271,6 +274,7 @@ export interface ConfigDevice {
 
   /* binary */
   switch_entity?: string
+  power_actual_entity?: string
   power_w?: number | null
   on_reserve_w?: number | null
   min_runtime_s?: number | null

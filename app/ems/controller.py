@@ -107,6 +107,7 @@ def _build_devices(device_configs: List[dict]) -> List[Device]:
                 min_runtime_s=cfg["min_runtime_s"],
                 min_offtime_s=cfg["min_offtime_s"],
                 off_delay_s=cfg["off_delay_s"],
+                power_actual_entity=cfg["power_actual_entity"] or None,
             ))
 
         else:
