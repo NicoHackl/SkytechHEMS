@@ -53,6 +53,7 @@ Verbraucher (Heizlüfter) — mit Zeitschutz, Hysterese, Rampenbegrenzung und No
 | `app/supervisor_client.py` | Einzige Stelle mit Supervisor-REST-Zugriff: eigene Optionen lesen, validieren, speichern, Add-on neu starten | Fachlogik enthalten, Token oder rohe Optionen loggen |
 | `app/config_service.py` | Ablauf der Konfigurationsverwaltung: lesen, validieren, Revision prüfen, mischen, speichern, Altgeräte sicher deaktivieren, Neustart anstoßen | HTTP sprechen — die Handler übersetzen nur Ausnahmen in Statuscodes |
 | `app/configuration.py` | Add-on-Optionen normalisieren und validieren, Modus-Listen parsen und stabil serialisieren, Revisions-Hash bilden, Diff für die sichere Deaktivierung liefern | HA oder den Supervisor ansprechen, Zustand halten |
+| `app/formula.py` | Formel-basierte Sensorwerte (D-045): AST-Whitelist prüfen, eingeschränkten Code gegen ein fertiges Namespace-Dict auswerten | HA-Entitäten auflösen, Zustand zwischen Aufrufen halten, `exec`/`eval` auf kompiliertem Python verwenden |
 | `app/ems/controller.py` | Einen Zyklus orchestrieren: globale Eingaben, Pool, Prioritätskaskade, Statusaufbau | Selbst HTTP sprechen |
 | `app/ems/devices.py` | Verhalten je Gerätetyp: Eligibility, Pool-Verbrauch, Rampe, Zeitschutz, Write-Ops. Hierarchie: `Device` → `ControllableDevice` → `BatteryDevice`, daneben `BinaryDevice` | Auf HA zugreifen (bekommt einen `StateProxy`) |
 | `app/ems/state.py` | Lesezugriff auf den State-Schnappschuss, Resolve-Vertrag (`has`, `availability`, `resolve_number/bool/select`), `safe_float`, `parse_ts` | Zustand halten, der einen Zyklus überdauert; klassenspezifische Defaultwerte kennen |
@@ -68,7 +69,12 @@ ist das eine Design-Entscheidung → [design-entscheidungen.md](design-entscheid
 Ein Zyklus (`EMSController.run_cycle()`), ausgelöst alle `interval_s` Sekunden:
 
 1. **Globale Eingaben** aus HA lesen (Freigabe, Regelmodus, globaler Puffer, Einschaltreserve,
-   Überschuss-Sensor, Hausleistungsbilanz für AC-Speicher, Debug-Schalter).
+   Überschuss-Sensor, Hausleistungsbilanz für AC-Speicher, Debug-Schalter). Ist für Überschuss
+   oder Hausleistungsbilanz eine Formel (D-045) konfiguriert, wird sie **vor** der jeweiligen
+   Einzel-Entität ausgewertet ([`app/formula.py`](../app/formula.py)); liefert sie einen
+   gültigen, endlichen Wert, ersetzt dieser die Entität vollständig, sonst greift unverändert
+   der Entitäts-Pfad. Welche Quelle wirkte, steht als `residual_source`/`battery_residual_source`
+   im Status.
 2. **Eligibility** je Gerät: Der globale Modus muss in `allowed_modes` liegen, `freigabe`,
    `technische_freigabe` und der Gerätemodus müssen passen.
 3. **Netz bereinigen:** `residual_bereinigt_w = residual_w − Σ netz_support_w`. Nur Speicher
@@ -185,6 +191,12 @@ Zusagen, auf die sich der gesamte Code verlässt. Wer eine davon bricht, bricht 
    HA-States läuft über den Resolve-Vertrag in [`app/ems/state.py`](../app/ems/state.py) und meldet
    neben dem Wert auch Ursache (`valid`, `missing`, `unavailable`, `invalid`) und Quelle (`ha`,
    `addon`, `internal`). Wahrheitswert-Ausdrücke wie `wert or fallback` sind damit ausgeschlossen.
+11. **Eine Formel (D-045) ist nie ein zweiter, stiller Mechanismus.** Liefert sie einen gültigen
+    Wert, ersetzt sie die konfigurierte Entität vollständig; sonst greift unverändert der
+    Entitäts-Pfad — nie eine Mischung aus beidem. Welche Quelle gerade wirkt, steht immer im
+    Status (`residual_source`/`battery_residual_source`), nie nur im Log (Lehre aus
+    [D-041](design-entscheidungen.md)). Der Formel-Interpreter selbst wirft nie: jeder Fehler wird
+    zu `valid: false`, ein Regelzyklus bricht an einer kaputten Formel nicht ab.
 
 ## Start und Betrieb
 

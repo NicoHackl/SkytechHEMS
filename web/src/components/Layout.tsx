@@ -15,9 +15,10 @@ export function Layout() {
   const { dirty } = useConfigDraft()
 
   /* Wer den Konfigurationsbereich mit ungespeichertem Entwurf verlaesst, wird
-     gefragt — innerhalb des Bereichs bleibt der Entwurf ohnehin erhalten. */
+     gefragt — innerhalb des Bereichs bleibt der Entwurf ohnehin erhalten.
+     Sensoren (D-045) teilt sich denselben Entwurf und zaehlt deshalb dazu. */
   const guard = (event: MouseEvent<HTMLAnchorElement>, to: string) => {
-    if (!dirty || to.startsWith('/konfiguration')) return
+    if (!dirty || to.startsWith('/konfiguration') || to.startsWith('/sensoren')) return
     if (!window.confirm('Es gibt ungespeicherte Änderungen an der Konfiguration. Trotzdem wechseln?')) {
       event.preventDefault()
     }
@@ -43,6 +44,10 @@ export function Layout() {
           <div className="nav-label">Einrichtung</div>
           <NavLink to="/konfiguration/global" className={navClass}>
             <Icon name="settings" /><span>Konfiguration</span>
+            {dirty ? <span className="count">•</span> : null}
+          </NavLink>
+          <NavLink to="/sensoren/ueberschuss" className={navClass} onClick={(event) => guard(event, '/sensoren')}>
+            <Icon name="pulse" /><span>Sensoren</span>
             {dirty ? <span className="count">•</span> : null}
           </NavLink>
         </nav>

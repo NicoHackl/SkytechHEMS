@@ -130,6 +130,7 @@ export function Status() {
                   {batteries.length
                     ? `Netzeinspeisung laut Sensor · bereinigt ${fmtW(cycle.residual_bereinigt_w)}`
                     : 'Netzeinspeisung laut Sensor'}
+                  {cycle.residual_source === 'formula' ? ' · Formel' : ''}
                 </p>
               </div>
               <div className="tile static">
@@ -170,6 +171,7 @@ export function Status() {
                       {cycle.battery_residual_sensor_valid
                         ? `Für Entladung · bereinigt ${fmtW(cycle.battery_residual_bereinigt_w)}`
                         : 'Kein gültiger Sensorwert'}
+                      {cycle.battery_residual_source === 'formula' ? ' · Formel' : ''}
                     </p>
                   </div>
                   <div className="tile static">

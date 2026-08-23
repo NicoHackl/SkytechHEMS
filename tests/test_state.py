@@ -178,3 +178,50 @@ def test_resolve_select_akzeptiert_nur_bekannte_optionen():
 def test_resolve_select_fehlend_nutzt_den_ersatzwert():
     r = proxy().resolve_select("input_select.m", ("auto",), fallback="standby")
     assert (r.value, r.state, r.source) == ("standby", STATE_MISSING, SOURCE_INTERNAL)
+
+
+# ---- resolve_formula_namespace (D-045): volle Matrix je Zeile ----
+
+def test_resolve_formula_namespace_volle_matrix_je_zeile():
+    """Pflicht-Testfall 13 (test-strategie.md): gültiger Wert, gültiger
+    Nullwert, fehlende Entität, unavailable, unknown, nicht-numerisch – Wert
+    und Diagnose getrennt geprüft."""
+    sp = proxy(**{
+        "sensor.a": "700",
+        "sensor.b": "0",
+        "sensor.d": "unavailable",
+        "sensor.e": "unknown",
+        "sensor.f": "kaputt",
+    })
+    variables = [
+        {"name": "a", "entity": "sensor.a"},   # gültiger Wert
+        {"name": "b", "entity": "sensor.b"},   # gültiger Nullwert – kein Fallback!
+        {"name": "c", "entity": "sensor.c"},   # fehlende Entität
+        {"name": "d", "entity": "sensor.d"},   # unavailable
+        {"name": "e", "entity": "sensor.e"},   # unknown
+        {"name": "f", "entity": "sensor.f"},   # nicht-numerisch
+    ]
+    namespace, diagnostics = sp.resolve_formula_namespace(variables)
+
+    assert namespace["a"] == 700.0 and namespace["a_valid"] is True
+    assert namespace["b"] == 0.0 and namespace["b_valid"] is True
+    assert namespace["c"] is None and namespace["c_valid"] is False
+    assert namespace["d"] is None and namespace["d_valid"] is False
+    assert namespace["e"] is None and namespace["e_valid"] is False
+    assert namespace["f"] is None and namespace["f_valid"] is False
+
+    by_name = {d["name"]: d for d in diagnostics}
+    assert by_name["a"]["state"] == STATE_VALID and by_name["a"]["source"] == SOURCE_HA
+    assert by_name["c"]["state"] == STATE_MISSING
+    assert by_name["d"]["state"] == STATE_UNAVAILABLE
+    assert by_name["e"]["state"] == STATE_UNAVAILABLE  # "unknown" fällt unter denselben Zustand
+    assert by_name["f"]["state"] == STATE_INVALID
+    for name in ("c", "d", "e", "f"):
+        assert by_name[name]["value"] is None
+        assert by_name[name]["valid"] is False
+
+
+def test_resolve_formula_namespace_leere_zeilenliste():
+    namespace, diagnostics = proxy().resolve_formula_namespace([])
+    assert namespace == {}
+    assert diagnostics == []

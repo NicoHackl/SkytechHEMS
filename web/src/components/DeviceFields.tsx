@@ -140,6 +140,13 @@ export function DeviceFieldsBinary({ device, patch, entities, error }: Props) {
           hint="Wird nur gelesen. Das HEMS schreibt ausschließlich die Anforderung."
           onChange={(value) => patch({ switch_entity: value })}
         />
+        <EntityField
+          label="Ist-Leistung (Sensor)"
+          value={device.power_actual_entity ?? ''} entities={entities} domains={['sensor']}
+          error={error('power_actual_entity')}
+          hint="Optional. Reine Datenquelle für spätere Ausbaustufen, aktuell ohne Regelwirkung."
+          onChange={(value) => patch({ power_actual_entity: value })}
+        />
         <p className="hint-box">
           Die fünf Werte unten sind Pflicht. Sie greifen, wenn der gleichnamige HA-Helfer fehlt,
           ausgefallen oder unbrauchbar ist. Mindestlaufzeit und Abschaltverzögerung gelten

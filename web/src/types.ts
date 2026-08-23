@@ -55,6 +55,9 @@ export interface ControllableDevice extends DeviceBase {
 export interface BinaryDevice extends DeviceBase {
   type: 'binary'
   power_w: number
+  /** Nur vorhanden, wenn `power_actual_entity` konfiguriert ist und der Sensor
+      einen gültigen Wert liefert. Reine Datenquelle, keine Regelgröße. */
+  power_actual_w?: number
   actual_on: boolean
   /** Vom EMS geschriebene Anforderung. Schalter an ohne Anforderung = Fremdsteuerung. */
   anforderung_an: boolean
@@ -142,6 +145,10 @@ export interface CycleStatus {
   battery_residual_w: number
   /** battery_residual_w abzüglich der gemessenen AC-Entladung. */
   battery_residual_bereinigt_w: number
+  /** "formula", wenn eine Formel (D-045) residual_w liefert, sonst "ha". */
+  residual_source: 'ha' | 'formula'
+  /** "formula", "ha", "addon" oder "internal" — siehe Resolve-Vertrag. */
+  battery_residual_source: 'ha' | 'addon' | 'internal' | 'formula'
   /** Summe der gemessenen Entladeleistung aller Speicher. */
   netz_support_w: number
   /** Σ current_w — nur vom HEMS angeforderte Last, Force-Modus gefiltert. */
@@ -267,6 +274,7 @@ export interface ConfigDevice {
 
   /* binary */
   switch_entity?: string
+  power_actual_entity?: string
   power_w?: number | null
   on_reserve_w?: number | null
   min_runtime_s?: number | null
@@ -286,6 +294,12 @@ export interface ConfigDevice {
   direction_switch_delay_s?: number | null
 }
 
+/** Eine Formel-Zeile (D-045): benannte HA-Entität für den Code darunter. */
+export interface FormulaVariable {
+  name: string
+  entity: string
+}
+
 export interface ConfigOptions {
   interval_s: number
   log_level: string
@@ -295,6 +309,12 @@ export interface ConfigOptions {
   speicher_in_residual_enthalten: boolean
   /** Kommagetrennte Teilmenge der normalen Regelmodi. */
   available_modes: string
+  /** Formel-basierte Sensorwerte (D-045): liefert der Code einen gültigen Wert,
+      ersetzt er die jeweilige Entität oben vollständig. Leer = keine Formel. */
+  residual_formula_variables: FormulaVariable[]
+  residual_formula_code: string
+  battery_residual_formula_variables: FormulaVariable[]
+  battery_residual_formula_code: string
   devices: ConfigDevice[]
 }
 
@@ -362,4 +382,21 @@ export interface EntityOption {
   domain: string
   state: string
   friendly_name: string
+}
+
+/** Diagnose einer einzelnen Formel-Zeile im Testlauf (D-045). */
+export interface FormulaVariableResult extends FormulaVariable {
+  value: number | null
+  valid: boolean
+  state: 'valid' | 'missing' | 'unavailable' | 'invalid'
+  source: 'ha' | 'addon' | 'internal'
+}
+
+/** Ergebnis von POST /api/config/sensors/test — immer 200, auch bei Fehler. */
+export interface FormulaTestResult {
+  valid: boolean
+  value: number | null
+  error: string | null
+  error_line: number | null
+  variables: FormulaVariableResult[]
 }

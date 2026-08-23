@@ -39,6 +39,8 @@ from configuration import (
     validate_options,
 )
 from ems.ops import safe_shutdown_ops
+from ems.state import StateProxy
+from formula import run_formula
 from supervisor_client import (
     SupervisorPermissionDenied,
     SupervisorRejected,
@@ -212,6 +214,30 @@ class ConfigService:
             "errors": validated.errors,
             "field_errors": validated.field_errors,
             "inactive_devices": [asdict(issue) for issue in validated.inactive_devices],
+        }
+
+    def test_formula(self, kind: str, variables: List[Dict[str, str]],
+                     code: str) -> Dict[str, Any]:
+        """Führt einen Formel-Entwurf (D-045) live gegen den aktuellen
+        HA-Schnappschuss aus – ohne zu speichern. Nutzt denselben Schnappschuss
+        wie `entities()`, deshalb immer den Stand des letzten Regelzyklus, nie
+        einen eigenen HA-Abruf.
+
+        `kind` ist "residual" oder "battery_residual" und bestimmt nur, welche
+        Ausgabevariable erwartet wird – das ist ein reines Diagnosewerkzeug wie
+        `validate()`, daher kein Fehlschlag bei ungültiger Formel: das Ergebnis
+        trägt `valid: false` mit Begründung statt eine Exception zu werfen.
+        """
+        output_name = "hausbilanz" if kind == "battery_residual" else "ueberschuss"
+        st = StateProxy(self._entity_snapshot() or {})
+        namespace, diagnostics = st.resolve_formula_namespace(variables)
+        result = run_formula(code, namespace, output_name)
+        return {
+            "valid": result.valid,
+            "value": result.value,
+            "error": result.error,
+            "error_line": result.error_line,
+            "variables": diagnostics,
         }
 
     async def save(self, draft: Dict[str, Any], stored_revision: str) -> Dict[str, Any]:

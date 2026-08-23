@@ -5,12 +5,13 @@ from ems.devices import BinaryDevice
 from conftest import make_states
 
 
-def make_binary(prio=1, power=1000.0, on_reserve=0.0):
+def make_binary(prio=1, power=1000.0, on_reserve=0.0, power_actual_entity=None):
     b = BinaryDevice(
         id="luft",
         allowed_modes=["auto"],
         entity_switch="switch.luft",
         entity_anforderung_an="input_boolean.ems_luft_anforderung_an",
+        power_actual_entity=power_actual_entity,
     )
     b.eligible = True
     b.priority = prio
@@ -178,6 +179,29 @@ def test_unbekannter_schalterzustand_gilt_als_aus():
     b = make_binary()
     b.update_from_ha(binary_states(**{"switch.luft": "unavailable"}), 10_000.0, 0.0)
     assert b.actual_on is False
+
+
+# ---- power_actual_entity: reine Datenquelle, ohne Regelwirkung ----
+
+def test_power_actual_w_ohne_entitaet_bleibt_none():
+    b = make_binary()
+    b.update_from_ha(binary_states(), 10_000.0, 0.0)
+    assert b.power_actual_w is None
+    assert "power_actual_w" not in b.to_status_dict()
+
+
+def test_power_actual_w_liest_konfigurierten_sensor():
+    b = make_binary(power_actual_entity="sensor.luft_istleistung")
+    b.update_from_ha(binary_states(**{"sensor.luft_istleistung": "742.5"}), 10_000.0, 0.0)
+    assert b.power_actual_w == 742.5
+    assert b.to_status_dict()["power_actual_w"] == 742.5
+
+
+def test_power_actual_w_ungueltiger_sensor_bleibt_none():
+    b = make_binary(power_actual_entity="sensor.luft_istleistung")
+    b.update_from_ha(binary_states(**{"sensor.luft_istleistung": "unavailable"}), 10_000.0, 0.0)
+    assert b.power_actual_w is None
+    assert "power_actual_w" not in b.to_status_dict()
 
 
 # ---- Add-on-Fallbacks: HA gewinnt, sonst der konfigurierte Wert ----

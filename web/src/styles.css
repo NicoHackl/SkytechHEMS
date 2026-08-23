@@ -610,3 +610,24 @@ table.data tbody tr:hover { background: var(--surface-2); cursor: pointer; }
   .config-state { justify-content: space-between; }
   .mode-check { flex: 1 1 auto; justify-content: center; }
 }
+
+/* =========================================================================
+   Sensoren-Bereich (D-045)
+   Formel-basierte Sensorwerte: benannte Variable + Entitaet, darunter Code,
+   der ueberschuss/hausbilanz berechnet. Jede Klasse hier wird von beiden
+   Sensoren-Tabs benutzt. Ausschliesslich Tokens, keine Literalfarbe.
+   ========================================================================= */
+
+/* ---------- Formel-Zeile: Name, Entitaet, Loeschen ---------- */
+.formula-var-row {
+  display: grid; grid-template-columns: 1fr 2fr auto; gap: 0 16px; align-items: start;
+  padding: 16px 0; border-bottom: 1px solid var(--border);
+}
+.formula-var-row:last-of-type { border-bottom: none; }
+.formula-var-row .field { margin-bottom: 0; }
+.formula-var-row .icon-btn { align-self: center; }
+
+@media (max-width: 620px) {
+  .formula-var-row { grid-template-columns: 1fr; gap: 10px; padding: 14px 0; }
+  .formula-var-row .icon-btn { justify-self: end; }
+}

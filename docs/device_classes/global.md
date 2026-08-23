@@ -164,6 +164,17 @@ Bilanz bildet, liegt unter
 Formeln, Vorzeichen und die Rückkopplung mit dem E3DC stehen in
 [konfiguration.md](../konfiguration.md#hausleistungsbilanz-für-ac-speicher).
 
+#### Formel statt Einzel-Entität (D-045)
+
+Statt genau einer Entity-ID akzeptieren beide Felder oben zusätzlich eine im Ingress-Panel unter
+„Sensoren" gepflegte Formel: beliebig viele benannte HA-Entitäten (`residual_formula_variables`
+bzw. `battery_residual_formula_variables`, je `{name, entity}`) plus ein eingeschränkter
+Python-Ausdruck (`residual_formula_code` bzw. `battery_residual_formula_code`), der der Variable
+`ueberschuss` bzw. `hausbilanz` einen Wert zuweist. Details zum Interpreter, zur Auswertungsreihenfolge
+und zur Sichtbarkeit der aktiven Quelle stehen in
+[konfiguration.md](../konfiguration.md#formel-statt-einzel-entität) und
+[sicherheit-datenschutz.md](../sicherheit-datenschutz.md#nutzerdefinierte-sensor-formeln-d-045).
+
 ## Globale Add-on-Optionen
 
 | Feld | Pflicht im Schema | Laufzeit-Default | Für welches Gerät | Funktion beziehungsweise Bezug zu HA |
@@ -175,6 +186,10 @@ Formeln, Vorzeichen und die Rückkopplung mit dem E3DC stehen in
 | `battery_residual_power_entity` | bedingt: bei `battery` | leer | `battery` | Vollständige `sensor.<name>`-Entity der signierten Hausleistungsbilanz für die Entladeplanung; kein Ersatzwert für einen HA-State |
 | `speicher_in_residual_enthalten` | nein | `true` | `battery` | Legt fest, ob gemessene Speicherentladung vor der Pool-Berechnung vom Überschuss-Sensor abgezogen wird |
 | `available_modes` | nein | alle drei normalen Modi | alle | Kommagetrennte Teilmenge aus `manuell`, `nur_heizen` und `nur_laden`; legt fest, welche normalen Regelmodi in dieser Anlage überhaupt verwendet werden |
+| `residual_formula_variables` | nein | leere Liste | alle | Formel-Zeilen (D-045) `[{name, entity}]` für den Überschuss; liefert der Code unten einen gültigen Wert, ersetzt er `residual_power_entity` vollständig |
+| `residual_formula_code` | nein | leer | alle | Eingeschränkter Python-Ausdruck (D-045), der `ueberschuss` aus den Zeilen oben berechnet; leer = keine Formel |
+| `battery_residual_formula_variables` | nein | leere Liste | `battery` | Formel-Zeilen (D-045) `[{name, entity}]` für die Hausleistungsbilanz; liefert der Code unten einen gültigen Wert, ersetzt er `battery_residual_power_entity` vollständig |
+| `battery_residual_formula_code` | nein | leer | `battery` | Eingeschränkter Python-Ausdruck (D-045), der `hausbilanz` aus den Zeilen oben berechnet; leer = keine Formel |
 | `devices` | ja | Manifest enthält Beispielgeräte; Laufzeit ohne Feld: leere Liste | alle | Liste der Geräteinstanzen und ihrer klassenspezifischen Felder |
 
 ### Normale Modi und Sondermodi

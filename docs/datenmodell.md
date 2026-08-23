@@ -160,8 +160,10 @@ auf `standby`; die übrigen laufen weiter. Ohne Ist-Leistung wäre die Pool-Bere
 |---|---|
 | Überschuss-Sensor (`residual_power_entity`) | **Pflicht.** PV-Überschuss in Watt; `unavailable`/`unknown` oder ≤ −50 000 W löst Hard-Lockout aus. Semantik: [konfiguration.md](konfiguration.md) |
 | Hausleistungsbilanz (`battery_residual_power_entity`) | **Pflicht bei `class: battery`.** Signiert: negativ = Unterdeckung, positiv = Einspeisung. Steuert ausschließlich die AC-Speicher-Entladung; ein ungültiger Wert schickt diese Speicher auf `standby`, ohne den übrigen Zyklus zu sperren. |
+| Formel-Zeilen (`residual_formula_variables`/`battery_residual_formula_variables`) | **Optional (D-045).** Beliebig viele benannte HA-Entitäten, die der zugehörige Formel-Code kombiniert. Liefert der Code einen gültigen Wert, ersetzt er die beiden Entitäten oben vollständig — siehe [konfiguration.md](konfiguration.md#formel-statt-einzel-entität) |
 | `actual_power_entity` je regelbarem Gerät | Ist-Leistung in Watt |
 | `switch_entity` je binärem Gerät | Tatsächlicher Schaltzustand |
+| `power_actual_entity` je binärem Gerät (optional) | Ist-Leistung in Watt, reine Datenquelle ohne Regelwirkung |
 | `voltage_l1/l2/l3_entity` | Phasenspannungen in Volt, Fallback je 230 V |
 | `soc_entity` je Speicher | Ladezustand in Prozent |
 | `charge_power_entity` / `discharge_power_entity` je Speicher | Ist-Leistung in Watt, beide ≥ 0 |
@@ -182,9 +184,11 @@ Global:
 | `global_mode_configured` | bool | `false`, wenn `global_mode` ein normaler, aber global nicht aktivierter Modus ist — der Zyklus bleibt dann sicher inaktiv |
 | `available_modes` | Liste | Die aktivierten normalen Regelmodi |
 | `residual_sensor_valid` | bool | Sensor lieferte einen brauchbaren Wert |
+| `residual_source` | string | `"ha"` oder `"formula"` (D-045) — welche Quelle `residual_w` gerade liefert |
 | `residual_w`, `pool_w`, `current_deficit_w`, `binary_total_w` | float | Leistungen in Watt |
 | `residual_bereinigt_w` | float | `residual_w` abzüglich der gemessenen Speicherentladung. Grundlage für Pool und Verbraucher-Defizit, nicht für die AC-Entladeplanung |
 | `battery_residual_sensor_valid` | bool | Separate Hausleistungsbilanz lieferte einen brauchbaren Wert; ohne `battery` nur Diagnose und nicht regelrelevant |
+| `battery_residual_source` | string | `"ha"`, `"addon"`, `"internal"` oder `"formula"` (D-045) — welche Quelle `battery_residual_w` gerade liefert |
 | `battery_residual_w` | float | Rohe Hausleistungsbilanz: negativ = Unterdeckung, positiv = Einspeisung |
 | `battery_residual_bereinigt_w` | float | `battery_residual_w` abzüglich der gemessenen AC-Entladung (`netz_support_w`) |
 | `netz_support_w` | float | Σ gemessene Entladeleistung aller Speicher |
@@ -221,7 +225,8 @@ Regelbares Gerät: `type`, `id`, `label`, `priority`, `eligible`, `source`, `act
 
 Binäres Gerät: `type`, `id`, `label`, `priority`, `eligible`, `source`, `power_w`, `actual_on`,
 `anforderung_an`, `desired_on`, `candidate_on`, `final_on`, `in_min_runtime`, `switch_age_s`,
-`min_runtime_s`, `min_offtime_s`, `off_delay_remaining_s`.
+`min_runtime_s`, `min_offtime_s`, `off_delay_remaining_s`. Dazu `power_actual_w`, sofern
+`power_actual_entity` konfiguriert ist und der Sensor einen gültigen Wert liefert.
 
 Speicher (`type: "battery"`): `id`, `label`, `priority` (Laden), `entlade_prioritat`, `eligible`,
 `source`, `ep_proposal_status`, `sensoren_gueltig`, `battery_residual_sensor_valid`, `soc_prozent`, `capacity_kwh`, `betriebsart`,

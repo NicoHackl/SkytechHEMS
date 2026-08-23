@@ -13,10 +13,13 @@ deshalb die autoritative Validierung.
 
 import hashlib
 import json
+import keyword
 import math
 import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
+
+from formula import FUNCTION_WHITELIST, RESERVED_OUTPUT_NAMES, validate_formula_source
 
 # ---------------------------------------------------------------------------
 # Feste Wertebereiche
@@ -47,6 +50,10 @@ INTERVAL_MAX_S = 300
 
 _NAME_RE = re.compile(r"^[a-z0-9_]+$")
 _ENTITY_RE = re.compile(r"^[a-z][a-z0-9_]*\.[a-z0-9_]+$")
+# Strenger als _NAME_RE: ein Formel-Zeilenname (D-045) landet als Python-Bezeichner
+# im Namespace einer Formel, _NAME_RE erlaubt aber z. B. führende Ziffern ("123"),
+# was kein gültiger Bezeichner ist.
+_FORMULA_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 # ---------------------------------------------------------------------------
 # Formular-Startwerte der verpflichtenden Add-on-Fallbacks
@@ -98,6 +105,13 @@ GLOBAL_DEFAULTS: Dict[str, Any] = {
     # derselbe Wert wie der konservativ geglättete Überschuss-Sensor.
     "battery_residual_power_entity": "",
     "speicher_in_residual_enthalten": True,
+    # Formel-basierte Sensorwerte (D-045): liefert der Code einen gültigen Wert,
+    # ersetzt er die jeweilige Entität oben vollständig. Leer = keine Formel,
+    # Verhalten bleibt exakt das der beiden Felder oben.
+    "residual_formula_variables": [],
+    "residual_formula_code": "",
+    "battery_residual_formula_variables": [],
+    "battery_residual_formula_code": "",
 }
 
 # Ändert sich einer dieser globalen Werte, werden vor einem Neustart vorsorglich
@@ -107,6 +121,10 @@ GLOBAL_KEYS_FORCING_SHUTDOWN: Tuple[str, ...] = (
     "battery_residual_power_entity",
     "speicher_in_residual_enthalten",
     "available_modes",
+    "residual_formula_variables",
+    "residual_formula_code",
+    "battery_residual_formula_variables",
+    "battery_residual_formula_code",
 )
 
 
@@ -201,7 +219,21 @@ def normalize_options(raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         _normalize_device(entry) for entry in (raw.get("devices") or [])
         if isinstance(entry, dict)
     ]
+    options["residual_formula_variables"] = _normalize_formula_variables(
+        raw.get("residual_formula_variables"))
+    options["battery_residual_formula_variables"] = _normalize_formula_variables(
+        raw.get("battery_residual_formula_variables"))
+    options["residual_formula_code"] = _as_text(options.get("residual_formula_code"))
+    options["battery_residual_formula_code"] = _as_text(options.get("battery_residual_formula_code"))
     return options
+
+
+def _normalize_formula_variables(raw: Any) -> List[Dict[str, str]]:
+    """Formel-Zeilen (D-045) mit aufgelösten Feldern, ohne Prüfung."""
+    return [
+        {"name": _as_text(entry.get("name")), "entity": _as_text(entry.get("entity"))}
+        for entry in (raw or []) if isinstance(entry, dict)
+    ]
 
 
 def _normalize_device(raw: Dict[str, Any]) -> Dict[str, Any]:
@@ -239,6 +271,7 @@ def _normalize_device(raw: Dict[str, Any]) -> Dict[str, Any]:
             device[key] = _as_float(raw.get(key), None) if key in raw else None
     elif cls == "binary":
         device["switch_entity"] = _as_text(raw.get("switch_entity"))
+        device["power_actual_entity"] = _as_text(raw.get("power_actual_entity"))
         for key in BINARY_FALLBACK_DEFAULTS:
             device[key] = _as_float(raw.get(key), None) if key in raw else None
     elif cls == "battery":
@@ -340,6 +373,13 @@ def _validate_global(options: Dict[str, Any], result: ValidationResult) -> None:
 
     options["speicher_in_residual_enthalten"] = bool(options.get("speicher_in_residual_enthalten"))
 
+    _validate_formula(options, result, output_name="ueberschuss",
+                      variables_key="residual_formula_variables",
+                      code_key="residual_formula_code")
+    _validate_formula(options, result, output_name="hausbilanz",
+                      variables_key="battery_residual_formula_variables",
+                      code_key="battery_residual_formula_code")
+
     unknown = [mode for mode in parse_modes(options["available_modes"])
                if mode not in NORMAL_MODES]
     if unknown:
@@ -402,6 +442,58 @@ def _validate_device(device: Dict[str, Any], index: int, available: List[str],
     return errors
 
 
+def _validate_formula(options: Dict[str, Any], result: ValidationResult, *,
+                      output_name: str, variables_key: str, code_key: str) -> None:
+    """Prüft eine Formel-Zeilenliste plus zugehörigen Code (D-045).
+
+    Feldfehler folgen demselben Pfadmuster wie Geräte: `<variables_key>[i].name`
+    bzw. `.entity`, der Code-Fehler landet unter `<code_key>`.
+    """
+    variables = options.get(variables_key) or []
+    seen: Dict[str, int] = {}
+    names: List[str] = []
+
+    for index, row in enumerate(variables):
+        name = row.get("name", "")
+        entity = row.get("entity", "")
+        prefix = f"{variables_key}[{index}]"
+
+        if not name:
+            result.field_errors[f"{prefix}.name"] = "Name ist ein Pflichtfeld."
+        elif not _FORMULA_NAME_RE.match(name):
+            result.field_errors[f"{prefix}.name"] = (
+                "Muss mit einem Kleinbuchstaben beginnen, danach nur Kleinbuchstaben, "
+                "Ziffern und Unterstriche."
+            )
+        elif keyword.iskeyword(name):
+            result.field_errors[f"{prefix}.name"] = f"'{name}' ist ein Python-Schlüsselwort."
+        elif name in RESERVED_OUTPUT_NAMES:
+            result.field_errors[f"{prefix}.name"] = (
+                f"'{name}' ist die Ausgabevariable und als Zeilenname nicht zulässig."
+            )
+        elif name in FUNCTION_WHITELIST:
+            result.field_errors[f"{prefix}.name"] = f"'{name}' ist eine reservierte Funktion."
+        elif name in seen:
+            result.field_errors[f"{prefix}.name"] = (
+                f"Name ist bereits in Zeile {seen[name] + 1} vergeben."
+            )
+        else:
+            seen[name] = index
+            names.append(name)
+
+        if not entity:
+            result.field_errors[f"{prefix}.entity"] = "Entität ist ein Pflichtfeld."
+        elif not _ENTITY_RE.match(entity):
+            result.field_errors[f"{prefix}.entity"] = "Vollständige Entity-ID erwartet, z. B. sensor.beispiel."
+
+    code = options.get(code_key) or ""
+    if code.strip():
+        variable_names = names + [f"{name}_valid" for name in names]
+        error = validate_formula_source(code, variable_names, output_name)
+        if error:
+            result.field_errors[code_key] = error
+
+
 def _validate_controllable(device: Dict[str, Any], fail) -> None:
     _require_entity(device, "actual_power_entity", fail)
 
@@ -435,6 +527,7 @@ def _validate_controllable(device: Dict[str, Any], fail) -> None:
 
 def _validate_binary(device: Dict[str, Any], fail) -> None:
     _require_entity(device, "switch_entity", fail)
+    _optional_entity(device, "power_actual_entity", fail)
     _number(device, "power_w", fail, exclusive_minimum=0.0,
             text="Pflichtfeld: endliche Zahl über 0 W.")
     for key in ("on_reserve_w", "min_runtime_s", "min_offtime_s", "off_delay_s"):

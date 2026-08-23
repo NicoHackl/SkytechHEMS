@@ -92,6 +92,10 @@ configuration:
       mindestlaufzeit_s, mindestauszeit_s and abschaltverzogerung_s. If any is
       missing, the device is not registered.
 
+      • power_actual_entity (optional) – sensor with the device's actual power
+      draw. Pure data source for future expansion stages, no effect on current
+      control.
+
       AC BATTERY STORAGE (class: battery)
 
       • soc_entity (required) – Sensor entity with the state of charge in
@@ -173,6 +177,37 @@ configuration:
       sensor. This field is required when an AC battery is configured. If the
       sensor reports unknown, unavailable or a non-numeric value, all AC
       batteries safely enter standby.
+  residual_formula_variables:
+    name: Surplus – formula variables (D-045)
+    description: >-
+      Optional list of named HA entities for a formula that can replace the
+      surplus sensor above. Each entry has name (a valid identifier, e.g.
+      "pv") and entity (the full entity ID). More convenient to maintain in
+      the "Sensors" area of the Ingress panel than here as YAML. Has no effect
+      without matching code (residual_formula_code).
+  residual_formula_code:
+    name: Surplus – formula code (D-045)
+    description: >-
+      Restricted Python expression that may use the variables named above and
+      must assign a value to "ueberschuss". For every name "<n>" a companion
+      "<n>_valid" is also available. If the code produces a valid, finite
+      value, it fully replaces residual_power_entity; empty or invalid code
+      leaves behaviour unchanged. Allowed: assignments, arithmetic,
+      comparisons, boolean operators and if/else — no loops, function
+      definitions, imports or attribute access. More convenient to maintain,
+      and to test against the current HA snapshot, in the "Sensors" area of
+      the Ingress panel.
+  battery_residual_formula_variables:
+    name: House power balance – formula variables (D-045)
+    description: >-
+      Same as residual_formula_variables, but for the house power balance.
+      Has no effect without matching code (battery_residual_formula_code).
+  battery_residual_formula_code:
+    name: House power balance – formula code (D-045)
+    description: >-
+      Same as residual_formula_code, but the variable is named "hausbilanz"
+      and a valid result replaces battery_residual_power_entity instead of
+      residual_power_entity.
   speicher_in_residual_enthalten:
     name: Battery power included in surplus sensor
     description: >-

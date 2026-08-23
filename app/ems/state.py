@@ -9,7 +9,7 @@ auseinander und niemand kann später sagen, welcher Wert gerade wirkt.
 import datetime
 import math
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 # Zustand eines gelesenen States. `missing` und `unavailable` verwenden denselben
 # Ersatzwert, sind aber verschiedene Ursachen: das eine ist ein Konfigurations-
@@ -26,6 +26,10 @@ STATE_WRITE_FAILED = "write_failed"
 SOURCE_HA       = "ha"
 SOURCE_ADDON    = "addon"
 SOURCE_INTERNAL = "internal"
+# Wert kommt aus einer nutzerdefinierten Formel (D-045), nicht direkt aus einer
+# konfigurierten HA-Entität. Nur für residual_w/battery_residual_w relevant –
+# siehe EMSController.run_cycle().
+SOURCE_FORMULA  = "formula"
 
 # HA meldet einen ausgefallenen Sensor über den State, nicht über das Fehlen der
 # Entität. `None` kommt bei einem Helfer ohne gesetzten Wert vor.
@@ -159,6 +163,38 @@ class StateProxy:
         if raw not in allowed:
             return self._select_fallback(STATE_INVALID, addon, fallback)
         return Resolved(raw, STATE_VALID, SOURCE_HA)
+
+    def resolve_formula_namespace(self, variables: Iterable[Dict[str, str]]
+                                  ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+        """Löst jede Formel-Zeile (D-045) über `resolve_number()` auf.
+
+        `variables` ist die konfigurierte Zeilenliste
+        `[{"name": ..., "entity": ...}, ...]` (siehe app/configuration.py). Für
+        jeden Namen `<n>` landen im zurückgegebenen Namespace sowohl `<n>`
+        (Wert oder `None`) als auch `<n>_valid` (bool) – eine Formel kann
+        Verfügbarkeit damit selbst prüfen, statt bei einem ungültigen Sensor
+        hart zu scheitern (siehe app/formula.py). Der Wert bleibt bei
+        ungültiger Entität `None`, nie stillschweigend `0` – ein gültiger Wert
+        `0` wird an keiner Stelle im Resolve-Vertrag durch einen Ersatzwert
+        verdrängt, das gilt hier genauso.
+
+        Die zweite Rückgabe ist eine Diagnosezeile pro Variable (Wert, Zustand,
+        Quelle) – unverändert das, was der „Testen"-Endpoint an die Oberfläche
+        weiterreicht.
+        """
+        namespace: Dict[str, Any] = {}
+        diagnostics: List[Dict[str, Any]] = []
+        for row in variables:
+            name, entity = row["name"], row["entity"]
+            resolved = self.resolve_number(entity)
+            valid = resolved.state == STATE_VALID
+            namespace[name] = resolved.value
+            namespace[f"{name}_valid"] = valid
+            diagnostics.append({
+                "name": name, "entity": entity, "value": resolved.value,
+                "valid": valid, "state": resolved.state, "source": resolved.source,
+            })
+        return namespace, diagnostics
 
     # ------------------------------------------------------------------
     # Interne Fallback-Auswahl

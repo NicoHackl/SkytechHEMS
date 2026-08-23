@@ -72,6 +72,10 @@ options:
   battery_residual_power_entity: "sensor.hausleistungsbilanz_fur_ac_speicher"
   speicher_in_residual_enthalten: true
   available_modes: "manuell,nur_heizen,nur_laden"
+  residual_formula_variables: []
+  residual_formula_code: ""
+  battery_residual_formula_variables: []
+  battery_residual_formula_code: ""
   devices:
     - name: heizstab
       label: "Heizstab"
@@ -112,6 +116,7 @@ options:
       min_runtime_s: 600
       min_offtime_s: 300
       off_delay_s: 120
+      power_actual_entity: ""
     - name: heizlufter_2
       label: "Heizlüfter 2"
       class: binary
@@ -147,6 +152,14 @@ schema:
   battery_residual_power_entity: str?
   speicher_in_residual_enthalten: bool?
   available_modes: str?
+  residual_formula_variables:
+    - name: str
+      entity: str
+  residual_formula_code: str?
+  battery_residual_formula_variables:
+    - name: str
+      entity: str
+  battery_residual_formula_code: str?
   devices:
     - name: str
       label: str?
@@ -172,6 +185,7 @@ schema:
       min_runtime_s: float?
       min_offtime_s: float?
       off_delay_s: float?
+      power_actual_entity: str?
       soc_entity: str?
       charge_power_entity: str?
       discharge_power_entity: str?

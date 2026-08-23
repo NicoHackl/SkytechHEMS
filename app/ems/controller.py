@@ -21,8 +21,10 @@ from configuration import (
     validate_options,
 )
 
+from formula import run_formula
+
 from .ops import WriteOp, WriteResult
-from .state import STATE_VALID, StateProxy, safe_float
+from .state import SOURCE_FORMULA, SOURCE_HA, SOURCE_INTERNAL, STATE_VALID, StateProxy, safe_float
 from .devices import Device, ControllableDevice, BinaryDevice, BatteryDevice
 
 log = logging.getLogger(__name__)
@@ -105,6 +107,7 @@ def _build_devices(device_configs: List[dict]) -> List[Device]:
                 min_runtime_s=cfg["min_runtime_s"],
                 min_offtime_s=cfg["min_offtime_s"],
                 off_delay_s=cfg["off_delay_s"],
+                power_actual_entity=cfg["power_actual_entity"] or None,
             ))
 
         else:
@@ -145,7 +148,11 @@ class EMSController:
                  residual_power_entity: Optional[str] = None,
                  battery_residual_power_entity: Optional[str] = None,
                  speicher_in_residual_enthalten: bool = True,
-                 available_modes: Optional[object] = None):
+                 available_modes: Optional[object] = None,
+                 residual_formula_variables: Optional[List[Dict[str, str]]] = None,
+                 residual_formula_code: Optional[str] = None,
+                 battery_residual_formula_variables: Optional[List[Dict[str, str]]] = None,
+                 battery_residual_formula_code: Optional[str] = None):
         # Die globalen Felder prüft der Aufrufer; hier interessiert nur, welche
         # Geräteeinträge instanziierbar sind und welche normalen Regelmodi gelten.
         self._available_modes: List[str] = (
@@ -188,6 +195,14 @@ class EMSController:
         # werden – sonst liest das EMS die eigene Entladung als PV-Überschuss.
         self._speicher_in_residual = bool(speicher_in_residual_enthalten)
         self._last_battery_residual_problem: Optional[str] = None
+        # Formel-basierte Sensorwerte (D-045): liefert der Code einen gültigen
+        # Wert, ersetzt er die jeweilige Entität oben vollständig – geprüft wird
+        # das pro Zyklus in run_cycle(), leerer Code lässt das Verhalten exakt
+        # unverändert (siehe app/formula.py).
+        self._residual_formula_variables = residual_formula_variables or []
+        self._residual_formula_code = residual_formula_code or ""
+        self._battery_residual_formula_variables = battery_residual_formula_variables or []
+        self._battery_residual_formula_code = battery_residual_formula_code or ""
         log.info("EMSController bereit – %d Geräte registriert, Überschuss-Sensor='%s', "
                  "Hausleistungsbilanz='%s', Speicher im Überschuss-Sensor=%s.",
                  len(self._devices), self._residual_entity,
@@ -274,29 +289,66 @@ class EMSController:
         effective_mode = global_mode if global_mode_configured else "aus"
         global_einschaltreserve = safe_float(st.get(HA_GLOBAL_EINSCHALTRESERVE_W))
 
-        residual_raw          = st.get(self._residual_entity)
-        residual_sensor_valid = residual_raw not in ("unavailable", "unknown", None)
-        residual_w            = safe_float(residual_raw) if residual_sensor_valid else 0.0
-        hard_lockout          = (not residual_sensor_valid
-                                 or residual_w <= HARD_LOCKOUT_THRESHOLD_W)
+        # Formel wird VOR der konfigurierten Einzel-Entität ausgewertet (D-045):
+        # liefert sie einen gültigen Wert, ersetzt sie die Entität vollständig;
+        # leerer oder ungültiger Code lässt den bisherigen Pfad unverändert.
+        # Welche Quelle gerade wirkt, steht im Status (residual_source).
+        residual_source = SOURCE_HA
+        residual_formula = None
+        if self._residual_formula_code:
+            residual_namespace, _ = st.resolve_formula_namespace(self._residual_formula_variables)
+            residual_formula = run_formula(self._residual_formula_code, residual_namespace,
+                                           "ueberschuss")
+            if not residual_formula.valid and debug_output:
+                log.warning("EMS Formel Überschuss ungültig, falle auf Entität zurück: %s",
+                            residual_formula.error)
+
+        if residual_formula and residual_formula.valid:
+            residual_w, residual_sensor_valid, residual_source = (
+                residual_formula.value, True, SOURCE_FORMULA)
+        else:
+            residual_raw          = st.get(self._residual_entity)
+            residual_sensor_valid = residual_raw not in ("unavailable", "unknown", None)
+            residual_w            = safe_float(residual_raw) if residual_sensor_valid else 0.0
+        hard_lockout = (not residual_sensor_valid
+                       or residual_w <= HARD_LOCKOUT_THRESHOLD_W)
 
         if not residual_sensor_valid:
             log.error("EMS SENSOR LOCKOUT: %s ist '%s' – alle Verbraucher abschalten",
-                      self._residual_entity, residual_raw)
+                      self._residual_entity, st.get(self._residual_entity))
         elif hard_lockout and debug_output:
             log.warning("EMS LOCKOUT: residual=%.0fW <= %.0fW",
                         residual_w, HARD_LOCKOUT_THRESHOLD_W)
 
-        battery_residual = (
-            st.resolve_number(self._battery_residual_entity)
-            if self._battery_residual_entity else None
-        )
-        battery_residual_sensor_valid = (
-            battery_residual is not None and battery_residual.state == STATE_VALID
-        )
-        battery_residual_w = (
-            float(battery_residual.value) if battery_residual_sensor_valid else 0.0
-        )
+        battery_residual_source = None
+        battery_residual_formula = None
+        if self._battery_residual_formula_code:
+            battery_namespace, _ = st.resolve_formula_namespace(
+                self._battery_residual_formula_variables)
+            battery_residual_formula = run_formula(
+                self._battery_residual_formula_code, battery_namespace, "hausbilanz")
+            if not battery_residual_formula.valid and debug_output:
+                log.warning("EMS Formel Hausbilanz ungültig, falle auf Entität zurück: %s",
+                            battery_residual_formula.error)
+
+        if battery_residual_formula and battery_residual_formula.valid:
+            battery_residual_w = battery_residual_formula.value
+            battery_residual_sensor_valid = True
+            battery_residual_source = SOURCE_FORMULA
+        else:
+            battery_residual = (
+                st.resolve_number(self._battery_residual_entity)
+                if self._battery_residual_entity else None
+            )
+            battery_residual_sensor_valid = (
+                battery_residual is not None and battery_residual.state == STATE_VALID
+            )
+            battery_residual_w = (
+                float(battery_residual.value) if battery_residual_sensor_valid else 0.0
+            )
+            battery_residual_source = (
+                battery_residual.source if battery_residual is not None else SOURCE_INTERNAL
+            )
 
         # ── 2. Alle Geräte aus HA aktualisieren ─────────────────────────
         for device in self._devices:
@@ -465,9 +517,15 @@ class EMSController:
             "residual_sensor_valid": residual_sensor_valid,
             "residual_w":            residual_w,
             "residual_bereinigt_w":  residual_bereinigt_w,
+            # "ha" oder "formula" (D-045) – welche Quelle den residual_w oben
+            # gerade liefert. Direkte Antwort auf D-041: zwei Mechanismen für
+            # denselben Wert bleiben nur nachvollziehbar, wenn sichtbar ist,
+            # welcher gerade greift.
+            "residual_source":       residual_source,
             "battery_residual_sensor_valid": battery_residual_sensor_valid,
             "battery_residual_w":    battery_residual_w,
             "battery_residual_bereinigt_w": battery_residual_bereinigt_w,
+            "battery_residual_source": battery_residual_source,
             "netz_support_w":        netz_support_w,
             "hems_last_w":           hems_last_w,
             "hems_last_gemessen_w":  hems_last_gemessen_w,
