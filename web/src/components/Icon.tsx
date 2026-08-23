@@ -38,6 +38,8 @@ const paths: Record<string, JSX.Element> = {
   warning: <><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" /><path d="M12 9v4M12 17h.01" /></>,
   /* Pulslinie — Sensoren, gemessener Wert. */
   pulse: <path d="M3 12h4l2-7 4 14 3-9 2 2h4" />,
+  /* Verzweigung — Flow Card, Leistungsfluss zwischen Knoten. */
+  flow: <><circle cx="5" cy="12" r="2" /><circle cx="19" cy="5" r="2" /><circle cx="19" cy="19" r="2" /><path d="M7 12h4M11 12l6-6M11 12l6 6" /></>,
 }
 
 export function Icon({ name, size = 18, ...props }: { name: string; size?: number } & SVGProps<SVGSVGElement>) {

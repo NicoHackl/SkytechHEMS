@@ -112,6 +112,9 @@ Seitenwechsel nicht neu montiert werden.
     <Route path="/" element={<Status />} />
     <Route path="/steuerung" element={<Steuerung />} />
     <Route path="/energy-pilot" element={<EnergyPilot />} />
+    <Route path="/sensoren/ueberschuss" element={<SensorenUeberschuss />} />
+    <Route path="/sensoren/hausbilanz" element={<SensorenHausbilanz />} />
+    <Route path="/flow-card" element={<FlowCard />} />
     <Route path="/konfiguration/global" element={<KonfigurationGlobal />} />
     <Route path="/konfiguration/geraete" element={<KonfigurationGeraete />} />
     <Route path="/konfiguration/geraete/neu" element={<KonfigurationGeraet mode="create" />} />
@@ -125,6 +128,28 @@ Die Geräteliste ist der einzige Datentyp der Anwendung und folgt dem Muster der
 **Liste** (`/konfiguration/geraete`), **Anlegen** (`.../neu`), **Bearbeiten** (`.../:index`), wobei
 Anlegen und Bearbeiten sich eine Komponente mit `mode: 'create' | 'edit'` teilen. Der Index ist
 dabei ausdrücklich nur die **Entwurfsposition** — die fachliche Identität bleibt `name`.
+
+### Seiten und ihr Bereich
+
+| Route | Bereich der Sidebar | Inhalt |
+|---|---|---|
+| `/` | – | Statusseite: laufender Zyklus, Geräte, Kennzahlen |
+| `/steuerung` | – | HA-Helfer je Gerät, direkt bedienbar |
+| `/energy-pilot` | Vorausschau | Vorschläge und Planstatus des Energy Pilot |
+| `/sensoren/ueberschuss`, `/sensoren/hausbilanz` | Einrichtung | Formel-basierte Sensorwerte (D-045) |
+| `/flow-card` | Einrichtung | Anlagenwerte und Anzeigeoptionen der Power Flow Card (D-046) |
+| `/konfiguration/*` | Einrichtung | Globale Optionen und Geräteliste |
+
+**Drei Bereiche teilen sich einen Entwurf.** `/konfiguration`, `/sensoren` und `/flow-card`
+schreiben alle in denselben `ConfigDraft`. Sie stehen deshalb in der Ausnahmeliste von `guard()`
+in `Layout.tsx` — ein Wechsel zwischen ihnen darf keine Rückfrage auslösen, der Entwurf bleibt ja
+erhalten — und tragen alle denselben Punkt in der Navigation, solange etwas ungespeichert ist.
+
+Die Seite **Flow Card** pflegt ausdrücklich **nicht** die Geräteliste: die Geräte kommen aus der
+Gerätekonfiguration, hier lässt sich je Gerät nur die Darstellung ändern. Eine zweite Pflegestelle
+wäre eine zweite Wahrheit. Ihre Vorschau ruft `api.flowPreview()` auf Knopfdruck ab, nicht im
+Dauerpolling: die Werte stammen aus dem Zustandsabbild des letzten Regelzyklus und ändern sich
+nicht schneller.
 
 Zugriffsschutz gibt es im Frontend nicht: Die Anmeldung erledigt der HA-Ingress, bevor die Seite
 überhaupt ausgeliefert wird — siehe [sicherheit-datenschutz.md](sicherheit-datenschutz.md).

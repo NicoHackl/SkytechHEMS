@@ -30,6 +30,10 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
     Darstellung; ein geändertes Icon schaltet kein Gerät ab (D-048).
   - Neuer Diagnoseendpunkt `GET api/flow/preview` zeigt beide Nutzlasten und je Verweis, ob er
     gerade trägt.
+  - Neuer Sidebar-Bereich „Flow Card" im Panel: Veröffentlichung ein- und ausschalten, Erzeugung,
+    Netz, Haus und Batterie pflegen, je Gerät Sichtbarkeit, Symbol und Farbe setzen, dazu die
+    Anzeigeoptionen. Die Vorschau zeigt auf Knopfdruck, welcher Verweis gerade trägt und welcher
+    nicht.
   - Rein additiv: ohne `flow_publish: true` wird keine einzige Entität geschrieben, und eine
     Bestandsanlage ohne `flow_*`-Optionen verhält sich unverändert. Empfehlung: beide Entitäten
     vom `recorder` ausschließen, solange keine Historie gewünscht ist.

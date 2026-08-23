@@ -292,6 +292,11 @@ export interface ConfigDevice {
   capacity_kwh?: number | null
   soc_max_hysteresis_percent?: number | null
   direction_switch_delay_s?: number | null
+
+  /* Flow Card (D-046): reine Anzeige, ohne Wirkung auf die Regelung. */
+  flow_show?: boolean
+  flow_icon?: string
+  flow_color?: string
 }
 
 /** Eine Formel-Zeile (D-045): benannte HA-Entität für den Code darunter. */
@@ -315,7 +320,62 @@ export interface ConfigOptions {
   residual_formula_code: string
   battery_residual_formula_variables: FormulaVariable[]
   battery_residual_formula_code: string
+
+  /* Flow Card (D-046): Anlagenwerte und Anzeigeoptionen der Lovelace-Karte.
+     Die Geräteliste kennt die Karte bereits aus `devices`. */
+  flow_publish: boolean
+  flow_title: string
+  flow_watt_threshold: number
+  flow_animation: boolean
+  flow_house_node: boolean
+  flow_pv_power_entities: FlowEntityRow[]
+  flow_pv_label: string
+  flow_grid_power_entity: string
+  flow_grid_power_sign: string
+  flow_grid_import_entity: string
+  flow_grid_export_entity: string
+  flow_grid_label: string
+  flow_house_power_entity: string
+  flow_house_label: string
+  flow_battery_label: string
+  flow_battery_soc_entity: string
+  flow_battery_capacity_kwh: number | null
+  flow_battery_power_entity: string
+  flow_battery_power_sign: string
+  flow_battery_charge_power_entity: string
+  flow_battery_discharge_power_entity: string
+
   devices: ConfigDevice[]
+}
+
+/** Eine PV-Zeile der Flow Card. Objektliste, weil das Add-on-Schema keine
+    einfache Stringliste mit Formularunterstützung ausdrücken kann. */
+export interface FlowEntityRow {
+  entity: string
+}
+
+/** Ein aufgelöster Verweis in der Vorschau: trägt er gerade oder nicht? */
+export interface FlowReference {
+  pfad: string
+  entity: string
+  state: string
+  /** Bleibt bei unbrauchbarem Zustand `null` — nie `0`. */
+  value: number | null
+  valid: boolean
+}
+
+/** Antwort von `GET api/flow/preview`. Immer 200, auch unvollständig. */
+export interface FlowPreview {
+  publish_enabled: boolean
+  config_entity: string
+  status_entity: string
+  revision: string
+  /** Leer, solange noch nie veröffentlicht wurde. */
+  zuletzt_geschrieben: string
+  config_payload: Record<string, unknown>
+  status_payload: Record<string, unknown>
+  aufgeloest: FlowReference[]
+  warnungen: string[]
 }
 
 /** Ein Eintrag, der beim Start nicht instanziiert würde. */

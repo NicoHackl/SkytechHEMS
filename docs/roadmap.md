@@ -84,7 +84,7 @@ und Anlagenwerte selbst aus dem HEMS — im Dashboard genügt
 | `flow_*`-Optionen und Prüfregeln | fertig | [konfiguration.md](konfiguration.md#flow-card-flow_) |
 | Publisher: zwei Anzeige-Sensoren je Zyklus | fertig | D-046, [architektur.md](architektur.md#datenfluss) |
 | Diagnoseendpunkt `GET api/flow/preview` | fertig | [api-referenz.md](api-referenz.md) |
-| Panel-Bereich „Flow Card" | offen | [frontend.md](frontend.md) |
+| Panel-Bereich „Flow Card" | fertig | [frontend.md](frontend.md#seiten-und-ihr-bereich) |
 | Die Lovelace-Karte selbst | offen | eigenes Repository `Skytech-Powerflow-Card` |
 | Erprobung an der realen Anlage | offen | verlangt eine laufende HA-Instanz |
 

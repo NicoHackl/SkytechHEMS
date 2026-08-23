@@ -1,6 +1,7 @@
 import type {
   ConfigOptions, ConfigResponse, ConfigSaveResult, ConfigValidation,
-  ControlGroup, EntityOption, FormulaTestResult, FormulaVariable, HaEntities, StatusResponse,
+  ControlGroup, EntityOption, FlowPreview, FormulaTestResult, FormulaVariable, HaEntities,
+  StatusResponse,
 } from './types'
 
 /* Einziger Ort im Frontend, an dem fetch aufgerufen wird. Basis-Pfad, Header und
@@ -89,4 +90,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ kind, variables, code }),
     }),
+
+  /* Kartendaten der Flow Card (D-046): zeigt beide Nutzlasten und je Verweis,
+     ob er gerade trägt. Antwortet immer mit 200. */
+  flowPreview: () => request<FlowPreview>('/flow/preview'),
 }
