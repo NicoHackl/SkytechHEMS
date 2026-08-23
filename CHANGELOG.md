@@ -10,6 +10,36 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ### Hinzugefügt
 
+- **Kartendaten für die Skytech Power Flow Card (D-046, D-047).** Ist die Veröffentlichung
+  eingeschaltet, schreibt das Add-on nach jedem Regelzyklus zwei Anzeige-Sensoren nach Home
+  Assistant. Aus ihnen baut sich die Lovelace-Karte vollständig selbst auf — im Dashboard genügt
+  `type: custom:skytech-power-flow-card`, es wird dort keine einzige Entität verdrahtet. Ein im
+  HEMS neu angelegtes Gerät erscheint innerhalb eines Zyklus auf der Karte, ein umbenanntes
+  behält seine Position.
+  - `sensor.skytech_hems_flow_config` trägt Layout, Anlagenwerte und die Geräteliste als reine
+    **Verweise** auf HA-Entitäten. Die Karte löst sie selbst auf und aktualisiert dadurch im Takt
+    von Home Assistant statt im Regelintervall. Geschrieben wird nur bei geänderter Revision oder
+    wenn die Entität nach einem HA-Neustart fehlt.
+  - `sensor.skytech_hems_flow_status` trägt die Kennzahlen des letzten Zyklus und je Gerät einen
+    Rückfallwert, falls ein Direktsensor ausfällt. Ein unbrauchbarer Messwert wird nie zu `0` —
+    eine fehlende Messung sieht sonst aus wie ein ausgeschaltetes Gerät.
+  - Neue Anlagenwerte unter `flow_*`: PV-Sensoren (werden summiert), Netz wahlweise signiert oder
+    als getrennte Sensoren, optional die Hausleistung sowie der Hausspeicher mit Ladestand und
+    Kapazität. Dazu die Anzeigeoptionen Überschrift, W/kW-Schwelle, Animation und Hausknoten.
+  - Je Gerät neu: `flow_show`, `flow_icon` und `flow_color`. Sie ändern ausschließlich die
+    Darstellung; ein geändertes Icon schaltet kein Gerät ab (D-048).
+  - Neuer Diagnoseendpunkt `GET api/flow/preview` zeigt beide Nutzlasten und je Verweis, ob er
+    gerade trägt.
+  - Die Konfigurationsentität trägt zusätzlich das Regelintervall. Ohne diesen Wert könnte die
+    Karte nicht beurteilen, ab wann ihre Statusdaten veraltet sind — die Regel stand im Vertrag,
+    die Größe dazu fehlte. Additiv, ohne Sprung der Schemaversion.
+  - Neuer Sidebar-Bereich „Flow Card" im Panel: Veröffentlichung ein- und ausschalten, Erzeugung,
+    Netz, Haus und Batterie pflegen, je Gerät Sichtbarkeit, Symbol und Farbe setzen, dazu die
+    Anzeigeoptionen. Die Vorschau zeigt auf Knopfdruck, welcher Verweis gerade trägt und welcher
+    nicht.
+  - Rein additiv: ohne `flow_publish: true` wird keine einzige Entität geschrieben, und eine
+    Bestandsanlage ohne `flow_*`-Optionen verhält sich unverändert. Empfehlung: beide Entitäten
+    vom `recorder` ausschließen, solange keine Historie gewünscht ist.
 - **Formel-basierte Sensorwerte für Überschuss und Hausleistungsbilanz (D-045).** Neuer
   Sidebar-Bereich „Sensoren" mit den Tabs „Überschuss" und „Hausbilanz": beliebig viele benannte
   HA-Entitäten kombinieren und in einem eingeschränkten Python-Ausdruck zu `ueberschuss` bzw.

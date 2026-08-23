@@ -211,6 +211,63 @@ die Statusseite bleibt bis zum Neustart beim tatsächlichen Laufzeitstand.
 > Die Feldbeschreibungen aus `translations/*.yaml` erscheinen in diesem Modus nicht — maßgeblich
 > ist die Referenz unter [`device_classes/`](device_classes/global.md).
 
+### Flow Card (`flow_*`)
+
+Anzeigeoptionen der **Skytech Power Flow Card** (D-046). Sie beeinflussen die Regelung nicht:
+keiner der Schlüssel steht in `GLOBAL_KEYS_FORCING_SHUTDOWN`, und die drei Gerätefelder sind
+zusätzlich vom Abschaltvergleich ausgenommen (D-048) — ein geändertes Icon schaltet keinen
+Heizstab ab.
+
+Gepflegt wird das im Panel unter „Flow Card". Die Geräte kennt die Karte bereits aus der
+Geräteliste; hier stehen nur die Anlagenwerte, die das HEMS sonst nirgends braucht.
+
+| Schlüssel | Typ | Default | Bedeutung |
+|---|---|---|---|
+| `flow_publish` | bool | `false` | Veröffentlichung ein/aus. Aus heißt: es wird keine einzige Entität geschrieben |
+| `flow_title` | str | `"Leistungsfluss"` | Überschrift der Karte. Leer = keine Überschrift |
+| `flow_watt_threshold` | int (0…100000) | `1000` | Ab diesem Betrag zeigt die Karte kW statt W |
+| `flow_animation` | bool | `true` | Wandernde Punkte auf den Flusslinien |
+| `flow_house_node` | bool | `true` | Hausknoten zeichnen |
+| `flow_pv_power_entities` | `[{entity}]` | `[]` | PV-Leistungssensoren, werden summiert. Leer = kein Erzeugungsknoten |
+| `flow_pv_label` | str | `"Photovoltaik"` | Anzeigename des Erzeugungsknotens |
+| `flow_grid_power_entity` | str | `""` | Signierter Netzsensor |
+| `flow_grid_power_sign` | list | `"positiv_bezug"` | `positiv_bezug` \| `positiv_einspeisung` |
+| `flow_grid_import_entity` | str | `""` | Alternative: getrennter Bezugssensor |
+| `flow_grid_export_entity` | str | `""` | Alternative: getrennter Einspeisesensor |
+| `flow_grid_label` | str | `"Netz"` | Anzeigename des Netzknotens |
+| `flow_house_power_entity` | str | `""` | Hausleistung. Leer = die Karte rechnet die Bilanz |
+| `flow_house_label` | str | `"Haus"` | Anzeigename des Hausknotens |
+| `flow_battery_label` | str | `""` | Anzeigename des Batterieknotens. Leer und ohne SoC = kein Knoten |
+| `flow_battery_soc_entity` | str | `""` | Ladestand in Prozent |
+| `flow_battery_capacity_kwh` | float \| null | `null` | Nur Anzeige |
+| `flow_battery_power_entity` | str | `""` | Variante A: ein signierter Sensor |
+| `flow_battery_power_sign` | list | `"positiv_laden"` | `positiv_laden` \| `positiv_entladen` |
+| `flow_battery_charge_power_entity` | str | `""` | Variante B: Ladesensor |
+| `flow_battery_discharge_power_entity` | str | `""` | Variante B: Entladesensor |
+
+Je Gerät kommen drei Felder dazu — sie gehören zum Gerät, damit sie ein Umsortieren der Liste
+überleben: `flow_show` (bool, Default `true`), `flow_icon` (mdi-Name, leer = die Karte wählt nach
+Geräteklasse) und `flow_color` (CSS-Farbe als Override, leer = Skytech-Akzent). Siehe
+[Gemeinsame Felder in `devices[]`](device_classes/global.md#gemeinsame-felder-in-devices).
+
+**Prüfregeln.** Beim Netz gilt entweder der signierte Sensor **oder** das Paar aus Bezug und
+Einspeisung, nie beides; analog bei der Batterie. Wird die Batterie überhaupt gezeichnet (Label
+oder SoC gesetzt), ist genau eine Leistungsvariante Pflicht. `flow_publish: true` verlangt
+mindestens einen Anlagenwert. Jede PV-Zeile braucht eine Entität, Duplikate sind ein Feldfehler.
+`flow_icon` muss mit `mdi:` beginnen. Leere Werte sind sonst überall gültig — die Karte kommt mit
+fehlenden Knoten zurecht.
+
+**Empfehlung `recorder`.** Beide veröffentlichten Entitäten gehören in die Ausschlussliste,
+solange keine Historie gewünscht ist: `sensor.skytech_hems_flow_status` ändert sich jeden Zyklus.
+
+```yaml
+recorder:
+  exclude:
+    entities:
+      - sensor.skytech_hems_flow_config
+      - sensor.skytech_hems_flow_status
+```
+
 ## Konfigurationsdateien
 
 | Datei | Zweck | Eingecheckt |

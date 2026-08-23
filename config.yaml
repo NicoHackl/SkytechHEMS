@@ -76,6 +76,27 @@ options:
   residual_formula_code: ""
   battery_residual_formula_variables: []
   battery_residual_formula_code: ""
+  flow_publish: false
+  flow_title: "Leistungsfluss"
+  flow_watt_threshold: 1000
+  flow_animation: true
+  flow_house_node: true
+  flow_pv_power_entities: []
+  flow_pv_label: "Photovoltaik"
+  flow_grid_power_entity: ""
+  flow_grid_power_sign: "positiv_bezug"
+  flow_grid_import_entity: ""
+  flow_grid_export_entity: ""
+  flow_grid_label: "Netz"
+  flow_house_power_entity: ""
+  flow_house_label: "Haus"
+  flow_battery_label: ""
+  flow_battery_soc_entity: ""
+  flow_battery_capacity_kwh: null
+  flow_battery_power_entity: ""
+  flow_battery_power_sign: "positiv_laden"
+  flow_battery_charge_power_entity: ""
+  flow_battery_discharge_power_entity: ""
   devices:
     - name: heizstab
       label: "Heizstab"
@@ -160,6 +181,28 @@ schema:
     - name: str
       entity: str
   battery_residual_formula_code: str?
+  flow_publish: bool?
+  flow_title: str?
+  flow_watt_threshold: int(0,100000)?
+  flow_animation: bool?
+  flow_house_node: bool?
+  flow_pv_power_entities:
+    - entity: str
+  flow_pv_label: str?
+  flow_grid_power_entity: str?
+  flow_grid_power_sign: list(positiv_bezug|positiv_einspeisung)?
+  flow_grid_import_entity: str?
+  flow_grid_export_entity: str?
+  flow_grid_label: str?
+  flow_house_power_entity: str?
+  flow_house_label: str?
+  flow_battery_label: str?
+  flow_battery_soc_entity: str?
+  flow_battery_capacity_kwh: float?
+  flow_battery_power_entity: str?
+  flow_battery_power_sign: list(positiv_laden|positiv_entladen)?
+  flow_battery_charge_power_entity: str?
+  flow_battery_discharge_power_entity: str?
   devices:
     - name: str
       label: str?
@@ -196,3 +239,6 @@ schema:
       capacity_kwh: float?
       soc_max_hysteresis_percent: float?
       direction_switch_delay_s: float?
+      flow_show: bool?
+      flow_icon: str?
+      flow_color: str?

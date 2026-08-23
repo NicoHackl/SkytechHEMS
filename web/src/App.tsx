@@ -8,6 +8,7 @@ import { KonfigurationGeraete } from './pages/KonfigurationGeraete'
 import { KonfigurationGeraet } from './pages/KonfigurationGeraet'
 import { SensorenUeberschuss } from './pages/SensorenUeberschuss'
 import { SensorenHausbilanz } from './pages/SensorenHausbilanz'
+import { FlowCard } from './pages/FlowCard'
 
 /* Ausschliesslich die Routentabelle. Das Layout ist Elternroute mit <Outlet />,
    damit Navigation und Kopfzeile beim Seitenwechsel nicht neu montiert werden.
@@ -23,6 +24,7 @@ export function App() {
         <Route path="/energy-pilot" element={<EnergyPilot />} />
         <Route path="/sensoren/ueberschuss" element={<SensorenUeberschuss />} />
         <Route path="/sensoren/hausbilanz" element={<SensorenHausbilanz />} />
+        <Route path="/flow-card" element={<FlowCard />} />
         <Route path="/konfiguration/global" element={<KonfigurationGlobal />} />
         <Route path="/konfiguration/geraete" element={<KonfigurationGeraete />} />
         <Route path="/konfiguration/geraete/neu" element={<KonfigurationGeraet mode="create" />} />

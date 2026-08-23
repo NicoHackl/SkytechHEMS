@@ -110,3 +110,31 @@ class HAClient:
                           op.domain, op.service, op.owner or "global", error)
             results.append(WriteResult(op, False, error))
         return results
+
+    async def set_state(self, entity_id: str, state: str,
+                        attributes: Optional[Dict[str, Any]] = None) -> bool:
+        """Schreibt einen Zustand direkt in die HA-Zustandsmaschine.
+
+        Ausschließlich für die Anzeigedaten der Flow Card (D-046). Der Regelpfad
+        schreibt weiterhin nur input_*-Helfer über Service-Aufrufe; die hier
+        erzeugten sensor.*-Entitäten schalten kein Gerät.
+
+        Wirft nie: ein fehlgeschlagener Anzeigeschrieb darf den Regelzyklus
+        nicht abbrechen. Liefert True bei Erfolg, sonst False.
+        """
+        url = f"{_HA_URL}/api/states/{entity_id}"
+        payload: Dict[str, Any] = {"state": state, "attributes": attributes or {}}
+        try:
+            session = self._get_session()
+            async with session.post(
+                url,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=5),
+            ) as resp:
+                if resp.status in (200, 201):
+                    return True
+                log.warning("Zustand %s konnte nicht geschrieben werden → HTTP %s",
+                            entity_id, resp.status)
+        except Exception as exc:
+            log.warning("Zustand %s konnte nicht geschrieben werden: %s", entity_id, exc)
+        return False

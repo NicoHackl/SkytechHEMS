@@ -626,6 +626,9 @@ table.data tbody tr:hover { background: var(--surface-2); cursor: pointer; }
 .formula-var-row:last-of-type { border-bottom: none; }
 .formula-var-row .field { margin-bottom: 0; }
 .formula-var-row .icon-btn { align-self: center; }
+/* Variante mit nur einer Entitaet statt Name + Entitaet: die PV-Zeilen der
+   Flow Card (D-046) tragen keinen Variablennamen. */
+.formula-var-row.single-field { grid-template-columns: 1fr auto; }
 
 @media (max-width: 620px) {
   .formula-var-row { grid-template-columns: 1fr; gap: 10px; padding: 14px 0; }

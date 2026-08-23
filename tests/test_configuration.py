@@ -565,3 +565,81 @@ def test_merge_schreibt_alle_bekannten_felder():
     assert merged["log_level"] == "debug"
     assert merged["devices"][0]["name"] == "luft"
     assert merged["available_modes"] == "manuell,nur_heizen,nur_laden"
+
+
+# ---------------------------------------------------------------------------
+# Flow Card (D-046 / D-047 / D-048)
+# ---------------------------------------------------------------------------
+
+def _flow_errors(**globals_):
+    result = cfg.validate_options(options(binary(), **globals_))
+    return {key: value for key, value in result.field_errors.items()
+            if key.startswith("flow_") or ".flow_" in key}
+
+
+def test_bestandskonfiguration_ohne_flow_felder_bleibt_gueltig():
+    result = cfg.validate_options(options(binary(), controllable()))
+    assert not result.field_errors
+    assert result.options["flow_publish"] is False
+
+
+def test_flow_veroeffentlichung_verlangt_einen_standardwert():
+    assert "flow_publish" in _flow_errors(flow_publish=True)
+    assert _flow_errors(flow_publish=True, flow_house_power_entity="sensor.haus") == {}
+
+
+def test_netz_darf_nicht_signiert_und_getrennt_zugleich_sein():
+    errors = _flow_errors(flow_grid_power_entity="sensor.netz",
+                          flow_grid_import_entity="sensor.bezug")
+    assert "flow_grid_power_entity" in errors
+
+
+def test_batterie_ohne_leistungsvariante_ist_ungueltig():
+    errors = _flow_errors(flow_battery_label="E3DC", flow_battery_soc_entity="sensor.soc")
+    assert "flow_battery_power_entity" in errors
+
+
+def test_batterie_mit_beiden_varianten_ist_ungueltig():
+    errors = _flow_errors(flow_battery_label="E3DC",
+                          flow_battery_power_entity="sensor.e3dc",
+                          flow_battery_charge_power_entity="sensor.laden",
+                          flow_battery_discharge_power_entity="sensor.entladen")
+    assert "flow_battery_power_entity" in errors
+
+
+def test_doppelte_pv_entitaet_ist_ein_feldfehler():
+    errors = _flow_errors(flow_pv_power_entities=[{"entity": "sensor.pv"},
+                                                  {"entity": "sensor.pv"}])
+    assert "flow_pv_power_entities[1].entity" in errors
+
+
+def test_leere_pv_zeile_ist_ein_feldfehler():
+    errors = _flow_errors(flow_pv_power_entities=[{"entity": ""}])
+    assert "flow_pv_power_entities[0].entity" in errors
+
+
+def test_flow_icon_ohne_mdi_praefix_ist_ein_feldfehler():
+    result = cfg.validate_options(options(binary(flow_icon="fan")))
+    assert "devices[0].flow_icon" in result.field_errors
+    assert not cfg.validate_options(options(binary(flow_icon="mdi:fan"))).field_errors
+
+
+def test_umschaltschwelle_ausserhalb_des_bereichs_ist_ungueltig():
+    assert "flow_watt_threshold" in _flow_errors(flow_watt_threshold=200000)
+    assert "flow_watt_threshold" in _flow_errors(flow_watt_threshold=1.5)
+
+
+def test_geaendertes_flow_icon_schaltet_kein_geraet_ab():
+    # Anzeigedaten dürfen nicht in den Regelpfad greifen (D-048): ein neues
+    # Icon ist kein Grund, einen laufenden Heizstab sicher abzuschalten.
+    old = options(binary(), controllable())
+    for key, value in (("flow_icon", "mdi:fan"), ("flow_color", "#ff0000"),
+                       ("flow_show", False)):
+        new = options(binary(**{key: value}), controllable())
+        assert cfg.devices_needing_shutdown(old, new) == [], key
+
+
+def test_echte_geraeteaenderung_schaltet_weiterhin_ab():
+    old = options(binary(), controllable())
+    new = options(binary(power_w=2000), controllable())
+    assert len(cfg.devices_needing_shutdown(old, new)) == 1

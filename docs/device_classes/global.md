@@ -42,9 +42,17 @@ Entitätsnamen.
 | `label` | alle | nein | Wert von `name` | Anzeigename; darf Leerzeichen und Umlaute enthalten |
 | `entity_prefix` | alle | nein | Wert von `name` | Überschreibt ausschließlich das Präfix der HEMS-Helfer |
 | `allowed_modes` | alle | nein | `manuell` | Kommagetrennte globale Regelmodi, in denen normale Nutzerregeln wirken; zulässig sind `manuell`, `nur_heizen` und `nur_laden`. Der Alt-Wert `auto` wird auf `manuell` abgebildet |
+| `flow_show` | alle | nein | `true` | Gerät auf der Power Flow Card anzeigen. `false` heißt: es kommt gar nicht erst in die veröffentlichte Geräteliste |
+| `flow_icon` | alle | nein | – | mdi-Name für den Knoten auf der Karte, z. B. `mdi:radiator`. Leer = die Karte wählt nach Geräteklasse. Muss mit `mdi:` beginnen |
+| `flow_color` | alle | nein | – | CSS-Farbe als Override für diesen Knoten. Leer = Skytech-Akzent |
 
 Ein fehlendes `name` oder eine unbekannte `class` führt dazu, dass nur dieser Geräteeintrag mit
 einer Fehlermeldung übersprungen wird.
+
+Die drei `flow_*`-Felder sind **reine Anzeige** (D-046). Sie gehören bewusst zum Gerät statt in
+eine eigene Liste, damit sie ein Umsortieren überleben. Vom Abschaltvergleich vor einem Neustart
+sind sie ausgenommen (D-048): ein neues Icon ist kein Grund, ein laufendes Gerät sicher
+abzuschalten.
 
 ## Gemeinsame HA-Helfer
 
