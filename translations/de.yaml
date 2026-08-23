@@ -248,3 +248,129 @@ configuration:
       Meldet input_select.ems_regelmodus einen normalen, hier nicht aktivierten
       Modus, ist der Zyklus sicher inaktiv – die Optionen des HA-Helfers legt
       oder ändert das Add-on nicht.
+  flow_publish:
+    name: Kartendaten veröffentlichen
+    description: >-
+      Schreibt nach jedem Regelzyklus zwei Anzeige-Sensoren nach Home
+      Assistant: sensor.skytech_hems_flow_config trägt Layout, Anlagenwerte und
+      Geräteliste, sensor.skytech_hems_flow_status die Kennzahlen des letzten
+      Zyklus. Aus diesen beiden baut sich die Skytech Power Flow Card selbst
+      auf; im Dashboard genügt dann type: custom:skytech-power-flow-card. Aus
+      heißt: es wird keine einzige Entität geschrieben. Die beiden Sensoren
+      tragen reine Anzeigedaten und schalten nichts. Empfehlung: beide vom
+      recorder ausschließen, solange keine Historie gewünscht ist. Für das
+      Einschalten wird mindestens ein Anlagenwert benötigt.
+  flow_title:
+    name: Überschrift der Karte
+    description: >-
+      Wird als Kartenüberschrift angezeigt. Leer lassen heißt: keine
+      Überschrift. Im Dashboard lässt sich der Wert je Karte überschreiben.
+  flow_watt_threshold:
+    name: Umschaltschwelle W auf kW
+    description: >-
+      Ab diesem Betrag zeigt die Karte Kilowatt statt Watt, darunter Watt ohne
+      Nachkommastelle. Zulässig sind 0 bis 100000.
+  flow_animation:
+    name: Wandernde Punkte
+    description: >-
+      Bewegte Punkte auf den Flusslinien. Unabhängig davon schaltet die Karte
+      die Bewegung ab, wenn das Betriebssystem reduzierte Bewegung verlangt.
+  flow_house_node:
+    name: Hausknoten zeichnen
+    description: >-
+      Zeichnet das Haus als eigenen Knoten, an dem die HEMS-Geräte hängen. Aus
+      heißt: die Geräte hängen direkt am Verteilpunkt zwischen Erzeugung, Netz
+      und Speicher. Die Bilanzregeln bleiben in beiden Fällen dieselben.
+  flow_pv_power_entities:
+    name: PV-Leistungssensoren
+    description: >-
+      Sensoren der aktuellen Erzeugungsleistung in Watt. Mehrere Zeilen werden
+      summiert, eine leere Liste heißt: kein Erzeugungsknoten. Jeder Eintrag
+      hat genau ein Feld entity mit der vollständigen Entity-ID; dieselbe
+      Entität zweimal einzutragen ist ein Fehler.
+  flow_pv_label:
+    name: Anzeigename der Erzeugung
+    description: >-
+      Beschriftung des Erzeugungsknotens auf der Karte.
+  flow_grid_power_entity:
+    name: Netzleistung (signiert)
+    description: >-
+      Ein Sensor, der Bezug und Einspeisung im Vorzeichen unterscheidet. Die
+      Richtung legt flow_grid_power_sign fest. Alternativ getrennte Sensoren
+      über flow_grid_import_entity und flow_grid_export_entity – beide Wege
+      zugleich sind unzulässig.
+  flow_grid_power_sign:
+    name: Vorzeichen der Netzleistung
+    description: >-
+      positiv_bezug heißt: ein positiver Wert ist Bezug aus dem Netz, ein
+      negativer ist Einspeisung. positiv_einspeisung bedeutet das Gegenteil.
+      Gilt nur für den signierten Netzsensor.
+  flow_grid_import_entity:
+    name: Netzbezug (getrennter Sensor)
+    description: >-
+      Bezugsleistung in Watt als eigener, immer positiver Sensor. Nur zusammen
+      mit flow_grid_export_entity und nur ohne flow_grid_power_entity.
+  flow_grid_export_entity:
+    name: Netzeinspeisung (getrennter Sensor)
+    description: >-
+      Einspeiseleistung in Watt als eigener, immer positiver Sensor. Nur
+      zusammen mit flow_grid_import_entity und nur ohne flow_grid_power_entity.
+  flow_grid_label:
+    name: Anzeigename des Netzes
+    description: >-
+      Beschriftung des Netzknotens auf der Karte.
+  flow_house_power_entity:
+    name: Hausleistung
+    description: >-
+      Sensor des gesamten Hausverbrauchs in Watt. Leer lassen heißt: die Karte
+      rechnet die Hausleistung aus Erzeugung, Netz und Speicher aus. Ein
+      gemessener Wert ist genauer, weil er auch Verbraucher erfasst, die
+      keinen Sensor haben.
+  flow_house_label:
+    name: Anzeigename des Hauses
+    description: >-
+      Beschriftung des Hausknotens auf der Karte.
+  flow_battery_label:
+    name: Anzeigename der Batterie
+    description: >-
+      Beschriftung des Batterieknotens. Leer lassen und keinen SoC-Sensor
+      eintragen heißt: kein Batterieknoten. Gemeint ist der Hausspeicher der
+      Anlage – auch dann, wenn das HEMS ihn gar nicht regelt (z. B. ein E3DC).
+      Vom HEMS geregelte AC-Speicher stehen dagegen in der Geräteliste.
+  flow_battery_soc_entity:
+    name: Ladestand der Batterie
+    description: >-
+      Sensor des Ladestands in Prozent. Wird als Ring um den Batterieknoten
+      gezeichnet.
+  flow_battery_capacity_kwh:
+    name: Kapazität der Batterie
+    description: >-
+      Nutzbare Kapazität in Kilowattstunden. Reine Anzeige, sie geht in keine
+      Regelung ein. Leer lassen, wenn sie nicht angezeigt werden soll.
+  flow_battery_power_entity:
+    name: Batterieleistung (signiert)
+    description: >-
+      Ein Sensor, der Laden und Entladen im Vorzeichen unterscheidet. Die
+      Richtung legt flow_battery_power_sign fest. Alternativ getrennte
+      Sensoren über flow_battery_charge_power_entity und
+      flow_battery_discharge_power_entity – beide Wege zugleich sind
+      unzulässig. Sobald die Batterie gezeichnet wird, ist genau einer der
+      beiden Wege Pflicht.
+  flow_battery_power_sign:
+    name: Vorzeichen der Batterieleistung
+    description: >-
+      positiv_laden heißt: ein positiver Wert ist Laden, ein negativer ist
+      Entladen. positiv_entladen bedeutet das Gegenteil. Gilt nur für den
+      signierten Sensor.
+  flow_battery_charge_power_entity:
+    name: Ladeleistung (getrennter Sensor)
+    description: >-
+      Ladeleistung in Watt als eigener, immer positiver Sensor. Nur zusammen
+      mit flow_battery_discharge_power_entity und nur ohne
+      flow_battery_power_entity.
+  flow_battery_discharge_power_entity:
+    name: Entladeleistung (getrennter Sensor)
+    description: >-
+      Entladeleistung in Watt als eigener, immer positiver Sensor. Nur zusammen
+      mit flow_battery_charge_power_entity und nur ohne
+      flow_battery_power_entity.

@@ -59,6 +59,7 @@ Verbraucher (Heizlüfter) — mit Zeitschutz, Hysterese, Rampenbegrenzung und No
 | `app/ems/state.py` | Lesezugriff auf den State-Schnappschuss, Resolve-Vertrag (`has`, `availability`, `resolve_number/bool/select`), `safe_float`, `parse_ts` | Zustand halten, der einen Zyklus überdauert; klassenspezifische Defaultwerte kennen |
 | `app/ha_client.py` | Einzige Stelle mit HA-REST-Zugriff, Session-Verwaltung, Timeouts; meldet je Schreiboperation Erfolg oder bereinigten Fehler zurück | Fachlogik enthalten, einen Fehlschlag verschlucken |
 | `app/ems/ops.py` | `WriteOp` (Operation samt verursachendem Gerät), `WriteResult`, `WriteTarget` | Selbst schreiben |
+| `app/flow_publisher.py` | Anzeigedaten der Power Flow Card (D-046) aus Optionen, Steuerschema und Zyklusstatus bauen und als zwei `sensor.*`-Entitäten veröffentlichen | Ein Gerät schalten, eine Ausnahme nach außen lassen, Home Assistant zusätzlich abfragen |
 | `web/` → `app/static/` | Darstellung und Bedienung | Fachlogik doppeln — sie rechnet nur an, was `/api/status` liefert |
 
 Regel: Keine Komponente übernimmt Aufgaben einer anderen. Verschiebt sich eine Verantwortung,
@@ -119,6 +120,14 @@ Ein Zyklus (`EMSController.run_cycle()`), ausgelöst alle `interval_s` Sekunden:
 13. **Write-Ops** sammeln, bei `output_unit=ampere` von Watt in ganze Ampere abrunden und gegen die
     HA-REST-API ausführen; optional das Post-Cycle-Skript auslösen. Jede Operation trägt ihr
     verursachendes Gerät; das Ergebnis geht an den Controller zurück.
+14. **Kartendaten veröffentlichen** (`app/flow_publisher.py`, nur bei `flow_publish: true`):
+    Aus dem fertigen Status und dem bereits geholten Zustandsabbild entstehen die beiden
+    Anzeige-Sensoren der Power Flow Card. Der Schritt liegt **nach** dem Zyklus, nicht darin:
+    er löst keine zusätzliche HA-Abfrage aus, trifft keine Regelentscheidung und verschluckt
+    jeden Fehler. Die Konfigurationsentität wird nur geschrieben, wenn sich ihr Revisionshash
+    geändert hat oder sie im Zustandsabbild fehlt — Letzteres deckt den HA-Neustart ab, nach dem
+    per `POST /api/states` erzeugte Entitäten verschwinden. Datenvertrag:
+    [`vertrag_powerflow_card_hems/kontrakt.md`](../vertrag_powerflow_card_hems/kontrakt.md).
 
 Zwischen Schritt 2 und 3 steht ein hartes Gate: **Schreibziel-Gesundheit.** Für jedes Gerät wird
 geprüft, ob seine Ausgabe-Entitäten im Schnappschuss vorhanden, verfügbar, von der richtigen Domain
@@ -148,6 +157,7 @@ Details zu Endpunkten: [api-referenz.md](api-referenz.md).
 │   ├── config_service.py   Ablauf der Konfigurationsverwaltung (ohne HTTP)
 │   ├── supervisor_client.py Supervisor-REST-Client für die eigenen Optionen
 │   ├── ha_client.py        HA-REST-Client
+│   ├── flow_publisher.py   Anzeigedaten der Power Flow Card (D-046)
 │   ├── requirements.txt    Laufzeit-Abhängigkeiten des Containers
 │   ├── ems/
 │   │   ├── controller.py   EMSController, config-getriebene Geräte-Registry
@@ -158,6 +168,7 @@ Details zu Endpunkten: [api-referenz.md](api-referenz.md).
 ├── web/                    Quellen der Oberfläche (React + TypeScript + Vite)
 ├── tests/                  pytest, inklusive Hypothesis-Property-Tests
 ├── erweiterungen/          Entwürfe für geplante Ausbaustufen
+├── vertrag_powerflow_card_hems/  Datenvertrag und Umsetzungsplan der Power Flow Card
 └── docs/                   diese Doku
 ```
 
@@ -171,7 +182,10 @@ Zusagen, auf die sich der gesamte Code verlässt. Wer eine davon bricht, bricht 
    einen `StateProxy` auf einen Schnappschuss.
 3. **Ein Zyklus liest einen Schnappschuss.** Innerhalb eines Zyklus ändert sich der gelesene
    Zustand nicht — sonst wären Pool und Zuteilung inkonsistent.
-4. **Geschrieben werden ausschließlich `input_*`-Helfer.** Reale Geräte schaltet Home Assistant.
+4. **Im Regelpfad werden ausschließlich `input_*`-Helfer geschrieben.** Reale Geräte schaltet
+   Home Assistant. Darüber hinaus veröffentlicht das Add-on reine Anzeigedaten als eigene
+   `sensor.*`-Entitäten, die kein Gerät schalten und in keiner Regelentscheidung vorkommen
+   (D-046). Der Regelpfad selbst bleibt davon unberührt.
 5. **Ein Zyklusfehler schaltet nichts.** Schlägt der Zyklus fehl, bleibt der letzte Sollwert
    stehen; die Anlage fällt nicht in einen undefinierten Zustand.
 6. **Ein Speicher lädt und entlädt nie gleichzeitig.** Sein einzelner signierter Sollwert und die

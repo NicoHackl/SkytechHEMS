@@ -414,7 +414,7 @@ Sichtprüfung aus `docs/frontend.md`.
 | Datei | Was |
 |---|---|
 | `docs/architektur.md` | Invariante 4 präzisieren (Entscheidung 2), Publisher in den Datenfluss aufnehmen |
-| `docs/datenmodell.md` | Neuer Abschnitt „Veröffentlichte Kartendaten" mit beiden Sensoren als Datenvertrag, Verweis auf `erweiterungen/dynamische_powerflow_card/kontrakt.md` |
+| `docs/datenmodell.md` | Neuer Abschnitt „Veröffentlichte Kartendaten" mit beiden Sensoren als Datenvertrag, Verweis auf `vertrag_powerflow_card_hems/kontrakt.md` |
 | `docs/api-referenz.md` | `GET api/flow/preview` |
 | `docs/konfiguration.md` | Die zwanzig `flow_*`-Optionen, Empfehlung zum `recorder`-Ausschluss beider Entitäten |
 | `docs/device_classes/global.md` | `flow_show`, `flow_icon`, `flow_color` als gemeinsame Gerätefelder |

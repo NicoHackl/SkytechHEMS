@@ -125,6 +125,21 @@ class ConfigService:
         options = info.get("options")
         return options if isinstance(options, dict) else {}
 
+    async def addon_version(self) -> str:
+        """Version des laufenden Add-ons, vom Supervisor.
+
+        Der einzige Weg zur Laufzeit: `config.yaml` liegt nicht im Image
+        (`COPY app/ .`), und ein YAML-Parser ist nicht installiert. Ohne
+        Supervisor bleibt die Version leer statt geraten.
+        """
+        if not self._supervisor.available:
+            return ""
+        try:
+            info = await self._supervisor.get_self_info()
+        except Exception:
+            return ""
+        return str(info.get("version") or "")
+
     async def read(self) -> Dict[str, Any]:
         """Alles, was die Konfigurationsseite zum Anzeigen braucht."""
         supervisor_error = ""

@@ -298,6 +298,41 @@ Die Oberfläche filtert deshalb zweifach: abgelaufene Vorschläge (`valid_until`
 Vergangenheit) werden ausgeblendet, und bei doppeltem Feld je Gerät bleibt nur der frischere
 (späteres `valid_until`).
 
+## Veröffentlichte Kartendaten
+
+Für die **Skytech Power Flow Card** schreibt das Add-on zwei eigene Anzeige-Entitäten über
+`POST /api/states` (D-046). Sie sind ein Datenvertrag zu einem zweiten Repository; autoritativ
+für jedes Feld ist
+[`vertrag_powerflow_card_hems/kontrakt.md`](../vertrag_powerflow_card_hems/kontrakt.md).
+
+| Entität | State | Inhalt | Schreibtakt |
+|---|---|---|---|
+| `sensor.skytech_hems_flow_config` | Revisions-Kurzhash, 12 Hex-Zeichen | Layout, Anlagenwerte, Geräteliste — ausschließlich **Verweise** auf HA-Entitäten, keine Messwerte | nur bei geänderter Revision oder fehlender Entität |
+| `sensor.skytech_hems_flow_status` | `pool_w`, gerundet | Kennzahlen des letzten Zyklus, Rückfallwert je Gerät | jeder Zyklus |
+
+Drei Zusagen dieses Vertrags:
+
+1. **Verweise, keine Messwerte.** Die Karte löst die Entity-IDs selbst gegen `hass.states` auf.
+   Dadurch aktualisiert sie im Takt von Home Assistant statt im Regelintervall und bleibt lesbar,
+   wenn das Add-on gerade steht.
+2. **Entity-IDs stehen ausgeschrieben.** Die Karte setzt keinen Namen aus einem Präfix zusammen.
+   Quelle ist dieselbe wie beim Steuerung-Tab: `_build_device_controls_schema()`.
+3. **`schema_version` ist additiv.** Neue optionale Felder erhöhen sie nicht; erhöht wird nur,
+   wenn ein Feld entfällt, umbenannt wird oder seine Bedeutung ändert (D-047).
+
+Zwei Abbildungen weichen bewusst von den internen Namen ab, weil der Vertrag eine andere Frage
+beantwortet als der Status:
+
+| Vertragsfeld | Quelle im Status | Warum |
+|---|---|---|
+| `devices[id].runtime_active` | `eligible and runtime_active` | Der Vertrag fragt „regelt gerade mit". Intern meldet `runtime_active` nur die Schreibziel-Gesundheit, die Freigabeentscheidung steht in `eligible` |
+| `devices[id].inactive_reasons` | Tokens aus `mark_inactive()`, sonst aus `entity_diagnostics` und `source` | Der Vertrag verlangt deutschen Klartext; intern sind es bewusst stabile Tokens. Ein unbekannter Token wird unverändert durchgereicht statt verschluckt |
+
+Beide Entitäten gehören in die `recorder`-Ausschlussliste, solange keine Historie gewünscht ist —
+die Statusentität ändert sich jeden Zyklus. Per `POST /api/states` erzeugte Entitäten überleben
+keinen HA-Neustart; der Publisher erkennt das am fehlenden Eintrag im Zustandsabbild und schreibt
+die Konfiguration spätestens nach einem Regelintervall neu.
+
 ## Migrationen
 
 Es gibt kein Schema, das migriert werden müsste. Ändert sich der Statusvertrag, müssen im

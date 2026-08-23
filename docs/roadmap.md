@@ -72,6 +72,25 @@ Wattwerte `available_charge_power_w` und `available_discharge_power_w`. Die verb
 Der vorhandene E3DC ist bewusst **kein** HEMS-Gerät: Er regelt sich selbst; seine Leistung fließt
 aber bewusst in die separate Hausleistungsbilanz für die AC-Entladung ein (D-044).
 
+### M5 — Power Flow Card
+
+**Ziel:** Eine Lovelace-Karte zeichnet den Leistungsfluss der Anlage und holt sich Geräteliste
+und Anlagenwerte selbst aus dem HEMS — im Dashboard genügt
+`type: custom:skytech-power-flow-card`.
+
+| Punkt | Status | Verweis |
+|---|---|---|
+| Datenvertrag zwischen HEMS und Karte | fertig | [kontrakt.md](../vertrag_powerflow_card_hems/kontrakt.md), D-047 |
+| `flow_*`-Optionen und Prüfregeln | fertig | [konfiguration.md](konfiguration.md#flow-card-flow_) |
+| Publisher: zwei Anzeige-Sensoren je Zyklus | fertig | D-046, [architektur.md](architektur.md#datenfluss) |
+| Diagnoseendpunkt `GET api/flow/preview` | fertig | [api-referenz.md](api-referenz.md) |
+| Panel-Bereich „Flow Card" | offen | [frontend.md](frontend.md) |
+| Die Lovelace-Karte selbst | offen | eigenes Repository `Skytech-Powerflow-Card` |
+| Erprobung an der realen Anlage | offen | verlangt eine laufende HA-Instanz |
+
+Die Karte entsteht in einem **eigenen** Repository. Gekoppelt sind beide allein über den
+Datenvertrag, nicht über die Versionsnummer (D-047).
+
 ## Zurückgestellt
 
 | Thema | Warum zurückgestellt | Bedingung für Wiederaufnahme |

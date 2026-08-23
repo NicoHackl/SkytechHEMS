@@ -39,6 +39,9 @@ LOG_LEVELS: Tuple[str, ...] = ("debug", "info", "warning", "error")
 OUTPUT_UNITS: Tuple[str, ...] = ("watt", "ampere")
 PHASE_VALUES: Tuple[str, ...] = ("1", "3", "1,3")
 POWER_SIGNS: Tuple[str, ...] = ("positiv_laden", "positiv_entladen")
+# Vorzeichenkonvention des Netzsensors der Flow Card. Absichtlich eigene Werte:
+# ein Netzsensor kennt Bezug und Einspeisung, kein Laden und Entladen.
+GRID_POWER_SIGNS: Tuple[str, ...] = ("positiv_bezug", "positiv_einspeisung")
 # Optionen, die der Betriebsart-Helfer eines Speichers tragen muss.
 BATTERY_MODE_OPTIONS: Tuple[str, ...] = ("laden", "entladen", "standby")
 
@@ -112,7 +115,51 @@ GLOBAL_DEFAULTS: Dict[str, Any] = {
     "residual_formula_code": "",
     "battery_residual_formula_variables": [],
     "battery_residual_formula_code": "",
+    # Flow Card (D-046/D-047): reine Anzeigedaten. Sie beeinflussen die Regelung
+    # nicht und stehen deshalb bewusst nicht in GLOBAL_KEYS_FORCING_SHUTDOWN.
+    "flow_publish": False,
+    "flow_title": "Leistungsfluss",
+    "flow_watt_threshold": 1000,
+    "flow_animation": True,
+    "flow_house_node": True,
+    "flow_pv_power_entities": [],
+    "flow_pv_label": "Photovoltaik",
+    "flow_grid_power_entity": "",
+    "flow_grid_power_sign": "positiv_bezug",
+    "flow_grid_import_entity": "",
+    "flow_grid_export_entity": "",
+    "flow_grid_label": "Netz",
+    "flow_house_power_entity": "",
+    "flow_house_label": "Haus",
+    "flow_battery_label": "",
+    "flow_battery_soc_entity": "",
+    "flow_battery_capacity_kwh": None,
+    "flow_battery_power_entity": "",
+    "flow_battery_power_sign": "positiv_laden",
+    "flow_battery_charge_power_entity": "",
+    "flow_battery_discharge_power_entity": "",
 }
+
+# Obergrenze der Umschaltschwelle W/kW. Darüber wäre die Karte nie in kW.
+FLOW_WATT_THRESHOLD_MAX = 100000
+
+# Reine Textfelder der Flow Card. Sie werden beim Normalisieren getrimmt.
+FLOW_TEXT_KEYS: Tuple[str, ...] = (
+    "flow_title", "flow_pv_label", "flow_grid_label", "flow_house_label",
+    "flow_battery_label", "flow_grid_power_sign", "flow_battery_power_sign",
+    "flow_grid_power_entity", "flow_grid_import_entity", "flow_grid_export_entity",
+    "flow_house_power_entity", "flow_battery_soc_entity",
+    "flow_battery_power_entity", "flow_battery_charge_power_entity",
+    "flow_battery_discharge_power_entity",
+)
+
+# Entity-Verweise der Flow Card, die auf ihre Form geprüft werden.
+FLOW_ENTITY_KEYS: Tuple[str, ...] = (
+    "flow_grid_power_entity", "flow_grid_import_entity", "flow_grid_export_entity",
+    "flow_house_power_entity", "flow_battery_soc_entity",
+    "flow_battery_power_entity", "flow_battery_charge_power_entity",
+    "flow_battery_discharge_power_entity",
+)
 
 # Ändert sich einer dieser globalen Werte, werden vor einem Neustart vorsorglich
 # ALLE alten Geräte sicher deaktiviert – ihre Zuteilung hing daran.
@@ -126,6 +173,11 @@ GLOBAL_KEYS_FORCING_SHUTDOWN: Tuple[str, ...] = (
     "battery_residual_formula_variables",
     "battery_residual_formula_code",
 )
+
+# Gerätefelder, die ausschließlich die Flow Card zeichnen. Sie sind vom
+# Abschaltvergleich ausgenommen: ein geändertes Icon darf keinen Heizstab
+# abschalten (D-048).
+DEVICE_KEYS_DISPLAY_ONLY: Tuple[str, ...] = ("flow_show", "flow_icon", "flow_color")
 
 
 # ---------------------------------------------------------------------------
@@ -225,7 +277,21 @@ def normalize_options(raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         raw.get("battery_residual_formula_variables"))
     options["residual_formula_code"] = _as_text(options.get("residual_formula_code"))
     options["battery_residual_formula_code"] = _as_text(options.get("battery_residual_formula_code"))
+
+    for key in FLOW_TEXT_KEYS:
+        options[key] = _as_text(options.get(key))
+    options["flow_pv_power_entities"] = _normalize_flow_entities(
+        raw.get("flow_pv_power_entities"))
     return options
+
+
+def _normalize_flow_entities(raw: Any) -> List[Dict[str, str]]:
+    """PV-Zeilen der Flow Card. Objektliste, weil das Add-on-Schema keine
+    einfache Stringliste mit Formularunterstützung ausdrücken kann."""
+    return [
+        {"entity": _as_text(entry.get("entity"))}
+        for entry in (raw or []) if isinstance(entry, dict)
+    ]
 
 
 def _normalize_formula_variables(raw: Any) -> List[Dict[str, str]]:
@@ -255,6 +321,12 @@ def _normalize_device(raw: Dict[str, Any]) -> Dict[str, Any]:
         device["allowed_modes"] = serialize_modes(parse_modes(raw["allowed_modes"]))
     else:
         device["allowed_modes"] = "manuell"
+
+    # Anzeigefelder der Flow Card, für alle Geräteklassen gleich. Sie gehören
+    # zum Gerät, damit sie ein Umsortieren der Liste überleben (D-047).
+    device["flow_show"] = bool(raw["flow_show"]) if "flow_show" in raw else True
+    device["flow_icon"] = _as_text(raw.get("flow_icon"))
+    device["flow_color"] = _as_text(raw.get("flow_color"))
 
     cls = device["class"]
     if cls == "controllable":
@@ -388,6 +460,108 @@ def _validate_global(options: Dict[str, Any], result: ValidationResult) -> None:
             f"Zulässig sind {', '.join(NORMAL_MODES)}."
         )
 
+    _validate_flow(options, result)
+
+
+def _validate_flow(options: Dict[str, Any], result: ValidationResult) -> None:
+    """Prüft die Anzeigeoptionen der Flow Card (D-046).
+
+    Leere Werte sind überall gültig: die Karte kommt mit fehlenden Knoten
+    zurecht und zeichnet dann einfach weniger.
+    """
+    for key in ("flow_publish", "flow_animation", "flow_house_node"):
+        options[key] = bool(options.get(key))
+
+    threshold = _as_float(options.get("flow_watt_threshold"), None)
+    if (threshold is None or threshold != int(threshold)
+            or not 0 <= int(threshold) <= FLOW_WATT_THRESHOLD_MAX):
+        result.field_errors["flow_watt_threshold"] = (
+            f"Ganze Zahl von 0 bis {FLOW_WATT_THRESHOLD_MAX} erwartet."
+        )
+    else:
+        options["flow_watt_threshold"] = int(threshold)
+
+    for key in FLOW_ENTITY_KEYS:
+        value = options.get(key) or ""
+        if value and not _ENTITY_RE.match(value):
+            result.field_errors[key] = (
+                "Vollständige Entity-ID erwartet, z. B. sensor.beispiel."
+            )
+
+    # PV-Zeilen: jede braucht eine Entität, Duplikate sind ein Feldfehler.
+    seen: Dict[str, int] = {}
+    for index, row in enumerate(options.get("flow_pv_power_entities") or []):
+        entity = row.get("entity", "")
+        path = f"flow_pv_power_entities[{index}].entity"
+        if not entity:
+            result.field_errors[path] = "Entität ist ein Pflichtfeld."
+        elif not _ENTITY_RE.match(entity):
+            result.field_errors[path] = (
+                "Vollständige Entity-ID erwartet, z. B. sensor.beispiel."
+            )
+        elif entity in seen:
+            result.field_errors[path] = (
+                f"Diese Entität steht bereits in Zeile {seen[entity] + 1}."
+            )
+        else:
+            seen[entity] = index
+
+    # Netz: genau ein Weg. Beide zugleich ergäben zwei Wahrheiten am selben Knoten.
+    grid_signed = options["flow_grid_power_entity"]
+    grid_split = (options["flow_grid_import_entity"], options["flow_grid_export_entity"])
+    if grid_signed and any(grid_split):
+        result.field_errors["flow_grid_power_entity"] = (
+            "Entweder ein signierter Netzsensor oder getrennte Sensoren für "
+            "Bezug und Einspeisung – nicht beides."
+        )
+    if grid_signed and options["flow_grid_power_sign"] not in GRID_POWER_SIGNS:
+        result.field_errors["flow_grid_power_sign"] = (
+            "Zulässig sind positiv_bezug oder positiv_einspeisung."
+        )
+
+    # Batterie: sobald sie überhaupt gezeichnet werden soll, braucht sie genau
+    # eine Leistungsvariante – dieselbe Regel wie bei der Geräteklasse battery.
+    battery_wanted = bool(options["flow_battery_label"] or options["flow_battery_soc_entity"])
+    battery_signed = options["flow_battery_power_entity"]
+    battery_split = (options["flow_battery_charge_power_entity"],
+                     options["flow_battery_discharge_power_entity"])
+    if battery_signed and any(battery_split):
+        result.field_errors["flow_battery_power_entity"] = (
+            "Entweder ein signierter Sensor oder das Paar aus Lade- und "
+            "Entladeleistung – nicht beides."
+        )
+    elif battery_wanted and not battery_signed and not all(battery_split):
+        result.field_errors["flow_battery_power_entity"] = (
+            "Pflicht, sobald die Batterie gezeichnet wird: entweder ein "
+            "signierter Sensor oder Lade- und Entladeleistung zusammen."
+        )
+    if battery_signed and options["flow_battery_power_sign"] not in POWER_SIGNS:
+        result.field_errors["flow_battery_power_sign"] = (
+            "Zulässig sind positiv_laden oder positiv_entladen."
+        )
+
+    capacity = _as_float(options.get("flow_battery_capacity_kwh"), None)
+    if options.get("flow_battery_capacity_kwh") in (None, ""):
+        options["flow_battery_capacity_kwh"] = None
+    elif capacity is None or capacity < 0:
+        result.field_errors["flow_battery_capacity_kwh"] = (
+            "Leer lassen oder eine endliche Zahl ab 0 kWh eintragen."
+        )
+    else:
+        options["flow_battery_capacity_kwh"] = capacity
+
+    # Ohne einen einzigen Standardwert hätte die Karte nichts zu zeichnen.
+    has_any = bool(
+        (options.get("flow_pv_power_entities") or [])
+        or grid_signed or any(grid_split)
+        or options["flow_house_power_entity"]
+        or battery_wanted
+    )
+    if options["flow_publish"] and not has_any:
+        result.field_errors["flow_publish"] = (
+            "Für die Veröffentlichung wird mindestens ein Standardwert benötigt."
+        )
+
 
 def _validate_device(device: Dict[str, Any], index: int, available: List[str],
                      seen_names: Dict[str, int],
@@ -416,6 +590,10 @@ def _validate_device(device: Dict[str, Any], index: int, available: List[str],
              f"Präfix ist bereits an Position {seen_prefixes[prefix] + 1} vergeben.")
     elif prefix:
         seen_prefixes[prefix] = index
+
+    icon = device.get("flow_icon") or ""
+    if icon and not icon.startswith("mdi:"):
+        fail("flow_icon", "Leer lassen oder einen Namen der Form mdi:beispiel eintragen.")
 
     cls = device["class"]
     if cls not in DEVICE_CLASSES:
@@ -600,9 +778,17 @@ def devices_needing_shutdown(old_raw: Optional[Dict[str, Any]],
     if any(old.get(key) != new.get(key) for key in GLOBAL_KEYS_FORCING_SHUTDOWN):
         return list(old["devices"])
 
-    new_by_name = {device["name"]: device for device in new["devices"]}
+    # Anzeigefelder bleiben außen vor: ein neues Icon ist kein Grund, einen
+    # laufenden Heizstab abzuschalten (D-048).
+    new_by_name = {device["name"]: _without_display_keys(device)
+                   for device in new["devices"]}
     return [device for device in old["devices"]
-            if new_by_name.get(device["name"]) != device]
+            if new_by_name.get(device["name"]) != _without_display_keys(device)]
+
+
+def _without_display_keys(device: Dict[str, Any]) -> Dict[str, Any]:
+    return {key: value for key, value in device.items()
+            if key not in DEVICE_KEYS_DISPLAY_ONLY}
 
 
 def merge_known_fields(stored_raw: Optional[Dict[str, Any]],

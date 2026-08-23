@@ -255,6 +255,41 @@ Bei ungültigem Code: `"valid": false`, `"value": null`, `"error"` als deutsche 
 sofern zutreffend. `400` nur bei kaputtem Anfragerumpf (kein JSON, `kind` fehlt/unbekannt,
 `variables` keine Liste) — nicht bei einer inhaltlich ungültigen Formel.
 
+### `GET api/flow/preview`
+
+Vorschau der Kartendaten der Power Flow Card (D-046). Zeigt, was die Karte gerade bekäme und
+welcher Verweis dabei trägt — die Seite „Flow Card" im Panel rendert daraus ihre Tabelle.
+
+Gearbeitet wird auf dem Zustandsabbild des letzten Zyklus; es wird **keine** zusätzliche
+HA-Abfrage ausgelöst, dieselbe Regel wie bei `GET /api/config/entities`.
+
+**Antwort `200`** — immer 200, ein Diagnosewerkzeug wie `/api/config/validate`; eine
+unvollständige Flow-Konfiguration ist kein HTTP-Fehler:
+
+```json
+{
+  "publish_enabled": true,
+  "config_entity": "sensor.skytech_hems_flow_config",
+  "status_entity": "sensor.skytech_hems_flow_status",
+  "revision": "a3f19c02b7d4",
+  "zuletzt_geschrieben": "23.08.2026 18:04:12",
+  "config_payload": { },
+  "status_payload": { },
+  "aufgeloest": [
+    {"pfad": "standard.pv_power_entities[0]", "entity": "sensor.ertrag_hausdach",
+     "state": "3120.0", "value": 3120.0, "valid": true},
+    {"pfad": "devices[heizstab].power_entity", "entity": "sensor.elwa_modbus_istleistung",
+     "state": "unavailable", "value": null, "valid": false}
+  ],
+  "warnungen": []
+}
+```
+
+`zuletzt_geschrieben` ist leer, solange noch nie veröffentlicht wurde. `value` bleibt bei einem
+unbrauchbaren Zustand `null` und wird nie zu `0` — eine fehlende Messung sieht sonst aus wie ein
+ausgeschaltetes Gerät. Aufbau beider Nutzlasten:
+[`vertrag_powerflow_card_hems/kontrakt.md`](../vertrag_powerflow_card_hems/kontrakt.md).
+
 ### `PUT /api/config`
 
 **Rumpf** `{"options": { … }, "stored_revision": "…"}`. Ablauf in genau dieser Reihenfolge:
@@ -308,3 +343,4 @@ Vom Add-on genutzte Endpunkte von Home Assistant:
 | Supervisor | `POST /addons/self/options` | Optionen speichern, Timeout 10 s | Fehlende Manager-Rolle als erklärendes `403`, Verbindungsfehler als `502`; es wird nie vorgetäuscht, das Speichern sei gelungen |
 | Supervisor | `POST /addons/self/restart` | Eigenes Add-on neu starten, Timeout 30 s | Wird erst nach der ausgelieferten `202`-Antwort angestoßen |
 | Home Assistant | `POST /api/services/<domain>/<service>` | Sollwerte, Schaltanforderungen, Post-Cycle-Skript, Timeout 5 s | Eine fehlgeschlagene Write-Op wird ihrem Gerät zugeordnet, geloggt und im Status sichtbar gemacht; das Gerät fährt im nächsten Zyklus nur noch seinen sicheren Zustand, die übrigen regeln weiter. Das Post-Cycle-Skript wirft und wird als Warnung gemeldet |
+| Home Assistant | `POST /api/states/<entity_id>` | Anzeigedaten der Power Flow Card (D-046), Timeout 5 s | Wird protokolliert und verschluckt: ein misslungener Anzeigeschrieb darf keinen Regelzyklus kosten. Die Karte zeichnet in der Lücke aus den HA-Entitäten weiter |

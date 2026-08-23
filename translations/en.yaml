@@ -232,3 +232,128 @@ configuration:
       input_select.ems_regelmodus reports a normal mode that is not enabled
       here, the cycle is safely inactive — the add-on never creates or changes
       the options of the HA helper.
+  flow_publish:
+    name: Publish card data
+    description: >-
+      After every control cycle, writes two display sensors to Home Assistant:
+      sensor.skytech_hems_flow_config carries layout, installation values and
+      the device list, sensor.skytech_hems_flow_status the metrics of the last
+      cycle. The Skytech Power Flow Card builds itself from those two; in the
+      dashboard, type: custom:skytech-power-flow-card is then enough. Off
+      means: not a single entity is written. Both sensors carry pure display
+      data and never switch anything. Recommendation: exclude both from the
+      recorder unless history is wanted. Enabling it requires at least one
+      installation value.
+  flow_title:
+    name: Card heading
+    description: >-
+      Shown as the card heading. Leave empty for no heading. The value can be
+      overridden per card in the dashboard.
+  flow_watt_threshold:
+    name: Switchover threshold W to kW
+    description: >-
+      From this magnitude on, the card shows kilowatts instead of watts; below
+      it, watts without decimals. Valid values are 0 to 100000.
+  flow_animation:
+    name: Travelling dots
+    description: >-
+      Moving dots along the flow lines. Independently of this, the card stops
+      the motion when the operating system asks for reduced motion.
+  flow_house_node:
+    name: Draw house node
+    description: >-
+      Draws the house as its own node with the HEMS devices attached to it. Off
+      means the devices attach directly to the distribution point between
+      generation, grid and battery. The balance rules stay the same either way.
+  flow_pv_power_entities:
+    name: PV power sensors
+    description: >-
+      Sensors of the current generation power in watts. Multiple rows are
+      summed, an empty list means no generation node. Each entry has exactly
+      one field entity holding the full entity ID; listing the same entity
+      twice is an error.
+  flow_pv_label:
+    name: Generation display name
+    description: >-
+      Label of the generation node on the card.
+  flow_grid_power_entity:
+    name: Grid power (signed)
+    description: >-
+      A single sensor whose sign distinguishes import from export. The
+      direction is set by flow_grid_power_sign. Alternatively use separate
+      sensors via flow_grid_import_entity and flow_grid_export_entity — both
+      ways at once are not allowed.
+  flow_grid_power_sign:
+    name: Sign of the grid power
+    description: >-
+      positiv_bezug means a positive value is import from the grid and a
+      negative one is export. positiv_einspeisung means the opposite. Applies
+      to the signed grid sensor only.
+  flow_grid_import_entity:
+    name: Grid import (separate sensor)
+    description: >-
+      Import power in watts as its own, always positive sensor. Only together
+      with flow_grid_export_entity and only without flow_grid_power_entity.
+  flow_grid_export_entity:
+    name: Grid export (separate sensor)
+    description: >-
+      Export power in watts as its own, always positive sensor. Only together
+      with flow_grid_import_entity and only without flow_grid_power_entity.
+  flow_grid_label:
+    name: Grid display name
+    description: >-
+      Label of the grid node on the card.
+  flow_house_power_entity:
+    name: House power
+    description: >-
+      Sensor of the total house consumption in watts. Leaving it empty means
+      the card computes the house power from generation, grid and battery. A
+      measured value is more accurate because it also covers consumers without
+      a sensor of their own.
+  flow_house_label:
+    name: House display name
+    description: >-
+      Label of the house node on the card.
+  flow_battery_label:
+    name: Battery display name
+    description: >-
+      Label of the battery node. Leaving it empty and setting no SoC sensor
+      means no battery node. This is the house battery of the installation —
+      even when HEMS does not control it (e.g. an E3DC). AC batteries
+      controlled by HEMS belong in the device list instead.
+  flow_battery_soc_entity:
+    name: Battery state of charge
+    description: >-
+      Sensor of the state of charge in percent. Drawn as a ring around the
+      battery node.
+  flow_battery_capacity_kwh:
+    name: Battery capacity
+    description: >-
+      Usable capacity in kilowatt-hours. Display only, it feeds into no
+      control decision. Leave empty to not show it.
+  flow_battery_power_entity:
+    name: Battery power (signed)
+    description: >-
+      A single sensor whose sign distinguishes charging from discharging. The
+      direction is set by flow_battery_power_sign. Alternatively use separate
+      sensors via flow_battery_charge_power_entity and
+      flow_battery_discharge_power_entity — both ways at once are not allowed.
+      As soon as the battery is drawn, exactly one of the two ways is required.
+  flow_battery_power_sign:
+    name: Sign of the battery power
+    description: >-
+      positiv_laden means a positive value is charging and a negative one is
+      discharging. positiv_entladen means the opposite. Applies to the signed
+      sensor only.
+  flow_battery_charge_power_entity:
+    name: Charge power (separate sensor)
+    description: >-
+      Charge power in watts as its own, always positive sensor. Only together
+      with flow_battery_discharge_power_entity and only without
+      flow_battery_power_entity.
+  flow_battery_discharge_power_entity:
+    name: Discharge power (separate sensor)
+    description: >-
+      Discharge power in watts as its own, always positive sensor. Only
+      together with flow_battery_charge_power_entity and only without
+      flow_battery_power_entity.

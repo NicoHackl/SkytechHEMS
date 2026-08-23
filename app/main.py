@@ -19,6 +19,8 @@ from config_service import ConfigProblem, ConfigService
 from configuration import GLOBAL_DEFAULTS, parse_modes, validate_options
 from ha_client import HAClient
 from ems import EMSController, StateProxy
+import flow_publisher
+from flow_publisher import FlowPublisher
 from supervisor_client import SupervisorClient
 
 # Alle für Menschen lesbaren Zeitangaben laufen über diese Zone und dieses
@@ -327,11 +329,17 @@ def _build_device_controls_schema(
         if cls == "controllable":
             output_unit = cfg["output_unit"]
             suffix = "a" if output_unit == "ampere" else "w"
+            allowed_phases = [int(value) for value in cfg["phases"].split(",")]
+            # Additiv ergaenzt (D-046): der Phasenhelfer existiert genau dann,
+            # wenn das Geraet ihn auch beschreibt - siehe write_targets().
+            phase_entity = (f"input_number.ems_{prefix}_anzahl_phase"
+                            if output_unit == "ampere" and len(allowed_phases) > 1 else "")
             base.update({
                 "output_unit": output_unit,
                 "actual_power_entity": cfg["actual_power_entity"],
                 "request_entity": f"input_number.ems_{prefix}_anforderung_leistung_{suffix}",
-                "allowed_phases": [int(value) for value in cfg["phases"].split(",")],
+                "phase_entity": phase_entity,
+                "allowed_phases": allowed_phases,
                 "voltage_entities": [
                     value for key in ("voltage_l1_entity", "voltage_l2_entity", "voltage_l3_entity")
                     if (value := cfg[key])
@@ -433,6 +441,12 @@ class HEMSApp:
         self._last_error: str = ""
         self._cycle_count: int = 0
 
+        # Kartendaten der Flow Card (D-046). Reine Anzeige: der Publisher
+        # schaltet nichts und läuft nach dem Zyklus, nicht darin.
+        self._flow = FlowPublisher(self.ha)
+        self._flow_options: dict = options
+        self._addon_version: str = ""
+
     # ------------------------------------------------------------------
     # Regelzyklus
     # ------------------------------------------------------------------
@@ -460,6 +474,15 @@ class HEMSApp:
             self._last_error        = ""
             self._cycle_count      += 1
             self._last_cycle_at     = now.strftime(DISPLAY_TIME_FORMAT)
+            await self._flow.publish(
+                options=self._flow_options,
+                controls_schema=self._controls_schema(),
+                status=result["status"],
+                states=states,
+                cycle_count=self._cycle_count,
+                addon_version=self._addon_version,
+                now=self._last_cycle_at,
+            )
             self._last_cycle_at_iso = now.replace(microsecond=0).isoformat()
             log.debug("Cycle %d completed.", self._cycle_count)
         except Exception as exc:
@@ -495,15 +518,19 @@ class HEMSApp:
             "instance_id":       self.instance_id,
         })
 
-    async def _handle_device_controls_schema(self, request: web.Request) -> web.Response:
-        """Liefert das Steuerung-Tab-Kontrollschema, abgeleitet aus den konfigurierten Geräten."""
-        schema = _build_device_controls_schema(
+    def _controls_schema(self) -> list:
+        """Der veröffentlichte Helfer-Vertrag. Einzige Quelle der Entity-IDs für
+        den Steuerung-Tab UND für die Kartendaten (D-046)."""
+        return _build_device_controls_schema(
             self._device_configs,
             residual_power_entity=self.ems.residual_power_entity,
             interval_s=self.interval_s,
             battery_residual_power_entity=self.ems.battery_residual_power_entity,
         )
-        return web.json_response(schema)
+
+    async def _handle_device_controls_schema(self, request: web.Request) -> web.Response:
+        """Liefert das Steuerung-Tab-Kontrollschema, abgeleitet aus den konfigurierten Geräten."""
+        return web.json_response(self._controls_schema())
 
     async def _handle_controls(self, request: web.Request) -> web.Response:
         """Liefert frische Zustände aller EMS-input_*-Helfer-Entitäten."""
@@ -597,6 +624,31 @@ class HEMSApp:
         domains = [d.strip() for d in raw.split(",") if d.strip()] or None
         return web.json_response({"entities": self.config.entities(domains)})
 
+    async def _handle_flow_preview(self, request: web.Request) -> web.Response:
+        """Zeigt, was die Karte gerade bekäme, und welcher Verweis gerade trägt.
+
+        Antwortet immer mit 200 (Diagnosewerkzeug wie /api/config/validate):
+        eine unvollständige Flow-Konfiguration ist kein HTTP-Fehler. Gearbeitet
+        wird auf dem Zustandsabbild des letzten Zyklus – es wird keine
+        zusätzliche HA-Abfrage ausgelöst.
+        """
+        options = self._flow_options
+        config_payload = flow_publisher.build_config_payload(
+            options, self._controls_schema(), self._addon_version, self._last_cycle_at)
+        status_payload = flow_publisher.build_status_payload(
+            self._last_status, self._cycle_count, self._last_cycle_at)
+        return web.json_response({
+            "publish_enabled": bool(options.get("flow_publish")),
+            "config_entity": flow_publisher.CONFIG_ENTITY_ID,
+            "status_entity": flow_publisher.STATUS_ENTITY_ID,
+            "revision": config_payload["revision"],
+            "zuletzt_geschrieben": self._flow.last_written_at,
+            "config_payload": config_payload,
+            "status_payload": status_payload,
+            "aufgeloest": flow_publisher.resolve_references(config_payload, self._last_states),
+            "warnungen": flow_publisher.payload_warnings(config_payload),
+        })
+
     async def _handle_config_validate(self, request: web.Request) -> web.Response:
         try:
             options, _ = await self._draft(request)
@@ -679,6 +731,7 @@ class HEMSApp:
         app.router.add_get("/api/config/entities",        self._handle_config_entities)
         app.router.add_post("/api/config/validate",       self._handle_config_validate)
         app.router.add_post("/api/config/sensors/test",   self._handle_sensors_test)
+        app.router.add_get("/api/flow/preview",            self._handle_flow_preview)
         app.router.add_put("/api/config",                 self._handle_config_put)
         app.router.add_post("/api/config/restart",        self._handle_config_restart)
         app.router.add_post("/api/config/save-and-restart",
@@ -704,6 +757,10 @@ class HEMSApp:
             except NotImplementedError:
                 # Signal-Handler werden nicht auf allen Plattformen unterstützt
                 pass
+
+        # Einmal beim Start: die Add-on-Version steht nur beim Supervisor. Sie
+        # geht in die Kartendaten ein und darf keinen Zyklus kosten (D-046).
+        self._addon_version = await self.config.addon_version()
 
         scheduler_task = asyncio.create_task(self._scheduler())
         try:
