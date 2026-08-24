@@ -142,7 +142,10 @@ def _battery_entry(options: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     return {
         "label": label,
         "soc_entity": soc,
-        "capacity_kwh": options.get("flow_battery_capacity_kwh"),
+        # capacity_kwh steht im Vertrag als "float oder null, nur Anzeige". Das
+        # HEMS befuellt es nicht: es braucht die Kapazitaet fuer nichts, und ein
+        # Pflichtfeld dafuer hat einmal den Add-on-Start blockiert.
+        "capacity_kwh": None,
         "power_entity": options.get("flow_battery_power_entity", ""),
         "power_sign": options.get("flow_battery_power_sign", ""),
         "charge_power_entity": options.get("flow_battery_charge_power_entity", ""),

@@ -198,13 +198,6 @@ export function FlowCard() {
                 error={fieldErrors.flow_battery_soc_entity}
                 onChange={(value) => patch({ flow_battery_soc_entity: value })}
               />
-              <NumberField
-                label="Kapazität" unit="kWh" min={0} step={0.1}
-                value={draft.flow_battery_capacity_kwh}
-                error={fieldErrors.flow_battery_capacity_kwh}
-                hint="Reine Anzeige. Leer lassen, wenn sie nicht erscheinen soll."
-                onChange={(value) => patch({ flow_battery_capacity_kwh: value })}
-              />
               <EntityField
                 label="Batterieleistung (signiert)"
                 value={draft.flow_battery_power_entity} entities={entities} domains={['sensor']}

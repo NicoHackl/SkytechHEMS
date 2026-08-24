@@ -239,7 +239,13 @@ Geräteliste; hier stehen nur die Anlagenwerte, die das HEMS sonst nirgends brau
 | `flow_house_label` | str | `"Haus"` | Anzeigename des Hausknotens |
 | `flow_battery_label` | str | `""` | Anzeigename des Batterieknotens. Leer und ohne SoC = kein Knoten |
 | `flow_battery_soc_entity` | str | `""` | Ladestand in Prozent |
-| `flow_battery_capacity_kwh` | float \| null | `null` | Nur Anzeige |
+
+Eine Kapazität wird **nicht** gepflegt. Der Vertrag kennt das Feld
+`standard.batterie.capacity_kwh` weiterhin, das HEMS befüllt es aber nicht: es braucht die
+Kapazität für nichts. Als Option mit dem Default `null` hatte sie den Add-on-Start blockiert —
+die Schemaprüfung des Supervisors sieht einen Schlüssel ohne Wert und verlangt eine Eingabe,
+obwohl das Feld als optional markiert ist. **Keine Option unter `options:` darf deshalb `null`
+sein**; ein Test wacht darüber.
 | `flow_battery_power_entity` | str | `""` | Variante A: ein signierter Sensor |
 | `flow_battery_power_sign` | list | `"positiv_laden"` | `positiv_laden` \| `positiv_entladen` |
 | `flow_battery_charge_power_entity` | str | `""` | Variante B: Ladesensor |

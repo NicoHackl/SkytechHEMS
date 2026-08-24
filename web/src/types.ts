@@ -339,7 +339,6 @@ export interface ConfigOptions {
   flow_house_label: string
   flow_battery_label: string
   flow_battery_soc_entity: string
-  flow_battery_capacity_kwh: number | null
   flow_battery_power_entity: string
   flow_battery_power_sign: string
   flow_battery_charge_power_entity: string

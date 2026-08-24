@@ -153,7 +153,11 @@ einem Regelintervall wieder vollständig.
     "batterie": {                            // null oder fehlend = kein Batterieknoten
       "label": "E3DC",
       "soc_entity": "sensor.e3dc_batterie_soc",
-      "capacity_kwh": 19.5,                  // float oder null, nur Anzeige
+      "capacity_kwh": null,                  // float oder null, nur Anzeige.
+                                             // Das Skytech HEMS befüllt es nicht: es braucht die
+                                             // Kapazität für nichts, und ein Pflichtfeld dafür hat
+                                             // einmal den Add-on-Start blockiert. Ein anderer
+                                             // Erzeuger darf eine Zahl liefern.
       "power_entity": "",                    // Variante A: ein signierter Sensor …
       "power_sign": "positiv_laden",         // … "positiv_laden" | "positiv_entladen"
       "charge_power_entity": "sensor.e3dc_leistung_batterie_laden",     // Variante B …

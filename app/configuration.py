@@ -133,7 +133,6 @@ GLOBAL_DEFAULTS: Dict[str, Any] = {
     "flow_house_label": "Haus",
     "flow_battery_label": "",
     "flow_battery_soc_entity": "",
-    "flow_battery_capacity_kwh": None,
     "flow_battery_power_entity": "",
     "flow_battery_power_sign": "positiv_laden",
     "flow_battery_charge_power_entity": "",
@@ -539,16 +538,6 @@ def _validate_flow(options: Dict[str, Any], result: ValidationResult) -> None:
         result.field_errors["flow_battery_power_sign"] = (
             "Zulässig sind positiv_laden oder positiv_entladen."
         )
-
-    capacity = _as_float(options.get("flow_battery_capacity_kwh"), None)
-    if options.get("flow_battery_capacity_kwh") in (None, ""):
-        options["flow_battery_capacity_kwh"] = None
-    elif capacity is None or capacity < 0:
-        result.field_errors["flow_battery_capacity_kwh"] = (
-            "Leer lassen oder eine endliche Zahl ab 0 kWh eintragen."
-        )
-    else:
-        options["flow_battery_capacity_kwh"] = capacity
 
     # Ohne einen einzigen Standardwert hätte die Karte nichts zu zeichnen.
     has_any = bool(

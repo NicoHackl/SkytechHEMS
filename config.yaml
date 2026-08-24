@@ -41,6 +41,19 @@ description: >-
   Hausleistungsbilanz für deren Entladeplanung; speicher_in_residual_enthalten
   sagt, ob die Speicherleistung im Überschuss-Sensor steckt, available_modes
   schaltet die normalen Regelmodi frei.
+
+  Flow Card: Mit flow_publish schreibt das Add-on zwei Anzeige-Sensoren nach
+  Home Assistant, aus denen sich die Skytech Power Flow Card selbst aufbaut –
+  im Dashboard genügt dann type: custom:skytech-power-flow-card. Die Geräte
+  kennt die Karte bereits aus dieser Konfiguration; hier gepflegt werden nur
+  die Anlagenwerte: flow_pv_power_entities (Liste, wird summiert), der Netzweg
+  entweder als flow_grid_power_entity mit flow_grid_power_sign oder getrennt
+  als flow_grid_import_entity und flow_grid_export_entity, optional
+  flow_house_power_entity sowie die Batterie über flow_battery_label,
+  flow_battery_soc_entity und genau eine Leistungsvariante. Anzeige:
+  flow_title, flow_watt_threshold, flow_animation und flow_house_node. Je Gerät
+  steuern flow_show, flow_icon und flow_color die Darstellung; sie ändern die
+  Regelung nicht.
 version: "2.0.2"
 slug: "skytech_hems"
 init: false
@@ -92,7 +105,6 @@ options:
   flow_house_label: "Haus"
   flow_battery_label: ""
   flow_battery_soc_entity: ""
-  flow_battery_capacity_kwh: null
   flow_battery_power_entity: ""
   flow_battery_power_sign: "positiv_laden"
   flow_battery_charge_power_entity: ""
@@ -198,7 +210,6 @@ schema:
   flow_house_label: str?
   flow_battery_label: str?
   flow_battery_soc_entity: str?
-  flow_battery_capacity_kwh: float?
   flow_battery_power_entity: str?
   flow_battery_power_sign: list(positiv_laden|positiv_entladen)?
   flow_battery_charge_power_entity: str?

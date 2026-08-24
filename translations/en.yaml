@@ -326,11 +326,6 @@ configuration:
     description: >-
       Sensor of the state of charge in percent. Drawn as a ring around the
       battery node.
-  flow_battery_capacity_kwh:
-    name: Battery capacity
-    description: >-
-      Usable capacity in kilowatt-hours. Display only, it feeds into no
-      control decision. Leave empty to not show it.
   flow_battery_power_entity:
     name: Battery power (signed)
     description: >-

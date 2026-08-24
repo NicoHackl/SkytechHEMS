@@ -342,11 +342,6 @@ configuration:
     description: >-
       Sensor des Ladestands in Prozent. Wird als Ring um den Batterieknoten
       gezeichnet.
-  flow_battery_capacity_kwh:
-    name: Kapazität der Batterie
-    description: >-
-      Nutzbare Kapazität in Kilowattstunden. Reine Anzeige, sie geht in keine
-      Regelung ein. Leer lassen, wenn sie nicht angezeigt werden soll.
   flow_battery_power_entity:
     name: Batterieleistung (signiert)
     description: >-

@@ -383,3 +383,10 @@ def test_regelintervall_steht_in_der_nutzlast():
         battery_residual_power_entity=result.options["battery_residual_power_entity"])
     payload = fp.build_config_payload(result.options, schema, "2.0.1", NOW, 3)
     assert payload["hems"]["interval_s"] == 3
+
+
+def test_batteriekapazitaet_wird_nicht_veroeffentlicht():
+    # Der Vertrag laesst das Feld ausdruecklich null. Das HEMS braucht die
+    # Kapazitaet fuer nichts -- und als Pflichtfeld hat sie den Start blockiert.
+    batterie = _config(**STANDARD)["standard"]["batterie"]
+    assert batterie["capacity_kwh"] is None

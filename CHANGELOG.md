@@ -8,6 +8,15 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Behoben
+
+- **Das Add-on ließ sich ohne einen Wert für die Batteriekapazität der Flow Card nicht starten.**
+  Die Option hatte als einzige im Manifest den Default `null`; die Schemaprüfung des Supervisors
+  sieht darin einen Schlüssel ohne Wert und verlangt eine Eingabe, obwohl das Feld optional ist.
+  Die Option entfällt ersatzlos — die Kapazität wurde für nichts gebraucht und war reine Anzeige,
+  die die Karte nie gezeichnet hat. Bestehende Konfigurationen dürfen den Schlüssel behalten, er
+  wird ignoriert. Ein Test stellt sicher, dass künftig **keine** Option den Wert `null` trägt.
+
 ### Hinzugefügt
 
 - **Kartendaten für die Skytech Power Flow Card (D-046, D-047).** Ist die Veröffentlichung

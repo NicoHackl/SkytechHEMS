@@ -643,3 +643,24 @@ def test_echte_geraeteaenderung_schaltet_weiterhin_ab():
     old = options(binary(), controllable())
     new = options(binary(power_w=2000), controllable())
     assert len(cfg.devices_needing_shutdown(old, new)) == 1
+
+
+def test_keine_option_im_manifest_hat_den_wert_null():
+    """Ein `null`-Default macht das Add-on startunfähig.
+
+    Die Schemaprüfung des Supervisors läuft VOR der Anwendung: sie sieht einen
+    vorhandenen Schlüssel ohne Wert und verlangt eine Eingabe, obwohl das Feld
+    als optional markiert ist. Genau daran ist einmal der Start gescheitert
+    (`flow_battery_capacity_kwh`). Der Wächter gilt für alle Optionen, nicht nur
+    für die eine.
+    """
+    import pathlib
+    import yaml
+
+    manifest = yaml.safe_load(
+        (pathlib.Path(__file__).resolve().parents[1] / "config.yaml").read_text("utf-8"))
+    leer = [key for key, value in manifest["options"].items() if value is None]
+    assert leer == [], (
+        f"Optionen ohne Wert im Manifest: {leer}. "
+        "Statt null einen konkreten Default eintragen oder den Schlüssel weglassen."
+    )
