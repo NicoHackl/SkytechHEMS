@@ -57,7 +57,7 @@ description: >-
   flow_title, flow_watt_threshold, flow_animation und flow_house_node. Je Gerät
   steuern flow_show, flow_icon und flow_color die Darstellung; sie ändern die
   Regelung nicht.
-version: "2.0.3"
+version: "2.0.4"
 slug: "skytech_hems"
 init: false
 arch:
