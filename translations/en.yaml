@@ -268,10 +268,15 @@ configuration:
   flow_pv_power_entities:
     name: PV power sensors
     description: >-
-      Sensors of the current generation power in watts. Multiple rows are
-      summed, an empty list means no generation node. Each entry has exactly
-      one field entity holding the full entity ID; listing the same entity
-      twice is an error.
+      Sensors of the current generation power in watts. An empty list means no
+      generation node. Each entry has entity holding the full entity ID and
+      optionally in_summe. Only rows with in_summe: true are summed into the
+      generation power; when the field is missing, true applies. Rows with
+      in_summe: false merely appear as a breakdown below the node on the card.
+      This allows entering the plant's system power and the individual strings
+      side by side without counting both — which would otherwise double the
+      generation. Listing the same entity twice is an error, as is an entity
+      already configured as a grid sensor.
   flow_pv_label:
     name: Generation display name
     description: >-

@@ -390,3 +390,33 @@ def test_batteriekapazitaet_wird_nicht_veroeffentlicht():
     # Kapazitaet fuer nichts -- und als Pflichtfeld hat sie den Start blockiert.
     batterie = _config(**STANDARD)["standard"]["batterie"]
     assert batterie["capacity_kwh"] is None
+
+
+def test_pv_zeilen_werden_in_summe_und_aufschluesselung_getrennt():
+    # Systemleistung zaehlt, die Strings sind nur Aufschluesselung -- sonst
+    # erschiene die Anlage doppelt so gross.
+    standard = _config(**{**STANDARD, "flow_pv_power_entities": [
+        {"entity": "sensor.pv_system", "in_summe": True},
+        {"entity": "sensor.string_sued", "in_summe": False},
+        {"entity": "sensor.string_ost", "in_summe": False},
+    ]})["standard"]
+    assert standard["pv_power_entities"] == ["sensor.pv_system"]
+    assert standard["pv_detail_entities"] == ["sensor.string_sued", "sensor.string_ost"]
+
+
+def test_zeile_ohne_in_summe_zaehlt_weiterhin_mit():
+    standard = _config(**{**STANDARD, "flow_pv_power_entities": [
+        {"entity": "sensor.pv_alt"},
+    ]})["standard"]
+    assert standard["pv_power_entities"] == ["sensor.pv_alt"]
+    assert standard["pv_detail_entities"] == []
+
+
+def test_vorschau_loest_auch_die_aufschluesselung_auf():
+    payload = _config(**{**STANDARD, "flow_pv_power_entities": [
+        {"entity": "sensor.pv_system", "in_summe": True},
+        {"entity": "sensor.string_sued", "in_summe": False},
+    ]})
+    pfade = [pfad for pfad, _ in fp.collect_references(payload)]
+    assert "standard.pv_power_entities[0]" in pfade
+    assert "standard.pv_detail_entities[0]" in pfade

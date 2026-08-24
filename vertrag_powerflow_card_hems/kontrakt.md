@@ -139,6 +139,10 @@ einem Regelintervall wieder vollständig.
       "sensor.e3dc_leistung_ertrag_hausdach",
       "sensor.e3dc_leistung_ertrag_garagendach"
     ],
+    "pv_detail_entities": [                  // Liste, wird NICHT summiert; nur Aufschlüsselung
+      "sensor.string_sued",
+      "sensor.string_ost"
+    ],
     "pv_label": "Photovoltaik",              // string, Anzeigename des Knotens
 
     "grid_power_entity": "sensor.e3dc_leistung_netz",
@@ -182,6 +186,16 @@ anwenden — sie stand im Vertrag, die Größe dazu fehlte. Fehlt das Feld (ält
 die Karte `30` an.
 
 **Vorzeichenkonventionen, verbindlich:**
+
+`pv_detail_entities` ist **additiv ergänzt** (24.08.2026) und erhöht `schema_version` nicht. Es
+löst ein reales Problem: eine Anlage hat oft einen Sensor für die Systemleistung **und** je einen
+je String. Beides in `pv_power_entities` zu legen verdoppelte die Erzeugung. Der Erzeuger legt
+deshalb genau eine der beiden Sichten in die Summe und die andere hierher; die Karte summiert
+`pv_detail_entities` **nie**, sondern zeigt sie als Aufschlüsselung am Erzeugungsknoten. Fehlt das
+Feld (älterer Erzeuger), gibt es keine Aufschlüsselung — kein Fehler.
+
+Verbindlich: Eine Entität steht **entweder** in `pv_power_entities` **oder** in
+`pv_detail_entities`, nie in beiden.
 
 - `grid_power_sign: "positiv_bezug"` — positiver Wert bedeutet Bezug aus dem Netz, negativer
   Einspeisung. `"positiv_einspeisung"` bedeutet das Gegenteil.
@@ -333,7 +347,7 @@ Auflösungsreihenfolge je Gerät:
 | `sensor.skytech_hems_flow_config` fehlt | Deutscher Klartexthinweis statt Grafik: *„Das Skytech HEMS veröffentlicht noch keine Kartendaten. Im HEMS-Panel unter ‚Flow Card' die Veröffentlichung einschalten."* |
 | `schema_version` höher als unterstützt | Hinweis, die Karte zu aktualisieren. Kein Zeichenversuch. |
 | `devices` leer | Grafik ohne Geräteknoten zeichnen, kein Fehler. Ein Haus ohne HEMS-Geräte ist ein gültiger Zustand. |
-| `standard.pv_power_entities` leer | Kein PV-Knoten, kein Fehler. |
+| `standard.pv_power_entities` leer | Kein PV-Knoten, kein Fehler. Eine gefüllte `pv_detail_entities` allein erzeugt ebenfalls keinen Knoten — sie beschreibt nur, woraus sich die Erzeugung zusammensetzt. |
 | `hard_lockout: true` | Abzeichen „HEMS gesperrt" am Kartenkopf. Werte werden weiter gezeichnet. |
 | `ems_enabled: false` | Abzeichen „HEMS aus". Werte werden weiter gezeichnet. |
 | Statusentität älter als 5 × Regelintervall (`hems.interval_s`, sonst 30 s) | Abzeichen „HEMS-Daten veraltet" mit Zeitpunkt. Gemessen wird am `last_updated` der Entität, nicht am formatierten Zeitstempel — der ist für Menschen, nicht zum Rechnen. |
@@ -372,6 +386,7 @@ Heizlüftern.
   "anzeige": { "titel": "Leistungsfluss", "watt_schwelle": 1000, "animation": true, "haus_knoten_anzeigen": true },
   "standard": {
     "pv_power_entities": ["sensor.e3dc_leistung_ertrag_hausdach", "sensor.e3dc_leistung_ertrag_garagendach"],
+    "pv_detail_entities": [],
     "pv_label": "Photovoltaik",
     "grid_power_entity": "sensor.e3dc_leistung_netz",
     "grid_power_sign": "positiv_bezug",

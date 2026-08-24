@@ -228,7 +228,7 @@ Geräteliste; hier stehen nur die Anlagenwerte, die das HEMS sonst nirgends brau
 | `flow_watt_threshold` | int (0…100000) | `1000` | Ab diesem Betrag zeigt die Karte kW statt W |
 | `flow_animation` | bool | `true` | Wandernde Punkte auf den Flusslinien |
 | `flow_house_node` | bool | `true` | Hausknoten zeichnen |
-| `flow_pv_power_entities` | `[{entity}]` | `[]` | PV-Leistungssensoren, werden summiert. Leer = kein Erzeugungsknoten |
+| `flow_pv_power_entities` | `[{entity, in_summe}]` | `[]` | PV-Leistungssensoren. Leer = kein Erzeugungsknoten |
 | `flow_pv_label` | str | `"Photovoltaik"` | Anzeigename des Erzeugungsknotens |
 | `flow_grid_power_entity` | str | `""` | Signierter Netzsensor |
 | `flow_grid_power_sign` | list | `"positiv_bezug"` | `positiv_bezug` \| `positiv_einspeisung` |
@@ -256,11 +256,20 @@ Je Gerät kommen drei Felder dazu — sie gehören zum Gerät, damit sie ein Ums
 Geräteklasse) und `flow_color` (CSS-Farbe als Override, leer = Skytech-Akzent). Siehe
 [Gemeinsame Felder in `devices[]`](device_classes/global.md#gemeinsame-felder-in-devices).
 
+**Erzeugung: Summe oder Aufschlüsselung.** Eine Anlage hat oft einen Sensor für die
+Systemleistung **und** je einen für die einzelnen Strings. Beides zu summieren verdoppelte die
+Erzeugung. Je Zeile legt `in_summe` deshalb fest, ob sie zählt (Default `true`, damit
+Bestandskonfigurationen sich unverändert verhalten) oder nur als Aufschlüsselung unter dem
+Erzeugungsknoten erscheint. Der Publisher trennt beides in `standard.pv_power_entities` und
+`standard.pv_detail_entities` — die Karte summiert die zweite Gruppe **nie**.
+
 **Prüfregeln.** Beim Netz gilt entweder der signierte Sensor **oder** das Paar aus Bezug und
 Einspeisung, nie beides; analog bei der Batterie. Wird die Batterie überhaupt gezeichnet (Label
 oder SoC gesetzt), ist genau eine Leistungsvariante Pflicht. `flow_publish: true` verlangt
 mindestens einen Anlagenwert. Jede PV-Zeile braucht eine Entität, Duplikate sind ein Feldfehler.
-`flow_icon` muss mit `mdi:` beginnen. Leere Werte sind sonst überall gültig — die Karte kommt mit
+`flow_icon` muss mit `mdi:` beginnen. Eine Entität, die bereits als Netzsensor eingetragen ist,
+darf nicht zusätzlich als Erzeugung dienen — Netzleistung ist keine Erzeugung, und die Karte
+rechnet die Hausbilanz daraus. Leere Werte sind sonst überall gültig — die Karte kommt mit
 fehlenden Knoten zurecht.
 
 **Empfehlung `recorder`.** Beide veröffentlichten Entitäten gehören in die Ausschlussliste,

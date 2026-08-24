@@ -102,9 +102,11 @@ def build_config_payload(options: Dict[str, Any], controls_schema: List[Dict[str
             "haus_knoten_anzeigen": bool(options.get("flow_house_node")),
         },
         "standard": {
-            "pv_power_entities": [row["entity"] for row
-                                  in (options.get("flow_pv_power_entities") or [])
-                                  if row.get("entity")],
+            # Nur die gezaehlten Zeilen. Die uebrigen stehen unten als
+            # Aufschluesselung -- sonst laege Systemleistung UND Stringleistung
+            # in derselben Summe und die Anlage erschiene doppelt so gross.
+            "pv_power_entities": _pv_entities(options, gezaehlt=True),
+            "pv_detail_entities": _pv_entities(options, gezaehlt=False),
             "pv_label": options.get("flow_pv_label", ""),
             "grid_power_entity": options.get("flow_grid_power_entity", ""),
             "grid_power_sign": options.get("flow_grid_power_sign", ""),
@@ -127,6 +129,19 @@ def build_config_payload(options: Dict[str, Any], controls_schema: List[Dict[str
     }
     payload["revision"] = revision(payload)
     return payload
+
+
+def _pv_entities(options: Dict[str, Any], *, gezaehlt: bool) -> List[str]:
+    """Die PV-Zeilen einer Gruppe als reine Entity-IDs.
+
+    `in_summe` fehlt in Bestandskonfigurationen und gilt dann als `True` —
+    dort wurde jede Zeile summiert, und genau so verhaelt sie sich weiter.
+    """
+    return [
+        row["entity"]
+        for row in (options.get("flow_pv_power_entities") or [])
+        if row.get("entity") and bool(row.get("in_summe", True)) is gezaehlt
+    ]
 
 
 def _battery_entry(options: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -456,6 +471,11 @@ def collect_references(config_payload: Dict[str, Any]) -> List[Tuple[str, str]]:
 
     for index, entity in enumerate(standard.get("pv_power_entities") or []):
         references.append((f"standard.pv_power_entities[{index}]", entity))
+
+    # Auch die Aufschluesselung: sie soll in der Vorschau genauso sichtbar sein
+    # wie die gezaehlten Zeilen, sonst faellt ein toter Stringsensor nie auf.
+    for index, entity in enumerate(standard.get("pv_detail_entities") or []):
+        references.append((f"standard.pv_detail_entities[{index}]", entity))
 
     for key in ("grid_power_entity", "grid_import_entity", "grid_export_entity",
                 "house_power_entity"):

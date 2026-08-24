@@ -284,10 +284,16 @@ configuration:
   flow_pv_power_entities:
     name: PV-Leistungssensoren
     description: >-
-      Sensoren der aktuellen Erzeugungsleistung in Watt. Mehrere Zeilen werden
-      summiert, eine leere Liste heißt: kein Erzeugungsknoten. Jeder Eintrag
-      hat genau ein Feld entity mit der vollständigen Entity-ID; dieselbe
-      Entität zweimal einzutragen ist ein Fehler.
+      Sensoren der aktuellen Erzeugungsleistung in Watt. Eine leere Liste
+      heißt: kein Erzeugungsknoten. Jeder Eintrag hat entity mit der
+      vollständigen Entity-ID und optional in_summe. Nur Zeilen mit
+      in_summe: true werden zur Erzeugungsleistung summiert; fehlt das Feld,
+      gilt true. Zeilen mit in_summe: false erscheinen auf der Karte lediglich
+      als Aufschlüsselung unter dem Knoten. So lassen sich die Systemleistung
+      der Anlage und die einzelnen Strings nebeneinander eintragen, ohne beides
+      zu zählen — das verdoppelte sonst die Erzeugung. Dieselbe Entität
+      zweimal einzutragen ist ein Fehler, ebenso eine Entität, die bereits als
+      Netzsensor eingetragen ist.
   flow_pv_label:
     name: Anzeigename der Erzeugung
     description: >-

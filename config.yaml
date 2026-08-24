@@ -46,7 +46,10 @@ description: >-
   Home Assistant, aus denen sich die Skytech Power Flow Card selbst aufbaut –
   im Dashboard genügt dann type: custom:skytech-power-flow-card. Die Geräte
   kennt die Karte bereits aus dieser Konfiguration; hier gepflegt werden nur
-  die Anlagenwerte: flow_pv_power_entities (Liste, wird summiert), der Netzweg
+  die Anlagenwerte: flow_pv_power_entities (Liste; je Zeile legt in_summe
+  fest, ob sie in die Erzeugungsleistung zählt oder nur als Aufschlüsselung
+  erscheint — so lassen sich Systemleistung und einzelne Strings nebeneinander
+  eintragen, ohne sie doppelt zu zählen), der Netzweg
   entweder als flow_grid_power_entity mit flow_grid_power_sign oder getrennt
   als flow_grid_import_entity und flow_grid_export_entity, optional
   flow_house_power_entity sowie die Batterie über flow_battery_label,
@@ -200,6 +203,7 @@ schema:
   flow_house_node: bool?
   flow_pv_power_entities:
     - entity: str
+      in_summe: bool?
   flow_pv_label: str?
   flow_grid_power_entity: str?
   flow_grid_power_sign: list(positiv_bezug|positiv_einspeisung)?

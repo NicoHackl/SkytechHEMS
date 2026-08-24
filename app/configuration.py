@@ -284,13 +284,25 @@ def normalize_options(raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     return options
 
 
-def _normalize_flow_entities(raw: Any) -> List[Dict[str, str]]:
-    """PV-Zeilen der Flow Card. Objektliste, weil das Add-on-Schema keine
-    einfache Stringliste mit Formularunterstützung ausdrücken kann."""
-    return [
-        {"entity": _as_text(entry.get("entity"))}
-        for entry in (raw or []) if isinstance(entry, dict)
-    ]
+def _normalize_flow_entities(raw: Any) -> List[Dict[str, Any]]:
+    """PV-Zeilen der Flow Card.
+
+    Objektliste, weil das Add-on-Schema keine einfache Stringliste mit
+    Formularunterstützung ausdrücken kann — und weil jede Zeile seit der
+    Aufteilung in Summe und Aufschlüsselung ein zweites Feld trägt.
+
+    `in_summe` fehlt in Bestandskonfigurationen und gilt dann als `True`: dort
+    wurde jede Zeile summiert, und genau so verhält sie sich weiter.
+    """
+    zeilen: List[Dict[str, Any]] = []
+    for entry in (raw or []):
+        if not isinstance(entry, dict):
+            continue
+        zeilen.append({
+            "entity": _as_text(entry.get("entity")),
+            "in_summe": bool(entry["in_summe"]) if "in_summe" in entry else True,
+        })
+    return zeilen
 
 
 def _normalize_formula_variables(raw: Any) -> List[Dict[str, str]]:
@@ -487,7 +499,15 @@ def _validate_flow(options: Dict[str, Any], result: ValidationResult) -> None:
                 "Vollständige Entity-ID erwartet, z. B. sensor.beispiel."
             )
 
-    # PV-Zeilen: jede braucht eine Entität, Duplikate sind ein Feldfehler.
+    # PV-Zeilen: jede braucht eine Entität, Duplikate sind ein Feldfehler —
+    # über beide Gruppen hinweg, sonst stünde dieselbe Leistung einmal in der
+    # Summe und einmal in der Aufschlüsselung.
+    netz_entitaeten = {
+        _as_text(options.get(key))
+        for key in ("flow_grid_power_entity", "flow_grid_import_entity",
+                    "flow_grid_export_entity")
+        if _as_text(options.get(key))
+    }
     seen: Dict[str, int] = {}
     for index, row in enumerate(options.get("flow_pv_power_entities") or []):
         entity = row.get("entity", "")
@@ -501,6 +521,13 @@ def _validate_flow(options: Dict[str, Any], result: ValidationResult) -> None:
         elif entity in seen:
             result.field_errors[path] = (
                 f"Diese Entität steht bereits in Zeile {seen[entity] + 1}."
+            )
+        elif entity in netz_entitaeten:
+            # Der Netzsensor als Erzeugung verdreht die gesamte Bilanz: die
+            # Karte rechnet die Hausleistung daraus und kommt auf Unsinn.
+            result.field_errors[path] = (
+                "Diese Entität ist bereits als Netzsensor eingetragen. "
+                "Netzleistung ist keine Erzeugung."
             )
         else:
             seen[entity] = index
