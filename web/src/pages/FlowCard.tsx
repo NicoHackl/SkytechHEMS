@@ -95,6 +95,13 @@ export function FlowCard() {
         <section className="card">
           <div className="card-head"><h2>Erzeugung</h2></div>
           <div className="card-body">
+            <p className="hint-box">
+              „In Summe" entscheidet, ob eine Zeile in die Erzeugungsleistung zählt. Hat die
+              Anlage einen Sensor für die Systemleistung <em>und</em> je einen für die einzelnen
+              Strings, gehört genau eine der beiden Sichten in die Summe — die andere erscheint
+              ohne Haken als Aufschlüsselung unter dem Knoten. Beides zu zählen verdoppelte die
+              Erzeugung.
+            </p>
             <PvRows
               rows={pvRows}
               entities={entities}
@@ -197,13 +204,6 @@ export function FlowCard() {
                 value={draft.flow_battery_soc_entity} entities={entities} domains={['sensor']}
                 error={fieldErrors.flow_battery_soc_entity}
                 onChange={(value) => patch({ flow_battery_soc_entity: value })}
-              />
-              <NumberField
-                label="Kapazität" unit="kWh" min={0} step={0.1}
-                value={draft.flow_battery_capacity_kwh}
-                error={fieldErrors.flow_battery_capacity_kwh}
-                hint="Reine Anzeige. Leer lassen, wenn sie nicht erscheinen soll."
-                onChange={(value) => patch({ flow_battery_capacity_kwh: value })}
               />
               <EntityField
                 label="Batterieleistung (signiert)"
@@ -359,16 +359,28 @@ function PvRows({ rows, entities, fieldErrors, onChange }: {
       {rows.length === 0 ? (
         <p className="hint-box">
           Noch kein Erzeugungssensor hinterlegt. Ohne Sensor zeichnet die Karte keinen
-          Erzeugungsknoten — das ist ein gültiger Zustand. Mehrere Zeilen werden summiert.
+          Erzeugungsknoten — das ist ein gültiger Zustand.
         </p>
       ) : rows.map((row, index) => (
-        <div className="formula-var-row single-field" key={index}>
+        <div className="formula-var-row pv-zeile" key={index}>
           <EntityField
             label="Leistungssensor" required
             value={row.entity} entities={entities} domains={['sensor']}
             error={fieldErrors[`flow_pv_power_entities[${index}].entity`]}
-            onChange={(value) => onChange(rows.map((r, i) => (i === index ? { entity: value } : r)))}
+            onChange={(value) => onChange(rows.map((r, i) =>
+              (i === index ? { ...r, entity: value } : r)))}
           />
+          <label className="switch">
+            <input
+              type="checkbox"
+              checked={row.in_summe !== false}
+              aria-label={`Zeile ${index + 1} in die Erzeugungsleistung zählen`}
+              onChange={(event) => onChange(rows.map((r, i) =>
+                (i === index ? { ...r, in_summe: event.target.checked } : r)))}
+            />
+            <span className="track" />
+            <span className="switch-label">In Summe</span>
+          </label>
           <button
             type="button" className="icon-btn danger-icon"
             aria-label={`Zeile ${index + 1} entfernen`}

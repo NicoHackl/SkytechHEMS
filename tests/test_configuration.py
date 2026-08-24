@@ -643,3 +643,48 @@ def test_echte_geraeteaenderung_schaltet_weiterhin_ab():
     old = options(binary(), controllable())
     new = options(binary(power_w=2000), controllable())
     assert len(cfg.devices_needing_shutdown(old, new)) == 1
+
+
+def test_keine_option_im_manifest_hat_den_wert_null():
+    """Ein `null`-Default macht das Add-on startunfähig.
+
+    Die Schemaprüfung des Supervisors läuft VOR der Anwendung: sie sieht einen
+    vorhandenen Schlüssel ohne Wert und verlangt eine Eingabe, obwohl das Feld
+    als optional markiert ist. Genau daran ist einmal der Start gescheitert
+    (`flow_battery_capacity_kwh`). Der Wächter gilt für alle Optionen, nicht nur
+    für die eine.
+    """
+    import pathlib
+    import yaml
+
+    manifest = yaml.safe_load(
+        (pathlib.Path(__file__).resolve().parents[1] / "config.yaml").read_text("utf-8"))
+    leer = [key for key, value in manifest["options"].items() if value is None]
+    assert leer == [], (
+        f"Optionen ohne Wert im Manifest: {leer}. "
+        "Statt null einen konkreten Default eintragen oder den Schlüssel weglassen."
+    )
+
+
+def test_pv_zeile_ohne_in_summe_gilt_als_gezaehlt():
+    # Bestandskonfigurationen kennen das Feld nicht. Dort wurde jede Zeile
+    # summiert, und genau so muss sie sich weiter verhalten.
+    zeilen = cfg.normalize_options(
+        {"flow_pv_power_entities": [{"entity": "sensor.pv"}]})["flow_pv_power_entities"]
+    assert zeilen == [{"entity": "sensor.pv", "in_summe": True}]
+
+
+def test_netzsensor_als_erzeugung_ist_ein_feldfehler():
+    # Der Netzsensor als PV verdreht die gesamte Hausbilanz.
+    errors = _flow_errors(
+        flow_grid_power_entity="sensor.netz",
+        flow_pv_power_entities=[{"entity": "sensor.netz"}])
+    assert "flow_pv_power_entities[0].entity" in errors
+
+
+def test_dieselbe_pv_entitaet_in_beiden_gruppen_ist_ein_feldfehler():
+    errors = _flow_errors(flow_pv_power_entities=[
+        {"entity": "sensor.pv", "in_summe": True},
+        {"entity": "sensor.pv", "in_summe": False},
+    ])
+    assert "flow_pv_power_entities[1].entity" in errors

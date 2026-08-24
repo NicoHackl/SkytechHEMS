@@ -339,7 +339,6 @@ export interface ConfigOptions {
   flow_house_label: string
   flow_battery_label: string
   flow_battery_soc_entity: string
-  flow_battery_capacity_kwh: number | null
   flow_battery_power_entity: string
   flow_battery_power_sign: string
   flow_battery_charge_power_entity: string
@@ -349,9 +348,13 @@ export interface ConfigOptions {
 }
 
 /** Eine PV-Zeile der Flow Card. Objektliste, weil das Add-on-Schema keine
-    einfache Stringliste mit Formularunterstützung ausdrücken kann. */
+    einfache Stringliste mit Formularunterstützung ausdrücken kann — und weil
+    jede Zeile seit der Aufteilung ein zweites Feld trägt. */
 export interface FlowEntityRow {
   entity: string
+  /** Zählt die Zeile in die Erzeugungsleistung? Sonst erscheint sie nur als
+      Aufschlüsselung am Knoten. Fehlt das Feld, gilt `true`. */
+  in_summe?: boolean
 }
 
 /** Ein aufgelöster Verweis in der Vorschau: trägt er gerade oder nicht? */

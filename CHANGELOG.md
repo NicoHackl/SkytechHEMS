@@ -8,8 +8,25 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Behoben
+
+- **Das Add-on ließ sich ohne einen Wert für die Batteriekapazität der Flow Card nicht starten.**
+  Die Option hatte als einzige im Manifest den Default `null`; die Schemaprüfung des Supervisors
+  sieht darin einen Schlüssel ohne Wert und verlangt eine Eingabe, obwohl das Feld optional ist.
+  Die Option entfällt ersatzlos — die Kapazität wurde für nichts gebraucht und war reine Anzeige,
+  die die Karte nie gezeichnet hat. Bestehende Konfigurationen dürfen den Schlüssel behalten, er
+  wird ignoriert. Ein Test stellt sicher, dass künftig **keine** Option den Wert `null` trägt.
+
 ### Hinzugefügt
 
+- **Erzeugung: Systemleistung und einzelne Strings nebeneinander.** Jede Zeile unter „Erzeugung"
+  hat neu den Schalter „In Summe". Nur gehakte Zeilen zählen in die Erzeugungsleistung; die
+  übrigen erscheinen auf der Karte als Aufschlüsselung unter dem Knoten. Damit lassen sich der
+  Sensor für die Anlagenleistung **und** die Sensoren der einzelnen Strings eintragen, ohne dass
+  beides zusammengezählt wird — das zeigte sonst die doppelte Erzeugung. Bestehende Zeilen ohne
+  den Schalter zählen weiter mit, das Verhalten ändert sich für sie nicht.
+- Eine Entität, die bereits als Netzsensor eingetragen ist, wird als Erzeugung nun abgelehnt.
+  Netzleistung ist keine Erzeugung; die Karte rechnet daraus die Hausbilanz und kam auf Unsinn.
 - **Kartendaten für die Skytech Power Flow Card (D-046, D-047).** Ist die Veröffentlichung
   eingeschaltet, schreibt das Add-on nach jedem Regelzyklus zwei Anzeige-Sensoren nach Home
   Assistant. Aus ihnen baut sich die Lovelace-Karte vollständig selbst auf — im Dashboard genügt

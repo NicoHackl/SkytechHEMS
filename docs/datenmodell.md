@@ -320,7 +320,8 @@ Drei Zusagen dieses Vertrags:
 3. **`schema_version` ist additiv.** Neue optionale Felder erhöhen sie nicht; erhöht wird nur,
    wenn ein Feld entfällt, umbenannt wird oder seine Bedeutung ändert (D-047). So ergänzt:
    `hems.interval_s` — der Vertrag verlangte von der Karte die Regel „Statusdaten älter als
-   5 × Regelintervall", lieferte das Regelintervall aber nicht mit.
+   5 × Regelintervall", lieferte das Regelintervall aber nicht mit — und
+   `standard.pv_detail_entities`, die Erzeugungszeilen, die **nicht** summiert werden.
 
 Zwei Abbildungen weichen bewusst von den internen Namen ab, weil der Vertrag eine andere Frage
 beantwortet als der Status:
