@@ -115,6 +115,11 @@ def build_config_payload(options: Dict[str, Any], controls_schema: List[Dict[str
             "grid_label": options.get("flow_grid_label", ""),
             "house_power_entity": options.get("flow_house_power_entity", ""),
             "house_label": options.get("flow_house_label", ""),
+            # Navigationsziele je Knoten (D-049). Leer heisst: More-Info-Dialog.
+            "pv_navigation": options.get("flow_nav_pv", ""),
+            "grid_navigation": options.get("flow_nav_grid", ""),
+            "house_navigation": options.get("flow_nav_house", ""),
+            "rest_navigation": options.get("flow_nav_rest", ""),
             "batterie": _battery_entry(options),
         },
         "devices": devices,
@@ -161,6 +166,7 @@ def _battery_entry(options: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         # HEMS befuellt es nicht: es braucht die Kapazitaet fuer nichts, und ein
         # Pflichtfeld dafuer hat einmal den Add-on-Start blockiert.
         "capacity_kwh": None,
+        "navigation": options.get("flow_nav_battery", ""),
         "power_entity": options.get("flow_battery_power_entity", ""),
         "power_sign": options.get("flow_battery_power_sign", ""),
         "charge_power_entity": options.get("flow_battery_charge_power_entity", ""),
@@ -207,6 +213,7 @@ def _device_entry(group: Dict[str, Any], config: Dict[str, Any],
         "power_kind": kind,
         "icon": config.get("flow_icon", ""),
         "farbe": config.get("flow_color", ""),
+        "navigation": config.get("flow_navigation", ""),
         "reihenfolge": position,
 
         "power_entity": "",

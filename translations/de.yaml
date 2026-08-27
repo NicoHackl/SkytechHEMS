@@ -375,3 +375,48 @@ configuration:
       Entladeleistung in Watt als eigener, immer positiver Sensor. Nur zusammen
       mit flow_battery_charge_power_entity und nur ohne
       flow_battery_power_entity.
+  flow_nav_pv:
+    name: Navigationsziel Erzeugung
+    description: >-
+      Dashboard-Ansicht, auf die ein Klick auf den Erzeugungsknoten springt, z. B.
+      /dashboard-pv/pv. Leer lassen heißt: der Klick öffnet wie bisher den
+      More-Info-Dialog der zugehörigen Entität. Zulässig ist nur ein Pfad
+      innerhalb dieser Home-Assistant-Instanz; er muss mit einem Schrägstrich
+      beginnen. Im Ingress-Panel unter „Flow Card“ lässt sich die Ansicht
+      auswählen, statt den Pfad zu tippen.
+  flow_nav_grid:
+    name: Navigationsziel Netz
+    description: >-
+      Dashboard-Ansicht, auf die ein Klick auf den Netzknoten springt, z. B.
+      /dashboard-pv/pv. Leer lassen heißt: der Klick öffnet wie bisher den
+      More-Info-Dialog der zugehörigen Entität. Zulässig ist nur ein Pfad
+      innerhalb dieser Home-Assistant-Instanz; er muss mit einem Schrägstrich
+      beginnen. Im Ingress-Panel unter „Flow Card“ lässt sich die Ansicht
+      auswählen, statt den Pfad zu tippen.
+  flow_nav_house:
+    name: Navigationsziel Haus
+    description: >-
+      Dashboard-Ansicht, auf die ein Klick auf den Hausknoten springt, z. B.
+      /dashboard-pv/pv. Leer lassen heißt: der Klick öffnet wie bisher den
+      More-Info-Dialog der zugehörigen Entität. Zulässig ist nur ein Pfad
+      innerhalb dieser Home-Assistant-Instanz; er muss mit einem Schrägstrich
+      beginnen. Im Ingress-Panel unter „Flow Card“ lässt sich die Ansicht
+      auswählen, statt den Pfad zu tippen.
+  flow_nav_battery:
+    name: Navigationsziel Batterie
+    description: >-
+      Dashboard-Ansicht, auf die ein Klick auf den Batterieknoten springt, z. B.
+      /dashboard-pv/pv. Leer lassen heißt: der Klick öffnet wie bisher den
+      More-Info-Dialog der zugehörigen Entität. Zulässig ist nur ein Pfad
+      innerhalb dieser Home-Assistant-Instanz; er muss mit einem Schrägstrich
+      beginnen. Im Ingress-Panel unter „Flow Card“ lässt sich die Ansicht
+      auswählen, statt den Pfad zu tippen.
+  flow_nav_rest:
+    name: Navigationsziel Übriges Haus
+    description: >-
+      Dashboard-Ansicht, auf die ein Klick auf den Knoten „Übriges Haus“ springt, z. B.
+      /dashboard-pv/pv. Leer lassen heißt: der Klick öffnet wie bisher den
+      More-Info-Dialog der zugehörigen Entität. Zulässig ist nur ein Pfad
+      innerhalb dieser Home-Assistant-Instanz; er muss mit einem Schrägstrich
+      beginnen. Im Ingress-Panel unter „Flow Card“ lässt sich die Ansicht
+      auswählen, statt den Pfad zu tippen.

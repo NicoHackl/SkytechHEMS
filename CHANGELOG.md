@@ -8,6 +8,22 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Hinzugefügt
+
+- **Navigationsziele für die Power Flow Card.** Je Knoten — Erzeugung, Netz, Haus, Übriges Haus,
+  Batterie und je Gerät — lässt sich eine Dashboard-Ansicht hinterlegen, auf die ein Klick auf der
+  Karte springt. Ohne Ziel öffnet der Klick wie bisher den More-Info-Dialog.
+  - Im Panel unter „Flow Card" steht dafür ein **Auswahlfeld** mit allen Dashboards und ihren
+    Ansichten. Die Liste holt das Add-on über den neuen Endpunkt `GET api/flow/dashboards`.
+  - Dafür spricht das Add-on erstmals **WebSocket** mit Home Assistant (D-049): die
+    Lovelace-Konfiguration gibt es nur über `lovelace/dashboards/list` und `lovelace/config`,
+    einen REST-Endpunkt dafür gibt es nicht. Die Abfrage liegt außerhalb des Regelpfads und wirft
+    nie; fällt sie aus, wird das Feld ein Textfeld.
+  - Strategie-Dashboards und YAML-Dashboards liefern keine Ansichtsliste. Sie erscheinen mit einer
+    Warnung; ein Pfad lässt sich dort von Hand eintragen.
+  - Zulässig ist nur ein Pfad innerhalb dieser Instanz. `http://…` und `javascript:…` werden
+    abgelehnt — geprüft im Add-on **und** noch einmal in der Karte.
+
 ### Behoben
 
 - **Das Add-on ließ sich ohne einen Wert für die Batteriekapazität der Flow Card nicht starten.**

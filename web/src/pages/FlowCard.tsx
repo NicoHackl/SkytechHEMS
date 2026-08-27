@@ -5,7 +5,7 @@ import { useConfigDraft } from '../components/ConfigDraft'
 import { EntityField, NumberField, SelectField, TextField } from '../components/ConfigFields'
 import { Icon } from '../components/Icon'
 import { api, ApiError } from '../api'
-import type { EntityOption, FlowEntityRow, FlowPreview } from '../types'
+import type { EntityOption, FlowDashboard, FlowEntityRow, FlowPreview } from '../types'
 
 /* Anlagenwerte und Anzeigeoptionen der Skytech Power Flow Card (D-046).
 
@@ -34,6 +34,7 @@ const KLASSEN: Record<string, string> = {
 export function FlowCard() {
   const { data, draft, entities, loadError, fieldErrors, restarting, ensureLoaded, patch, setDevices }
     = useConfigDraft()
+  const ziele = useNavigationsziele()
 
   useEffect(ensureLoaded, [ensureLoaded])
 
@@ -63,6 +64,13 @@ export function FlowCard() {
       {restarting ? <RestartOverlay /> : null}
 
       <div className="content form-content">
+
+        {ziele.warnungen.length > 0 ? (
+          <p className="hint-box">
+            Nicht jedes Dashboard lässt sich als Ziel auswählen:{' '}
+            {ziele.warnungen.join(' ')} Ein Pfad lässt sich dort trotzdem von Hand eintragen.
+          </p>
+        ) : null}
 
         <section className="card">
           <div className="card-head"><h2>Veröffentlichung</h2></div>
@@ -116,6 +124,11 @@ export function FlowCard() {
                 hint="Beschriftung des Erzeugungsknotens."
                 onChange={(value) => patch({ flow_pv_label: value })}
               />
+              <ZielFeld
+                label="Navigationsziel" ziele={ziele}
+                value={draft.flow_nav_pv} error={fieldErrors.flow_nav_pv}
+                onChange={(value) => patch({ flow_nav_pv: value })}
+              />
             </div>
           </div>
         </section>
@@ -155,10 +168,15 @@ export function FlowCard() {
                 onChange={(value) => patch({ flow_grid_export_entity: value })}
               />
               <TextField
-                label="Anzeigename" wide
+                label="Anzeigename"
                 value={draft.flow_grid_label}
                 error={fieldErrors.flow_grid_label}
                 onChange={(value) => patch({ flow_grid_label: value })}
+              />
+              <ZielFeld
+                label="Navigationsziel" ziele={ziele}
+                value={draft.flow_nav_grid} error={fieldErrors.flow_nav_grid}
+                onChange={(value) => patch({ flow_nav_grid: value })}
               />
             </div>
           </div>
@@ -179,6 +197,17 @@ export function FlowCard() {
               value={draft.flow_house_label}
               error={fieldErrors.flow_house_label}
               onChange={(value) => patch({ flow_house_label: value })}
+            />
+            <ZielFeld
+              label="Navigationsziel Haus" ziele={ziele}
+              value={draft.flow_nav_house} error={fieldErrors.flow_nav_house}
+              onChange={(value) => patch({ flow_nav_house: value })}
+            />
+            <ZielFeld
+              label="Navigationsziel „Übriges Haus“" ziele={ziele}
+              value={draft.flow_nav_rest} error={fieldErrors.flow_nav_rest}
+              hint="Der Knoten für den Verbrauch, den kein HEMS-Gerät erklärt."
+              onChange={(value) => patch({ flow_nav_rest: value })}
             />
           </div>
         </section>
@@ -230,6 +259,11 @@ export function FlowCard() {
                 error={fieldErrors.flow_battery_discharge_power_entity}
                 onChange={(value) => patch({ flow_battery_discharge_power_entity: value })}
               />
+              <ZielFeld
+                label="Navigationsziel" wide ziele={ziele}
+                value={draft.flow_nav_battery} error={fieldErrors.flow_nav_battery}
+                onChange={(value) => patch({ flow_nav_battery: value })}
+              />
             </div>
           </div>
         </section>
@@ -237,6 +271,10 @@ export function FlowCard() {
         <section className="card">
           <div className="card-head"><h2>Geräte</h2></div>
           <div className="card-body">
+            <p className="hint-box">
+              Ein Navigationsziel legt fest, wohin ein Klick auf den Knoten springt. Ohne Ziel
+              öffnet der Klick wie bisher den More-Info-Dialog der Leitentität.
+            </p>
             {draft.devices.length === 0 ? (
               <div className="empty">
                 <Icon name="plug" size={40} />
@@ -252,6 +290,7 @@ export function FlowCard() {
                     <tr>
                       <th>Gerät</th><th>Klasse</th><th>Anzeigen</th>
                       <th aria-label="Symbol" /><th aria-label="Farbe" />
+                      <th aria-label="Navigationsziel" />
                     </tr>
                   </thead>
                   <tbody>
@@ -288,6 +327,14 @@ export function FlowCard() {
                             value={device.flow_color ?? ''}
                             error={fieldErrors[`devices[${index}].flow_color`]}
                             onChange={(value) => setDeviceField(index, { flow_color: value })}
+                          />
+                        </td>
+                        <td>
+                          <ZielFeld
+                            label="Ziel" ziele={ziele}
+                            value={device.flow_navigation ?? ''}
+                            error={fieldErrors[`devices[${index}].flow_navigation`]}
+                            onChange={(value) => setDeviceField(index, { flow_navigation: value })}
                           />
                         </td>
                       </tr>
@@ -490,5 +537,89 @@ function Vorschau() {
         )}
       </div>
     </section>
+  )
+}
+
+/* Navigationsziele: die Liste der Dashboard-Ansichten.
+
+   Home Assistant gibt sie nur über WebSocket heraus; das Add-on holt sie und
+   reicht sie über `api.flowDashboards()` durch (D-049). Fällt das aus, bleibt
+   die Seite bedienbar — das Feld wird dann ein Textfeld. */
+interface Navigationsziele {
+  /** Pfade in der Reihenfolge Dashboard, Ansicht. Leerer Eintrag = kein Ziel. */
+  pfade: string[]
+  beschriftungen: Record<string, string>
+  geladen: boolean
+  fehler: string
+  warnungen: string[]
+}
+
+function useNavigationsziele(): Navigationsziele {
+  const [dashboards, setDashboards] = useState<FlowDashboard[] | null>(null)
+  const [warnungen, setWarnungen] = useState<string[]>([])
+  const [fehler, setFehler] = useState('')
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const antwort = await api.flowDashboards()
+        setDashboards(antwort.dashboards)
+        setWarnungen(antwort.warnungen)
+      } catch {
+        setFehler('Die Dashboards konnten nicht gelesen werden.')
+      }
+    })()
+  }, [])
+
+  const pfade = ['']
+  const beschriftungen: Record<string, string> = { '': 'kein Ziel' }
+  for (const dashboard of dashboards ?? []) {
+    for (const view of dashboard.views) {
+      const pfad = `/${dashboard.url_path}/${view.path}`
+      pfade.push(pfad)
+      beschriftungen[pfad] = `${dashboard.title} › ${view.title}`
+    }
+  }
+
+  return { pfade, beschriftungen, geladen: dashboards !== null, fehler, warnungen }
+}
+
+/** Ein Ziel wählen — oder tippen, wenn die Liste nicht zu haben war. */
+function ZielFeld({ label, value, error, hint, wide, ziele, onChange }: {
+  label: string
+  value: string
+  ziele: Navigationsziele
+  error?: string
+  hint?: string
+  wide?: boolean
+  onChange: (value: string) => void
+}) {
+  // Auch ein gespeichertes Ziel, das es nicht mehr gibt, muss wählbar bleiben —
+  // sonst setzt die Auswahl es beim ersten Speichern still zurück.
+  const pfade = value && !ziele.pfade.includes(value) ? [...ziele.pfade, value] : ziele.pfade
+  const beschriftungen = value && !ziele.beschriftungen[value]
+    ? { ...ziele.beschriftungen, [value]: `${value} (nicht gefunden)` }
+    : ziele.beschriftungen
+
+  if (!ziele.geladen) {
+    return (
+      <TextField
+        label={label} mono wide={wide} value={value} error={error}
+        placeholder="/dashboard-pv/pv"
+        hint={ziele.fehler
+          ? `${ziele.fehler} Pfad von Hand eintragen.`
+          : (hint ?? 'Ansichten werden geladen …')}
+        onChange={onChange}
+      />
+    )
+  }
+
+  return (
+    <SelectField
+      label={label} wide={wide}
+      value={value} options={pfade} labels={beschriftungen}
+      error={error} hint={hint}
+      onChange={onChange}
+    />
   )
 }

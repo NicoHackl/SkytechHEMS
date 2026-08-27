@@ -56,7 +56,11 @@ description: >-
   flow_battery_soc_entity und genau eine Leistungsvariante. Anzeige:
   flow_title, flow_watt_threshold, flow_animation und flow_house_node. Je Gerät
   steuern flow_show, flow_icon und flow_color die Darstellung; sie ändern die
-  Regelung nicht.
+  Regelung nicht. Mit flow_nav_pv, flow_nav_grid, flow_nav_house,
+  flow_nav_battery, flow_nav_rest und je Gerät flow_navigation lässt sich je
+  Knoten eine Dashboard-Ansicht hinterlegen, auf die ein Klick springt, z. B.
+  /dashboard-pv/pv. Leer heißt: der Klick öffnet wie bisher den
+  More-Info-Dialog.
 version: "2.0.3"
 slug: "skytech_hems"
 init: false
@@ -112,6 +116,11 @@ options:
   flow_battery_power_sign: "positiv_laden"
   flow_battery_charge_power_entity: ""
   flow_battery_discharge_power_entity: ""
+  flow_nav_pv: ""
+  flow_nav_grid: ""
+  flow_nav_house: ""
+  flow_nav_battery: ""
+  flow_nav_rest: ""
   devices:
     - name: heizstab
       label: "Heizstab"
@@ -218,6 +227,11 @@ schema:
   flow_battery_power_sign: list(positiv_laden|positiv_entladen)?
   flow_battery_charge_power_entity: str?
   flow_battery_discharge_power_entity: str?
+  flow_nav_pv: str?
+  flow_nav_grid: str?
+  flow_nav_house: str?
+  flow_nav_battery: str?
+  flow_nav_rest: str?
   devices:
     - name: str
       label: str?
@@ -257,3 +271,4 @@ schema:
       flow_show: bool?
       flow_icon: str?
       flow_color: str?
+      flow_navigation: str?

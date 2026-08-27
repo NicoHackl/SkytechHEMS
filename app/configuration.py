@@ -137,6 +137,12 @@ GLOBAL_DEFAULTS: Dict[str, Any] = {
     "flow_battery_power_sign": "positiv_laden",
     "flow_battery_charge_power_entity": "",
     "flow_battery_discharge_power_entity": "",
+    # Navigationsziele je Knoten (D-049). Leer = More-Info-Dialog wie bisher.
+    "flow_nav_pv": "",
+    "flow_nav_grid": "",
+    "flow_nav_house": "",
+    "flow_nav_battery": "",
+    "flow_nav_rest": "",
 }
 
 # Obergrenze der Umschaltschwelle W/kW. Darüber wäre die Karte nie in kW.
@@ -150,6 +156,13 @@ FLOW_TEXT_KEYS: Tuple[str, ...] = (
     "flow_house_power_entity", "flow_battery_soc_entity",
     "flow_battery_power_entity", "flow_battery_charge_power_entity",
     "flow_battery_discharge_power_entity",
+    "flow_nav_pv", "flow_nav_grid", "flow_nav_house", "flow_nav_battery", "flow_nav_rest",
+)
+
+# Navigationsziele. Geprüft wird die Form, nicht die Existenz: eine gelöschte
+# Ansicht darf die Konfiguration nicht ungültig machen.
+FLOW_NAV_KEYS: Tuple[str, ...] = (
+    "flow_nav_pv", "flow_nav_grid", "flow_nav_house", "flow_nav_battery", "flow_nav_rest",
 )
 
 # Entity-Verweise der Flow Card, die auf ihre Form geprüft werden.
@@ -176,7 +189,9 @@ GLOBAL_KEYS_FORCING_SHUTDOWN: Tuple[str, ...] = (
 # Gerätefelder, die ausschließlich die Flow Card zeichnen. Sie sind vom
 # Abschaltvergleich ausgenommen: ein geändertes Icon darf keinen Heizstab
 # abschalten (D-048).
-DEVICE_KEYS_DISPLAY_ONLY: Tuple[str, ...] = ("flow_show", "flow_icon", "flow_color")
+DEVICE_KEYS_DISPLAY_ONLY: Tuple[str, ...] = (
+    "flow_show", "flow_icon", "flow_color", "flow_navigation",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -338,6 +353,7 @@ def _normalize_device(raw: Dict[str, Any]) -> Dict[str, Any]:
     device["flow_show"] = bool(raw["flow_show"]) if "flow_show" in raw else True
     device["flow_icon"] = _as_text(raw.get("flow_icon"))
     device["flow_color"] = _as_text(raw.get("flow_color"))
+    device["flow_navigation"] = _as_text(raw.get("flow_navigation"))
 
     cls = device["class"]
     if cls == "controllable":
@@ -492,6 +508,10 @@ def _validate_flow(options: Dict[str, Any], result: ValidationResult) -> None:
     else:
         options["flow_watt_threshold"] = int(threshold)
 
+    for key in FLOW_NAV_KEYS:
+        if not ist_navigationsziel(options.get(key) or ""):
+            result.field_errors[key] = NAVIGATION_FEHLER
+
     for key in FLOW_ENTITY_KEYS:
         value = options.get(key) or ""
         if value and not _ENTITY_RE.match(value):
@@ -610,6 +630,9 @@ def _validate_device(device: Dict[str, Any], index: int, available: List[str],
     icon = device.get("flow_icon") or ""
     if icon and not icon.startswith("mdi:"):
         fail("flow_icon", "Leer lassen oder einen Namen der Form mdi:beispiel eintragen.")
+
+    if not ist_navigationsziel(device.get("flow_navigation") or ""):
+        fail("flow_navigation", NAVIGATION_FEHLER)
 
     cls = device["class"]
     if cls not in DEVICE_CLASSES:
@@ -824,6 +847,29 @@ def merge_known_fields(stored_raw: Optional[Dict[str, Any]],
 # ---------------------------------------------------------------------------
 # Kleine Helfer
 # ---------------------------------------------------------------------------
+
+NAVIGATION_FEHLER = (
+    "Leer lassen oder einen Pfad innerhalb dieser Home-Assistant-Instanz "
+    "eintragen, z. B. /dashboard-pv/pv."
+)
+
+
+def ist_navigationsziel(pfad: str) -> bool:
+    """Ist das ein Pfad innerhalb dieser HA-Instanz?
+
+    Geprüft wird die Form, nicht die Existenz — eine gelöschte Ansicht darf die
+    Konfiguration nicht ungültig machen. Ausgeschlossen sind fremde Ziele:
+    `//host/…` wäre protokollrelativ, und ein Doppelpunkt ließe `http://…`
+    ebenso durch wie `javascript:…`.
+    """
+    if not pfad:
+        return True
+    if not pfad.startswith("/") or pfad.startswith("//"):
+        return False
+    if ":" in pfad:
+        return False
+    return not any(zeichen.isspace() for zeichen in pfad)
+
 
 def _as_text(value: Any) -> str:
     return "" if value is None else str(value).strip()

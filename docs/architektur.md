@@ -57,7 +57,7 @@ Verbraucher (Heizlüfter) — mit Zeitschutz, Hysterese, Rampenbegrenzung und No
 | `app/ems/controller.py` | Einen Zyklus orchestrieren: globale Eingaben, Pool, Prioritätskaskade, Statusaufbau | Selbst HTTP sprechen |
 | `app/ems/devices.py` | Verhalten je Gerätetyp: Eligibility, Pool-Verbrauch, Rampe, Zeitschutz, Write-Ops. Hierarchie: `Device` → `ControllableDevice` → `BatteryDevice`, daneben `BinaryDevice` | Auf HA zugreifen (bekommt einen `StateProxy`) |
 | `app/ems/state.py` | Lesezugriff auf den State-Schnappschuss, Resolve-Vertrag (`has`, `availability`, `resolve_number/bool/select`), `safe_float`, `parse_ts` | Zustand halten, der einen Zyklus überdauert; klassenspezifische Defaultwerte kennen |
-| `app/ha_client.py` | Einzige Stelle mit HA-REST-Zugriff, Session-Verwaltung, Timeouts; meldet je Schreiboperation Erfolg oder bereinigten Fehler zurück | Fachlogik enthalten, einen Fehlschlag verschlucken |
+| `app/ha_client.py` | Einzige Stelle mit HA-Zugriff: REST für Zustände und Dienste, dazu **eine** WebSocket-Abfrage für die Dashboardliste (D-049), Session-Verwaltung, Timeouts; meldet je Schreiboperation Erfolg oder bereinigten Fehler zurück | Fachlogik enthalten, einen Fehlschlag im Regelpfad verschlucken |
 | `app/ems/ops.py` | `WriteOp` (Operation samt verursachendem Gerät), `WriteResult`, `WriteTarget` | Selbst schreiben |
 | `app/flow_publisher.py` | Anzeigedaten der Power Flow Card (D-046) aus Optionen, Steuerschema und Zyklusstatus bauen und als zwei `sensor.*`-Entitäten veröffentlichen | Ein Gerät schalten, eine Ausnahme nach außen lassen, Home Assistant zusätzlich abfragen |
 | `web/` → `app/static/` | Darstellung und Bedienung | Fachlogik doppeln — sie rechnet nur an, was `/api/status` liefert |
@@ -179,7 +179,8 @@ Zusagen, auf die sich der gesamte Code verlässt. Wer eine davon bricht, bricht 
 1. **Der Gerätename ist die Identität.** `name` aus der Konfiguration ist die stabile ID und taucht
    unverändert als `id` in `/api/status` auf; `label` ist reine Anzeige und darf sich ändern.
 2. **Nur der `HAClient` spricht mit Home Assistant.** Geräte und Controller sehen ausschließlich
-   einen `StateProxy` auf einen Schnappschuss.
+   einen `StateProxy` auf einen Schnappschuss. Das gilt auch für die WebSocket-Abfrage der
+   Dashboardliste (D-049) — sie liegt im selben Client und außerhalb des Regelpfads.
 3. **Ein Zyklus liest einen Schnappschuss.** Innerhalb eines Zyklus ändert sich der gelesene
    Zustand nicht — sonst wären Pool und Zuteilung inkonsistent.
 4. **Im Regelpfad werden ausschließlich `input_*`-Helfer geschrieben.** Reale Geräte schaltet

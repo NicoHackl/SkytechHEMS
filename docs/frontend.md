@@ -137,7 +137,7 @@ dabei ausdrücklich nur die **Entwurfsposition** — die fachliche Identität bl
 | `/steuerung` | – | HA-Helfer je Gerät, direkt bedienbar |
 | `/energy-pilot` | Vorausschau | Vorschläge und Planstatus des Energy Pilot |
 | `/sensoren/ueberschuss`, `/sensoren/hausbilanz` | Einrichtung | Formel-basierte Sensorwerte (D-045) |
-| `/flow-card` | Einrichtung | Anlagenwerte und Anzeigeoptionen der Power Flow Card (D-046) |
+| `/flow-card` | Einrichtung | Anlagenwerte, Anzeigeoptionen und Navigationsziele der Power Flow Card (D-046, D-049) |
 | `/konfiguration/*` | Einrichtung | Globale Optionen und Geräteliste |
 
 **Drei Bereiche teilen sich einen Entwurf.** `/konfiguration`, `/sensoren` und `/flow-card`

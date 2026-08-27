@@ -297,6 +297,8 @@ export interface ConfigDevice {
   flow_show?: boolean
   flow_icon?: string
   flow_color?: string
+  /** Dashboard-Ansicht, auf die ein Klick auf den Knoten springt. */
+  flow_navigation?: string
 }
 
 /** Eine Formel-Zeile (D-045): benannte HA-Entität für den Code darunter. */
@@ -344,6 +346,13 @@ export interface ConfigOptions {
   flow_battery_charge_power_entity: string
   flow_battery_discharge_power_entity: string
 
+  /* Navigationsziele je Knoten (D-049). Leer = More-Info-Dialog wie bisher. */
+  flow_nav_pv: string
+  flow_nav_grid: string
+  flow_nav_house: string
+  flow_nav_battery: string
+  flow_nav_rest: string
+
   devices: ConfigDevice[]
 }
 
@@ -365,6 +374,25 @@ export interface FlowReference {
   /** Bleibt bei unbrauchbarem Zustand `null` — nie `0`. */
   value: number | null
   valid: boolean
+}
+
+/** Eine Ansicht eines Dashboards, als Ziel wählbar. */
+export interface FlowDashboardView {
+  path: string
+  title: string
+}
+
+export interface FlowDashboard {
+  url_path: string
+  title: string
+  /** Leer bei Strategie- und YAML-Dashboards — dann sagt es eine Warnung. */
+  views: FlowDashboardView[]
+}
+
+/** Antwort von `GET api/flow/dashboards`. Immer 200. */
+export interface FlowDashboards {
+  dashboards: FlowDashboard[]
+  warnungen: string[]
 }
 
 /** Antwort von `GET api/flow/preview`. Immer 200, auch unvollständig. */

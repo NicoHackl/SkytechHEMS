@@ -290,6 +290,31 @@ unbrauchbaren Zustand `null` und wird nie zu `0` — eine fehlende Messung sieht
 ausgeschaltetes Gerät. Aufbau beider Nutzlasten:
 [`vertrag_powerflow_card_hems/kontrakt.md`](../vertrag_powerflow_card_hems/kontrakt.md).
 
+### `GET api/flow/dashboards`
+
+Dashboards und ihre Ansichten, für die Zielauswahl der Flow Card (D-049).
+
+**Antwort `200`** — immer 200, wie `api/flow/preview`. Die Auswahl ist Bequemlichkeit; fällt sie
+aus, fällt die Seite auf ein Textfeld zurück:
+
+```json
+{
+  "dashboards": [
+    { "url_path": "lovelace", "title": "Übersicht", "views": [] },
+    { "url_path": "dashboard-pv", "title": "PV",
+      "views": [{ "path": "ems", "title": "EMS" }, { "path": "pv", "title": "PV" }] }
+  ],
+  "warnungen": ["„Übersicht“ ist ein Strategie-Dashboard und hat keine einzelnen Ansichten."]
+}
+```
+
+Eine Ansicht ohne eigenen Pfad erscheint mit ihrer Position (`"path": "0"`) — so ist sie
+adressierbar. Das Standard-Dashboard trägt `lovelace`; in der Liste von Home Assistant taucht es
+nicht auf und wird separat abgefragt.
+
+**Einzige WebSocket-Stelle des Add-ons.** Die Lovelace-Konfiguration gibt Home Assistant nur über
+`lovelace/dashboards/list` und `lovelace/config` heraus; einen REST-Endpunkt dafür gibt es nicht.
+
 ### `PUT /api/config`
 
 **Rumpf** `{"options": { … }, "stored_revision": "…"}`. Ablauf in genau dieser Reihenfolge:
@@ -344,3 +369,4 @@ Vom Add-on genutzte Endpunkte von Home Assistant:
 | Supervisor | `POST /addons/self/restart` | Eigenes Add-on neu starten, Timeout 30 s | Wird erst nach der ausgelieferten `202`-Antwort angestoßen |
 | Home Assistant | `POST /api/services/<domain>/<service>` | Sollwerte, Schaltanforderungen, Post-Cycle-Skript, Timeout 5 s | Eine fehlgeschlagene Write-Op wird ihrem Gerät zugeordnet, geloggt und im Status sichtbar gemacht; das Gerät fährt im nächsten Zyklus nur noch seinen sicheren Zustand, die übrigen regeln weiter. Das Post-Cycle-Skript wirft und wird als Warnung gemeldet |
 | Home Assistant | `POST /api/states/<entity_id>` | Anzeigedaten der Power Flow Card (D-046), Timeout 5 s | Wird protokolliert und verschluckt: ein misslungener Anzeigeschrieb darf keinen Regelzyklus kosten. Die Karte zeichnet in der Lücke aus den HA-Entitäten weiter |
+| Home Assistant | `WS /api/websocket` — `lovelace/dashboards/list`, `lovelace/config` | Dashboards und Ansichten für die Zielauswahl (D-049), Timeout 10 s je Nachricht | Wird protokolliert und verschluckt; die Seite fällt auf ein Textfeld zurück. Strategie- und YAML-Dashboards erscheinen ohne Ansichten mit einer Warnung |

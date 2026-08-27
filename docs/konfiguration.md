@@ -250,6 +250,7 @@ sein**; ein Test wacht darüber.
 | `flow_battery_power_sign` | list | `"positiv_laden"` | `positiv_laden` \| `positiv_entladen` |
 | `flow_battery_charge_power_entity` | str | `""` | Variante B: Ladesensor |
 | `flow_battery_discharge_power_entity` | str | `""` | Variante B: Entladesensor |
+| `flow_nav_pv`, `flow_nav_grid`, `flow_nav_house`, `flow_nav_battery`, `flow_nav_rest` | str | `""` | Navigationsziel je Knoten, z. B. `/dashboard-pv/pv` |
 
 Je Gerät kommen drei Felder dazu — sie gehören zum Gerät, damit sie ein Umsortieren der Liste
 überleben: `flow_show` (bool, Default `true`), `flow_icon` (mdi-Name, leer = die Karte wählt nach
@@ -262,6 +263,19 @@ Erzeugung. Je Zeile legt `in_summe` deshalb fest, ob sie zählt (Default `true`,
 Bestandskonfigurationen sich unverändert verhalten) oder nur als Aufschlüsselung unter dem
 Erzeugungsknoten erscheint. Der Publisher trennt beides in `standard.pv_power_entities` und
 `standard.pv_detail_entities` — die Karte summiert die zweite Gruppe **nie**.
+
+**Navigationsziele.** Je Knoten lässt sich eine Dashboard-Ansicht hinterlegen, auf die ein Klick
+springt: `flow_nav_pv`, `flow_nav_grid`, `flow_nav_house`, `flow_nav_battery`, `flow_nav_rest` und
+je Gerät `flow_navigation`. Leer heißt: der Klick öffnet wie bisher den More-Info-Dialog. Im Panel
+unter „Flow Card" steht dafür ein Auswahlfeld; die Liste holt das Add-on über
+`GET api/flow/dashboards` (D-049).
+
+Zulässig ist ausschließlich ein Pfad innerhalb dieser Instanz — beginnend mit `/`, nicht mit `//`,
+ohne Doppelpunkt und ohne Leerraum. Das schließt `http://…` und `javascript:…` aus. Geprüft wird
+die **Form**, nicht die Existenz: eine gelöschte Ansicht darf die Konfiguration nicht ungültig
+machen.
+
+Wie die drei Anzeigefelder ist auch `flow_navigation` vom Abschaltvergleich ausgenommen (D-048).
 
 **Prüfregeln.** Beim Netz gilt entweder der signierte Sensor **oder** das Paar aus Bezug und
 Einspeisung, nie beides; analog bei der Batterie. Wird die Batterie überhaupt gezeichnet (Label

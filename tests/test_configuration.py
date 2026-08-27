@@ -688,3 +688,39 @@ def test_dieselbe_pv_entitaet_in_beiden_gruppen_ist_ein_feldfehler():
         {"entity": "sensor.pv", "in_summe": False},
     ])
     assert "flow_pv_power_entities[1].entity" in errors
+
+
+# ---------------------------------------------------------------------------
+# Navigationsziele (D-049)
+# ---------------------------------------------------------------------------
+
+def test_navigationsziel_akzeptiert_pfade_der_eigenen_instanz():
+    for pfad in ("", "/dashboard-pv/pv", "/dashboard-pv/überschussverbraucher", "/lovelace/0"):
+        assert cfg.ist_navigationsziel(pfad), pfad
+
+
+def test_navigationsziel_lehnt_fremde_ziele_ab():
+    # Ein Klick darf nur innerhalb dieser Instanz landen. `//host` waere
+    # protokollrelativ, ein Doppelpunkt liesse http:// und javascript: durch.
+    for pfad in ("http://boese.de", "//boese.de", "javascript:alert(1)",
+                 "ohne-slash", "/mit leer"):
+        assert not cfg.ist_navigationsziel(pfad), pfad
+
+
+def test_fremdes_navigationsziel_ist_ein_feldfehler():
+    assert "flow_nav_pv" in _flow_errors(flow_nav_pv="http://boese.de")
+    assert _flow_errors(flow_nav_pv="/dashboard-pv/pv") == {}
+
+
+def test_navigationsziel_am_geraet_wird_geprueft():
+    result = cfg.validate_options(options(binary(flow_navigation="javascript:alert(1)")))
+    assert "devices[0].flow_navigation" in result.field_errors
+    assert not cfg.validate_options(
+        options(binary(flow_navigation="/dashboard-pv/heizlufter-1"))).field_errors
+
+
+def test_geaendertes_navigationsziel_schaltet_kein_geraet_ab():
+    # Ein Ziel ist Anzeige, kein Regelpfad (D-048).
+    old = options(binary(), controllable())
+    new = options(binary(flow_navigation="/dashboard-pv/heizlufter-1"), controllable())
+    assert cfg.devices_needing_shutdown(old, new) == []

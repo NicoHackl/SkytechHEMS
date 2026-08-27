@@ -154,6 +154,12 @@ einem Regelintervall wieder vollständig.
     "house_power_entity": "sensor.e3dc_leistung_haus",  // leer = Karte rechnet die Bilanz
     "house_label": "Haus",
 
+    // Navigationsziele je Knoten. Leer = Klick öffnet den More-Info-Dialog.
+    "pv_navigation": "/dashboard-pv/pv",
+    "grid_navigation": "/dashboard-pv/netz",
+    "house_navigation": "/dashboard-pv/ems",
+    "rest_navigation": "/dashboard-pv/ueberschussverbraucher",
+
     "batterie": {                            // null oder fehlend = kein Batterieknoten
       "label": "E3DC",
       "soc_entity": "sensor.e3dc_batterie_soc",
@@ -165,7 +171,8 @@ einem Regelintervall wieder vollständig.
       "power_entity": "",                    // Variante A: ein signierter Sensor …
       "power_sign": "positiv_laden",         // … "positiv_laden" | "positiv_entladen"
       "charge_power_entity": "sensor.e3dc_leistung_batterie_laden",     // Variante B …
-      "discharge_power_entity": "sensor.e3dc_leistung_batterie_entladen" // … zwei Sensoren
+      "discharge_power_entity": "sensor.e3dc_leistung_batterie_entladen", // … zwei Sensoren
+      "navigation": "/dashboard-pv/batterie"
     }
   },
 
@@ -184,6 +191,21 @@ einem Regelintervall wieder vollständig.
 diesen Wert könnte die Karte die Regel „älter als 5 × Regelintervall" aus Abschnitt 6 gar nicht
 anwenden — sie stand im Vertrag, die Größe dazu fehlte. Fehlt das Feld (älterer Erzeuger), nimmt
 die Karte `30` an.
+
+**Navigationsziele, verbindlich** (additiv ergänzt 27.08.2026, `schema_version` bleibt `1`):
+
+Ein Klick auf einen Knoten springt auf die hinterlegte Dashboard-Ansicht; ohne Ziel öffnet er wie
+bisher den More-Info-Dialog der Leitentität. Zulässig ist **ausschließlich ein Pfad innerhalb
+derselben Home-Assistant-Instanz**:
+
+- er beginnt mit `/`,
+- er beginnt **nicht** mit `//` — das wäre protokollrelativ und führte auf einen fremden Host,
+- er enthält **keinen** Doppelpunkt — der ließe `http://…` und `javascript:…` durch,
+- er enthält keinen Leerraum.
+
+Der Erzeuger prüft das, und **die Karte prüft es erneut**. Sie springt nicht ungeprüft dorthin,
+wohin ein Attributwert zeigt. Ein Ziel, dessen Ansicht es nicht mehr gibt, ist kein Fehler: Home
+Assistant zeigt dann seine eigene Meldung, die Karte zeichnet unverändert weiter.
 
 **Vorzeichenkonventionen, verbindlich:**
 
@@ -218,6 +240,7 @@ stehen, sind gar nicht erst enthalten.
   "power_kind": "watt",                      // siehe Abschnitt 5
   "icon": "mdi:radiator",                    // string, mdi-Name; leer = Karte wählt nach class
   "farbe": "",                               // string, CSS-Farbe als Override; leer = Akzent
+  "navigation": "/dashboard-pv/heizstab",    // string, Ziel eines Klicks; leer = More-Info
   "reihenfolge": 1,                          // int, nur informativ; maßgeblich ist die Arrayfolge
 
   // Leistungsermittlung — je nach power_kind ist nur eine Teilmenge belegt
@@ -347,6 +370,8 @@ Auflösungsreihenfolge je Gerät:
 | `sensor.skytech_hems_flow_config` fehlt | Deutscher Klartexthinweis statt Grafik: *„Das Skytech HEMS veröffentlicht noch keine Kartendaten. Im HEMS-Panel unter ‚Flow Card' die Veröffentlichung einschalten."* |
 | `schema_version` höher als unterstützt | Hinweis, die Karte zu aktualisieren. Kein Zeichenversuch. |
 | `devices` leer | Grafik ohne Geräteknoten zeichnen, kein Fehler. Ein Haus ohne HEMS-Geräte ist ein gültiger Zustand. |
+| Navigationsziel zeigt auf eine gelöschte Ansicht | Kein Fehler der Karte. Home Assistant meldet die unbekannte Ansicht selbst. |
+| Navigationsziel ist kein Pfad dieser Instanz | Die Karte ignoriert es und öffnet den More-Info-Dialog. |
 | `standard.pv_power_entities` leer | Kein PV-Knoten, kein Fehler. Eine gefüllte `pv_detail_entities` allein erzeugt ebenfalls keinen Knoten — sie beschreibt nur, woraus sich die Erzeugung zusammensetzt. |
 | `hard_lockout: true` | Abzeichen „HEMS gesperrt" am Kartenkopf. Werte werden weiter gezeichnet. |
 | `ems_enabled: false` | Abzeichen „HEMS aus". Werte werden weiter gezeichnet. |

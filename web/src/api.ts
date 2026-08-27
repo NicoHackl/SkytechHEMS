@@ -1,7 +1,7 @@
 import type {
   ConfigOptions, ConfigResponse, ConfigSaveResult, ConfigValidation,
-  ControlGroup, EntityOption, FlowPreview, FormulaTestResult, FormulaVariable, HaEntities,
-  StatusResponse,
+  ControlGroup, EntityOption, FlowDashboards, FlowPreview, FormulaTestResult, FormulaVariable,
+  HaEntities, StatusResponse,
 } from './types'
 
 /* Einziger Ort im Frontend, an dem fetch aufgerufen wird. Basis-Pfad, Header und
@@ -94,4 +94,8 @@ export const api = {
   /* Kartendaten der Flow Card (D-046): zeigt beide Nutzlasten und je Verweis,
      ob er gerade trägt. Antwortet immer mit 200. */
   flowPreview: () => request<FlowPreview>('/flow/preview'),
+
+  /* Dashboards und Ansichten für die Zielauswahl (D-049). Die Liste gibt es
+     nur über WebSocket; das Add-on holt sie und reicht sie hier durch. */
+  flowDashboards: () => request<FlowDashboards>('/flow/dashboards'),
 }
