@@ -61,7 +61,7 @@ description: >-
   Knoten eine Dashboard-Ansicht hinterlegen, auf die ein Klick springt, z. B.
   /dashboard-pv/pv. Leer heißt: der Klick öffnet wie bisher den
   More-Info-Dialog.
-version: "2.0.3"
+version: "2.0.4"
 slug: "skytech_hems"
 init: false
 arch:
