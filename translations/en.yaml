@@ -357,3 +357,43 @@ configuration:
       Discharge power in watts as its own, always positive sensor. Only
       together with flow_battery_charge_power_entity and only without
       flow_battery_power_entity.
+  flow_nav_pv:
+    name: Generation navigation target
+    description: >-
+      Dashboard view a click on the generation node navigates to, e.g.
+      /dashboard-pv/pv. Leaving it empty means the click opens the more-info
+      dialog of the related entity as before. Only a path within this Home
+      Assistant instance is accepted; it must start with a slash. The Ingress
+      panel under "Flow Card" lets you pick the view instead of typing the path.
+  flow_nav_grid:
+    name: Grid navigation target
+    description: >-
+      Dashboard view a click on the grid node navigates to, e.g.
+      /dashboard-pv/pv. Leaving it empty means the click opens the more-info
+      dialog of the related entity as before. Only a path within this Home
+      Assistant instance is accepted; it must start with a slash. The Ingress
+      panel under "Flow Card" lets you pick the view instead of typing the path.
+  flow_nav_house:
+    name: House navigation target
+    description: >-
+      Dashboard view a click on the house node navigates to, e.g.
+      /dashboard-pv/pv. Leaving it empty means the click opens the more-info
+      dialog of the related entity as before. Only a path within this Home
+      Assistant instance is accepted; it must start with a slash. The Ingress
+      panel under "Flow Card" lets you pick the view instead of typing the path.
+  flow_nav_battery:
+    name: Battery navigation target
+    description: >-
+      Dashboard view a click on the battery node navigates to, e.g.
+      /dashboard-pv/pv. Leaving it empty means the click opens the more-info
+      dialog of the related entity as before. Only a path within this Home
+      Assistant instance is accepted; it must start with a slash. The Ingress
+      panel under "Flow Card" lets you pick the view instead of typing the path.
+  flow_nav_rest:
+    name: Remaining house navigation target
+    description: >-
+      Dashboard view a click on the “remaining house” node navigates to, e.g.
+      /dashboard-pv/pv. Leaving it empty means the click opens the more-info
+      dialog of the related entity as before. Only a path within this Home
+      Assistant instance is accepted; it must start with a slash. The Ingress
+      panel under "Flow Card" lets you pick the view instead of typing the path.

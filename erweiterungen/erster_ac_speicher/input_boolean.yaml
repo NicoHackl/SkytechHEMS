@@ -1,0 +1,28 @@
+# Skytech HEMS — HA-Helfer für den ersten AC-Speicher (Anzeigename "Speicher 1")
+# Technischer Präfix: acspeicher1 (Begründung siehe README.md in diesem Ordner —
+# "speicher" ist für diese Anlage reserviert: ems_speicher_* gehört der bestehenden
+# E3DC-Regelung).
+# Domain: input_boolean
+
+input_boolean:
+  ems_acspeicher1_freigabe:
+    name: "EMS Speicher 1 Freigabe"
+    icon: mdi:home-battery
+    initial: off
+
+  ems_acspeicher1_technische_freigabe:
+    name: "EMS Speicher 1 technische Freigabe"
+    icon: mdi:home-battery
+    initial: off
+
+  # Bedienhelfer — optional mit Fallback "erlaubt", hier für echte Bedienbarkeit angelegt.
+  # Eine fehlende Entität gilt als "erlaubt", eine vorhandene mit ungültigem State als "gesperrt".
+  ems_acspeicher1_laden_erlaubt:
+    name: "EMS Speicher 1 Laden erlaubt"
+    icon: mdi:home-battery
+    initial: on
+
+  ems_acspeicher1_entladen_erlaubt:
+    name: "EMS Speicher 1 Entladen erlaubt"
+    icon: mdi:home-battery
+    initial: on

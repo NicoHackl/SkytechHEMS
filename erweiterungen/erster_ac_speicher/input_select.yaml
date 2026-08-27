@@ -1,0 +1,35 @@
+# Skytech HEMS — HA-Helfer für den ersten AC-Speicher (Anzeigename "Speicher 1")
+# Technischer Präfix: acspeicher1 (Begründung siehe README.md in diesem Ordner).
+# Domain: input_select
+
+input_select:
+  ems_acspeicher1_modus:
+    name: "EMS Speicher 1 Modus"
+    icon: mdi:home-battery
+    options:
+      - auto
+      - aus
+      - manuell
+    initial: manuell
+
+  # Bedienhelfer — legt fest, welche Richtung (Laden/Entladen) das HEMS grundsätzlich
+  # nutzen darf. Optional mit Fallback "standby", hier für echte Bedienbarkeit angelegt.
+  ems_acspeicher1_betriebsart:
+    name: "EMS Speicher 1 Betriebsart"
+    icon: mdi:home-battery
+    options:
+      - auto
+      - nur_entladen
+      - nur_laden
+      - standby
+    initial: auto
+
+  # Ausgabe (vom HEMS geschrieben) — kein Fallback, genau diese drei Optionen sind Pflicht.
+  ems_acspeicher1_anforderung_betriebsart:
+    name: "EMS Speicher 1 Anforderung Betriebsart"
+    icon: mdi:home-battery
+    options:
+      - entladen
+      - laden
+      - standby
+    initial: standby

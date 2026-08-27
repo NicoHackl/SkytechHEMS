@@ -625,6 +625,15 @@ class HEMSApp:
         domains = [d.strip() for d in raw.split(",") if d.strip()] or None
         return web.json_response({"entities": self.config.entities(domains)})
 
+    async def _handle_flow_dashboards(self, request: web.Request) -> web.Response:
+        """Dashboards und Ansichten für die Zielauswahl im Panel (D-049).
+
+        Antwortet immer mit 200: die Auswahl ist Bequemlichkeit. Fällt sie aus,
+        fällt die Seite auf ein Textfeld zurück und sagt, warum.
+        """
+        dashboards, warnungen = await self.ha.list_dashboards()
+        return web.json_response({"dashboards": dashboards, "warnungen": warnungen})
+
     async def _handle_flow_preview(self, request: web.Request) -> web.Response:
         """Zeigt, was die Karte gerade bekäme, und welcher Verweis gerade trägt.
 
@@ -734,6 +743,7 @@ class HEMSApp:
         app.router.add_post("/api/config/validate",       self._handle_config_validate)
         app.router.add_post("/api/config/sensors/test",   self._handle_sensors_test)
         app.router.add_get("/api/flow/preview",            self._handle_flow_preview)
+        app.router.add_get("/api/flow/dashboards",         self._handle_flow_dashboards)
         app.router.add_put("/api/config",                 self._handle_config_put)
         app.router.add_post("/api/config/restart",        self._handle_config_restart)
         app.router.add_post("/api/config/save-and-restart",

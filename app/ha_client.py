@@ -1,6 +1,7 @@
+import asyncio
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import aiohttp
 
@@ -12,6 +13,16 @@ log = logging.getLogger(__name__)
 # Für die lokale Entwicklung kann mit HA_URL / HA_TOKEN überschrieben werden.
 _HA_URL = os.environ.get("HA_URL", "http://supervisor/core")
 _HA_TOKEN = os.environ.get("HA_TOKEN", os.environ.get("SUPERVISOR_TOKEN", ""))
+
+# Die Dashboard-Liste gibt Home Assistant ausschliesslich ueber WebSocket
+# heraus; einen REST-Endpunkt dafuer gibt es nicht (D-049).
+_WS_URL = (_HA_URL.replace("https://", "wss://", 1).replace("http://", "ws://", 1)
+           + "/api/websocket")
+_WS_TIMEOUT_S = 10
+
+# url_path des Standard-Dashboards. In lovelace/dashboards/list taucht es
+# nicht auf -- es wird mit url_path None abgefragt und heisst im Adressfeld so.
+STANDARD_DASHBOARD = "lovelace"
 
 
 class HAClient:
@@ -138,3 +149,130 @@ class HAClient:
         except Exception as exc:
             log.warning("Zustand %s konnte nicht geschrieben werden: %s", entity_id, exc)
         return False
+
+    async def list_dashboards(self) -> Tuple[List[Dict[str, Any]], List[str]]:
+        """Dashboards samt Ansichten, fuer die Zielauswahl im Panel (D-049).
+
+        Home Assistant gibt die Lovelace-Konfiguration ausschliesslich ueber
+        WebSocket heraus; einen REST-Endpunkt dafuer gibt es nicht. Das ist die
+        einzige Stelle im Add-on, die WebSocket spricht.
+
+        Wirft nie: die Zielauswahl ist Bequemlichkeit, kein Regelpfad. Faellt
+        sie aus, faellt die Oberflaeche auf ein Textfeld zurueck.
+        """
+        if not _HA_TOKEN:
+            return [], ["Ohne Zugangstoken lassen sich die Dashboards nicht lesen."]
+        try:
+            return forme_dashboards(await self._hole_dashboard_rohdaten())
+        except asyncio.TimeoutError:
+            log.warning("Dashboards: Zeitueberschreitung beim WebSocket")
+            return [], ["Home Assistant hat nicht rechtzeitig geantwortet."]
+        except Exception as exc:
+            log.warning("Dashboards konnten nicht gelesen werden: %s", exc)
+            return [], ["Die Dashboards konnten nicht gelesen werden."]
+
+    async def _hole_dashboard_rohdaten(
+        self,
+    ) -> List[Tuple[Dict[str, Any], Optional[Dict[str, Any]], str]]:
+        """Der reine Protokollteil: verbinden, anmelden, abfragen."""
+        session = self._get_session()
+        async with session.ws_connect(_WS_URL) as ws:
+            await self._anmelden(ws)
+
+            naechste_id = 1
+
+            async def frage(nutzlast: Dict[str, Any]) -> Dict[str, Any]:
+                nonlocal naechste_id
+                kennung = naechste_id
+                naechste_id += 1
+                await ws.send_json({"id": kennung, **nutzlast})
+                while True:
+                    nachricht = await asyncio.wait_for(
+                        ws.receive_json(), timeout=_WS_TIMEOUT_S)
+                    if nachricht.get("id") == kennung and nachricht.get("type") == "result":
+                        return nachricht
+
+            liste = await frage({"type": "lovelace/dashboards/list"})
+            # Das Standard-Dashboard steht nicht in der Liste.
+            metadaten: List[Dict[str, Any]] = [{"url_path": None, "title": "Übersicht"}]
+            if liste.get("success"):
+                metadaten += [eintrag for eintrag in (liste.get("result") or [])
+                              if isinstance(eintrag, dict)]
+
+            rohdaten: List[Tuple[Dict[str, Any], Optional[Dict[str, Any]], str]] = []
+            for meta in metadaten:
+                antwort = await frage({
+                    "type": "lovelace/config", "url_path": meta.get("url_path"),
+                })
+                if antwort.get("success"):
+                    rohdaten.append((meta, antwort.get("result") or {}, ""))
+                else:
+                    fehler = (antwort.get("error") or {}).get("message") or "unbekannt"
+                    rohdaten.append((meta, None, str(fehler)))
+            return rohdaten
+
+    async def _anmelden(self, ws: aiohttp.ClientWebSocketResponse) -> None:
+        """Der Anmeldewechsel von Home Assistant: auth_required, auth, auth_ok."""
+        gruss = await asyncio.wait_for(ws.receive_json(), timeout=_WS_TIMEOUT_S)
+        if gruss.get("type") != "auth_required":
+            raise RuntimeError(f"Unerwartete Begruessung: {gruss.get('type')}")
+        await ws.send_json({"type": "auth", "access_token": _HA_TOKEN})
+        antwort = await asyncio.wait_for(ws.receive_json(), timeout=_WS_TIMEOUT_S)
+        if antwort.get("type") != "auth_ok":
+            raise RuntimeError("Anmeldung am WebSocket abgelehnt")
+
+
+# ---------------------------------------------------------------------------
+# Dashboards und Ansichten
+# ---------------------------------------------------------------------------
+
+def forme_dashboards(
+    rohdaten: List[Tuple[Dict[str, Any], Optional[Dict[str, Any]], str]],
+) -> Tuple[List[Dict[str, Any]], List[str]]:
+    """Bringt die WebSocket-Antworten in die Form, die das Panel braucht.
+
+    `rohdaten` ist je Dashboard ein Tripel aus Metadaten, Konfiguration und
+    Fehlertext. Bewusst eine reine Funktion neben dem Socket: nur so laesst
+    sich pruefen, was bei Strategie- und YAML-Dashboards herauskommt.
+    """
+    dashboards: List[Dict[str, Any]] = []
+    warnungen: List[str] = []
+
+    for meta, config, fehler in rohdaten:
+        url_path = _text(meta.get("url_path")) or STANDARD_DASHBOARD
+        titel = _text(meta.get("title")) or url_path
+
+        if fehler:
+            # YAML-Dashboards antworten je nach Konfiguration mit einem Fehler.
+            dashboards.append({"url_path": url_path, "title": titel, "views": []})
+            warnungen.append(
+                f"Die Ansichten von „{titel}“ konnten nicht gelesen werden.")
+            continue
+
+        views = (config or {}).get("views")
+        if not isinstance(views, list):
+            # Strategie-Dashboards bauen ihre Ansichten erst im Browser.
+            dashboards.append({"url_path": url_path, "title": titel, "views": []})
+            warnungen.append(
+                f"„{titel}“ ist ein Strategie-Dashboard und hat keine "
+                "einzelnen Ansichten.")
+            continue
+
+        dashboards.append({
+            "url_path": url_path,
+            "title": titel,
+            # Eine Ansicht ohne Pfad ist ueber ihre Position erreichbar.
+            "views": [
+                {
+                    "path": _text(view.get("path")) or str(index),
+                    "title": _text(view.get("title")) or _text(view.get("path")) or str(index),
+                }
+                for index, view in enumerate(views) if isinstance(view, dict)
+            ],
+        })
+
+    return dashboards, warnungen
+
+
+def _text(wert: Any) -> str:
+    return "" if wert is None else str(wert).strip()

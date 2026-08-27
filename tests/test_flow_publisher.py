@@ -420,3 +420,34 @@ def test_vorschau_loest_auch_die_aufschluesselung_auf():
     pfade = [pfad for pfad, _ in fp.collect_references(payload)]
     assert "standard.pv_power_entities[0]" in pfade
     assert "standard.pv_detail_entities[0]" in pfade
+
+
+def test_navigationsziele_stehen_in_der_nutzlast():
+    payload = _config(**{
+        **STANDARD,
+        "flow_nav_pv": "/dashboard-pv/pv",
+        "flow_nav_grid": "/dashboard-pv/netz",
+        "flow_nav_house": "/dashboard-pv/ems",
+        "flow_nav_battery": "/dashboard-pv/batterie",
+        "flow_nav_rest": "/dashboard-pv/überschussverbraucher",
+    })
+    standard = payload["standard"]
+    assert standard["pv_navigation"] == "/dashboard-pv/pv"
+    assert standard["grid_navigation"] == "/dashboard-pv/netz"
+    assert standard["house_navigation"] == "/dashboard-pv/ems"
+    assert standard["rest_navigation"] == "/dashboard-pv/überschussverbraucher"
+    assert standard["batterie"]["navigation"] == "/dashboard-pv/batterie"
+
+
+def test_navigationsziel_je_geraet_steht_in_der_nutzlast():
+    devices = [dict(device) for device in ALL_DEVICES]
+    devices[0]["flow_navigation"] = "/dashboard-pv/heizstab"
+    assert _by_id(_config(devices, **STANDARD))["heizstab"]["navigation"] \
+        == "/dashboard-pv/heizstab"
+
+
+def test_ohne_konfiguration_bleiben_die_ziele_leer():
+    standard = _config(**STANDARD)["standard"]
+    assert standard["pv_navigation"] == ""
+    assert standard["batterie"]["navigation"] == ""
+    assert _by_id(_config(**STANDARD))["heizstab"]["navigation"] == ""
