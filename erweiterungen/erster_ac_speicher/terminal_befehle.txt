@@ -1,0 +1,71 @@
+Marstek Venus E 3.0 — aktuelle AC-Leistung per Open API abrufen
+=================================================================
+
+WICHTIG, VORHER LESEN:
+Marsteks "Open API" ist KEINE HTTP/REST-API. Sie läuft über UDP mit
+JSON-RPC-Nachrichten auf Port 30000 (Standard). curl funktioniert deshalb
+nicht — die Befehle unten nutzen stattdessen nc (auf macOS vorinstalliert)
+bzw. python3 als Rückfallebene.
+
+Voraussetzung, einmalig: In der Marstek-App unter dem Gerät die "API"-Option
+aktivieren und den UDP-Port notieren (Standard 30000). Ohne das bleibt jede
+Anfrage unten unbeantwortet (Timeout, kein Fehler).
+
+IP wie angegeben übernommen: 190.168.0.147 — falls du stattdessen dein
+lokales Heimnetz meintest, wäre das vermutlich 192.168.0.147 (Class-C).
+In allen Befehlen einfach die IP ersetzen.
+
+-----------------------------------------------------------------
+Befehl A — ES.GetStatus (liefert SOC, Batterie- und Netzleistung)
+-----------------------------------------------------------------
+Feld bat_power = Leistung batterieseitig (DC).
+Felder ongrid_power / offgrid_power = Leistung netzseitig (AC) — das ist
+vermutlich der Wert, den du suchst ("aktive AC Lade-/Entladeleistung").
+Vorzeichen (Laden = +/−?) ist in der Doku nicht spezifiziert — einmal
+bewusst laden und einmal entladen lassen und den Wert vergleichen, um die
+Konvention selbst festzustellen.
+
+echo -n '{"id":1,"method":"ES.GetStatus","params":{"id":0}}' | nc -u -w2 -p 30000 190.168.0.147 30000
+
+-----------------------------------------------------------------
+Befehl B — Bat.GetStatus (Fallback, falls A nichts zurückgibt)
+-----------------------------------------------------------------
+Manche Venus-E-3.0-Firmwarestände (z. B. V139) unterstützen ES.GetStatus
+nicht und antworten nur auf Bat.GetStatus + ES.GetMode. Liefert SOC,
+Lade-/Entladeflags und Batterietemperatur, aber KEINE Watt-Leistung.
+
+echo -n '{"id":1,"method":"Bat.GetStatus","params":{"id":0}}' | nc -u -w2 -p 30000 190.168.0.147 30000
+
+-----------------------------------------------------------------
+Befehl C — Python-Variante (robuster, falls nc keine Antwort zeigt)
+-----------------------------------------------------------------
+Gleiche Anfrage wie A, mit explizitem 3-Sekunden-Timeout und Fehlermeldung
+statt stillem Hängenbleiben.
+
+python3 -c "
+import socket, json
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.bind(('', 30000))
+s.settimeout(3)
+req = json.dumps({'id': 1, 'method': 'ES.GetStatus', 'params': {'id': 0}}).encode()
+s.sendto(req, ('190.168.0.147', 30000))
+try:
+    data, _ = s.recvfrom(4096)
+    print(data.decode())
+except socket.timeout:
+    print('Keine Antwort — Open API im Marstek-App aktiviert? Port korrekt? IP erreichbar?')
+"
+
+-----------------------------------------------------------------
+Hinweis zu -p 30000 bei nc
+-----------------------------------------------------------------
+Marstek verlangt laut Community-Doku, dass Quell- und Zielport identisch
+sind (deshalb -p 30000 im nc-Aufruf, gleiches Prinzip im Python-bind()).
+Ist Port 30000 lokal bereits belegt, schlägt der Befehl mit "Address already
+in use" fehl — dann einen anderen Prozess, der den Port hält, beenden oder
+kurz warten.
+
+Quellen:
+- https://static-eu.marstekcloud.com/ems/resource/agreement/MarstekDeviceOpenApi.pdf
+- https://github.com/Randyocean/Marstek/blob/main/docs/marstek_device_openapi.MD
+- https://github.com/jaapp/ha-marstek-local-api
