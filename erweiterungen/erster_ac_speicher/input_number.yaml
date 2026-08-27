@@ -1,0 +1,70 @@
+# Skytech HEMS — HA-Helfer für den ersten AC-Speicher (Anzeigename "Speicher 1")
+# Technischer Präfix: acspeicher1 (Begründung siehe README.md in diesem Ordner).
+# Domain: input_number
+
+input_number:
+  # Global — einmal für die gesamte Anlage, nicht je Speicher. Existiert bislang nicht,
+  # weil dies der erste AC-Speicher (class: battery) ist; ab jetzt Pflicht.
+  # Startwert 30 W ist eine Annahme (Empfehlung aus dem Entwurfsdokument bei kurzem
+  # Regelzyklus) — im Ingress-Panel jederzeit änderbar.
+  ems_ac_speicher_entlade_abschlag_w:
+    name: "EMS AC-Speicher Entlade-Abschlag"
+    icon: mdi:home-battery
+    min: 0
+    max: 500
+    step: 5
+    unit_of_measurement: "W"
+    mode: box
+    initial: 30
+
+  ems_acspeicher1_prioritat:
+    name: "EMS Speicher 1 Priorität"
+    icon: mdi:numeric
+    min: 1
+    max: 100
+    step: 1
+    mode: box
+    initial: 50
+
+  # Bedienhelfer — unabhängig von "prioritat", regelt nur die Reihenfolge beim Entladen.
+  ems_acspeicher1_entlade_prioritat:
+    name: "EMS Speicher 1 Entladepriorität"
+    icon: mdi:numeric
+    min: 1
+    max: 100
+    step: 1
+    mode: box
+    initial: 50
+
+  ems_acspeicher1_soc_min_prozent:
+    name: "EMS Speicher 1 SOC Minimum"
+    icon: mdi:home-battery
+    min: 0
+    max: 100
+    step: 1
+    unit_of_measurement: "%"
+    mode: box
+    initial: 10
+
+  ems_acspeicher1_soc_max_prozent:
+    name: "EMS Speicher 1 SOC Maximum"
+    icon: mdi:home-battery
+    min: 0
+    max: 100
+    step: 1
+    unit_of_measurement: "%"
+    mode: box
+    initial: 100
+
+  # Ausgabe (vom HEMS geschrieben) — kein Fallback. min MUSS negativ sein, sonst rastet
+  # Home Assistant jede Entladeanforderung auf 0. Bereich an die 2500 W Lade-/Entladeleistung
+  # aus config.yaml angepasst (siehe README.md).
+  ems_acspeicher1_anforderung_leistung_w:
+    name: "EMS Speicher 1 Anforderung Leistung"
+    icon: mdi:home-battery
+    min: -2500
+    max: 2500
+    step: 1
+    unit_of_measurement: "W"
+    mode: box
+    initial: 0
