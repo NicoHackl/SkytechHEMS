@@ -326,15 +326,20 @@ def _inactive_reasons(device: Dict[str, Any]) -> List[str]:
             reasons.append(_BLOCK_TEXTS.get(blocked, str(blocked)))
         return reasons
 
-    diagnostics = device.get("entity_diagnostics") or {}
-    roles = {info.get("role"): str(info.get("state") or "")
-             for info in diagnostics.values() if isinstance(info, dict)}
-    if roles.get("technische_freigabe", "on") != "on":
-        reasons.append("Technische Freigabe aus")
-    if roles.get("freigabe", "on") != "on":
-        reasons.append("Freigabe aus")
+    # Die Reihenfolge ist die Aussage: die Karte zeigt nur den ERSTEN Grund,
+    # und das soll der sein, den der Nutzer selbst umlegen kann (D-050).
+    #
+    # `is False` statt `not …`: `None` heisst „in diesem Zyklus nicht gefragt"
+    # und darf keinen Grund erzeugen. Frueher wurde hier der AUFLOESUNGSZUSTAND
+    # aus `entity_diagnostics` (`valid`, `missing`, …) mit `"on"` verglichen —
+    # der ist nie `on`, also standen immer beide Gruende da.
     if device.get("source") == "aus":
         reasons.append("Gerätemodus aus")
+    else:
+        if device.get("freigabe") is False:
+            reasons.append("Freigabe aus")
+        if device.get("technische_freigabe") is False:
+            reasons.append("Technische Freigabe aus")
     if not reasons:
         reasons.append("Nicht freigegeben")
     return reasons

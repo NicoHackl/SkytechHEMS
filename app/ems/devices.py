@@ -64,6 +64,14 @@ class Device(ABC):
         self._runtime_active: bool = True
         self._inactive_reasons: List[str] = []
         self._write_error: str = ""
+        # Die beiden Freigaben dieses Zyklus, als WIRKSAME Entscheidung — unter
+        # Energy Pilot schlägt der Vorschlag den Nutzerschalter. `None` heißt
+        # „in diesem Zyklus nicht gefragt": bei source == 'aus' läuft die
+        # Freigabeprüfung gar nicht, dann darf auch kein Freigabegrund im Status
+        # stehen. Ohne diese Felder kannte der Status nur `eligible` und konnte
+        # nicht sagen, WELCHE der beiden Freigaben fehlt.
+        self._freigabe_technisch: Optional[bool] = None
+        self._freigabe_bedien: Optional[bool] = None
 
     # Vom Nutzer wählbare Gerätemodi. `auto` = Energy Pilot, `manuell` = normale
     # Regeln, `aus` = gerätespezifischer Kill-Switch.
@@ -77,6 +85,8 @@ class Device(ABC):
         self._runtime_active = True
         self._inactive_reasons = []
         self._write_error = ""
+        self._freigabe_technisch = None
+        self._freigabe_bedien = None
 
     # ------------------------------------------------------------------
     # Laufzeitgesundheit: Schreibziele und Schreibfehler
@@ -246,11 +256,25 @@ class Device(ABC):
         technische_freigabe = self._flag(
             st, f"input_boolean.ems_{pfx}_technische_freigabe", "technische_freigabe")
         user_freigabe = self._flag(st, f"input_boolean.ems_{pfx}_freigabe", "freigabe")
-        if not technische_freigabe:
-            return False
-        if self.source == "ep":
-            return self._ep_bool(st, "freigabe", user_freigabe)
-        return user_freigabe
+        # Die Bedienfreigabe wird auch dann aufgelöst, wenn die technische schon
+        # sperrt: der Status soll beide Schalter nennen können, nicht nur den,
+        # der zuerst greift.
+        bedien_freigabe = (self._ep_bool(st, "freigabe", user_freigabe)
+                           if self.source == "ep" else user_freigabe)
+        self._freigabe_technisch = technische_freigabe
+        self._freigabe_bedien = bedien_freigabe
+        return technische_freigabe and bedien_freigabe
+
+    def freigabe_status(self) -> Dict[str, Optional[bool]]:
+        """Die beiden Freigaben für `to_status_dict`.
+
+        Als eigene Methode, weil drei Geräteklassen ihr Statuswörterbuch
+        getrennt pflegen — getrennt gepflegte Felder laufen auseinander.
+        """
+        return {
+            "freigabe": self._freigabe_bedien,
+            "technische_freigabe": self._freigabe_technisch,
+        }
 
     # ------------------------------------------------------------------
     # EP-Vorschlagswerte (Energy Pilot) lesen – mit Fallback auf Nutzerwert.
@@ -862,6 +886,7 @@ class ControllableDevice(Device):
             "label":                 self.label,
             "priority":              self.priority,
             "eligible":              self.eligible,
+            **self.freigabe_status(),
             "source":                self.source,
             "ep_proposal_status":    self._ep_proposal_status,
             "entity_diagnostics":    self._entity_diagnostics,
@@ -1117,6 +1142,7 @@ class BinaryDevice(Device):
             "label":                self.label,
             "priority":             self.priority,
             "eligible":             self.eligible,
+            **self.freigabe_status(),
             "source":               self.source,
             "ep_proposal_status":   self._ep_proposal_status,
             "entity_diagnostics":   self._entity_diagnostics,
@@ -1826,6 +1852,7 @@ class BatteryDevice(ControllableDevice):
             "priority":              self.priority,
             "entlade_prioritat":     self.entlade_priority,
             "eligible":              self.eligible,
+            **self.freigabe_status(),
             "source":                self.source,
             "ep_proposal_status":    self._ep_proposal_status,
             "entity_diagnostics":    self._entity_diagnostics,

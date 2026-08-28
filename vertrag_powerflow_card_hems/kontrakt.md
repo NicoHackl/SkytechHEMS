@@ -318,6 +318,11 @@ Wird nach **jedem** abgeschlossenen Regelzyklus geschrieben.
 }
 ```
 
+`inactive_reasons` ist **nach Handlungsrelevanz sortiert**: der erste Eintrag ist der Grund, den
+der Nutzer am ehesten selbst beheben kann. Die Karte zeigt genau diesen einen. Konkret steht die
+Bedienfreigabe deshalb vor der technischen Freigabe — sind beide aus, lautet der erste Eintrag
+`"Freigabe aus"`. Der Erzeuger darf die Reihenfolge nicht als beliebig behandeln.
+
 `leistung_w` ist bewusst **nicht** der Primärwert. Sie wird nur benutzt, wenn die Karte den
 Direktwert nicht auflösen kann — siehe Abschnitt 6.
 

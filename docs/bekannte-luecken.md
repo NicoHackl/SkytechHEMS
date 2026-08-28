@@ -16,6 +16,17 @@ Stand: 21.08.2026.
 
 Dinge, die schon einmal Zeit gekostet haben:
 
+- **`entity_diagnostics[…]["state"]` ist der Auflösungszustand, nicht der HA-State.** Dort steht
+  `valid`, `missing`, `invalid` oder `unavailable` — nie `on`/`off` und nie der Zahlenwert
+  (`app/ems/devices.py`, `_note()`). Wer ihn mit einem HA-State vergleicht, bekommt eine Bedingung,
+  die immer zutrifft. Genau daran sind die Freigabegründe der Power Flow Card gescheitert: sie
+  meldeten jedem gesperrten Gerät „Technische Freigabe aus", gleich wie die Schalter standen. Wird
+  ein *Wert* gebraucht, muss ihn das Gerät ausdrücklich in `to_status_dict()` legen — siehe
+  `freigabe_status()`.
+- **Von Hand gebaute Statuseinträge in Tests prüfen nichts.** Derselbe Fehler stand in
+  `tests/test_flow_publisher.py` als bestätigende Vorlage (`"state": "on"`), eine Form, die
+  `to_status_dict()` nie erzeugt. Für alles, was am Statuswörterbuch hängt, gehört mindestens ein
+  Test über einen echten `EMSController.run_cycle()` dazu.
 - **`schutz_w` ist nicht die geschützte Mindestleistung.** `schutz_w` ist der effektive Schutz
   (`Sockel + reserve_w + globaler Puffer`, geklemmt). Der Energy Pilot verglich anfangs dagegen und
   zeigte 900 W statt der eingetragenen 600 W. Der rohe Nutzerwert steht in

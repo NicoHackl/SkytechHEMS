@@ -8,6 +8,14 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Behoben
+
+- **Die Power Flow Card nennt jetzt die Freigabe, die tatsächlich fehlt.** Unter einem gesperrten
+  Überschussverbraucher stand bisher immer „Technische Freigabe aus" — auch dann, wenn die
+  technische Freigabe an war und nur die Bedienfreigabe fehlte. Sind beide aus, steht „Freigabe
+  aus": der Schalter, den man selbst umlegt, wird zuerst genannt. Gilt für regelbare, binäre und
+  Speichergeräte gleichermaßen.
+
 ### Hinzugefügt
 
 - **Navigationsziele für die Power Flow Card.** Je Knoten — Erzeugung, Netz, Haus, Übriges Haus,

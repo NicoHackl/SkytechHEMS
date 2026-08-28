@@ -88,6 +88,13 @@ Ein einzelnes Gerät mit kaputtem Schreibziel macht den Zyklus **nicht** fehlerh
 `devices_inactive_runtime` und trägt selbst `runtime_active: false` samt `inactive_reasons` und
 `write_error`.
 
+Je Gerät stehen außerdem `freigabe` und `technische_freigabe` im Status: die beiden Freigaben
+dieses Zyklus als **wirksame** Entscheidung — unter Energy Pilot schlägt der Vorschlag den
+Nutzerschalter. `null` heißt „in diesem Zyklus nicht gefragt": bei `source: "aus"` läuft die
+Freigabeprüfung gar nicht. Aus diesen beiden Feldern bildet der Kartenvertrag seine
+`inactive_reasons` (D-050). Sie sind **nicht** aus `entity_diagnostics` ableitbar — dort steht der
+Auflösungszustand einer Entität (`valid`, `missing`, …), nicht ihr HA-State.
+
 ### `GET /api/controls`
 
 Liefert die frischen Zustände aller EMS-Helfer, gefiltert auf die Präfixe
