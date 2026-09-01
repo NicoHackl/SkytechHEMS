@@ -29,14 +29,19 @@ Modbus/Cloud-Aufrufe übersetzt hat — durch sauberen, getesteten Python-Code s
   Geräteklasse `battery` in HEMS liest bereits beliebige Entity-IDs (`soc_entity`,
   `charge_power_entity`/`discharge_power_entity` bzw. `power_entity`) — diese Integration liefert
   genau solche Entitäten, HEMS-Config zeigt einfach darauf. Keine Codeänderung in HEMS nötig.
-- **Ein Wrapper, mehrere Speicher, mehrere Hersteller.** Eine Integration (ein `domain`), pro
-  physischem Speicher ein eigener `ConfigEntry` (HA-Standardmuster: Integration mehrfach über die
-  UI hinzufügen). Herstellerunterschiede stecken hinter einem Adapter-Interface — neuer Hersteller
-  = neuer Adapter, keine Änderung an Coordinator/Platforms/HEMS-Anbindung.
-- **Transport pro Adapter, nicht pro Integration.** Marstek: lokale UDP-Open-API (JSON-RPC, Port
-  30000) statt Modbus TCP — offizielles, zweckgebautes Protokoll, weniger Overhead pro Abfrage,
-  läuft unabhängig vom Firmware-Mindeststand, den natives Modbus TCP voraussetzt. Spätere
-  Hersteller bringen ihr eigenes Protokoll (Modbus, REST, Cloud …) mit — bleibt Adapter-intern.
+- **Ein Wrapper, mehrere Speicher, mehrere Hersteller, mehrere Protokolle.** Eine Integration (ein
+  `domain`), pro physischem Speicher ein eigener `ConfigEntry` (HA-Standardmuster: Integration
+  mehrfach über die UI hinzufügen). Die Adapter-Achse ist **Hersteller × Protokoll**, nicht nur
+  Hersteller — derselbe Hersteller kann mehrere Adapter haben (Marstek bietet z. B. UDP Local API
+  **und** Modbus TCP parallel an). Neuer Adapter (neuer Hersteller **oder** neues Protokoll für
+  einen bestehenden Hersteller) = neue Datei unter `adapters/`, keine Änderung an
+  Coordinator/Platforms/HEMS-Anbindung.
+- **Transport ist reines Adapter-Detail, beliebiges IP-Protokoll passt.** Marstek startet mit der
+  lokalen UDP-Open-API (JSON-RPC, Port 30000) statt Modbus TCP — offizielles, zweckgebautes
+  Protokoll, weniger Overhead pro Abfrage, läuft unabhängig vom Firmware-Mindeststand, den natives
+  Modbus TCP voraussetzt. Das Adapter-Interface (Abschnitt 4) verlangt nur
+  `connect()`/`read()`/`write_*()`/`close()` — dahinter passt jedes netzwerkbasierte Protokoll:
+  Modbus TCP, HTTP/REST, MQTT, künftig auch Cloud-APIs. Details und Grenzen dazu in Abschnitt 13.
 
 ## 3. Verzeichnisstruktur (Zielrepo)
 
@@ -122,14 +127,18 @@ Sensor → Speicher geht in sicheren Zustand). Diese Integration muss dafür nic
 ## 6. Config-Flow
 
 1. **Hersteller wählen** (`SelectSelector`, aktuell einzige Option „Marstek").
-2. **Verbindungsdaten je Hersteller** — bei Marstek: Host/IP (Pflicht), UDP-Port (Default 30000,
-   editierbar), optional Discovery-Button.
-3. **Verbindungstest** vor Abschluss (`connect()` + `read()` einmal ausführen) — schlägt er fehl,
+2. **Protokoll wählen**, falls der gewählte Hersteller mehr als einen Adapter hat (bei Marstek
+   künftig z. B. „UDP Local API" vs. „Modbus TCP") — Schritt entfällt automatisch, wenn nur ein
+   Adapter existiert.
+3. **Verbindungsdaten je Adapter** — bei Marstek/UDP: Host/IP (Pflicht), UDP-Port (Default 30000,
+   editierbar), optional Discovery-Button. Bei einem künftigen Modbus-Adapter entsprechend
+   Host/IP + TCP-Port + Unit-ID.
+4. **Verbindungstest** vor Abschluss (`connect()` + `read()` einmal ausführen) — schlägt er fehl,
    bleibt der Flow im Fehlerzustand statt einen kaputten Entry anzulegen.
-4. `unique_id` je Entry aus Host+Port (oder, falls die Marstek-Antwort eine Geräte-/MAC-ID liefert,
+5. `unique_id` je Entry aus Host+Port (oder, falls die Marstek-Antwort eine Geräte-/MAC-ID liefert,
    daraus) — verhindert doppelte Entries für denselben Speicher.
 
-Mehrere Speicher = Schritt 1–4 mehrfach über „Integration hinzufügen" in der HA-UI. Jeder Entry
+Mehrere Speicher = Schritt 1–5 mehrfach über „Integration hinzufügen" in der HA-UI. Jeder Entry
 bekommt einen eigenen Coordinator, eigenes Device in der Device-Registry, eigene Entity-IDs
 (Präfix aus einem im Flow vergebenen Anzeigenamen).
 
@@ -197,7 +206,33 @@ dieser Integration selbst, um die HEMS-Grenze („kein direktes Schalten") nicht
 - CI: `pytest` + `ruff` wie im HEMS-Repo, plus `hassfest`/`hacs` Validierungsworkflow (HA-Standard
   für Integrationen, prüft `manifest.json`/`hacs.json`-Konsistenz).
 
-## 12. Nächste Schritte
+## 13. Erweiterbarkeit auf weitere Protokolle
+
+Adapter-Achse ist **Hersteller × Protokoll** (Abschnitt 2). Grundsätzlich passt jedes
+netzwerkbasierte (IP-)Protokoll hinter `StorageAdapter` aus Abschnitt 4 — Beispiele:
+
+| Protokoll | Beispiel-Einsatz | Coordinator-Modell | Bibliothek |
+|---|---|---|---|
+| UDP JSON-RPC | Marstek Local API | Poll (Coordinator fragt aktiv ab) | eigener Client, s. Abschnitt 5 |
+| Modbus TCP | Marstek (Firmware ≥144), viele andere Wechselrichter/Speicher (Growatt, Deye, Sofar, SolarEdge …) | Poll | `pymodbus` |
+| HTTP/REST | Herstelleranbindungen mit lokalem Webserver (z. B. manche Cloud-Gateways im LAN-Modus) | Poll | `aiohttp` (in HA ohnehin vorhanden) |
+| MQTT | Geräte, die selbst Telemetrie publizieren | **Push**, nicht Poll — siehe unten | `paho-mqtt` bzw. HAs `mqtt`-Integration als Basis |
+
+**Poll vs. Push — wichtiger Unterschied fürs Coordinator-Design:** UDP/Modbus/HTTP sind
+Request-Response — der `DataUpdateCoordinator` fragt aktiv in festem Intervall ab, `read()` liefert
+synchron den aktuellen Wert. MQTT (und ähnliche Publish-Subscribe-Protokolle) schieben Werte
+unaufgefordert — dafür braucht so ein Adapter statt eines aktiv abfragenden `read()` einen
+Hintergrund-Listener, der den letzten empfangenen Wert zwischenspeichert und per `read()` nur noch
+zurückgibt (`read()` wird dadurch nie selbst blockierend/netzwerkaktiv). Nach außen (Coordinator,
+Platforms, HEMS-Anbindung) ändert sich nichts — das Interface aus Abschnitt 4 bleibt gleich, nur
+die Implementierung dahinter.
+
+**Nicht automatisch erweiterbar:** Nicht-IP-Transporte (Bluetooth LE, proprietäre USB/Seriell-Dongles)
+brauchen einen grundsätzlich anderen Adapter-Unterbau (z. B. `bleak` statt Socket) — passen zwar
+noch ins gleiche `StorageAdapter`-Protocol, aber nicht in die Prämisse „grundsätzlich immer
+Netzwerk (IP)" aus dieser Planung. Bei Bedarf eigener Punkt, kein Blocker für den aktuellen Plan.
+
+## 14. Nächste Schritte
 
 1. Marstek Open-API-Doku vollständig lesen, exakte Commands für Punkt 5 festhalten.
 2. Neues Repo anlegen, dieses Dokument dorthin kopieren, `AGENTS.md`/`CLAUDE.md` fürs neue Repo
