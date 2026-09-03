@@ -53,6 +53,17 @@ Dinge, die schon einmal Zeit gekostet haben:
   AC-Speicher des HEMS benutzt deshalb `acspeicher1` als Präfix, sein globaler Helfer heißt
   `input_number.ems_ac_speicher_entlade_abschlag_w`. Der E3DC ist **kein** HEMS-Gerät: er regelt
   sich selbst, ist aber bewusst in der Hausleistungsbilanz für die AC-Entladung enthalten.
+- **`acspeicher1` bekommt künftig eine zusätzliche Datenquelle für seine Lese-Entitäten.** Für
+  Marstek-Speicher entsteht das eigenständige Repo
+  [Skytech-HEMS-Battery-Provider](https://github.com/NicoHackl/Skytech-HEMS-Battery-Provider)
+  (Home-Assistant-Integration `battery_bridge`) — sobald produktiv, liefert es
+  `sensor.<prefix>_soc`/`_ist_ladeleistung`/`_ist_entladeleistung` für die
+  `soc_entity`/`charge_power_entity`/`discharge_power_entity`-Felder aus
+  [device_classes/battery.md](device_classes/battery.md). Welche Entity-IDs das für `acspeicher1`
+  konkret werden, steht erst nach der Inbetriebnahme fest (offen, siehe F-13/F-14 oben) — **nicht
+  vorab eintragen**. Die Schreibseite bleibt außerhalb des HEMS: die Integration selbst übersetzt
+  die `anforderung_*`-Helfer künftig in ihre eigenen Sollwert-Entities (keine Codeänderung in HEMS
+  nötig), genau wie bisher die Modbus-Automation — nur eingebaut statt handgepflegt.
 - **Der Sollwert des Speichers ist signiert.** `input_number.ems_<prefix>_anforderung_leistung_w`
   trägt „+ laden / − entladen" in einer Entität. Der HA-Helfer braucht ein **negatives Minimum** —
   steht dort `min: 0`, klemmt Home Assistant jede Entladeanforderung serverseitig auf 0 und der
@@ -92,7 +103,7 @@ Der Code ist gebaut und getestet; diese Fragen betreffen die **Inbetriebnahme am
 
 | # | Frage | Blockiert |
 |---|---|---|
-| F-13 | Welches Gerät wird der AC-Speicher? Liefert `soc_entity`, die Ist-Leistungssensoren und `capacity_kwh`; welche festen Lade-/Entladegrenzen werden als `available_*_w` eingetragen? | Inbetriebnahme, nicht den Code |
+| F-13 | ~~Welches Gerät wird der AC-Speicher?~~ **Beantwortet (03.09.2026):** Marstek Venus E 3.0, Präfix `acspeicher1`, aktuell über die bestehende Modbus-Automation angebunden. | — |
 | F-14 | Bringt das Gerät eine eigene Nulleinspeisung mit, und lässt sie sich abschalten? Nicht abschaltbar heißt: HEMS und Gerät regeln gegeneinander | Inbetriebnahme |
 
 ## Bewusst nicht umgesetzt

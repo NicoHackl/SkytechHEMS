@@ -62,12 +62,15 @@ Deckung des Hausverbrauchs. Entwurf v5:
 | Phase 4 — Mehrspeicher, getrennte Lade-/Entladepriorität | fertig | D-040 |
 | Phase 5 — Energy-Pilot-Vorschlagsfelder für Speicher | offen | Entwurf, Abschnitt 13 |
 | Phase 6 — Netzladen mit dynamischen Tarifen | zurückgestellt | Entwurf, Abschnitt 11; B-4 |
-| Inbetriebnahme am realen Gerät | offen | F-13, F-14 |
+| Inbetriebnahme am realen Gerät | in Arbeit | F-14 |
 
-Der Code läuft gegen Tests und einen synthetischen HA-Zustand. **Erprobt am Gerät ist er nicht** —
-es gibt noch keinen AC-Speicher. Seit D-043 sind die physischen Grenzen die direkt konfigurierten
-Wattwerte `available_charge_power_w` und `available_discharge_power_w`. Die verbliebenen Fragen stehen in
-[bekannte-luecken.md](bekannte-luecken.md).
+Seit 03.09.2026 ist ein echter AC-Speicher angeschlossen: ein Marstek Venus E 3.0, Präfix
+`acspeicher1`, aktuell über die bestehende Modbus-Automation angebunden. F-13 damit beantwortet —
+F-14 bleibt offen. Seit D-043 sind die physischen Grenzen die direkt konfigurierten Wattwerte
+`available_charge_power_w` und `available_discharge_power_w`. Die im laufenden Betrieb noch zu
+bestätigenden Regelverhalten-Details (Vorzeichen, Sensor-Skew) stehen weiterhin in
+[bekannte-luecken.md](bekannte-luecken.md) — „in Arbeit" heißt hier: angeschlossen und aktiv
+gesteuert, nicht: jeder Punkt der Inbetriebnahme abgeschlossen.
 
 Der vorhandene E3DC ist bewusst **kein** HEMS-Gerät: Er regelt sich selbst; seine Leistung fließt
 aber bewusst in die separate Hausleistungsbilanz für die AC-Entladung ein (D-044).
