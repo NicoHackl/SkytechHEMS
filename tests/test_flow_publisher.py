@@ -10,11 +10,18 @@ gültigen Gerätekonfigurationen, derselben Menge, die der Controller registrier
 
 import asyncio
 
+import pytest
+
 import flow_publisher as fp
 from configuration import normalize_options, validate_options
+from ems.controller import EMSController
 from main import _build_device_controls_schema
 
-from test_run_cycle import BIN_FALLBACKS, CTRL_FALLBACKS
+from conftest import make_states
+from test_run_cycle import (
+    BIN_FALLBACKS, CTRL_FALLBACKS,
+    _battery, _battery_cfg, _binary, _controllable_w, _global,
+)
 
 NOW = "23.08.2026 18:04:12"
 
@@ -255,21 +262,44 @@ def test_kennzahlen_des_zyklus_stehen_im_status():
     assert payload["global_mode"] == "manuell"
 
 
+def _gesperrt(**over):
+    """Ein freigabegesperrtes Gerät, wie `to_status_dict()` es liefert."""
+    eintrag = {"id": "heizstab", "type": "controllable", "actual_w": 0.0,
+               "eligible": False, "runtime_active": True, "source": "user",
+               "freigabe": True, "technische_freigabe": True}
+    eintrag.update(over)
+    return fp.build_status_payload(_status([eintrag]), 1, NOW)["devices"]["heizstab"]
+
+
 def test_geraet_ohne_freigabe_gilt_nicht_als_aktiv():
     # `runtime_active` im Vertrag heißt „regelt gerade mit". Im Code ist das
     # eligible UND runtime_active – ein gesperrtes Gerät ist technisch heil.
-    status = _status([
-        {"id": "heizstab", "type": "controllable", "actual_w": 0.0,
-         "eligible": False, "runtime_active": True, "source": "user",
-         "entity_diagnostics": {
-             "input_boolean.ems_heizstab_freigabe": {"role": "freigabe", "state": "off"},
-             "input_boolean.ems_heizstab_technische_freigabe":
-                 {"role": "technische_freigabe", "state": "on"},
-         }},
-    ])
-    entry = fp.build_status_payload(status, 1, NOW)["devices"]["heizstab"]
+    entry = _gesperrt(freigabe=False)
     assert entry["runtime_active"] is False
     assert entry["inactive_reasons"] == ["Freigabe aus"]
+
+
+def test_nur_die_tatsaechlich_fehlende_freigabe_wird_genannt():
+    # Der Fehler, den das behebt: hier stand früher IMMER „Technische Freigabe
+    # aus", weil der Auflösungszustand einer Entität (`valid`) mit `"on"`
+    # verglichen wurde. Die Karte zeigt nur den ersten Grund.
+    assert _gesperrt(technische_freigabe=False)["inactive_reasons"] == [
+        "Technische Freigabe aus"]
+    assert _gesperrt(freigabe=False)["inactive_reasons"] == ["Freigabe aus"]
+
+
+def test_bei_beiden_freigaben_steht_die_bedienfreigabe_vorn():
+    # D-050: die Karte zeigt Position 0, und das soll der Schalter sein, den der
+    # Nutzer selbst umlegt.
+    assert _gesperrt(freigabe=False, technische_freigabe=False)["inactive_reasons"] == [
+        "Freigabe aus", "Technische Freigabe aus"]
+
+
+def test_ein_abgeschaltetes_geraet_nennt_nur_den_modus():
+    # Bei source == 'aus' läuft die Freigabeprüfung gar nicht; beide Felder sind
+    # dann None und dürfen keinen Freigabegrund erzeugen.
+    entry = _gesperrt(source="aus", freigabe=None, technische_freigabe=None)
+    assert entry["inactive_reasons"] == ["Gerätemodus aus"]
 
 
 def test_inaktive_gruende_werden_als_deutscher_text_geliefert():
@@ -451,3 +481,88 @@ def test_ohne_konfiguration_bleiben_die_ziele_leer():
     assert standard["pv_navigation"] == ""
     assert standard["batterie"]["navigation"] == ""
     assert _by_id(_config(**STANDARD))["heizstab"]["navigation"] == ""
+
+
+# ---------------------------------------------------------------------------
+# Brücke: echter Regelzyklus → Statusnutzlast
+# ---------------------------------------------------------------------------
+
+# Die Tests oben bauen ihre Geräteeinträge von Hand. Genau daran ist der Fehler
+# vorbeigelaufen, den diese Datei jetzt absichert: der Publisher las den
+# AUFLÖSUNGSZUSTAND einer Entität (`valid`, `missing`, …) und verglich ihn mit
+# `"on"`. Ein handgeschriebener Eintrag mit `"state": "on"` bestätigte das —
+# eine Form, die `to_status_dict()` nie erzeugt.
+#
+# Diese Tests nehmen den Status deshalb aus einem ECHTEN `run_cycle()`. Sie
+# fallen, sobald sich ein Feldname im Statuswörterbuch ändert, ohne dass der
+# Publisher mitgezogen wird.
+
+def _gruende_aus_echtem_zyklus(devices, states):
+    ctrl = EMSController(devices, residual_power_entity="sensor.s")
+    res = ctrl.run_cycle(make_states({**_global(), **states, "sensor.s": 0}))
+    payload = fp.build_status_payload(res["status"], 1, NOW)
+    return {gid: eintrag["inactive_reasons"] for gid, eintrag in payload["devices"].items()}
+
+
+@pytest.mark.parametrize("freigabe,technische,erwartet", [
+    ("on",  "off", ["Technische Freigabe aus"]),
+    ("off", "on",  ["Freigabe aus"]),
+    ("off", "off", ["Freigabe aus", "Technische Freigabe aus"]),
+    ("on",  "on",  []),
+])
+def test_regelbares_geraet_nennt_die_richtige_freigabe(freigabe, technische, erwartet):
+    gruende = _gruende_aus_echtem_zyklus(
+        [{"name": "heizstab", "class": "controllable", "allowed_modes": "auto",
+          "actual_power_entity": "sensor.heizstab_ist", **CTRL_FALLBACKS}],
+        {**_controllable_w("heizstab"),
+         "input_boolean.ems_heizstab_freigabe": freigabe,
+         "input_boolean.ems_heizstab_technische_freigabe": technische,
+         "sensor.heizstab_ist": 0},
+    )
+    assert gruende["heizstab"] == erwartet
+
+
+@pytest.mark.parametrize("freigabe,technische,erwartet", [
+    ("on",  "off", ["Technische Freigabe aus"]),
+    ("off", "on",  ["Freigabe aus"]),
+    ("off", "off", ["Freigabe aus", "Technische Freigabe aus"]),
+])
+def test_binaeres_geraet_nennt_die_richtige_freigabe(freigabe, technische, erwartet):
+    gruende = _gruende_aus_echtem_zyklus(
+        [{"name": "heizlufter_1", "class": "binary", "allowed_modes": "auto",
+          "switch_entity": "switch.heizlufter_1", **BIN_FALLBACKS}],
+        {**_binary("heizlufter_1"),
+         "input_boolean.ems_heizlufter_1_freigabe": freigabe,
+         "input_boolean.ems_heizlufter_1_technische_freigabe": technische,
+         "switch.heizlufter_1": "off"},
+    )
+    assert gruende["heizlufter_1"] == erwartet
+
+
+@pytest.mark.parametrize("freigabe,technische,erwartet", [
+    ("on",  "off", ["Technische Freigabe aus"]),
+    ("off", "on",  ["Freigabe aus"]),
+    ("off", "off", ["Freigabe aus", "Technische Freigabe aus"]),
+])
+def test_speicher_nennt_die_richtige_freigabe(freigabe, technische, erwartet):
+    gruende = _gruende_aus_echtem_zyklus(
+        [_battery_cfg("acspeicher1")],
+        {**_battery("acspeicher1"),
+         "input_boolean.ems_acspeicher1_freigabe": freigabe,
+         "input_boolean.ems_acspeicher1_technische_freigabe": technische},
+    )
+    assert gruende["acspeicher1"] == erwartet
+
+
+def test_ein_abgeschaltetes_geraet_meldet_keine_freigabe():
+    # Gerätemodus 'aus': die Freigabeprüfung läuft gar nicht, beide Felder
+    # bleiben None – im Status darf dann nur der Modus stehen.
+    gruende = _gruende_aus_echtem_zyklus(
+        [{"name": "heizstab", "class": "controllable", "allowed_modes": "auto",
+          "actual_power_entity": "sensor.heizstab_ist", **CTRL_FALLBACKS}],
+        {**_controllable_w("heizstab"),
+         "input_select.ems_heizstab_modus": "aus",
+         "input_boolean.ems_heizstab_freigabe": "off",
+         "sensor.heizstab_ist": 0},
+    )
+    assert gruende["heizstab"] == ["Gerätemodus aus"]
