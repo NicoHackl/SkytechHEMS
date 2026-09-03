@@ -797,6 +797,32 @@ class ControllableDevice(Device):
         self._alloc_w = 0.0
         return remaining_w
 
+    def allocate_protected_minimum(self, remaining_w: float) -> float:
+        """Teilt den priorisierten Schutzsockel zu, ohne die technische Grenze zu brechen.
+
+        Der Schutzsockel ist keine zweite technische Einschaltgrenze: Reicht der
+        Pool für das technische Minimum, aber nicht für den vollständigen
+        Schutz, darf das Gerät mit dem verfügbaren Teil weiterlaufen. Reicht er
+        nicht einmal für die technische Untergrenze, bleibt das Gerät aus und
+        ein niedriger-priores Gerät darf seinen kleineren Startwert noch prüfen.
+        """
+        if not self.eligible or remaining_w <= 0:
+            self._alloc_w = 0.0
+            return remaining_w
+
+        min_w = self.min_technisch_w
+        if remaining_w < min_w:
+            self._alloc_w = 0.0
+            return remaining_w
+
+        protected_w = max(self._schutz_w, min_w)
+        if protected_w <= 0:
+            self._alloc_w = 0.0
+            return remaining_w
+
+        self._alloc_w = min(remaining_w, protected_w)
+        return remaining_w - self._alloc_w
+
     def allocate_surplus(self, remaining_w: float) -> float:
         """Durchlauf 2: nachdem alle Geräte ihr technisches Minimum haben, den
         Überschuss in Prioritätsreihenfolge (höchste Priorität zuerst) bis
@@ -1588,6 +1614,12 @@ class BatteryDevice(ControllableDevice):
             self._alloc_w = 0.0
             return remaining_w
         return super().allocate_minimum(remaining_w)
+
+    def allocate_protected_minimum(self, remaining_w: float) -> float:
+        if not self._darf_laden():
+            self._alloc_w = 0.0
+            return remaining_w
+        return super().allocate_protected_minimum(remaining_w)
 
     def allocate_surplus(self, remaining_w: float) -> float:
         return super().allocate_surplus(remaining_w) if self._darf_laden() else remaining_w

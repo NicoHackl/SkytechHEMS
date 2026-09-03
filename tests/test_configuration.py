@@ -125,6 +125,14 @@ def test_globale_defaults_werden_gesetzt():
     assert result["residual_power_entity"] == cfg.DEFAULT_RESIDUAL_ENTITY
     assert result["battery_residual_power_entity"] == ""
     assert result["speicher_in_residual_enthalten"] is True
+    assert result["protected_minimum_scope"] == "binary_only"
+
+
+def test_gueltigkeitsbereich_der_geschuetzten_mindestleistung_wird_geprueft():
+    assert cfg.validate_options(
+        options(protected_minimum_scope="binary_and_controllable")).valid
+    result = cfg.validate_options(options(protected_minimum_scope="beides_immer"))
+    assert "protected_minimum_scope" in result.field_errors
 
 
 def test_intervall_ausserhalb_des_bereichs_ist_ein_fehler():

@@ -225,6 +225,137 @@ def test_geschuetzt_protects_power_from_lower_priority_binary():
 
 
 # ---------------------------------------------------------------------------
+# Geschützte Mindestleistung auch zwischen regelbaren Verbrauchern
+# ---------------------------------------------------------------------------
+
+def _allocations(result):
+    return {
+        device["id"]: device["alloc_w"]
+        for device in result["status"]["devices"]
+        if "alloc_w" in device
+    }
+
+
+def _protected_controller(config):
+    return EMSController(
+        config,
+        residual_power_entity="sensor.s",
+        protected_minimum_scope="binary_and_controllable",
+    )
+
+
+def test_geschuetzte_mindestleistungen_werden_vor_zusatzleistung_verteilt():
+    # Beispiel 1: Erst erhalten beide regelbaren Geräte ihren Schutzsockel
+    # (je 1 kW); der verbleibende halbe kW geht danach an Prio 1.
+    ctrl = _protected_controller([
+        {"name": "prio1", "class": "controllable", "allowed_modes": "auto",
+         "actual_power_entity": "sensor.prio1", **CTRL_FALLBACKS},
+        {"name": "prio2", "class": "controllable", "allowed_modes": "auto",
+         "actual_power_entity": "sensor.prio2", **CTRL_FALLBACKS},
+    ])
+    states = {
+        **_global(),
+        **_controllable_w("prio1", prio=1, min_w=0, max_w=2500, geschuetzt=1000,
+                          actual=1500, setpoint=1500),
+        **_controllable_w("prio2", prio=2, min_w=0, max_w=2500, geschuetzt=1000,
+                          actual=1000, setpoint=1000),
+        "sensor.prio1": 1500,
+        "sensor.prio2": 1000,
+        # Der Sensor enthält die laufenden HEMS-Lasten: Pool = 0 + 2500 W.
+        "sensor.s": 0,
+    }
+
+    assert _allocations(ctrl.run_cycle(make_states(states))) == {
+        "prio1": pytest.approx(1500), "prio2": pytest.approx(1000),
+    }
+
+
+def test_unerfuellbarer_schutzsockel_blockiert_keine_bereits_laufende_teilleistung():
+    # Beispiel 2: Prio 1 braucht 2 kW, für Prio 2 bleiben nur 500 W. Der
+    # Schutzsockel von Prio 2 erzeugt keine Energie und schaltet die laufenden
+    # 500 W nicht ab.
+    ctrl = _protected_controller([
+        {"name": "prio1", "class": "controllable", "allowed_modes": "auto",
+         "actual_power_entity": "sensor.prio1", **CTRL_FALLBACKS},
+        {"name": "prio2", "class": "controllable", "allowed_modes": "auto",
+         "actual_power_entity": "sensor.prio2", **CTRL_FALLBACKS},
+    ])
+    states = {
+        **_global(),
+        **_controllable_w("prio1", prio=1, min_w=0, max_w=2500, geschuetzt=2000,
+                          actual=2000, setpoint=2000),
+        **_controllable_w("prio2", prio=2, min_w=0, max_w=2500, geschuetzt=1000,
+                          actual=500, setpoint=500),
+        "sensor.prio1": 2000,
+        "sensor.prio2": 500,
+        "sensor.s": 0,
+    }
+
+    assert _allocations(ctrl.run_cycle(make_states(states))) == {
+        "prio1": pytest.approx(2000), "prio2": pytest.approx(500),
+    }
+
+
+def test_abregelung_verbraucht_zuerst_leistung_oberhalb_des_schutzsockels():
+    # Beispiel 3: 3 kW laufen, der Pool beträgt nur 2,5 kW. Prio 1 liefert
+    # den einzigen entbehrlichen halben kW; Prio 3 bleibt bei seinem Sockel
+    # und der Binärverbraucher der mittleren Priorität bleibt an.
+    ctrl = _protected_controller([
+        {"name": "prio1", "class": "controllable", "allowed_modes": "auto",
+         "actual_power_entity": "sensor.prio1", **CTRL_FALLBACKS},
+        {"name": "bin", "class": "binary", "allowed_modes": "auto",
+         "switch_entity": "switch.bin", **BIN_FALLBACKS},
+        {"name": "prio3", "class": "controllable", "allowed_modes": "auto",
+         "actual_power_entity": "sensor.prio3", **CTRL_FALLBACKS},
+    ])
+    states = {
+        **_global(),
+        **_controllable_w("prio1", prio=1, min_w=0, max_w=2500, geschuetzt=500,
+                          actual=1500, setpoint=1500),
+        **_binary("bin", prio=2, power=500, switch="on"),
+        **_controllable_w("prio3", prio=3, min_w=0, max_w=2500, geschuetzt=1000,
+                          actual=1000, setpoint=1000),
+        "sensor.prio1": 1500,
+        "sensor.prio3": 1000,
+        "switch.bin": "on",
+        # 1500 + 500 + 1000 W laufen; −500 W am Sensor ergibt 2,5 kW Pool.
+        "sensor.s": -500,
+    }
+
+    result = ctrl.run_cycle(make_states(states))
+    assert _allocations(result) == {
+        "prio1": pytest.approx(1000), "prio3": pytest.approx(1000),
+    }
+    binary = next(device for device in result["status"]["devices"] if device["id"] == "bin")
+    assert binary["final_on"] is True
+
+
+def test_standardbereich_belaesst_regelbare_verteilung_unveraendert():
+    # Ohne die neue Option bleibt die bisherige Verteilung aktiv: Prio 1 nimmt
+    # den gesamten Pool bis zu ihrer technischen Obergrenze auf.
+    ctrl = EMSController([
+        {"name": "prio1", "class": "controllable", "allowed_modes": "auto",
+         "actual_power_entity": "sensor.prio1", **CTRL_FALLBACKS},
+        {"name": "prio2", "class": "controllable", "allowed_modes": "auto",
+         "actual_power_entity": "sensor.prio2", **CTRL_FALLBACKS},
+    ], residual_power_entity="sensor.s")
+    states = {
+        **_global(),
+        **_controllable_w("prio1", prio=1, min_w=0, max_w=2500, geschuetzt=1000,
+                          actual=1500, setpoint=1500),
+        **_controllable_w("prio2", prio=2, min_w=0, max_w=2500, geschuetzt=1000,
+                          actual=1000, setpoint=1000),
+        "sensor.prio1": 1500,
+        "sensor.prio2": 1000,
+        "sensor.s": 0,
+    }
+
+    assert _allocations(ctrl.run_cycle(make_states(states))) == {
+        "prio1": pytest.approx(2500), "prio2": pytest.approx(0),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Fremdsteuerung ("Force-Modus"): Leistung darf nicht in den Pool zurückfließen
 # ---------------------------------------------------------------------------
 

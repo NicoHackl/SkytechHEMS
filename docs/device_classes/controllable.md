@@ -52,12 +52,18 @@ Ursache steht je Entität in `entity_diagnostics`, siehe
 | `input_number.ems_<prefix>_runter_regelzeit_s` | s | Add-on-Feld `decrease_delay_s` | Mindestabstand beim normalen Absenken; bei Defizit wird sofort abgesenkt |
 | `input_number.ems_<prefix>_max_anderung_pro_schritt_<u>` | W oder A | Add-on-Feld `maximum_step_change` | Maximale Sollwertänderung je Regelzyklus |
 | `input_number.ems_<prefix>_min_anderung_pro_schritt_<u>` | W oder A | Add-on-Feld `minimum_step_change` | Totband; kleinere Änderungen werden nicht geschrieben |
-| `input_number.ems_<prefix>_geschutzte_mindestleistung_<u>` | W oder A | intern `0` | Reservierter Sockel vor der normalen Überschussverteilung |
+| `input_number.ems_<prefix>_geschutzte_mindestleistung_<u>` | W oder A | intern `0` | Reservierter Sockel gegenüber Binärverbrauchern; mit `protected_minimum_scope: binary_and_controllable` zusätzlich vor der Zusatzleistung höher priorisierter regelbarer Verbraucher |
 | `input_number.ems_<prefix>_reserve_w` | W | intern `0` | Gerätespezifischer Zusatzpuffer; auch im Ampere-Modus immer Watt |
 | `input_number.ems_<prefix>_min_umschaltzeit_s` | s | Add-on-Feld `phase_switch_delay_s`, sonst intern `30` | Sperrzeit zwischen Phasenwechseln; nur bei `phases: "1,3"` gelesen |
 
 Ein negativer Wert ist in allen Feldern oben ungültig und löst den Ersatzwert aus. Ein gültiger
 Wert `0` ist dagegen ein Wert und wird nie ersetzt — auch nicht bei `min_umschaltzeit_s`.
+
+Ob der Schutzsockel ausschließlich gegenüber Binärverbrauchern oder zusätzlich innerhalb der
+regelbaren Prioritätskaskade wirkt, legt die globale Add-on-Option
+[`protected_minimum_scope`](global.md#geltungsbereich-der-geschützten-mindestleistung) fest.
+Auch im erweiterten Modus bleibt der Wert ein Schutz, keine zweite technische Untergrenze: Der
+Start richtet sich weiterhin nach `min_technisch_<u>`.
 
 Die vier [gemeinsamen HA-Helfer](global.md#gemeinsame-ha-helfer) werden ebenfalls gelesen.
 

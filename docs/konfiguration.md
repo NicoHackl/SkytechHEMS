@@ -50,6 +50,12 @@ klassenspezifischen Felder stehen hier:
 | `binary` | [Binäres Gerät](device_classes/binary.md#felder-in-der-add-on-konfiguration) |
 | `battery` | [AC-Speicher](device_classes/battery.md#felder-in-der-add-on-konfiguration) |
 
+Die globale Auswahl `protected_minimum_scope` steht im Ingress-Panel unter „Konfiguration →
+Globale Einstellungen“. `binary_only` ist der rückwärtskompatible Standard; der erweiterte Modus
+`binary_and_controllable` bindet geschützte Mindestleistungen auch in die Zuteilung regelbarer
+Verbraucher ein. Die vollständige Kaskade steht bei den
+[globalen Gerätefeldern](device_classes/global.md#geltungsbereich-der-geschützten-mindestleistung).
+
 ### Semantik des Überschuss-Sensors
 
 Der Pool wird als `residual_w + Σ current_w` der aktuell vom EMS angeforderten Geräte berechnet.

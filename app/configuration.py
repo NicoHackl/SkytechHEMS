@@ -39,6 +39,14 @@ LOG_LEVELS: Tuple[str, ...] = ("debug", "info", "warning", "error")
 OUTPUT_UNITS: Tuple[str, ...] = ("watt", "ampere")
 PHASE_VALUES: Tuple[str, ...] = ("1", "3", "1,3")
 POWER_SIGNS: Tuple[str, ...] = ("positiv_laden", "positiv_entladen")
+# Geltungsbereich der geschützten Mindestleistung. Der Standard ist bewusst der
+# bisherige Pfad: Bestandsanlagen dürfen ihr Regelverhalten nicht ändern.
+PROTECTED_MINIMUM_SCOPE_BINARY_ONLY = "binary_only"
+PROTECTED_MINIMUM_SCOPE_BINARY_AND_CONTROLLABLE = "binary_and_controllable"
+PROTECTED_MINIMUM_SCOPES: Tuple[str, ...] = (
+    PROTECTED_MINIMUM_SCOPE_BINARY_ONLY,
+    PROTECTED_MINIMUM_SCOPE_BINARY_AND_CONTROLLABLE,
+)
 # Vorzeichenkonvention des Netzsensors der Flow Card. Absichtlich eigene Werte:
 # ein Netzsensor kennt Bezug und Einspeisung, kein Laden und Entladen.
 GRID_POWER_SIGNS: Tuple[str, ...] = ("positiv_bezug", "positiv_einspeisung")
@@ -108,6 +116,8 @@ GLOBAL_DEFAULTS: Dict[str, Any] = {
     # derselbe Wert wie der konservativ geglättete Überschuss-Sensor.
     "battery_residual_power_entity": "",
     "speicher_in_residual_enthalten": True,
+    # Bestandsverhalten: Der Schutz gilt nur gegenüber binären Verbrauchern.
+    "protected_minimum_scope": PROTECTED_MINIMUM_SCOPE_BINARY_ONLY,
     # Formel-basierte Sensorwerte (D-045): liefert der Code einen gültigen Wert,
     # ersetzt er die jeweilige Entität oben vollständig. Leer = keine Formel,
     # Verhalten bleibt exakt das der beiden Felder oben.
@@ -179,6 +189,7 @@ GLOBAL_KEYS_FORCING_SHUTDOWN: Tuple[str, ...] = (
     "residual_power_entity",
     "battery_residual_power_entity",
     "speicher_in_residual_enthalten",
+    "protected_minimum_scope",
     "available_modes",
     "residual_formula_variables",
     "residual_formula_code",
@@ -281,6 +292,7 @@ def normalize_options(raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     options["available_modes"] = serialize_modes(
         parse_modes(raw["available_modes"]) if "available_modes" in raw else list(NORMAL_MODES)
     )
+    options["protected_minimum_scope"] = _as_text(options.get("protected_minimum_scope"))
     options["devices"] = [
         _normalize_device(entry) for entry in (raw.get("devices") or [])
         if isinstance(entry, dict)
@@ -471,6 +483,12 @@ def _validate_global(options: Dict[str, Any], result: ValidationResult) -> None:
     options["battery_residual_power_entity"] = battery_residual
 
     options["speicher_in_residual_enthalten"] = bool(options.get("speicher_in_residual_enthalten"))
+
+    protected_minimum_scope = options["protected_minimum_scope"]
+    if protected_minimum_scope not in PROTECTED_MINIMUM_SCOPES:
+        result.field_errors["protected_minimum_scope"] = (
+            "Zulässig sind binary_only oder binary_and_controllable."
+        )
 
     _validate_formula(options, result, output_name="ueberschuss",
                       variables_key="residual_formula_variables",

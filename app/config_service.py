@@ -31,6 +31,7 @@ from configuration import (
     OUTPUT_UNITS,
     PHASE_VALUES,
     POWER_SIGNS,
+    PROTECTED_MINIMUM_SCOPES,
     SPECIAL_MODES,
     devices_needing_shutdown,
     merge_known_fields,
@@ -183,6 +184,7 @@ class ConfigService:
             "output_units": list(OUTPUT_UNITS),
             "phases": list(PHASE_VALUES),
             "power_signs": list(POWER_SIGNS),
+            "protected_minimum_scopes": list(PROTECTED_MINIMUM_SCOPES),
             "global_defaults": dict(GLOBAL_DEFAULTS),
             "device_defaults": {
                 "controllable": dict(CONTROLLABLE_FALLBACK_DEFAULTS),

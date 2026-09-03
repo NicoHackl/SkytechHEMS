@@ -91,6 +91,19 @@ export function KonfigurationGlobal() {
               hint="Optional. Wird nach jedem erfolgreichen Zyklus gestartet."
               onChange={(value) => patch({ post_cycle_script: value })}
             />
+            <SelectField
+              label="Geltungsbereich der geschützten Mindestleistung" required wide
+              value={draft.protected_minimum_scope}
+              options={data.supported.protected_minimum_scopes}
+              labels={{
+                binary_only: 'Nur Binärgeräte',
+                binary_and_controllable: 'Binär- und regelbare Geräte',
+              }}
+              error={fieldErrors.protected_minimum_scope}
+              hint={'„Nur Binärgeräte“ erhält das bisherige Verhalten. Bei „Binär- und regelbare Geräte“ '
+                    + 'sichert die Prioritätskaskade regelbare Verbraucher zunächst bis zu ihrer geschützten Mindestleistung ab.'}
+              onChange={(value) => patch({ protected_minimum_scope: value })}
+            />
           </div>
         </section>
 
