@@ -221,6 +221,17 @@ configuration:
       1 kW discharge – if the sensor value rises by 1 kW, this option belongs
       "on". Batteries not controlled by HEMS (e.g. a self-regulating hybrid
       storage system) are not affected.
+  protected_minimum_scope:
+    name: Protected minimum power scope
+    description: >-
+      Defines where a controllable device's protected minimum power applies.
+      binary_only is the backwards-compatible default: it reserves power only
+      before following binary consumers. binary_and_controllable also extends
+      controllable allocation: devices first receive their protected floor in
+      priority order, then free power is distributed up to their technical
+      maxima. As the pool falls, power above the floors is reduced first, then
+      the lowest-priority participant falls below its floor. The choice takes
+      effect after restarting the add-on.
   available_modes:
     name: Enabled control modes
     description: >-

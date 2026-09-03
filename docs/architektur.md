@@ -108,10 +108,15 @@ Ein Zyklus (`EMSController.run_cycle()`), ausgelöst alle `interval_s` Sekunden:
    Defizit, sobald ein Speicher die Hauslast deckt, und die Verbraucher liefen faktisch aus der
    Batterie.
 7. **Pool nach Priorität verteilen**: regelbare Geräte reservieren ihre Schutzleistung, binäre
-   Geräte ermitteln ihre hysteresebehaftete Wunschvorgabe.
+   Geräte ermitteln ihre hysteresebehaftete Wunschvorgabe. `protected_minimum_scope` entscheidet,
+   ob der Schutz ausschließlich gegen Binärgeräte wirkt (`binary_only`) oder anschließend auch
+   die Reihenfolge der regelbaren Zuteilung bestimmt (`binary_and_controllable`).
 8. **Kandidat** je binärem Gerät unter Mindestlaufzeit, Abschaltverzögerung und Mindestauszeit.
 9. **Prioritätskaskade** (Demotion/Promotion) und **One-Change-Limit** anwenden.
-10. **Allocation** der regelbaren Geräte aus dem verbleibenden Pool.
+10. **Allocation** der regelbaren Geräte aus dem verbleibenden Pool: Im Standardmodus zuerst
+    technische Minima, danach Zusatzleistung. Im erweiterten Modus zuerst die Schutzsockel in
+    Prioritätsreihenfolge, danach Zusatzleistung. Bei sinkendem Pool verschwinden dadurch erst
+    Anteile oberhalb der Sockel, dann die Sockel des niedrigsten Teilnehmers.
 11. **Entladeplanung:** `hausdefizit_w` wird **einmal** über alle entladebereiten Speicher
     aufgeteilt, strikt nach `entlade_prioritat`. Rechnete jeder Speicher für sich, entladen bei
     drei Speichern und 2 kW Defizit alle drei mit 2 kW. Muss nach Schritt 10 und vor Schritt 12

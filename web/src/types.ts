@@ -168,6 +168,8 @@ export interface CycleStatus {
   /** false: der gemeldete Modus ist global nicht aktiviert — Zyklus sicher inaktiv. */
   global_mode_configured: boolean
   available_modes: string[]
+  /** Geltungsbereich der geschützten Mindestleistung im aktuellen Zyklus. */
+  protected_minimum_scope: string
   devices: Device[]
   /** Beim Start übersprungene Einträge — ohne erfundene Ist-, SoC- oder Schaltwerte. */
   inactive_devices: InactiveDeviceIssue[]
@@ -314,6 +316,8 @@ export interface ConfigOptions {
   residual_power_entity: string
   battery_residual_power_entity: string
   speicher_in_residual_enthalten: boolean
+  /** Wo die geschützte Mindestleistung in der Leistungsverteilung wirkt. */
+  protected_minimum_scope: string
   /** Kommagetrennte Teilmenge der normalen Regelmodi. */
   available_modes: string
   /** Formel-basierte Sensorwerte (D-045): liefert der Code einen gültigen Wert,
@@ -428,6 +432,7 @@ export interface ConfigSupported {
   output_units: string[]
   phases: string[]
   power_signs: string[]
+  protected_minimum_scopes: string[]
   global_defaults: Record<string, string | number | boolean>
   device_defaults: Record<DeviceClass, Record<string, number | null>>
 }

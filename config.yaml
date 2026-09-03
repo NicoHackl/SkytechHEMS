@@ -39,8 +39,9 @@ description: >-
   Global: residual_power_entity legt den Überschuss-Sensor fest.
   battery_residual_power_entity ist bei AC-Speichern die signierte
   Hausleistungsbilanz für deren Entladeplanung; speicher_in_residual_enthalten
-  sagt, ob die Speicherleistung im Überschuss-Sensor steckt, available_modes
-  schaltet die normalen Regelmodi frei.
+  sagt, ob die Speicherleistung im Überschuss-Sensor steckt,
+  protected_minimum_scope legt den Geltungsbereich der geschützten
+  Mindestleistung fest, available_modes schaltet die normalen Regelmodi frei.
 
   Flow Card: Mit flow_publish schreibt das Add-on zwei Anzeige-Sensoren nach
   Home Assistant, aus denen sich die Skytech Power Flow Card selbst aufbaut –
@@ -91,6 +92,7 @@ options:
   residual_power_entity: "sensor.verfugbare_leistung_fur_uberschussverbraucher"
   battery_residual_power_entity: "sensor.hausleistungsbilanz_fur_ac_speicher"
   speicher_in_residual_enthalten: true
+  protected_minimum_scope: "binary_only"
   available_modes: "manuell,nur_heizen,nur_laden"
   residual_formula_variables: []
   residual_formula_code: ""
@@ -196,6 +198,7 @@ schema:
   residual_power_entity: str?
   battery_residual_power_entity: str?
   speicher_in_residual_enthalten: bool?
+  protected_minimum_scope: list(binary_only|binary_and_controllable)?
   available_modes: str?
   residual_formula_variables:
     - name: str

@@ -193,6 +193,7 @@ und zur Sichtbarkeit der aktiven Quelle stehen in
 | `residual_power_entity` | nein | `sensor.verfugbare_leistung_fur_uberschussverbraucher` | alle | Vollständige Entity-ID des Überschuss-Sensors; dies ist eine Entity-Zuordnung, kein Ersatzwert für einen HA-State |
 | `battery_residual_power_entity` | bedingt: bei `battery` | leer | `battery` | Vollständige `sensor.<name>`-Entity der signierten Hausleistungsbilanz für die Entladeplanung; kein Ersatzwert für einen HA-State |
 | `speicher_in_residual_enthalten` | nein | `true` | `battery` | Legt fest, ob gemessene Speicherentladung vor der Pool-Berechnung vom Überschuss-Sensor abgezogen wird |
+| `protected_minimum_scope` | nein | `binary_only` | regelbare Verbraucher | Geltungsbereich der geschützten Mindestleistung: `binary_only` erhält das bisherige Verhalten; `binary_and_controllable` ergänzt die Prioritätskaskade für regelbare Verbraucher |
 | `available_modes` | nein | alle drei normalen Modi | alle | Kommagetrennte Teilmenge aus `manuell`, `nur_heizen` und `nur_laden`; legt fest, welche normalen Regelmodi in dieser Anlage überhaupt verwendet werden |
 | `residual_formula_variables` | nein | leere Liste | alle | Formel-Zeilen (D-045) `[{name, entity}]` für den Überschuss; liefert der Code unten einen gültigen Wert, ersetzt er `residual_power_entity` vollständig |
 | `residual_formula_code` | nein | leer | alle | Eingeschränkter Python-Ausdruck (D-045), der `ueberschuss` aus den Zeilen oben berechnet; leer = keine Formel |
@@ -212,6 +213,27 @@ ist dieser Zyklus **sicher inaktiv**: Pool und Hausdefizit sind `0`, alle Gerät
 sicheren Zustand. Der rohe HA-State bleibt als `global_mode` im Status sichtbar, zusätzlich meldet
 `global_mode_configured: false` die Ursache. Die Optionen des HA-Helfers legt oder ändert das
 Add-on ausdrücklich **nicht**.
+
+### Geltungsbereich der geschützten Mindestleistung
+
+`protected_minimum_scope` ist eine Add-on-Option und wird nach dem Speichern mit dem nächsten
+Neustart wirksam. Sie kennt genau zwei Werte:
+
+| Wert | Verhalten |
+|---|---|
+| `binary_only` | Standard und Bestandsverhalten. Der effektive Schutz (`schutz_w`) wird nur bei der Entscheidung über nachfolgende binäre Verbraucher reserviert. Die anschließende Verteilung zwischen regelbaren Verbrauchern bleibt die bisherige strikte Prioritätsverteilung. |
+| `binary_and_controllable` | Erweiterte Prioritätskaskade. Nach der Binärentscheidung erhält jedes regelbare Gerät in Prioritätsreihenfolge zunächst seinen effektiven Schutzsockel. Erst danach verteilt das HEMS freie Leistung wieder nach Priorität bis zu den technischen Obergrenzen. |
+
+Der effektive Schutzsockel ist `schutz_w`: geschützte Mindestleistung plus `reserve_w` plus
+globaler Puffer, an der technischen Obergrenze geklemmt. Er ist **keine zweite technische
+Einschaltgrenze**. Trägt der Pool das technische Minimum, aber nicht den gesamten Sockel, bleibt
+das Gerät mit dem verfügbaren Teil aktiv; ein Sockel erzeugt keine Leistung.
+
+Bei fallendem Pool nimmt die erneute Prioritätsverteilung zuerst Leistung oberhalb der
+Schutzsockel weg. Reicht das nicht, fällt der niedrigste regelbare Teilnehmer unter seinen Sockel;
+binäre Geräte folgen weiterhin ihrer Priorität sowie Mindestlaufzeit, Mindestauszeit und
+Abschaltverzögerung. Für `battery` betrifft der erweiterte Modus ausschließlich die
+Ladeallokation, nie die getrennte Entladeplanung.
 
 ### Add-on-Fallbacks für HA-Entitäten
 

@@ -6,9 +6,11 @@ Garantien. Diese Tests fangen ganze Klassen von Abweichungen automatisch ab –
 insbesondere die Regression, dass geschuetzte_mindestleistung die Zuteilung
 verändert.
 
-`_allocate` spiegelt die 2-Durchlauf-Schleife aus EMSController.run_cycle
-(controller.py, „Durchlauf 1: Minimum" + „Durchlauf 2: Überschuss") wider; die
-Phasenwahl ist im Watt-Modus ein No-Op und hier bewusst ausgeklammert.
+`_allocate` spiegelt den Bestandsmodus aus EMSController.run_cycle
+(„Durchlauf 1: technisches Minimum" + „Durchlauf 2: Überschuss") wider.
+`_allocate_protected` modelliert zusätzlich den wählbaren Kaskadenmodus, in
+dem der Schutzsockel regelbarer Geräte vor der Zusatzleistung verteilt wird.
+Die Phasenwahl ist im Watt-Modus ein No-Op und hier bewusst ausgeklammert.
 """
 
 import pytest
@@ -35,6 +37,7 @@ def _make(min_w, max_w, geschuetzt, prio):
     d.min_technisch_w = min_w
     d.max_technisch_w = max_w
     d.geschuetzte_mindestleistung_w = geschuetzt
+    d._schutz_w = min(geschuetzt, max_w)
     return d
 
 
@@ -44,6 +47,17 @@ def _allocate(devices, pool):
     remaining = pool
     for d in ordered:
         remaining = d.allocate_minimum(remaining)
+    for d in ordered:
+        remaining = d.allocate_surplus(remaining)
+    return remaining
+
+
+def _allocate_protected(devices, pool):
+    """Wie der Kaskadenmodus: Schutzsockel, dann Zusatzleistung."""
+    ordered = sorted(devices, key=lambda d: d.priority)
+    remaining = pool
+    for d in ordered:
+        remaining = d.allocate_protected_minimum(remaining)
     for d in ordered:
         remaining = d.allocate_surplus(remaining)
     return remaining
@@ -127,6 +141,41 @@ def test_single_device_runs_whenever_pool_covers_min_technisch(min_w, extra, ges
     d.allocate_surplus(remaining)
     assert d.alloc_w >= min_w - TOL
     assert d.alloc_w == pytest.approx(min(pool, max_w), abs=1e-4)
+
+
+_protected = st.integers(min_value=0, max_value=20000)
+
+
+@given(first=_protected, second=_protected, extra=_protected)
+def test_protection_kaskade_deckt_alle_sockel_vor_zusatzleistung(
+        first, second, extra):
+    # Sobald beide Sockel in den Pool passen, erhält Prio 2 exakt ihren
+    # Schutzsockel. Erst der Rest darf als Zusatzleistung an Prio 1 gehen.
+    maximum = float(first + second + extra + 1)
+    high = _make(0.0, maximum, float(first), prio=1)
+    low = _make(0.0, maximum, float(second), prio=2)
+
+    remaining = _allocate_protected([high, low], float(first + second + extra))
+
+    assert remaining == pytest.approx(0.0)
+    assert high.alloc_w == pytest.approx(first + extra)
+    assert low.alloc_w == pytest.approx(second)
+
+
+@given(first=_protected, second=_protected)
+def test_protection_kaskade_kuerzt_niedrigere_prio_erst_unter_sockel(first, second):
+    # Reicht der Pool nicht mehr für beide Sockel, behält Prio 1 ihren Anteil;
+    # Prio 2 wird erst danach unter ihren Schutzsockel abgesenkt.
+    maximum = float(first + second + 1)
+    high = _make(0.0, maximum, float(first), prio=1)
+    low = _make(0.0, maximum, float(second), prio=2)
+    pool = float(first)
+
+    remaining = _allocate_protected([high, low], pool)
+
+    assert remaining == pytest.approx(0.0)
+    assert high.alloc_w == pytest.approx(first)
+    assert low.alloc_w == pytest.approx(0.0)
 
 
 # ===========================================================================

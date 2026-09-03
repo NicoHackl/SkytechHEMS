@@ -18,6 +18,13 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ### Hinzugefügt
 
+- **Wählbarer Geltungsbereich der geschützten Mindestleistung.** Unter „Konfiguration → Globale
+  Einstellungen" legt `protected_minimum_scope` fest, ob der Schutz wie bisher nur gegenüber
+  Binärverbrauchern (`binary_only`, Standard) wirkt oder zusätzlich die Verteilung regelbarer
+  Verbraucher steuert (`binary_and_controllable`). Im erweiterten Modus erhalten regelbare Geräte
+  ihren Schutzsockel in Prioritätsreihenfolge, bevor freie Leistung bis zu den technischen
+  Obergrenzen verteilt wird. Bei sinkendem Pool fällt erst Leistung oberhalb der Sockel weg, danach
+  der niedrigste Teilnehmer unter seinen Sockel; Binärgeräte behalten ihren Zeitschutz.
 - **Navigationsziele für die Power Flow Card.** Je Knoten — Erzeugung, Netz, Haus, Übriges Haus,
   Batterie und je Gerät — lässt sich eine Dashboard-Ansicht hinterlegen, auf die ein Klick auf der
   Karte springt. Ohne Ziel öffnet der Klick wie bisher den More-Info-Dialog.

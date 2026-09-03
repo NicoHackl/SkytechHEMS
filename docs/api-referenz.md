@@ -57,6 +57,7 @@ Scheduler.
     "binary_total_w": 2000.0,
     "global_mode_configured": true,
     "available_modes": ["manuell", "nur_heizen", "nur_laden"],
+    "protected_minimum_scope": "binary_only",
     "devices": [ { "id": "heizstab", "type": "controllable" } ],
     "inactive_devices": []
   },

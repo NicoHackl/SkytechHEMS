@@ -183,6 +183,7 @@ Global:
 | `hard_lockout` | bool | Sperre wegen ungültigem Überschuss-Sensor |
 | `global_mode_configured` | bool | `false`, wenn `global_mode` ein normaler, aber global nicht aktivierter Modus ist — der Zyklus bleibt dann sicher inaktiv |
 | `available_modes` | Liste | Die aktivierten normalen Regelmodi |
+| `protected_minimum_scope` | string | Wirksamer Geltungsbereich der geschützten Mindestleistung: `binary_only` oder `binary_and_controllable` |
 | `residual_sensor_valid` | bool | Sensor lieferte einen brauchbaren Wert |
 | `residual_source` | string | `"ha"` oder `"formula"` (D-045) — welche Quelle `residual_w` gerade liefert |
 | `residual_w`, `pool_w`, `current_deficit_w`, `binary_total_w` | float | Leistungen in Watt |

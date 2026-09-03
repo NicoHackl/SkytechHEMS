@@ -415,6 +415,7 @@ class HEMSApp:
             residual_power_entity=str(option("residual_power_entity")),
             battery_residual_power_entity=str(option("battery_residual_power_entity")),
             speicher_in_residual_enthalten=bool(options["speicher_in_residual_enthalten"]),
+            protected_minimum_scope=str(option("protected_minimum_scope")),
             available_modes=options["available_modes"],
             residual_formula_variables=option("residual_formula_variables"),
             residual_formula_code=str(option("residual_formula_code")),

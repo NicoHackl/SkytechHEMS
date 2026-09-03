@@ -15,6 +15,9 @@ from typing import Dict, List, Optional
 from configuration import (
     DEFAULT_RESIDUAL_ENTITY,
     NORMAL_MODES,
+    PROTECTED_MINIMUM_SCOPE_BINARY_AND_CONTROLLABLE,
+    PROTECTED_MINIMUM_SCOPE_BINARY_ONLY,
+    PROTECTED_MINIMUM_SCOPES,
     SPECIAL_MODES,
     parse_modes,
     serialize_modes,
@@ -148,6 +151,7 @@ class EMSController:
                  residual_power_entity: Optional[str] = None,
                  battery_residual_power_entity: Optional[str] = None,
                  speicher_in_residual_enthalten: bool = True,
+                 protected_minimum_scope: Optional[str] = None,
                  available_modes: Optional[object] = None,
                  residual_formula_variables: Optional[List[Dict[str, str]]] = None,
                  residual_formula_code: Optional[str] = None,
@@ -169,11 +173,21 @@ class EMSController:
             self._residual_entity if battery_residual_power_entity is None
             else battery_residual_power_entity.strip()
         )
+        # Direkte Python-Konsumenten erhalten bei einem fehlenden oder
+        # unbekannten Wert sicher den bisherigen Regelpfad. Die Add-on-
+        # Konfiguration wird vorher validiert und kann einen Tippfehler nicht
+        # speichern.
+        requested_scope = (protected_minimum_scope or "").strip()
+        self._protected_minimum_scope = (
+            requested_scope if requested_scope in PROTECTED_MINIMUM_SCOPES
+            else PROTECTED_MINIMUM_SCOPE_BINARY_ONLY
+        )
         validated = validate_options({
             "devices": device_configs,
             "available_modes": serialize_modes(self._available_modes),
             "residual_power_entity": self._residual_entity,
             "battery_residual_power_entity": self._battery_residual_entity,
+            "protected_minimum_scope": self._protected_minimum_scope,
         })
         self._device_configs: List[Dict] = validated.devices
         self._devices: List[Device] = _build_devices(validated.devices)
@@ -204,10 +218,11 @@ class EMSController:
         self._battery_residual_formula_variables = battery_residual_formula_variables or []
         self._battery_residual_formula_code = battery_residual_formula_code or ""
         log.info("EMSController bereit – %d Geräte registriert, Überschuss-Sensor='%s', "
-                 "Hausleistungsbilanz='%s', Speicher im Überschuss-Sensor=%s.",
+                 "Hausleistungsbilanz='%s', Speicher im Überschuss-Sensor=%s, "
+                 "Mindestleistung=%s.",
                  len(self._devices), self._residual_entity,
                  self._battery_residual_entity or "nicht konfiguriert",
-                 self._speicher_in_residual)
+                 self._speicher_in_residual, self._protected_minimum_scope)
 
     def report_write_results(self, results: List[WriteResult]) -> None:
         """Ordnet fehlgeschlagene Schreiboperationen ihrem Gerät zu (behebt B-2).
@@ -471,21 +486,33 @@ class EMSController:
             if not device.final_on:
                 device.reset_off_timer()
 
-        # ── 9. Regelbare Geräte zuteilen (2 Durchläufe: Minimum zuerst) ──
-        # Regel: 1. Prioritätsreihenfolge  2. Jedes Gerät erhält sein min_technisch_w,
-        #           bevor ein niedriger-priores Gerät aktiviert wird.
-        #        3. Der Überschuss geht dann zuerst an das höchst-priore Gerät.
+        # ── 9. Regelbare Geräte zuteilen ────────────────────────────────
         binary_total_w = sum(d.power_w for d in binary_devices if d.final_on)
         remaining_w    = max(pool_w - binary_total_w, 0.0)
         sorted_ctrl    = [d for d in sorted(self._devices, key=lambda d: d.priority)
                           if isinstance(d, ControllableDevice)]
 
-        # Phasenwahl + Durchlauf 1: technisches Minimum je Gerät garantieren
-        for device in sorted_ctrl:
-            device.select_phases(remaining_w, now_ts)
-            remaining_w = device.allocate_minimum(remaining_w)
+        if self._protected_minimum_scope == PROTECTED_MINIMUM_SCOPE_BINARY_AND_CONTROLLABLE:
+            # Neuer Kaskadenmodus: Ein regelbares Gerät erhält seinen
+            # Schutzsockel in Prioritätsreihenfolge, bevor ein niedriger-priores
+            # regelbares Gerät Leistung oberhalb seines technischen Starts
+            # beanspruchen kann. Binärgeräte wurden oben bereits in dieselbe
+            # Prioritätsfolge einbezogen.
+            for device in sorted_ctrl:
+                device.select_phases(remaining_w, now_ts)
+                remaining_w = device.allocate_protected_minimum(remaining_w)
+        else:
+            # Bestandsverhalten: Die geschützte Mindestleistung wirkt nur bei
+            # der Binärentscheidung; regelbare Geräte erhalten zunächst allein
+            # ihr technisches Minimum.
+            for device in sorted_ctrl:
+                device.select_phases(remaining_w, now_ts)
+                remaining_w = device.allocate_minimum(remaining_w)
 
-        # Durchlauf 2: Überschuss in Prioritätsreihenfolge bis max verteilen
+        # Danach fließt jeder noch freie Watt nach Priorität bis zur jeweiligen
+        # technischen Obergrenze. Bei einem fallenden Pool verschwindet damit
+        # zuerst Leistung oberhalb des Schutzsockels; reicht das nicht, fällt
+        # der niedrigste Teilnehmer im vorigen Durchlauf unter seinen Sockel.
         for device in sorted_ctrl:
             remaining_w = device.allocate_surplus(remaining_w)
 
@@ -513,6 +540,7 @@ class EMSController:
             "global_mode":           global_mode,
             "global_mode_configured": global_mode_configured,
             "available_modes":       list(self._available_modes),
+            "protected_minimum_scope": self._protected_minimum_scope,
             "hard_lockout":          hard_lockout,
             "residual_sensor_valid": residual_sensor_valid,
             "residual_w":            residual_w,
