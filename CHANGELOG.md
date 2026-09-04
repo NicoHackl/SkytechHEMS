@@ -18,6 +18,8 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ### Hinzugefügt
 
+- **Eigenes Icon und Logo im Supervisor.** Das Add-on erscheint jetzt mit dem Skytech-HEMS-Marken-
+  icon statt des bisherigen Platzhalters, u. a. im Add-on-Store und auf der Übersichtsseite.
 - **Wählbarer Geltungsbereich der geschützten Mindestleistung.** Unter „Konfiguration → Globale
   Einstellungen" legt `protected_minimum_scope` fest, ob der Schutz wie bisher nur gegenüber
   Binärverbrauchern (`binary_only`, Standard) wirkt oder zusätzlich die Verteilung regelbarer
