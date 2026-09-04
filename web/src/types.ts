@@ -334,6 +334,9 @@ export interface ConfigOptions {
   flow_watt_threshold: number
   flow_animation: boolean
   flow_house_node: boolean
+  /** CSS-Farbe des Rings um ein freigegebenes Gerät. Leer = weißer
+      Standardwert der Karte. */
+  flow_freigabe_ring_farbe: string
   flow_pv_power_entities: FlowEntityRow[]
   flow_pv_label: string
   flow_grid_power_entity: string

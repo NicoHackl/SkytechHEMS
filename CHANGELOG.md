@@ -20,6 +20,10 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 - **Eigenes Icon und Logo im Supervisor.** Das Add-on erscheint jetzt mit dem Skytech-HEMS-Marken-
   icon statt des bisherigen Platzhalters, u. a. im Add-on-Store und auf der Übersichtsseite.
+- **Farbe des Freigabe-Rings der Power Flow Card einstellbar.** Der Ring um ein freigegebenes
+  Gerät ist standardmäßig weiß; im Panel unter „Flow Card" lässt sich dafür ein beliebiger
+  CSS-Farbwert hinterlegen. Leer lassen ergibt den weißen Standardwert. Der graue gestrichelte
+  Ring eines gesperrten Geräts ist davon unabhängig.
 - **Wählbarer Geltungsbereich der geschützten Mindestleistung.** Unter „Konfiguration → Globale
   Einstellungen" legt `protected_minimum_scope` fest, ob der Schutz wie bisher nur gegenüber
   Binärverbrauchern (`binary_only`, Standard) wirkt oder zusätzlich die Verteilung regelbarer

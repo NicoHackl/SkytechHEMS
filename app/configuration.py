@@ -132,6 +132,9 @@ GLOBAL_DEFAULTS: Dict[str, Any] = {
     "flow_watt_threshold": 1000,
     "flow_animation": True,
     "flow_house_node": True,
+    # CSS-Farbe des Rings um ein freigegebenes Geraet. Leer = weisser
+    # Standardwert der Karte (D-052).
+    "flow_freigabe_ring_farbe": "",
     "flow_pv_power_entities": [],
     "flow_pv_label": "Photovoltaik",
     "flow_grid_power_entity": "",
@@ -167,6 +170,7 @@ FLOW_TEXT_KEYS: Tuple[str, ...] = (
     "flow_battery_power_entity", "flow_battery_charge_power_entity",
     "flow_battery_discharge_power_entity",
     "flow_nav_pv", "flow_nav_grid", "flow_nav_house", "flow_nav_battery", "flow_nav_rest",
+    "flow_freigabe_ring_farbe",
 )
 
 # Navigationsziele. Geprüft wird die Form, nicht die Existenz: eine gelöschte

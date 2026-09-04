@@ -381,6 +381,13 @@ export function FlowCard() {
               <span className="track" />
               <span className="switch-label">Haus als eigenen Knoten zeichnen</span>
             </label>
+            <TextField
+              label="Farbe des Freigabe-Rings" mono placeholder="#ffffff"
+              value={draft.flow_freigabe_ring_farbe}
+              error={fieldErrors.flow_freigabe_ring_farbe}
+              hint="Ring um ein freigegebenes Gerät. Leer lassen heißt: weißer Standardwert."
+              onChange={(value) => patch({ flow_freigabe_ring_farbe: value })}
+            />
           </div>
         </section>
 

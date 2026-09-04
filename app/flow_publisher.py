@@ -100,6 +100,9 @@ def build_config_payload(options: Dict[str, Any], controls_schema: List[Dict[str
             "watt_schwelle": options.get("flow_watt_threshold", 1000),
             "animation": bool(options.get("flow_animation")),
             "haus_knoten_anzeigen": bool(options.get("flow_house_node")),
+            # Additiv ergänzt (04.09.2026): Farbe des Rings um ein freigegebenes
+            # Geraet. Leer laesst die Karte bei ihrem weissen Standardwert.
+            "freigabe_ring_farbe": options.get("flow_freigabe_ring_farbe", ""),
         },
         "standard": {
             # Nur die gezaehlten Zeilen. Die uebrigen stehen unten als

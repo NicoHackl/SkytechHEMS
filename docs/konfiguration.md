@@ -234,6 +234,7 @@ Geräteliste; hier stehen nur die Anlagenwerte, die das HEMS sonst nirgends brau
 | `flow_watt_threshold` | int (0…100000) | `1000` | Ab diesem Betrag zeigt die Karte kW statt W |
 | `flow_animation` | bool | `true` | Wandernde Punkte auf den Flusslinien |
 | `flow_house_node` | bool | `true` | Hausknoten zeichnen |
+| `flow_freigabe_ring_farbe` | str | `""` | CSS-Farbe des Rings um ein freigegebenes Gerät. Leer = weißer Standardwert der Karte |
 | `flow_pv_power_entities` | `[{entity, in_summe}]` | `[]` | PV-Leistungssensoren. Leer = kein Erzeugungsknoten |
 | `flow_pv_label` | str | `"Photovoltaik"` | Anzeigename des Erzeugungsknotens |
 | `flow_grid_power_entity` | str | `""` | Signierter Netzsensor |

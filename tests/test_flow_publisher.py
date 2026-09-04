@@ -222,6 +222,15 @@ def test_reihenfolge_folgt_der_geraeteliste():
     assert [d["reihenfolge"] for d in payload["devices"]] == [1, 2, 3, 4]
 
 
+def test_freigabe_ring_farbe_fehlt_ohne_angabe():
+    assert _config(**STANDARD)["anzeige"]["freigabe_ring_farbe"] == ""
+
+
+def test_freigabe_ring_farbe_wird_uebernommen():
+    payload = _config(**STANDARD, flow_freigabe_ring_farbe="#ff0000")
+    assert payload["anzeige"]["freigabe_ring_farbe"] == "#ff0000"
+
+
 # ---------------------------------------------------------------------------
 # Statusnutzlast
 # ---------------------------------------------------------------------------
