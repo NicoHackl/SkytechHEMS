@@ -131,7 +131,8 @@ einem Regelintervall wieder vollständig.
     "titel": "Leistungsfluss",               // string, Kartenüberschrift; leer = keine Überschrift
     "watt_schwelle": 1000,                   // int, ab diesem Betrag in kW statt W anzeigen
     "animation": true,                       // bool, wandernde Punkte an/aus
-    "haus_knoten_anzeigen": true             // bool, Haus als eigener Knoten
+    "haus_knoten_anzeigen": true,            // bool, Haus als eigener Knoten
+    "freigabe_ring_farbe": ""                // string, CSS-Farbe; leer = weißer Standardwert
   },
 
   "standard": {
@@ -191,6 +192,13 @@ einem Regelintervall wieder vollständig.
 diesen Wert könnte die Karte die Regel „älter als 5 × Regelintervall" aus Abschnitt 6 gar nicht
 anwenden — sie stand im Vertrag, die Größe dazu fehlte. Fehlt das Feld (älterer Erzeuger), nimmt
 die Karte `30` an.
+
+`anzeige.freigabe_ring_farbe` ist **additiv ergänzt** (04.09.2026) und erhöht `schema_version`
+nicht. Der Ring um ein freigegebenes Gerät war fest auf die Akzentfarbe der Karte verdrahtet; das
+Feld macht ihn je Anlage einstellbar, im HEMS unter Flow-Card-Konfiguration gepflegt. Ein
+beliebiger gültiger CSS-Farbwert überschreibt den Ring, leer oder fehlend (älterer Erzeuger)
+ergibt den weißen Standardwert. Der graue gestrichelte Ring eines gesperrten Geräts bleibt davon
+unberührt — er zeigt unabhängig von diesem Feld immer dieselbe feste Farbe.
 
 **Navigationsziele, verbindlich** (additiv ergänzt 27.08.2026, `schema_version` bleibt `1`):
 
