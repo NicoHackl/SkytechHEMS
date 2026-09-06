@@ -493,11 +493,13 @@ class EMSController:
                           if isinstance(d, ControllableDevice)]
 
         if self._protected_minimum_scope == PROTECTED_MINIMUM_SCOPE_BINARY_AND_CONTROLLABLE:
-            # Neuer Kaskadenmodus: Ein regelbares Gerät erhält seinen
-            # Schutzsockel in Prioritätsreihenfolge, bevor ein niedriger-priores
+            # Neuer Kaskadenmodus: Ein regelbares Gerät erhält seine geschützte
+            # Mindestleistung in Prioritätsreihenfolge, bevor ein niedriger-priores
             # regelbares Gerät Leistung oberhalb seines technischen Starts
-            # beanspruchen kann. Binärgeräte wurden oben bereits in dieselbe
-            # Prioritätsfolge einbezogen.
+            # beanspruchen kann. Der Sockel ist der reine Helferwert, nicht
+            # schutz_w: reserve_w und globaler Puffer bleiben Reservierung
+            # gegenüber Binärgeräten. Binärgeräte wurden oben bereits in
+            # dieselbe Prioritätsfolge einbezogen.
             for device in sorted_ctrl:
                 device.select_phases(remaining_w, now_ts)
                 remaining_w = device.allocate_protected_minimum(remaining_w)

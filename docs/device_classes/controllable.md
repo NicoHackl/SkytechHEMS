@@ -59,9 +59,11 @@ Ursache steht je Entität in `entity_diagnostics`, siehe
 Ein negativer Wert ist in allen Feldern oben ungültig und löst den Ersatzwert aus. Ein gültiger
 Wert `0` ist dagegen ein Wert und wird nie ersetzt — auch nicht bei `min_umschaltzeit_s`.
 
-Ob der Schutzsockel ausschließlich gegenüber Binärverbrauchern oder zusätzlich innerhalb der
-regelbaren Prioritätskaskade wirkt, legt die globale Add-on-Option
+Ob die geschützte Mindestleistung ausschließlich gegenüber Binärverbrauchern oder zusätzlich
+innerhalb der regelbaren Prioritätskaskade wirkt, legt die globale Add-on-Option
 [`protected_minimum_scope`](global.md#geltungsbereich-der-geschützten-mindestleistung) fest.
+In der Kaskade zählt genau dieser Helferwert, an `max_technisch_<u>` geklemmt — `reserve_w` und
+der globale Puffer erhöhen nur `schutz_w` und damit die Reservierung gegenüber Binärgeräten.
 Auch im erweiterten Modus bleibt der Wert ein Schutz, keine zweite technische Untergrenze: Der
 Start richtet sich weiterhin nach `min_technisch_<u>`.
 

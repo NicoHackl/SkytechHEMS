@@ -227,9 +227,11 @@ configuration:
       Defines where a controllable device's protected minimum power applies.
       binary_only is the backwards-compatible default: it reserves power only
       before following binary consumers. binary_and_controllable also extends
-      controllable allocation: devices first receive their protected floor in
-      priority order, then free power is distributed up to their technical
-      maxima. As the pool falls, power above the floors is reduced first, then
+      controllable allocation: devices first receive their protected minimum
+      power in priority order, then free power is distributed up to their
+      technical maxima. The floor is exactly that helper value; reserve_w and
+      the global buffer stay a reservation against binary consumers.
+      As the pool falls, power above the floors is reduced first, then
       the lowest-priority participant falls below its floor. The choice takes
       effect after restarting the add-on.
   available_modes:

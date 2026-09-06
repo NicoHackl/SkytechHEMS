@@ -37,7 +37,9 @@ def _make(min_w, max_w, geschuetzt, prio):
     d.min_technisch_w = min_w
     d.max_technisch_w = max_w
     d.geschuetzte_mindestleistung_w = geschuetzt
-    d._schutz_w = min(geschuetzt, max_w)
+    # Bewusst deutlich größer als die geschützte Mindestleistung: _schutz_w ist die
+    # Reservierung gegenüber Binärgeräten und darf die Kaskade nicht anheben.
+    d._schutz_w = min(geschuetzt + 500.0, max_w)
     return d
 
 
