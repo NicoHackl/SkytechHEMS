@@ -222,15 +222,18 @@ Neustart wirksam. Sie kennt genau zwei Werte:
 | Wert | Verhalten |
 |---|---|
 | `binary_only` | Standard und Bestandsverhalten. Der effektive Schutz (`schutz_w`) wird nur bei der Entscheidung über nachfolgende binäre Verbraucher reserviert. Die anschließende Verteilung zwischen regelbaren Verbrauchern bleibt die bisherige strikte Prioritätsverteilung. |
-| `binary_and_controllable` | Erweiterte Prioritätskaskade. Nach der Binärentscheidung erhält jedes regelbare Gerät in Prioritätsreihenfolge zunächst seinen effektiven Schutzsockel. Erst danach verteilt das HEMS freie Leistung wieder nach Priorität bis zu den technischen Obergrenzen. |
+| `binary_and_controllable` | Erweiterte Prioritätskaskade. Nach der Binärentscheidung erhält jedes regelbare Gerät in Prioritätsreihenfolge zunächst seine geschützte Mindestleistung. Erst danach verteilt das HEMS freie Leistung wieder nach Priorität bis zu den technischen Obergrenzen. |
 
-Der effektive Schutzsockel ist `schutz_w`: geschützte Mindestleistung plus `reserve_w` plus
-globaler Puffer, an der technischen Obergrenze geklemmt. Er ist **keine zweite technische
-Einschaltgrenze**. Trägt der Pool das technische Minimum, aber nicht den gesamten Sockel, bleibt
-das Gerät mit dem verfügbaren Teil aktiv; ein Sockel erzeugt keine Leistung.
+Der Sockel der Kaskade ist ausschließlich `geschutzte_mindestleistung_<u>`, an der technischen
+Obergrenze geklemmt. Stehen dort 500 W, teilt der Durchlauf exakt 500 W zu. `reserve_w` und der
+globale Puffer gehen **nicht** ein: Sie sind über `schutz_w` weiterhin die Reservierung gegenüber
+Binärverbrauchern und dürfen kein Sollwert eines regelbaren Geräts werden. Der Sockel ist auch
+**keine zweite technische Einschaltgrenze**. Trägt der Pool das technische Minimum, aber nicht den
+gesamten Sockel, bleibt das Gerät mit dem verfügbaren Teil aktiv; ein Sockel erzeugt keine
+Leistung.
 
 Bei fallendem Pool nimmt die erneute Prioritätsverteilung zuerst Leistung oberhalb der
-Schutzsockel weg. Reicht das nicht, fällt der niedrigste regelbare Teilnehmer unter seinen Sockel;
+Sockel weg. Reicht das nicht, fällt der niedrigste regelbare Teilnehmer unter seinen Sockel;
 binäre Geräte folgen weiterhin ihrer Priorität sowie Mindestlaufzeit, Mindestauszeit und
 Abschaltverzögerung. Für `battery` betrifft der erweiterte Modus ausschließlich die
 Ladeallokation, nie die getrennte Entladeplanung.

@@ -114,8 +114,9 @@ Ein Zyklus (`EMSController.run_cycle()`), ausgelöst alle `interval_s` Sekunden:
 8. **Kandidat** je binärem Gerät unter Mindestlaufzeit, Abschaltverzögerung und Mindestauszeit.
 9. **Prioritätskaskade** (Demotion/Promotion) und **One-Change-Limit** anwenden.
 10. **Allocation** der regelbaren Geräte aus dem verbleibenden Pool: Im Standardmodus zuerst
-    technische Minima, danach Zusatzleistung. Im erweiterten Modus zuerst die Schutzsockel in
-    Prioritätsreihenfolge, danach Zusatzleistung. Bei sinkendem Pool verschwinden dadurch erst
+    technische Minima, danach Zusatzleistung. Im erweiterten Modus zuerst die geschützten
+    Mindestleistungen in Prioritätsreihenfolge — der reine Helferwert, ohne `reserve_w` und
+    globalen Puffer —, danach Zusatzleistung. Bei sinkendem Pool verschwinden dadurch erst
     Anteile oberhalb der Sockel, dann die Sockel des niedrigsten Teilnehmers.
 11. **Entladeplanung:** `hausdefizit_w` wird **einmal** über alle entladebereiten Speicher
     aufgeteilt, strikt nach `entlade_prioritat`. Rechnete jeder Speicher für sich, entladen bei

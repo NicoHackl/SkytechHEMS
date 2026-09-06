@@ -798,13 +798,20 @@ class ControllableDevice(Device):
         return remaining_w
 
     def allocate_protected_minimum(self, remaining_w: float) -> float:
-        """Teilt den priorisierten Schutzsockel zu, ohne die technische Grenze zu brechen.
+        """Teilt die priorisierte geschützte Mindestleistung zu, ohne die technische
+        Grenze zu brechen.
 
-        Der Schutzsockel ist keine zweite technische Einschaltgrenze: Reicht der
-        Pool für das technische Minimum, aber nicht für den vollständigen
-        Schutz, darf das Gerät mit dem verfügbaren Teil weiterlaufen. Reicht er
-        nicht einmal für die technische Untergrenze, bleibt das Gerät aus und
-        ein niedriger-priores Gerät darf seinen kleineren Startwert noch prüfen.
+        Sockel ist ausschließlich geschuetzte_mindestleistung_w, an der technischen
+        Obergrenze geklemmt — bewusst NICHT _schutz_w: reserve_w und der globale
+        Puffer sind Sicherheitsabstand gegenüber Binärverbrauchern (consume_from_pool)
+        und dürfen nie zum Sollwert eines regelbaren Geräts werden. Stehen 500 W als
+        geschützte Mindestleistung, erhält das Gerät in diesem Durchlauf exakt 500 W.
+
+        Der Sockel ist keine zweite technische Einschaltgrenze: Reicht der Pool für
+        das technische Minimum, aber nicht für den vollständigen Sockel, darf das
+        Gerät mit dem verfügbaren Teil weiterlaufen. Reicht er nicht einmal für die
+        technische Untergrenze, bleibt das Gerät aus und ein niedriger-priores Gerät
+        darf seinen kleineren Startwert noch prüfen.
         """
         if not self.eligible or remaining_w <= 0:
             self._alloc_w = 0.0
@@ -815,7 +822,8 @@ class ControllableDevice(Device):
             self._alloc_w = 0.0
             return remaining_w
 
-        protected_w = max(self._schutz_w, min_w)
+        protected_w = max(min(self.geschuetzte_mindestleistung_w, self.max_technisch_w),
+                          min_w)
         if protected_w <= 0:
             self._alloc_w = 0.0
             return remaining_w

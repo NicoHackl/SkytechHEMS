@@ -355,6 +355,33 @@ def test_standardbereich_belaesst_regelbare_verteilung_unveraendert():
     }
 
 
+def test_kaskade_sockel_ist_der_helferwert_ohne_reserve_und_puffer():
+    # 500 W geschützte Mindestleistung sind im Kaskadendurchlauf exakt 500 W.
+    # reserve_w (200 W je Gerät) und der globale Puffer (100 W) bleiben
+    # Reservierung gegenüber Binärgeräten und heben den Sockel nicht an:
+    # Pool 1600 W → je 500 W Sockel, die restlichen 600 W gehen an Prio 1.
+    ctrl = _protected_controller([
+        {"name": "prio1", "class": "controllable", "allowed_modes": "auto",
+         "actual_power_entity": "sensor.prio1", **CTRL_FALLBACKS},
+        {"name": "prio2", "class": "controllable", "allowed_modes": "auto",
+         "actual_power_entity": "sensor.prio2", **CTRL_FALLBACKS},
+    ])
+    states = {
+        **_global(**{"input_number.ems_globaler_puffer_w": 100}),
+        **_controllable_w("prio1", prio=1, min_w=0, max_w=2500, geschuetzt=500,
+                          reserve=200),
+        **_controllable_w("prio2", prio=2, min_w=0, max_w=3500, geschuetzt=500,
+                          reserve=200),
+        "sensor.prio1": 0,
+        "sensor.prio2": 0,
+        "sensor.s": 1600,
+    }
+
+    assert _allocations(ctrl.run_cycle(make_states(states))) == {
+        "prio1": pytest.approx(1100), "prio2": pytest.approx(500),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Fremdsteuerung ("Force-Modus"): Leistung darf nicht in den Pool zurückfließen
 # ---------------------------------------------------------------------------

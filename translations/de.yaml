@@ -243,9 +243,11 @@ configuration:
       Legt fest, wo die geschützte Mindestleistung regelbarer Geräte wirkt.
       binary_only ist der rückwärtskompatible Standard: Sie reserviert Leistung
       nur vor nachfolgenden Binärverbrauchern. binary_and_controllable ergänzt
-      die Verteilung regelbarer Geräte: Zuerst erhalten sie ihren Schutzsockel
-      in Prioritätsreihenfolge, erst danach wird freie Leistung bis zur
-      technischen Obergrenze verteilt. Bei fallendem Pool wird zuerst Leistung
+      die Verteilung regelbarer Geräte: Zuerst erhalten sie ihre geschützte
+      Mindestleistung in Prioritätsreihenfolge, erst danach wird freie Leistung
+      bis zur technischen Obergrenze verteilt. Sockel ist dabei genau der
+      Helferwert; reserve_w und der globale Puffer bleiben Reservierung
+      gegenüber Binärgeräten. Bei fallendem Pool wird zuerst Leistung
       oberhalb der Sockel reduziert, danach der Sockel des niedrigsten
       Teilnehmers. Die Auswahl wirkt nach einem Add-on-Neustart.
   available_modes:

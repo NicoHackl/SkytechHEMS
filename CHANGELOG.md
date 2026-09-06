@@ -28,8 +28,11 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
   Einstellungen" legt `protected_minimum_scope` fest, ob der Schutz wie bisher nur gegenüber
   Binärverbrauchern (`binary_only`, Standard) wirkt oder zusätzlich die Verteilung regelbarer
   Verbraucher steuert (`binary_and_controllable`). Im erweiterten Modus erhalten regelbare Geräte
-  ihren Schutzsockel in Prioritätsreihenfolge, bevor freie Leistung bis zu den technischen
-  Obergrenzen verteilt wird. Bei sinkendem Pool fällt erst Leistung oberhalb der Sockel weg, danach
+  ihre geschützte Mindestleistung in Prioritätsreihenfolge, bevor freie Leistung bis zu den
+  technischen Obergrenzen verteilt wird. Sockel ist dabei genau der Helferwert: Stehen 500 W in
+  `geschutzte_mindestleistung_w`, teilt der Durchlauf 500 W zu. `reserve_w` und der globale Puffer
+  gehen nicht ein — sie bleiben Reservierung gegenüber Binärgeräten und werden nie zum Sollwert.
+  Bei sinkendem Pool fällt erst Leistung oberhalb der Sockel weg, danach
   der niedrigste Teilnehmer unter seinen Sockel; Binärgeräte behalten ihren Zeitschutz.
 - **Navigationsziele für die Power Flow Card.** Je Knoten — Erzeugung, Netz, Haus, Übriges Haus,
   Batterie und je Gerät — lässt sich eine Dashboard-Ansicht hinterlegen, auf die ein Klick auf der

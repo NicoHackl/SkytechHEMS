@@ -45,12 +45,17 @@ Es gibt die globale Add-on-Option `protected_minimum_scope`:
 
 - `binary_only` ist der Default und erhält das bisherige Verhalten vollständig.
 - `binary_and_controllable` ergänzt nach der bestehenden Binärentscheidung einen Schutzdurchlauf
-  für regelbare Geräte. Jedes Gerät erhält in Prioritätsreihenfolge zunächst seinen effektiven
-  Schutzsockel `schutz_w`; danach fließt verbleibende Leistung erneut nach Priorität bis zur
-  technischen Obergrenze.
+  für regelbare Geräte. Jedes Gerät erhält in Prioritätsreihenfolge zunächst seine geschützte
+  Mindestleistung; danach fließt verbleibende Leistung erneut nach Priorität bis zur technischen
+  Obergrenze.
 
-Der effektive Sockel bleibt geschützte Mindestleistung plus Geräte- und globalem Puffer, an der
-technischen Obergrenze geklemmt. Er ist keine zweite technische Einschaltgrenze: Trägt der Pool das
+Der Sockel dieses Durchlaufs ist ausschließlich der Helferwert
+`geschutzte_mindestleistung_<u>`, an der technischen Obergrenze geklemmt — **nicht** `schutz_w`.
+`reserve_w` und der globale Puffer bleiben das, was sie immer waren: Sicherheitsabstand, den
+`consume_from_pool` gegenüber Binärverbrauchern reserviert. Sie werden nie zum Sollwert eines
+regelbaren Geräts (Korrektur vom 06.09.2026; die erste Fassung hat `schutz_w` zugeteilt und damit
+bei 500 W geschützter Mindestleistung, 200 W Reserve und 100 W globalem Puffer 800 W geladen).
+Der Sockel ist keine zweite technische Einschaltgrenze: Trägt der Pool das
 technische Minimum, aber nicht den ganzen Sockel, erhält das Gerät den verfügbaren Teil.
 
 Bei sinkendem Pool berechnet derselbe Ablauf zuerst kleinere Anteile oberhalb der Sockel. Reicht
