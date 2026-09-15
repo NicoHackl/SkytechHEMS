@@ -49,8 +49,9 @@ Für Speicher zusätzlich verpflichtend:
 
 6. **Die Entladung erhöht den Pool nicht.** Der wichtigste Test der Speicher-Erweiterung —
    ohne ihn steht die Aufschaukelung wieder offen.
-7. **Das Hausdefizit schließt HEMS-Lasten aus**, auch fremdgesteuerte. Sonst deckt der Speicher
-   den von Hand eingeschalteten Heizstab.
+7. **Das Hausdefizit schließt HEMS-Lasten aus**, auch fremdgesteuerte — **nicht** aber eine
+   Zwangslast (D-053), die bewusst als Hausverbrauch gilt. Sonst deckt der Speicher den von Hand
+   eingeschalteten Heizstab.
 8. **Ohne konfigurierten Speicher bleibt das Verhalten unverändert.**
    `test_pool_ohne_speicher_unveraendert` und die Property P7 sind der Beweis, dass die
    Erweiterung wirklich additiv ist.
@@ -68,6 +69,16 @@ Für jeden Fallback zusätzlich verpflichtend:
 13. **Die volle Matrix je Feld:** gültiger HA-Wert, gültiger HA-Nullwert, fehlende Entität,
     `unavailable`, `unknown` und nicht numerischer Wert. Wert und Diagnose werden getrennt
     geprüft — `missing` und `unavailable` liefern denselben Wert, aber verschiedene Ursachen.
+
+Für den Zwang (D-053) zusätzlich verpflichtend:
+
+14. **Zwang wirkt bei jeder Sperre außer der technischen Freigabe** — globales Aus, Regelmodus
+    `aus`, Hard-Lockout, Gerätemodus `aus`, fehlende Bedienfreigabe — und nie bei
+    `runtime_active: false`. Er ignoriert Notabschaltung, Mindestauszeit, Rampe, Totband,
+    Kaskade und One-Change; reserviert nichts und rechnet nichts in den Pool zurück; die
+    Zwangslast wird vom Speicher gedeckt; nach dem Zwang schützt die Mindestlaufzeit. Für
+    `force` und `force_leistung_w` gilt die volle Matrix aus Punkt 13, für Ampere-Geräte
+    zusätzlich Phasenwahl und Umschaltsperre unter Zwang.
 
 Ein Bugfix ohne Regressionstest ist nicht abgeschlossen. Der Test muss **vor** dem Fix
 nachweislich fehlschlagen.

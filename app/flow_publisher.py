@@ -270,10 +270,17 @@ def build_status_payload(status: Dict[str, Any], cycle_count: int,
     """Kennzahlen des letzten Zyklus und Rueckfallwerte je Geraet (Abschnitt 4)."""
     devices: Dict[str, Any] = {}
     for device in status.get("devices") or []:
+        # `runtime_active` heißt im Vertrag „regelt gerade mit". Ein Zwangsgerät
+        # (D-053) läuft auch ohne Freigabe – es wäre sonst als „Gerätemodus aus"
+        # gezeigt worden, obwohl es gerade Leistung zieht.
+        force_active = bool(device.get("force_active"))
         devices[device.get("id", "")] = {
             "leistung_w": _device_power(device),
-            "runtime_active": bool(device.get("eligible")) and bool(device.get("runtime_active")),
+            "runtime_active": ((bool(device.get("eligible")) or force_active)
+                               and bool(device.get("runtime_active"))),
             "inactive_reasons": _inactive_reasons(device),
+            # Additiv (D-047): Gerät läuft per Zwang-Helfer außerhalb des Pools.
+            "zwang": force_active,
         }
 
     pool = _as_float(status.get("pool_w"), 0.0)
@@ -318,6 +325,10 @@ def _inactive_reasons(device: Dict[str, Any]) -> List[str]:
     Der Vertrag kennt nur eine Liste, also werden beide uebersetzt.
     """
     reasons: List[str] = []
+    # Ein wirksamer Zwang setzt nie ein kaputtes Schreibziel voraus – wer hier
+    # ankommt, regelt tatsächlich, auch ohne Freigabe.
+    if device.get("force_active"):
+        return reasons
     if not device.get("runtime_active", True):
         for token in device.get("inactive_reasons") or []:
             reasons.append(INACTIVE_REASON_TEXTS.get(token, str(token)))

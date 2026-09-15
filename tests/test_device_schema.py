@@ -81,6 +81,54 @@ def test_schema_items_have_stable_semantics_without_suffix_inference():
     assert by_key["hoch_regelzeit_s"]["planning_relevant"] is False
 
 
+def test_schema_kennt_zwang_helfer():
+    """D-053: beide Zwang-Helfer sind Nutzersteuerung; die Leistung ist immer Watt."""
+    heater, fan = _schema()[1:]
+    heater_keys = {item["key"]: item for item in heater["items"]}
+    assert heater_keys["force"] == {
+        "entity": "input_boolean.ems_heizstab_force", "label": "Zwang", "key": "force",
+        "kind": "bool", "role": "user_control", "planning_relevant": True,
+    }
+    assert heater_keys["force_leistung_w"] == {
+        "entity": "input_number.ems_heizstab_force_leistung_w", "label": "Zwangsleistung",
+        "key": "force_leistung_w", "kind": "number", "role": "user_control",
+        "planning_relevant": True, "unit": "W",
+    }
+    fan_keys = {item["key"] for item in fan["items"]}
+    assert "force" in fan_keys and "force_leistung_w" not in fan_keys
+
+
+def test_zwangsleistung_bleibt_im_ampere_modus_watt():
+    wallbox = _build_device_controls_schema(
+        _valid([{
+            "name": "wallbox_1", "class": "controllable", "entity_prefix": "wallbox",
+            "actual_power_entity": "sensor.wb", "allowed_modes": "auto",
+            "output_unit": "ampere", "phases": "1,3", **CTRL_FALLBACKS,
+        }]),
+        residual_power_entity="sensor.ueberschuss", interval_s=3,
+    )[1]
+    entities = {item["entity"] for item in wallbox["items"]}
+    assert "input_number.ems_wallbox_force_leistung_w" in entities
+    assert "input_number.ems_wallbox_force_leistung_a" not in entities
+    assert "input_number.ems_wallbox_max_technisch_a" in entities
+
+
+def test_speicher_hat_keinen_zwang_helfer():
+    battery = _build_device_controls_schema(
+        _valid([{
+            "name": "acspeicher1", "class": "battery",
+            "soc_entity": "sensor.acspeicher1_soc",
+            "charge_power_entity": "sensor.acspeicher1_lade_w",
+            "discharge_power_entity": "sensor.acspeicher1_entlade_w",
+            "available_charge_power_w": 1500, "available_discharge_power_w": 2000,
+            "capacity_kwh": 10.0, "allowed_modes": "manuell,nur_laden",
+        }]),
+        residual_power_entity="sensor.ueberschuss", interval_s=3,
+        battery_residual_power_entity="sensor.hausleistungsbilanz",
+    )[1]
+    assert not any(item["key"].startswith("force") for item in battery["items"])
+
+
 def test_unbekannte_klasse_erreicht_das_schema_nicht():
     """Die Validierung sortiert sie vorher aus – der Builder sieht sie nie."""
     result = validate_options({"devices": [{"name": "x", "class": "future"}]})

@@ -8,6 +8,16 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Geändert
+
+- **„Force-Modus" heißt jetzt Fremdsteuerung.** Der Begriff für ein extern eingeschaltetes Gerät
+  ohne HEMS-Anforderung wurde in Code-Kommentaren, Doku und Oberfläche umbenannt, damit `force`
+  eindeutig den neuen Zwang bezeichnet. Verhalten unverändert.
+- **`binary_total_w` und Flow-`runtime_active` präzisiert.** `binary_total_w` im Status zählt
+  Zwangsgeräte nicht mit (ihre Last steckt bereits im Residual); `runtime_active` der Power Flow
+  Card ist für ein Zwangsgerät `true` mit leeren `inactive_reasons`. Ohne Zwang-Helfer bleibt
+  beides wie bisher.
+
 ### Behoben
 
 - **Die Power Flow Card nennt jetzt die Freigabe, die tatsächlich fehlt.** Unter einem gesperrten
@@ -18,6 +28,19 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ### Hinzugefügt
 
+- **Zwangsbetrieb je Gerät.** Mit dem neuen Helfer `input_boolean.ems_<prefix>_force` läuft ein
+  regelbares oder binäres Gerät unabhängig vom PV-Überschuss — auch ohne Bedienfreigabe, bei
+  Gerätemodus „aus", bei global ausgeschalteter Regelung und während einer Notabschaltung. Nur die
+  technische Freigabe und ein kaputtes Schreibziel bleiben hartes Gate. Regelbare Geräte bekommen
+  ihre Leistung aus `input_number.ems_<prefix>_force_leistung_w` (immer Watt, auch bei Ampere-
+  Geräten; geklemmt auf die technischen Grenzen; fehlend oder 0 = Zwang unwirksam) und schreiben
+  sie sofort ohne Rampe und Totband. Ein Zwangsgerät nimmt nichts aus dem Pool, wird nicht in ihn
+  zurückgerechnet und zählt nicht gegen Kaskade oder One-Change-Limit; seine Last gilt als
+  Hausverbrauch und wird vom AC-Speicher gedeckt. Der Status trägt `force_requested`,
+  `force_active`, `force_blocked_reason` und `force_w`; die Statuskarte zeigt „Zwang" bzw. „Zwang
+  unwirksam" mit Grund, der Steuerung-Tab beide Helfer, die Power Flow Card additiv `zwang`.
+  Beide Helfer sind optional und müssen wie alle anderen in Home Assistant angelegt werden.
+  Entscheidung D-053.
 - **Eigenes Icon und Logo im Supervisor.** Das Add-on erscheint jetzt mit dem Skytech-HEMS-Marken-
   icon statt des bisherigen Platzhalters, u. a. im Add-on-Store und auf der Übersichtsseite.
 - **Farbe des Freigabe-Rings der Power Flow Card einstellbar.** Der Ring um ein freigegebenes

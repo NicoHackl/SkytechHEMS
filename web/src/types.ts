@@ -20,6 +20,18 @@ interface DeviceBase {
   write_error: string | null
 }
 
+/** Zwang (D-053): eine eigene Achse neben `eligible`. Ein Zwangsgerät läuft
+    außerhalb des Pools — `force_active: true` bei `eligible: false` ist kein
+    Widerspruch, sondern der Normalfall bei gesperrter Freigabe. */
+interface ForceStatus {
+  /** Roher Zustand des Helfers `ems_<prefix>_force`. */
+  force_requested: boolean
+  /** Wirksame Entscheidung: angefordert UND kein Sperrgrund. */
+  force_active: boolean
+  /** Warum ein angeforderter Zwang nicht wirkt; null, wenn er wirkt oder nicht angefordert ist. */
+  force_blocked_reason: 'technische_freigabe' | 'runtime' | 'keine_leistung' | null
+}
+
 /** Ursache und Quelle eines gelesenen HA-States. */
 export interface EntityDiagnostic {
   role: string
@@ -27,8 +39,10 @@ export interface EntityDiagnostic {
   source: 'ha' | 'addon' | 'internal'
 }
 
-export interface ControllableDevice extends DeviceBase {
+export interface ControllableDevice extends DeviceBase, ForceStatus {
   type: 'controllable'
+  /** Effektive, geklemmte Zwangsleistung in Watt; null, solange kein Zwang wirkt. */
+  force_w: number | null
   actual_w: number
   /** Aktuell in HA stehender Sollwert, immer in Watt. */
   anforderung_current_w: number
@@ -52,7 +66,7 @@ export interface ControllableDevice extends DeviceBase {
   phase_lock_remaining_s?: number
 }
 
-export interface BinaryDevice extends DeviceBase {
+export interface BinaryDevice extends DeviceBase, ForceStatus {
   type: 'binary'
   power_w: number
   /** Nur vorhanden, wenn `power_actual_entity` konfiguriert ist und der Sensor
@@ -151,9 +165,9 @@ export interface CycleStatus {
   battery_residual_source: 'ha' | 'addon' | 'internal' | 'formula'
   /** Summe der gemessenen Entladeleistung aller Speicher. */
   netz_support_w: number
-  /** Σ current_w — nur vom HEMS angeforderte Last, Force-Modus gefiltert. */
+  /** Σ current_w — nur aus dem Pool angeforderte Last; Fremdsteuerung und Zwang gefiltert. */
   hems_last_w: number
-  /** Σ gemessene_last_w — roher Messwert, Force-Modus enthalten. */
+  /** Σ gemessene_last_w — roher Messwert, Fremdsteuerung enthalten, Zwang gefiltert (D-053). */
   hems_last_gemessen_w: number
   /** Ungeklemmter Pool: positiv = Überschuss, negativ = Entladebedarf. */
   pool_roh_w: number

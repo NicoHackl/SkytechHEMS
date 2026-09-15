@@ -55,9 +55,18 @@ Ursache steht je Entität in `entity_diagnostics`, siehe
 | `input_number.ems_<prefix>_geschutzte_mindestleistung_<u>` | W oder A | intern `0` | Reservierter Sockel gegenüber Binärverbrauchern; mit `protected_minimum_scope: binary_and_controllable` zusätzlich vor der Zusatzleistung höher priorisierter regelbarer Verbraucher |
 | `input_number.ems_<prefix>_reserve_w` | W | intern `0` | Gerätespezifischer Zusatzpuffer; auch im Ampere-Modus immer Watt |
 | `input_number.ems_<prefix>_min_umschaltzeit_s` | s | Add-on-Feld `phase_switch_delay_s`, sonst intern `30` | Sperrzeit zwischen Phasenwechseln; nur bei `phases: "1,3"` gelesen |
+| `input_number.ems_<prefix>_force_leistung_w` | W (immer, auch im Ampere-Modus) | intern `0` → Zwang unwirksam | Zwangsleistung (D-053), nur mit `ems_<prefix>_force: on` gelesen; geklemmt auf `[min_technisch, max_technisch]`; im Ampere-Modus wählt das HEMS die Phasen zur Zwangsleistung und rundet auf ganze Ampere ab |
 
 Ein negativer Wert ist in allen Feldern oben ungültig und löst den Ersatzwert aus. Ein gültiger
 Wert `0` ist dagegen ein Wert und wird nie ersetzt — auch nicht bei `min_umschaltzeit_s`.
+
+**Zwang** (`ems_<prefix>_force: on`): der Sollwert wird sofort geschrieben — ohne
+`hoch_regelzeit_s`, ohne `max_anderung_pro_schritt` und ohne Totband — und bei Defizit nicht
+abgeregelt. Fehlt `force_leistung_w`, ist der Wert ungültig oder `0`, bleibt das Gerät in der
+Normalregelung und der Status nennt `force_blocked_reason: "keine_leistung"`; die Ursache steht in
+`entity_diagnostics`. Die Umschaltsperre `min_umschaltzeit_s` gilt auch unter Zwang. Endet der
+Zwang, greift die Rampe wieder normal. Einzelheiten:
+[global.md](global.md#gemeinsame-ha-helfer).
 
 Ob die geschützte Mindestleistung ausschließlich gegenüber Binärverbrauchern oder zusätzlich
 innerhalb der regelbaren Prioritätskaskade wirkt, legt die globale Add-on-Option
@@ -119,7 +128,9 @@ Im Ampere-Modus wird dieser Watt-Vorschlag nicht übernommen. Für alle Vorschl�
 - eine Automation oder Integration, die den Anforderungshelfer auf das reale Gerät überträgt
 
 Die klassenspezifischen Eingangshelfer sind dagegen optional: ohne sie regelt das Gerät mit den
-Add-on-Werten weiter, statt still auf `0` zu fallen.
+Add-on-Werten weiter, statt still auf `0` zu fallen. Auch `force` und `force_leistung_w` sind
+optional — ohne sie gibt es keinen Zwang, und im Steuerung-Tab ist „Helfer nicht gefunden" dann
+kein Fehler.
 
 ## Beispiel
 

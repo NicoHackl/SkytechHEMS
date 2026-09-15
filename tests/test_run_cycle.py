@@ -383,7 +383,7 @@ def test_kaskade_sockel_ist_der_helferwert_ohne_reserve_und_puffer():
 
 
 # ---------------------------------------------------------------------------
-# Fremdsteuerung ("Force-Modus"): Leistung darf nicht in den Pool zurückfließen
+# Fremdsteuerung (extern eingeschaltet): Leistung darf nicht in den Pool zurückfließen
 # ---------------------------------------------------------------------------
 
 def test_extern_erzwungener_binaerverbraucher_blaeht_pool_nicht_auf():
@@ -743,7 +743,7 @@ def test_fremdgesteuerter_heizstab_wird_nicht_gedeckt():
         "input_number.ems_ac_speicher_entlade_abschlag_w": 0,
     }
     status = ctrl.run_cycle(make_states(states))["status"]
-    assert status["hems_last_w"] == 0                 # Force-Anteil zählt nicht
+    assert status["hems_last_w"] == 0                 # Fremdanteil zählt nicht
     assert status["hems_last_gemessen_w"] == 2000     # gemessen zählt er sehr wohl
     assert status["hausdefizit_w"] == pytest.approx(500)
 
@@ -1174,3 +1174,461 @@ def test_ungueltiger_eintrag_bleibt_bis_in_den_status_sichtbar():
     assert [d["id"] for d in status["devices"]] == ["heizstab"]
     assert [i["name"] for i in status["inactive_devices"]] == ["pumpe"]
     assert [c["name"] for c in ctrl.device_configs] == ["heizstab"]
+
+
+# ---------------------------------------------------------------------------
+# Zwang (D-053): Gerät läuft außerhalb des Pools, Zwangslast ist Hausverbrauch
+# ---------------------------------------------------------------------------
+
+def _force(prefix, on=True, leistung=None):
+    """Zwang-Helfer eines Geräts; `leistung=None` lässt den Leistungshelfer weg."""
+    states = {f"input_boolean.ems_{prefix}_force": "on" if on else "off"}
+    if leistung is not None:
+        states[f"input_number.ems_{prefix}_force_leistung_w"] = leistung
+    return states
+
+
+def _zwang_heizstab(**over):
+    """Heizstab (500–3000 W) mit Zwang 2000 W bei leerem Pool."""
+    states = {
+        **_global(),
+        **_controllable_w("heizstab", min_w=500, max_w=3000, setpoint=0),
+        **_force("heizstab", leistung=2000),
+        "sensor.s": 0,
+        "sensor.heizstab_ist": 0,
+    }
+    states.update(over)
+    return states
+
+
+def _setpoint_op(res):
+    return _op_for(res["write_ops"], "input_number.ems_heizstab_anforderung_leistung_w")
+
+
+@pytest.mark.parametrize("sperre", [
+    {"input_boolean.ems_pv_regelung_aktiv": "off"},
+    {"input_select.ems_regelmodus": "aus"},
+    {"sensor.s": "unavailable"},                         # Hard-Lockout
+    {"input_select.ems_heizstab_modus": "aus"},
+    {"input_boolean.ems_heizstab_freigabe": "off"},
+], ids=["global_aus", "regelmodus_aus", "hard_lockout", "geraetemodus_aus", "bedienfreigabe_aus"])
+def test_zwang_regelbar_wirkt_trotz_sperre(sperre):
+    """Zwang übersteuert jede Sperre außer der technischen Freigabe."""
+    ctrl = EMSController([_heizstab_cfg()], residual_power_entity="sensor.s")
+    res = ctrl.run_cycle(make_states(_zwang_heizstab(**sperre)))
+    dev = _dev(res)
+    assert _setpoint_op(res)[2]["value"] == pytest.approx(2000)
+    assert dev["force_requested"] is True
+    assert dev["force_active"] is True
+    assert dev["force_blocked_reason"] is None
+    assert dev["force_w"] == pytest.approx(2000)
+    # Die Pool-Achse bleibt ehrlich: das Gerät ist NICHT freigegeben.
+    assert dev["eligible"] is False
+
+
+def test_zwang_regelbar_ohne_sperre_verlaesst_den_pool():
+    """Auch mit Freigabe und vollem Pool gilt die Zwangsleistung, nicht der Pool."""
+    ctrl = EMSController([_heizstab_cfg()], residual_power_entity="sensor.s")
+    res = ctrl.run_cycle(make_states(_zwang_heizstab(**{"sensor.s": 3000})))
+    assert _setpoint_op(res)[2]["value"] == pytest.approx(2000)
+    assert _dev(res)["eligible"] is True
+    assert _dev(res)["force_active"] is True
+
+
+def test_zwang_nie_ohne_technische_freigabe():
+    ctrl = EMSController([_heizstab_cfg()], residual_power_entity="sensor.s")
+    states = _zwang_heizstab(**{
+        "input_boolean.ems_pv_regelung_aktiv": "off",
+        "input_boolean.ems_heizstab_technische_freigabe": "off",
+    })
+    res = ctrl.run_cycle(make_states(states))
+    dev = _dev(res)
+    assert _setpoint_op(res) is None                    # Sollwert bleibt 0
+    assert dev["force_active"] is False
+    assert dev["force_blocked_reason"] == "technische_freigabe"
+    # Die technische Freigabe wurde für den Zwang gefragt – trotz source 'aus'.
+    assert dev["source"] == "aus"
+    assert dev["technische_freigabe"] is False
+
+
+def test_zwang_nie_bei_fehlendem_schreibziel():
+    ctrl = EMSController([_heizstab_cfg()], residual_power_entity="sensor.s")
+    states = _zwang_heizstab()
+    del states["input_number.ems_heizstab_anforderung_leistung_w"]
+    dev = _dev(ctrl.run_cycle(make_states(states)))
+    assert dev["runtime_active"] is False
+    assert dev["force_active"] is False
+    assert dev["force_blocked_reason"] == "runtime"
+
+
+def test_zwang_regelbar_ignoriert_rampe_und_totband():
+    ctrl = EMSController([_heizstab_cfg()], residual_power_entity="sensor.s")
+    states = _zwang_heizstab(**{
+        "input_number.ems_heizstab_hoch_regelzeit_s": 600,
+        "input_number.ems_heizstab_max_anderung_pro_schritt_w": 100,
+        "input_number.ems_heizstab_min_anderung_pro_schritt_w": 500,
+        "input_number.ems_heizstab_anforderung_leistung_w": 1900,
+    })
+    # last_changed = jetzt: die Hoch-Regelzeit wäre noch lange nicht abgelaufen.
+    import datetime
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    res = ctrl.run_cycle(make_states(states, last_changed=now))
+    assert _setpoint_op(res)[2]["value"] == pytest.approx(2000)
+
+
+def test_zwang_regelbar_schreibt_nicht_ohne_aenderung():
+    """Kein Schreiben bei delta 0 – sonst altert last_changed nie."""
+    ctrl = EMSController([_heizstab_cfg()], residual_power_entity="sensor.s")
+    states = _zwang_heizstab(**{
+        "input_number.ems_heizstab_anforderung_leistung_w": 2000,
+        "sensor.heizstab_ist": 2000,
+    })
+    assert _setpoint_op(ctrl.run_cycle(make_states(states))) is None
+
+
+def test_zwang_regelbar_ignoriert_defizit_runterregeln():
+    ctrl = EMSController([_heizstab_cfg()], residual_power_entity="sensor.s")
+    states = _zwang_heizstab(**{
+        "input_number.ems_heizstab_anforderung_leistung_w": 2000,
+        "sensor.heizstab_ist": 2000,
+        "sensor.s": -3000,
+    })
+    res = ctrl.run_cycle(make_states(states))
+    assert res["status"]["current_deficit_w"] == pytest.approx(3000)
+    assert _setpoint_op(res) is None                    # bleibt bei 2000
+    assert _dev(res)["new_w"] == pytest.approx(2000)
+
+
+@pytest.mark.parametrize(("wunsch", "erwartet"), [(200, 500), (9000, 3000)])
+def test_zwang_regelbar_wird_auf_technische_grenzen_geklemmt(wunsch, erwartet):
+    ctrl = EMSController([_heizstab_cfg()], residual_power_entity="sensor.s")
+    res = ctrl.run_cycle(make_states(_zwang_heizstab(**_force("heizstab", leistung=wunsch))))
+    assert _setpoint_op(res)[2]["value"] == pytest.approx(erwartet)
+    assert _dev(res)["force_w"] == pytest.approx(erwartet)
+
+
+@pytest.mark.parametrize(("wert", "diagnose"), [
+    (None, "missing"),
+    ("unavailable", "unavailable"),
+    ("unknown", "unavailable"),
+    ("kaputt", "invalid"),
+    ("-5", "invalid"),
+    ("0", "valid"),
+], ids=["fehlt", "unavailable", "unknown", "text", "negativ", "null"])
+def test_zwang_regelbar_ohne_leistung_bleibt_in_normalregelung(wert, diagnose):
+    """Ohne gültige Zwangsleistung > 0 ist der Zwang unwirksam; Ursache getrennt."""
+    ctrl = EMSController([_heizstab_cfg()], residual_power_entity="sensor.s")
+    states = _zwang_heizstab(**{"sensor.s": 3000})
+    helper = "input_number.ems_heizstab_force_leistung_w"
+    if wert is None:
+        del states[helper]
+    else:
+        states[helper] = wert
+    res = ctrl.run_cycle(make_states(states))
+    dev = _dev(res)
+    assert dev["force_requested"] is True
+    assert dev["force_active"] is False
+    assert dev["force_blocked_reason"] == "keine_leistung"
+    assert dev["force_w"] is None
+    assert dev["entity_diagnostics"][helper]["state"] == diagnose
+    # Normalregelung: der volle Pool von 3000 W wird zugeteilt.
+    assert _setpoint_op(res)[2]["value"] == pytest.approx(3000)
+
+
+@pytest.mark.parametrize(("wert", "diagnose", "aktiv"), [
+    (None, "missing", False),
+    ("unavailable", "unavailable", False),
+    ("unknown", "unavailable", False),
+    ("vielleicht", "invalid", False),
+    ("off", "valid", False),
+    ("on", "valid", True),
+], ids=["fehlt", "unavailable", "unknown", "text", "off", "on"])
+def test_zwang_helfer_matrix_boolean(wert, diagnose, aktiv):
+    ctrl = EMSController([_heizstab_cfg()], residual_power_entity="sensor.s")
+    states = _zwang_heizstab()
+    helper = "input_boolean.ems_heizstab_force"
+    if wert is None:
+        del states[helper]
+    else:
+        states[helper] = wert
+    dev = _dev(ctrl.run_cycle(make_states(states)))
+    assert dev["force_requested"] is aktiv
+    assert dev["force_active"] is aktiv
+    assert dev["entity_diagnostics"][helper]["state"] == diagnose
+
+
+def test_zwangslast_wird_nicht_in_den_pool_zurueckgerechnet():
+    """Der zweite Heizstab bekommt nur den echten Überschuss, nicht die Zwangslast."""
+    cfg = [_heizstab_cfg(),
+           {"name": "zweiter", "class": "controllable",
+            "actual_power_entity": "sensor.zweiter_ist", "allowed_modes": "auto", **CTRL_FALLBACKS}]
+    ctrl = EMSController(cfg, residual_power_entity="sensor.s")
+    states = _zwang_heizstab(**{
+        "input_number.ems_heizstab_anforderung_leistung_w": 2000,
+        "sensor.heizstab_ist": 2000,
+        "sensor.s": 1000,                # Residual enthält die Zwangslast bereits
+        **_controllable_w("zweiter", prio=2, min_w=500, max_w=3000, setpoint=0),
+        "sensor.zweiter_ist": 0,
+    })
+    res = ctrl.run_cycle(make_states(states))
+    assert res["status"]["hems_last_w"] == pytest.approx(0)
+    assert res["status"]["pool_roh_w"] == pytest.approx(1000)
+    op = _op_for(res["write_ops"], "input_number.ems_zweiter_anforderung_leistung_w")
+    assert op[2]["value"] == pytest.approx(1000)
+
+
+def test_zwangslast_reserviert_keine_schutzleistung():
+    """Ein Zwangsgerät hält keinen Schutzsockel gegen Binärgeräte."""
+    cfg = [_heizstab_cfg(),
+           {"name": "luft", "class": "binary",
+            "switch_entity": "switch.luft", "allowed_modes": "auto", **BIN_FALLBACKS}]
+    ctrl = EMSController(cfg, residual_power_entity="sensor.s")
+    states = _zwang_heizstab(**{
+        **_controllable_w("heizstab", min_w=500, max_w=3000, geschuetzt=1500, setpoint=0),
+        **_force("heizstab", leistung=2000),
+        **_binary("luft", prio=2, power=1000, switch="off"),
+        "switch.luft": "off",
+        "sensor.s": 1000,
+    })
+    res = ctrl.run_cycle(make_states(states))
+    assert _op_for(res["write_ops"], "input_boolean.ems_luft_anforderung_an")[1] == "turn_on"
+
+
+def test_zwangslast_wird_vom_speicher_gedeckt():
+    """Spiegel zu test_fremdgesteuerter_heizstab_wird_nicht_gedeckt: unter Zwang
+    ist der Heizstab Hausverbrauch und der Speicher deckt ihn (D-053)."""
+    cfg = [_battery_cfg("speicher"), _heizstab_cfg()]
+    ctrl = EMSController(cfg, residual_power_entity="sensor.s")
+    states = _zwang_heizstab(**{
+        **_battery("speicher"),
+        "input_number.ems_heizstab_anforderung_leistung_w": 2000,
+        "sensor.heizstab_ist": 2000,
+        "sensor.s": -2500,
+        "input_number.ems_ac_speicher_entlade_abschlag_w": 0,
+    })
+    res = ctrl.run_cycle(make_states(states))
+    status = res["status"]
+    assert status["hems_last_w"] == 0
+    assert status["hems_last_gemessen_w"] == 0
+    assert status["hausdefizit_w"] == pytest.approx(2500)
+    op = _op_for(res["write_ops"], "input_number.ems_speicher_anforderung_leistung_w")
+    assert op[2]["value"] == pytest.approx(-2500)
+
+
+def test_speicher_kennt_keinen_zwang():
+    cfg = [_battery_cfg("speicher")]
+    ctrl = EMSController(cfg, residual_power_entity="sensor.s")
+    states = {
+        **_global(),
+        **_battery("speicher"),
+        **_force("speicher", leistung=3000),
+        "sensor.s": 0,
+    }
+    dev = _dev(ctrl.run_cycle(make_states(states)), "speicher")
+    assert "force_active" not in dev
+    assert "input_boolean.ems_speicher_force" not in dev["entity_diagnostics"]
+
+
+# ---- Binär ----
+
+def _zwang_luft(**over):
+    states = {
+        **_global(),
+        **_binary("luft", prio=9, power=2000, switch="off"),
+        **_force("luft"),
+        "switch.luft": "off",
+        "sensor.s": 0,
+    }
+    states.update(over)
+    return states
+
+
+def _luft_cfg(name="luft"):
+    return {"name": name, "class": "binary",
+            "switch_entity": f"switch.{name}", "allowed_modes": "auto", **BIN_FALLBACKS}
+
+
+def test_zwang_binaer_schaltet_ohne_mindestauszeit_ein():
+    import datetime
+    ctrl = EMSController([_luft_cfg()], residual_power_entity="sensor.s")
+    states = _zwang_luft(**{
+        "input_boolean.ems_pv_regelung_aktiv": "off",
+        "input_number.ems_luft_mindestauszeit_s": 600,
+    })
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    res = ctrl.run_cycle(make_states(states, last_changed=now))
+    assert _op_for(res["write_ops"], "input_boolean.ems_luft_anforderung_an")[1] == "turn_on"
+    dev = _dev(res, "luft")
+    assert dev["force_active"] is True and dev["final_on"] is True
+
+
+def test_zwang_binaer_ignoriert_notabschaltung():
+    ctrl = EMSController([_luft_cfg()], residual_power_entity="sensor.s")
+    states = _zwang_luft(**{"switch.luft": "on",
+                            "input_boolean.ems_luft_anforderung_an": "on",
+                            "sensor.s": -5000})
+    res = ctrl.run_cycle(make_states(states))
+    assert res["status"]["binary_immediate_off"] is True
+    assert _op_for(res["write_ops"], "input_boolean.ems_luft_anforderung_an")[1] == "turn_on"
+
+
+def test_zwang_binaer_ist_kein_grund_fuer_kaskaden_promotion():
+    """Prio 1 bleibt aus, obwohl das Zwangsgerät (Prio 9) läuft."""
+    ctrl = EMSController([_luft_cfg("boiler"), _luft_cfg("luft")], residual_power_entity="sensor.s")
+    states = _zwang_luft(**{
+        **_binary("boiler", prio=1, power=1000, switch="on"),
+        "switch.boiler": "on",
+        "switch.luft": "on",
+        "input_boolean.ems_luft_anforderung_an": "on",
+        "sensor.s": -1000,               # kein Überschuss: nur der Boiler läuft aus dem Pool
+    })
+    res = ctrl.run_cycle(make_states(states))
+    assert _op_for(res["write_ops"], "input_boolean.ems_boiler_anforderung_an")[1] == "turn_off"
+    assert _op_for(res["write_ops"], "input_boolean.ems_luft_anforderung_an")[1] == "turn_on"
+
+
+def test_zwang_binaer_zaehlt_nicht_gegen_one_change():
+    """Zwang-Einschaltung und reguläre Einschaltung im selben Zyklus."""
+    ctrl = EMSController([_luft_cfg("boiler"), _luft_cfg("luft")], residual_power_entity="sensor.s")
+    states = _zwang_luft(**{
+        **_binary("boiler", prio=1, power=1000, switch="off"),
+        "switch.boiler": "off",
+        "sensor.s": 1000,
+    })
+    res = ctrl.run_cycle(make_states(states))
+    assert _op_for(res["write_ops"], "input_boolean.ems_boiler_anforderung_an")[1] == "turn_on"
+    assert _op_for(res["write_ops"], "input_boolean.ems_luft_anforderung_an")[1] == "turn_on"
+
+
+def test_zwang_binaer_zieht_nichts_aus_dem_pool():
+    """binary_total_w lässt das Zwangsgerät aus; der Heizstab bekommt den vollen Pool."""
+    ctrl = EMSController([_luft_cfg(), _heizstab_cfg()], residual_power_entity="sensor.s")
+    states = _zwang_luft(**{
+        **_controllable_w("heizstab", prio=1, min_w=500, max_w=3000, setpoint=0),
+        "sensor.heizstab_ist": 0,
+        "switch.luft": "on",
+        "input_boolean.ems_luft_anforderung_an": "on",
+        "sensor.s": 1500,
+    })
+    res = ctrl.run_cycle(make_states(states))
+    assert res["status"]["binary_total_w"] == pytest.approx(0)
+    assert _setpoint_op(res)[2]["value"] == pytest.approx(1500)
+
+
+def test_zwang_ende_mindestlaufzeit_schuetzt():
+    """Nach dem Zwang greifen die normalen Zeitschutzregeln wieder."""
+    import datetime
+    ctrl = EMSController([_luft_cfg()], residual_power_entity="sensor.s")
+    res = ctrl.run_cycle(make_states(_zwang_luft()))
+    assert _op_for(res["write_ops"], "input_boolean.ems_luft_anforderung_an")[1] == "turn_on"
+
+    vor_10s = (datetime.datetime.now(datetime.timezone.utc)
+               - datetime.timedelta(seconds=10)).isoformat()
+    states = _zwang_luft(**{
+        **_force("luft", on=False),
+        "switch.luft": "on",
+        "input_boolean.ems_luft_anforderung_an": "on",
+        "input_number.ems_luft_mindestlaufzeit_s": 300,
+    })
+    res = ctrl.run_cycle(make_states(states, last_changed=vor_10s))
+    dev = _dev(res, "luft")
+    assert dev["force_active"] is False
+    assert dev["in_min_runtime"] is True
+    assert _op_for(res["write_ops"], "input_boolean.ems_luft_anforderung_an")[1] == "turn_on"
+
+
+# ---- Ampere ----
+
+def _wallbox_cfg():
+    return {"name": "wallbox_1", "class": "controllable",
+            "actual_power_entity": "sensor.wb", "entity_prefix": "wallbox",
+            "allowed_modes": "auto", "output_unit": "ampere", "phases": "1,3", **CTRL_FALLBACKS}
+
+
+def _wallbox_states(**over):
+    states = {
+        **_global(),
+        "input_boolean.ems_wallbox_freigabe": "on",
+        "input_boolean.ems_wallbox_technische_freigabe": "on",
+        "input_select.ems_wallbox_modus": "auto",
+        "input_number.ems_wallbox_prioritat": 1,
+        "input_number.ems_wallbox_min_technisch_a": 6,
+        "input_number.ems_wallbox_max_technisch_a": 16,
+        "input_number.ems_wallbox_geschutzte_mindestleistung_a": 0,
+        "input_number.ems_wallbox_reserve_w": 0,
+        "input_number.ems_wallbox_hoch_regelzeit_s": 0,
+        "input_number.ems_wallbox_runter_regelzeit_s": 0,
+        "input_number.ems_wallbox_max_anderung_pro_schritt_a": 16,
+        "input_number.ems_wallbox_min_anderung_pro_schritt_a": 0,
+        "input_number.ems_wallbox_min_umschaltzeit_s": 0,
+        "input_number.ems_wallbox_anforderung_leistung_a": 0,
+        "input_number.ems_wallbox_anzahl_phase": 1,
+        "sensor.wb": 0,
+        "sensor.s": 0,
+    }
+    states.update(over)
+    return states
+
+
+@pytest.mark.parametrize(("zwang_w", "phasen", "ampere"), [
+    (3680, None, 16),   # einphasig: 16 A × 230 V; Phase bleibt 1 → kein Phasen-Op
+    (11000, 3.0, 15),   # dreiphasig: floor(11000 / 690) = 15 A
+])
+def test_zwang_ampere_waehlt_phasen_und_ampere_zur_zwangsleistung(zwang_w, phasen, ampere):
+    """Die Zwangsleistung ist immer Watt; Phasen und Ampere folgen ihr."""
+    ctrl = EMSController([_wallbox_cfg()], residual_power_entity="sensor.s")
+    res = ctrl.run_cycle(make_states(_wallbox_states(**_force("wallbox", leistung=zwang_w))))
+    amp   = _op_for(res["write_ops"], "input_number.ems_wallbox_anforderung_leistung_a")
+    phase = _op_for(res["write_ops"], "input_number.ems_wallbox_anzahl_phase")
+    assert amp[2]["value"] == ampere
+    assert (phase[2]["value"] if phase else None) == phasen
+    assert _dev(res, "wallbox_1")["force_w"] == pytest.approx(zwang_w)
+
+
+def test_zwang_ampere_liest_leistung_in_watt_nicht_in_ampere():
+    """`_force_leistung_a` ist kein Helfer – nur `_force_leistung_w` zählt."""
+    ctrl = EMSController([_wallbox_cfg()], residual_power_entity="sensor.s")
+    states = _wallbox_states(**{
+        "input_boolean.ems_wallbox_force": "on",
+        "input_number.ems_wallbox_force_leistung_a": 16,
+    })
+    dev = _dev(ctrl.run_cycle(make_states(states)), "wallbox_1")
+    assert dev["force_blocked_reason"] == "keine_leistung"
+    assert "input_number.ems_wallbox_force_leistung_w" in dev["entity_diagnostics"]
+
+
+def test_zwang_ampere_respektiert_phasensperre():
+    """Die Umschaltsperre schützt Hardware und gilt auch unter Zwang."""
+    ctrl = EMSController([_wallbox_cfg()], residual_power_entity="sensor.s")
+    # Zyklus 1: Ladestart mit 11 kW → Wechsel 1→3 Phasen, Sperre beginnt.
+    res = ctrl.run_cycle(make_states(_wallbox_states(**{
+        **_force("wallbox", leistung=11000),
+        "input_number.ems_wallbox_min_umschaltzeit_s": 300,
+    })))
+    assert _op_for(res["write_ops"], "input_number.ems_wallbox_anzahl_phase")[2]["value"] == 3.0
+    # Zyklus 2: Zwang auf 3680 W während des Ladens – die Sperre hält 3 Phasen,
+    # der Zwang wird auf das dreiphasige Minimum (6 A) geklemmt.
+    res = ctrl.run_cycle(make_states(_wallbox_states(**{
+        **_force("wallbox", leistung=3680),
+        "input_number.ems_wallbox_min_umschaltzeit_s": 300,
+        "input_number.ems_wallbox_anforderung_leistung_a": 15,
+        "input_number.ems_wallbox_anzahl_phase": 3,
+    })))
+    assert _op_for(res["write_ops"], "input_number.ems_wallbox_anzahl_phase") is None
+    amp = _op_for(res["write_ops"], "input_number.ems_wallbox_anforderung_leistung_a")
+    assert amp[2]["value"] == 6
+    assert _dev(res, "wallbox_1")["force_w"] == pytest.approx(4140)
+
+
+def test_status_traegt_zwangsfelder_additiv():
+    ctrl = EMSController([_heizstab_cfg(), _luft_cfg()], residual_power_entity="sensor.s")
+    states = {**_heizstab_states(), **_binary("luft", prio=9, power=2000), "switch.luft": "off"}
+    res = ctrl.run_cycle(make_states(states))
+    heizstab, luft = _dev(res), _dev(res, "luft")
+    assert heizstab["force_requested"] is False
+    assert heizstab["force_active"] is False
+    assert heizstab["force_blocked_reason"] is None
+    assert heizstab["force_w"] is None
+    assert luft["force_requested"] is False
+    assert luft["force_active"] is False
+    assert "force_w" not in luft

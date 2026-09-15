@@ -35,7 +35,7 @@ def test_current_w_depends_on_actual_state():
 
 
 def test_current_w_ignoriert_extern_erzwungenen_schalter():
-    """Force-Modus: Schalter an, aber HEMS hat nicht angefordert -> nicht in den Pool."""
+    """Fremdsteuerung: Schalter an, aber HEMS hat nicht angefordert -> nicht in den Pool."""
     b = make_binary(power=1500.0)
     b._actual_on = True
     b._anforderung_an = False
@@ -300,3 +300,66 @@ def test_zeitschutz_bleibt_unveraendert_mit_addon_werten():
     d.calculate_candidate(10_000.0)
     assert d.candidate_on is True
     assert d.in_min_runtime is True
+
+
+# ---- Zwang (D-053) ----
+
+def _zwang(b):
+    b._force_requested = True
+    b._force_active = True
+    return b
+
+
+def test_current_w_und_gemessene_last_null_bei_zwang():
+    b = _zwang(make_binary(power=1500.0))
+    b._actual_on = True
+    b._anforderung_an = True
+    assert b.current_w == 0.0
+    assert b.gemessene_last_w == 0.0
+
+
+def test_consume_from_pool_bei_zwang_wuenscht_an_ohne_verbrauch():
+    b = _zwang(make_binary(power=1000.0, on_reserve=200.0))
+    b.eligible = False
+    b._actual_on = False
+    assert b.consume_from_pool(0.0, 300.0) == 0.0
+    assert b.desired_on is True
+
+
+def test_candidate_bei_zwang_ignoriert_mindestauszeit():
+    b = _zwang(make_binary())
+    b._actual_on = False
+    b._switch_age_s = 10.0
+    b.min_offtime_s = 600.0
+    b.consume_from_pool(0.0, 0.0)
+    b.calculate_candidate(now_ts=1000.0)
+    assert b.candidate_on is True
+
+
+def test_candidate_bei_zwang_setzt_off_timer_zurueck():
+    b = _zwang(make_binary())
+    b._actual_on = True
+    b._off_since_ts = 900.0
+    b.calculate_candidate(now_ts=1000.0)
+    assert b.candidate_on is True
+    assert b._off_since_ts == 0.0
+
+
+def test_nach_zwang_ende_greift_abschaltverzoegerung_neu():
+    b = make_binary()
+    b._actual_on = True
+    b._switch_age_s = 1000.0
+    b.off_delay_s = 30.0
+    # Unter Zwang: Timer bleibt zurückgesetzt.
+    _zwang(b)
+    b.consume_from_pool(0.0, 0.0)
+    b.calculate_candidate(now_ts=1000.0)
+    assert b._off_since_ts == 0.0
+    # Zwang endet, Pool leer: die Verzögerung beginnt jetzt erst zu laufen.
+    b._force_active = False
+    b.consume_from_pool(0.0, 0.0)
+    b.calculate_candidate(now_ts=1010.0)
+    assert b.candidate_on is True
+    assert b._off_since_ts == 1010.0
+    b.calculate_candidate(now_ts=1045.0)
+    assert b.candidate_on is False

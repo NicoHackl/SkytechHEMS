@@ -39,6 +39,13 @@ Entität in `entity_diagnostics`, siehe
 | `input_number.ems_<prefix>_mindestauszeit_s` | s | Add-on-Feld `min_offtime_s` | Verhindert zu frühes Wiedereinschalten |
 | `input_number.ems_<prefix>_abschaltverzogerung_s` | s | Add-on-Feld `off_delay_s` | Verzögert den Aus-Befehl nach Ablauf der Mindestlaufzeit; gilt auch bei Notabschaltung |
 
+Zusätzlich liest ein binäres Gerät den Zwang-Helfer `input_boolean.ems_<prefix>_force` (D-053,
+optional, siehe [global.md](global.md#gemeinsame-ha-helfer)): mit `on` wird `anforderung_an`
+sofort gesetzt — ohne Mindestauszeit, ohne One-Change-Limit, ohne Prioritätskaskade und auch bei
+Notabschaltung. Seine `leistung_w` wird weder aus dem Pool reserviert noch in ihn zurückgerechnet.
+Endet der Zwang, greifen Mindestlaufzeit und Abschaltverzögerung ab dann normal. Eine
+Zwangsleistung gibt es bei binären Geräten nicht.
+
 Ein negativer Wert ist ungültig und löst den Ersatzwert aus. Ein gültiger Wert `0` ist ein Wert und
 wird nie ersetzt.
 
@@ -94,7 +101,7 @@ Für beide gelten der [Commit-Vertrag und der Fallback auf die HA-Helfer](global
 - eine HA-Automation, die `anforderung_an` auf den realen Schalter überträgt
 
 Die fünf klassenspezifischen Eingangshelfer sind dagegen optional: ohne sie regelt das Gerät mit
-den Add-on-Werten weiter.
+den Add-on-Werten weiter. Auch `force` ist optional.
 
 ## Beispiel
 

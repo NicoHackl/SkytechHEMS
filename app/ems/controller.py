@@ -380,6 +380,9 @@ class EMSController:
             device.check_runtime_health(st, self._write_failures.get(device.id, ""))
             if not device.runtime_active:
                 device.eligible = False
+            # Zwang (D-053) NACH der Laufzeitprüfung: er übersteuert Freigaben
+            # und globale Gates, aber nie ein kaputtes Schreibziel.
+            device.resolve_force(st)
 
         batteries = [d for d in self._devices if isinstance(d, BatteryDevice)]
         for battery in batteries:
@@ -405,10 +408,12 @@ class EMSController:
         # ── 4. Pool und Hausdefizit ─────────────────────────────────────
         # Zwei Summen, weil "was kann ich freigeben?" und "was soll der
         # Speicher decken?" zwei verschiedene Fragen sind:
-        #   current_w        filtert den Force-Modus heraus  -> Pool
-        #   gemessene_last_w filtert nichts                  -> Entladung
-        # Eine von Hand eingeschaltete HEMS-Last ist weiterhin ein
-        # Überschussverbraucher und wird vom Speicher nicht gedeckt.
+        #   current_w        filtert Fremdsteuerung und Zwang heraus -> Pool
+        #   gemessene_last_w filtert nur den Zwang heraus            -> Entladung
+        # Eine fremdgesteuerte HEMS-Last ist weiterhin ein Überschussverbraucher
+        # und wird vom Speicher nicht gedeckt. Eine Zwangslast (D-053) ist
+        # dagegen Hausverbrauch: sie steckt im Residual, wird nirgends
+        # zurückaddiert und darf vom Speicher gedeckt werden.
         hems_last_w          = sum(d.current_w        for d in self._devices)
         hems_last_gemessen_w = sum(d.gemessene_last_w for d in self._devices)
 
@@ -487,7 +492,11 @@ class EMSController:
                 device.reset_off_timer()
 
         # ── 9. Regelbare Geräte zuteilen ────────────────────────────────
-        binary_total_w = sum(d.power_w for d in binary_devices if d.final_on)
+        # Zwangsgeräte werden hier NICHT abgezogen: ihre Last steckt im
+        # Residual und current_w rechnet sie nicht zurück – der Pool ist also
+        # bereits um sie reduziert. Ein zweiter Abzug wäre Doppelzählung.
+        binary_total_w = sum(d.power_w for d in binary_devices
+                             if d.final_on and not d.force_active)
         remaining_w    = max(pool_w - binary_total_w, 0.0)
         sorted_ctrl    = [d for d in sorted(self._devices, key=lambda d: d.priority)
                           if isinstance(d, ControllableDevice)]
@@ -593,7 +602,8 @@ class EMSController:
 
         hausdefizit_w enthält per Konstruktion KEINE HEMS-Gerätelast, auch keine
         fremdgesteuerte – die Abgrenzung "nicht für Überschussverbraucher" ist
-        damit bereits erledigt und braucht hier keine Sonderbehandlung.
+        damit bereits erledigt und braucht hier keine Sonderbehandlung. Eine
+        Zwangslast (D-053) zählt dagegen als Hausverbrauch und steckt im Defizit.
         """
         for battery in batteries:
             battery.set_discharge_target(0.0)
@@ -653,10 +663,14 @@ class EMSController:
         # (Mindestlaufzeit + Abschaltverzögerung) in calculate_candidate
         # bestimmt.
 
-        # Promotion: höher-priore Geräte dürfen nicht aus sein, während niedriger-priore an sind
+        # Promotion: höher-priore Geräte dürfen nicht aus sein, während niedriger-priore an sind.
+        # Zwangsgeräte (D-053) bleiben auf beiden Seiten außen vor: sie laufen
+        # nicht wegen des Pools und brauchen selbst keine Promotion.
         for i, high in enumerate(sorted_b):
+            if high.force_active:
+                continue
             for low in sorted_b[i + 1:]:
-                if low.final_on:
+                if low.final_on and not low.force_active:
                     if high.eligible and (high.actual_on or high.candidate_on):
                         high.final_on = True
                         high.reset_off_timer()
@@ -670,8 +684,12 @@ class EMSController:
         if binary_immediate_off:
             return
 
-        turn_offs = [d for d in binary_devices if d.actual_on  and not d.final_on]
-        turn_ons  = [d for d in binary_devices if not d.actual_on and d.final_on]
+        # Zwangsgeräte zählen nicht gegen das Budget – sonst würde der
+        # turn_offs-Zweig eine Zwangs-Einschaltung wieder zurücknehmen.
+        turn_offs = [d for d in binary_devices
+                     if d.actual_on and not d.final_on and not d.force_active]
+        turn_ons  = [d for d in binary_devices
+                     if not d.actual_on and d.final_on and not d.force_active]
 
         if len(turn_offs) + len(turn_ons) <= 1:
             return
@@ -696,7 +714,8 @@ class EMSController:
         for d in binary_devices:
             if d.actual_on != d.final_on:
                 direction = "AUS→AN" if d.final_on else "AN→AUS"
-                reason    = ("Notabschaltung" if binary_immediate_off and not d.final_on
+                reason    = ("Zwang" if d.force_active
+                             else "Notabschaltung" if binary_immediate_off and not d.final_on
                              else "desired" + ("=JA" if d.final_on else "=NEIN"))
                 log.info("EMS [%s] %s  prio=%d  pool=%.0fW  %s",
                          d.id, direction, d.priority, pool_w, reason)

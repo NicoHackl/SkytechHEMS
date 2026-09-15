@@ -317,9 +317,11 @@ def test_p7_ohne_speicher_identisch_zum_altverhalten(residual, heizstab_ist, sol
     assert status["hausdefizit_w"] == 0.0 or status["pool_w"] == 0.0
 
 
-@given(params=_battery_state(), power=_watt, switch=st.booleans())
-def test_p2_gemessene_last_nie_kleiner_als_current(params, power, switch):
-    """Die Ungleichung, die P2 trägt: entlade_basis_w >= pool_roh_w."""
+@given(params=_battery_state(), power=_watt, switch=st.booleans(), force=st.booleans())
+def test_p2_gemessene_last_nie_kleiner_als_current(params, power, switch, force):
+    """Die Ungleichung, die P2 trägt: entlade_basis_w >= pool_roh_w.
+
+    Auch unter Zwang (D-053): dann sind beide Summanden 0."""
     battery = _ready_battery(params)
     binary = BinaryDevice(id="hl", allowed_modes=["auto"],
                           entity_switch="switch.hl",
@@ -328,9 +330,11 @@ def test_p2_gemessene_last_nie_kleiner_als_current(params, power, switch):
     binary.power_w = power
     binary._actual_on = switch
     binary._anforderung_an = switch
+    binary._force_active = force
     controllable = _make(0.0, 10000.0, 0.0, 1)
     controllable._actual_w = power
     controllable._anforderung_current_w = power / 2
+    controllable._force_active = force
 
     for device in (battery, binary, controllable):
         assert device.gemessene_last_w >= device.current_w - TOL

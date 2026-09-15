@@ -1,7 +1,7 @@
 # D-040: AC-gekoppelte Speicher als eigene Geräteklasse, mit bereinigtem Pool und getrennter Entladepriorität
 
 - **Datum:** 20.08.2026
-- **Status:** Aktiv, Entladequelle teilweise ersetzt durch D-044
+- **Status:** Aktiv, Entladequelle teilweise ersetzt durch D-044; Ausnahme für Zwangslasten durch D-053
 - **Betrifft:** [`app/ems/devices.py`](../../app/ems/devices.py),
   [`app/ems/controller.py`](../../app/ems/controller.py),
   [`app/main.py`](../../app/main.py), [`config.yaml`](../../config.yaml),
@@ -63,7 +63,7 @@ sich selbst regelt.
 
 1. **Erst bereinigen, dann regeln.** Zwei neue Default-Properties auf `Device`:
    `netz_support_w` (gemessene Einspeisung ins Hausnetz) und `gemessene_last_w` (Leistungsaufnahme
-   **ohne** Force-Modus-Filter). Daraus im Zyklus:
+   **ohne** Fremdsteuerungs-Filter). Daraus im Zyklus:
 
    ```
    residual_bereinigt_w         = residual_w − Σ netz_support_w
@@ -81,9 +81,11 @@ sich selbst regelt.
    Rückrechnung der Überschussverbraucher über `gemessene_last_w` bleibt erhalten, damit sie nicht
    vom Speicher gedeckt werden.
 
-2. **Zwei Summen statt einer.** `current_w` filtert den Force-Modus heraus — richtig für den Pool,
-   falsch für die Entladung: ein von Hand eingeschalteter Heizstab landete sonst im Hausverbrauch
-   und würde vom Speicher gedeckt. `gemessene_last_w` filtert nichts. D-044 führt dafür einen
+2. **Zwei Summen statt einer.** `current_w` filtert die Fremdsteuerung heraus — richtig für den
+   Pool, falsch für die Entladung: ein von Hand eingeschalteter Heizstab landete sonst im
+   Hausverbrauch und würde vom Speicher gedeckt. `gemessene_last_w` filtert nichts. **Geändert
+   durch D-053:** eine per Zwang-Helfer laufende Last ist bewusst Hausverbrauch und fällt aus
+   `gemessene_last_w` heraus — der Speicher deckt sie. D-044 führt dafür einen
    zweiten Sensorvertrag ein; Pool und Hausdefizit können deshalb diagnostisch gleichzeitig positiv
    sein. Der einzelne signierte Sollwert und die Richtungsauflösung verhindern trotzdem, dass ein
    Speicher gleichzeitig lädt und entlädt.
