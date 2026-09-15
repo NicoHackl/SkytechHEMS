@@ -133,6 +133,13 @@ def _ctrl_items_controllable(p: str, output_unit: str = 'watt') -> list:
             "technische_freigabe", "technical_gate",
         ),
         _control_item(f"input_select.ems_{p}_modus", "Modus", "modus", "user_control"),
+        # Zwang (D-053): Leistung bewusst immer in Watt, auch im Ampere-Modus
+        # – wie reserve_w. Beide Helfer sind optional.
+        _control_item(f"input_boolean.ems_{p}_force", "Zwang", "force", "user_control"),
+        _control_item(
+            f"input_number.ems_{p}_force_leistung_w", "Zwangsleistung", "force_leistung_w",
+            "user_control", unit="W",
+        ),
         _control_item(
             f"input_number.ems_{p}_prioritat", "Priorität", "prioritat", "user_preference"
         ),
@@ -188,6 +195,7 @@ def _ctrl_items_binary(p: str) -> list:
             "technische_freigabe", "technical_gate",
         ),
         _control_item(f"input_select.ems_{p}_modus", "Modus", "modus", "user_control"),
+        _control_item(f"input_boolean.ems_{p}_force", "Zwang", "force", "user_control"),
         _control_item(
             f"input_number.ems_{p}_prioritat", "Priorität", "prioritat", "user_preference"
         ),

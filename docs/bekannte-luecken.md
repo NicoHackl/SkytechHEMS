@@ -4,7 +4,7 @@
 etwas in [architektur.md](architektur.md), heißt das nicht, dass es implementiert ist — hier steht,
 wo nicht.
 
-Stand: 21.08.2026.
+Stand: 15.09.2026.
 
 ## Abweichungen Spec ↔ Code
 
@@ -15,6 +15,17 @@ Stand: 21.08.2026.
 ## Stolpersteine
 
 Dinge, die schon einmal Zeit gekostet haben:
+
+- **`force` heißt Zwang, nicht Fremdsteuerung.** Seit D-053 bezeichnet `force` ausschließlich
+  den Zwang-Helfer `ems_<prefix>_force`. Das frühere „Force-Modus" — Schalter extern an, ohne
+  HEMS-Anforderung — heißt in Code und Doku **Fremdsteuerung**; die Testnamen
+  `*extern_erzwungen*` meinen weiterhin diese Fremdsteuerung. Wer `current_w` liest: es filtert
+  **beides** heraus, `gemessene_last_w` nur den Zwang.
+- **`force_active: true` bei `eligible: false` ist kein Bug.** Zwang ist eine eigene Achse; ein
+  Zwangsgerät mit gesperrter Freigabe ist der Normalfall. Wer „regelt gerade mit" braucht, prüft
+  `runtime_active and (eligible or force_active)` — so macht es der Flow-Publisher.
+- **`_force*`-Helfer sind optional.** Im Steuerung-Tab und in `HelferStatus` erscheinen sie ohne
+  Anlage als „Helfer nicht gefunden" bzw. „fehlt" — das ist kein Fehler, sondern „kein Zwang".
 
 - **`entity_diagnostics[…]["state"]` ist der Auflösungszustand, nicht der HA-State.** Dort steht
   `valid`, `missing`, `invalid` oder `unavailable` — nie `on`/`off` und nie der Zahlenwert

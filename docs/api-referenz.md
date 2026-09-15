@@ -80,7 +80,8 @@ konfigurierten Speicher ist `netz_support_w` immer `0`, `residual_bereinigt_w` g
 nicht auf `residual_w`. Die AC-Entladeplanung verwendet dagegen ausschließlich die separate
 `battery_residual_w` beziehungsweise `battery_residual_bereinigt_w`. `hausdefizit_w` ist bewusst
 kleiner als `current_deficit_w`, sobald HEMS-Geräte laufen — die Differenz ist deren gemessene
-Last, die ein Speicher ausdrücklich **nicht** decken soll. Ist die Hausleistungsbilanz ungültig,
+Last, die ein Speicher ausdrücklich **nicht** decken soll. Ausnahme ist eine Zwangslast (D-053):
+sie zählt als Hausverbrauch und bleibt in `hausdefizit_w`. Ist die Hausleistungsbilanz ungültig,
 ist `battery_residual_sensor_valid: false`, `hausdefizit_w: 0` und jeder AC-Speicher fährt auf
 `standby`; andere Verbraucher regeln weiter.
 
@@ -95,6 +96,13 @@ Nutzerschalter. `null` heißt „in diesem Zyklus nicht gefragt": bei `source: "
 Freigabeprüfung gar nicht. Aus diesen beiden Feldern bildet der Kartenvertrag seine
 `inactive_reasons` (D-050). Sie sind **nicht** aus `entity_diagnostics` ableitbar — dort steht der
 Auflösungszustand einer Entität (`valid`, `missing`, …), nicht ihr HA-State.
+
+Einzige Ausnahme von „nicht gefragt": ist ein **Zwang** angefordert (`force_requested: true`),
+wird die technische Freigabe auch bei `source: "aus"` gelesen und steht dann als `true`/`false`
+im Status — sie ist das eine Gate, das der Zwang nie überstimmt. Regelbare und binäre Geräte
+tragen dafür additiv `force_requested`, `force_active`, `force_blocked_reason` und (nur regelbar)
+`force_w`; Feldbedeutung in [datenmodell.md](datenmodell.md#statusvertrag-apistatus). Ein
+Zwangsgerät hat im Kartenvertrag keine `inactive_reasons` und `zwang: true`.
 
 ### `GET /api/controls`
 

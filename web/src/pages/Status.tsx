@@ -249,6 +249,33 @@ function PriorityBadge({ device }: { device: { priority: number; source: string 
   )
 }
 
+/* Zwang (D-053): das Gerät läuft außerhalb des Pools. Ein angeforderter, aber
+   unwirksamer Zwang ist ein Fehlerbild — der Nutzer erwartet ein laufendes Gerät. */
+function ForceBadge({ device }: { device: ControllableDevice | BinaryDevice }) {
+  if (device.force_active) return <span className="pill warn">Zwang</span>
+  if (device.force_requested) return <span className="pill err">Zwang unwirksam</span>
+  return null
+}
+
+const FORCE_BLOCKED_LABELS: Record<string, string> = {
+  technische_freigabe: 'unwirksam – technische Freigabe aus',
+  runtime: 'unwirksam – Gerät nicht regelbar',
+  keine_leistung: 'unwirksam – keine gültige Zwangsleistung (> 0 W)',
+}
+
+/** Zeile zum Zwang; fehlt, solange der Helfer nicht angefordert ist. */
+function ForceRow({ device }: { device: ControllableDevice | BinaryDevice }) {
+  if (device.force_active) {
+    const leistung = device.type === 'controllable' && device.force_w != null
+      ? `aktiv – ${fmtW(device.force_w)} (nicht aus dem Pool)`
+      : 'aktiv (nicht aus dem Pool)'
+    return <KeyValue label="Zwang" value={leistung} tone="warn" />
+  }
+  if (!device.force_requested) return null
+  const grund = device.force_blocked_reason
+  return <KeyValue label="Zwang" value={(grund && FORCE_BLOCKED_LABELS[grund]) || 'unwirksam'} tone="err" />
+}
+
 /* Warum ein Gerät technisch nicht regelbar ist. Das ist etwas anderes als
    „gerade nicht freigegeben" — deshalb eigene Texte und eine eigene Zeile. */
 const RUNTIME_LABELS: Record<string, string> = {
@@ -292,8 +319,10 @@ function UebersprungenCard({ issue }: { issue: InactiveDeviceIssue }) {
 }
 
 function ControllableCard({ device, elapsed }: { device: ControllableDevice; elapsed: number }) {
-  const state: CardState = !device.eligible || !device.runtime_active
-    ? 'off' : device.new_w > 0 ? 'active' : 'idle'
+  const state: CardState = device.force_active
+    ? 'active'
+    : !device.eligible || !device.runtime_active
+      ? 'off' : device.new_w > 0 ? 'active' : 'idle'
   const changed = Math.round(device.new_w) !== Math.round(device.anforderung_current_w)
   const isAmpere = device.output_unit === 'ampere'
 
@@ -316,8 +345,13 @@ function ControllableCard({ device, elapsed }: { device: ControllableDevice; ela
   const phaseLock = multiPhase ? Math.max(0, (device.phase_lock_remaining_s ?? 0) - elapsed) : 0
 
   return (
-    <DeviceCard title={device.label || device.id} badge={<PriorityBadge device={device} />} state={state}>
+    <DeviceCard
+      title={device.label || device.id}
+      badge={<><ForceBadge device={device} /><PriorityBadge device={device} /></>}
+      state={state}
+    >
       <KeyValue label="Freigabe" value={device.eligible ? 'ja' : 'nein'} tone={device.eligible ? 'ok' : 'err'} />
+      <ForceRow device={device} />
       <RuntimeRow device={device} />
       <KeyValue label="Ist" value={fmtW(device.actual_w)} />
       <KeyValue label="Anforderung" value={currentLabel} />
@@ -343,10 +377,12 @@ function ControllableCard({ device, elapsed }: { device: ControllableDevice; ela
 }
 
 function BinaryCard({ device, elapsed }: { device: BinaryDevice; elapsed: number }) {
-  const state: CardState = !device.eligible || !device.runtime_active
-    ? 'off' : device.final_on ? 'active' : 'idle'
+  const state: CardState = device.force_active
+    ? 'active'
+    : !device.eligible || !device.runtime_active
+      ? 'off' : device.final_on ? 'active' : 'idle'
   const changed = device.actual_on !== device.final_on
-  // Schalter extern an, ohne HEMS-Anforderung: Fremdsteuerung ("Force-Modus").
+  // Schalter extern an, ohne HEMS-Anforderung: Fremdsteuerung.
   const externallyOn = device.actual_on && !device.anforderung_an
 
   const runtimeRow = device.actual_on && device.min_runtime_s > 0
@@ -358,8 +394,13 @@ function BinaryCard({ device, elapsed }: { device: BinaryDevice; elapsed: number
   const offDelay = device.off_delay_remaining_s
 
   return (
-    <DeviceCard title={device.label || device.id} badge={<PriorityBadge device={device} />} state={state}>
+    <DeviceCard
+      title={device.label || device.id}
+      badge={<><ForceBadge device={device} /><PriorityBadge device={device} /></>}
+      state={state}
+    >
       <KeyValue label="Freigabe" value={device.eligible ? 'ja' : 'nein'} tone={device.eligible ? 'ok' : 'err'} />
+      <ForceRow device={device} />
       <RuntimeRow device={device} />
       <KeyValue label="Leistung" value={fmtW(device.power_w)} />
       <KeyValue label="Ist" value={device.actual_on ? 'AN' : 'AUS'} tone={device.actual_on ? 'ok' : 'err'} />

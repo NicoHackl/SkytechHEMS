@@ -272,9 +272,16 @@ Drei Gerätetypen, drei Karten in `pages/Status.tsx`, unterschieden über das di
 
 | Typ | Karte | Kartenzustand |
 |---|---|---|
-| `controllable` | `ControllableCard` | `off` / `active` / `idle` |
-| `binary` | `BinaryCard` | `off` / `active` / `idle` |
+| `controllable` | `ControllableCard` | `off` / `active` / `idle`; unter Zwang immer `active` |
+| `binary` | `BinaryCard` | `off` / `active` / `idle`; unter Zwang immer `active` |
 | `battery` | `BatteryCard` | `off` / `charge` / `discharge` / `idle` |
+
+**Zwang (D-053) ist eine Achse quer zur Freigabe.** Ein wirksamer Zwang bekommt die Badge
+„Zwang" (`pill warn`) und eine Zeile „Zwang: aktiv – 2000 W (nicht aus dem Pool)"; ein
+angeforderter, aber unwirksamer Zwang die Badge „Zwang unwirksam" (`pill err`) mit dem Grund aus
+`force_blocked_reason`. Die Zeile „Freigabe" bleibt daneben ehrlich — `nein` bei gesperrter
+Freigabe, auch wenn das Gerät per Zwang läuft. Beides in `ForceBadge`/`ForceRow` in
+`pages/Status.tsx`; die Speicherkarte kennt keinen Zwang.
 
 **Drei verschiedene „inaktiv" auseinanderhalten.** `eligible: false` ist die Freigabeentscheidung
 dieses Zyklus und darf nicht wie ein Fehler aussehen. `runtime_active: false` heißt „technisch

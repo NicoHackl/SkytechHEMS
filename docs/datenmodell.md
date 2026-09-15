@@ -58,6 +58,7 @@ für [globale Werte](device_classes/global.md), [regelbare Geräte](device_class
 | `input_boolean.ems_<prefix>_technische_freigabe` | `input_boolean` | Technische Freigabe. Nur wenn **beide** Freigaben `on` sind, wirkt das Gerät mit — hartes Gate in jedem Modus |
 | `input_select.ems_<prefix>_modus` | `input_select` | `auto` = EP-Vorschlag für dieses Gerät, `manuell` = normale Regeln, `aus` = Kill-Switch |
 | `input_number.ems_<prefix>_prioritat` | `input_number` | Kleinere Zahl = höhere Priorität |
+| `input_boolean.ems_<prefix>_force` | `input_boolean` | Zwang (D-053), optional. `on` = Gerät läuft unabhängig von Pool, Bedien-Freigabe, Modus, globalen Sperren und Notabschaltung; nie ohne technische Freigabe oder mit kaputtem Schreibziel. Nicht beim Speicher |
 
 ### Regelbare Geräte
 
@@ -74,6 +75,7 @@ Ampere. `reserve_w` ist **immer** in Watt.
 | `max_anderung_pro_schritt_w` / `_a` | W / A | Maximale Änderung je Zyklus |
 | `min_anderung_pro_schritt_w` / `_a` | W / A | Totband — kleinere Änderungen werden nicht geschrieben |
 | `min_umschaltzeit_s` | s | Phasenwechsel-Hysterese; Fallback `phase_switch_delay_s`, dann 30 s. Ein gültiger Wert `0` gilt als „keine Sperrzeit" und wird nicht ersetzt |
+| `force_leistung_w` | W (**immer** Watt) | Zwangsleistung (D-053), nur mit `force: on` wirksam; geklemmt auf `[min_technisch, max_technisch]`, sofort ohne Rampe und Totband geschrieben. Fehlend, ungültig oder `0` → Zwang unwirksam |
 | `anforderung_leistung_w` / `_a` **(Ausgabe)** | W / A | Vom EMS geschriebener Sollwert, im Ampere-Modus ganzzahlig abgerundet |
 | `anzahl_phase` **(Ausgabe)** | 1 oder 3 | Gewählte Phasenzahl, nur bei `phases="1,3"` |
 
@@ -186,19 +188,20 @@ Global:
 | `protected_minimum_scope` | string | Wirksamer Geltungsbereich der geschützten Mindestleistung: `binary_only` oder `binary_and_controllable` |
 | `residual_sensor_valid` | bool | Sensor lieferte einen brauchbaren Wert |
 | `residual_source` | string | `"ha"` oder `"formula"` (D-045) — welche Quelle `residual_w` gerade liefert |
-| `residual_w`, `pool_w`, `current_deficit_w`, `binary_total_w` | float | Leistungen in Watt |
+| `residual_w`, `pool_w`, `current_deficit_w` | float | Leistungen in Watt |
 | `residual_bereinigt_w` | float | `residual_w` abzüglich der gemessenen Speicherentladung. Grundlage für Pool und Verbraucher-Defizit, nicht für die AC-Entladeplanung |
 | `battery_residual_sensor_valid` | bool | Separate Hausleistungsbilanz lieferte einen brauchbaren Wert; ohne `battery` nur Diagnose und nicht regelrelevant |
 | `battery_residual_source` | string | `"ha"`, `"addon"`, `"internal"` oder `"formula"` (D-045) — welche Quelle `battery_residual_w` gerade liefert |
 | `battery_residual_w` | float | Rohe Hausleistungsbilanz: negativ = Unterdeckung, positiv = Einspeisung |
 | `battery_residual_bereinigt_w` | float | `battery_residual_w` abzüglich der gemessenen AC-Entladung (`netz_support_w`) |
 | `netz_support_w` | float | Σ gemessene Entladeleistung aller Speicher |
-| `hems_last_w` | float | Σ `current_w` — nur vom HEMS angeforderte Last, Force-Modus gefiltert |
-| `hems_last_gemessen_w` | float | Σ `gemessene_last_w` — roher Messwert, Force-Modus enthalten |
+| `hems_last_w` | float | Σ `current_w` — nur aus dem Pool angeforderte Last; Fremdsteuerung und Zwang gefiltert |
+| `hems_last_gemessen_w` | float | Σ `gemessene_last_w` — roher Messwert, Fremdsteuerung enthalten, Zwangslast gefiltert (D-053) |
 | `pool_roh_w` | float | Ungeklemmter Pool aus dem Überschuss-Sensor. Positiv = verteilter Überschuss, negativ = kein verteilter Überschuss |
 | `entlade_basis_w` | float | Basis der Entladeplanung aus der separaten Hausleistungsbilanz; enthält die gemessenen HEMS-Lasten zurückgerechnet |
-| `hausdefizit_w` | float | Hausverbrauchs-Fehlbetrag, den die Speicher decken sollen. **Enthält keine HEMS-Gerätelast**, auch keine fremdgesteuerte; bei ungültiger Hausleistungsbilanz `0` |
-| `binary_immediate_off` | bool | Notabschaltung binärer Geräte |
+| `hausdefizit_w` | float | Hausverbrauchs-Fehlbetrag, den die Speicher decken sollen. **Enthält keine HEMS-Gerätelast**, auch keine fremdgesteuerte — wohl aber eine Zwangslast (D-053); bei ungültiger Hausleistungsbilanz `0` |
+| `binary_immediate_off` | bool | Notabschaltung binärer Geräte; ein Zwangsgerät bleibt davon unberührt |
+| `binary_total_w` | float | Σ `power_w` der final eingeschalteten Binärgeräte **ohne** Zwangsgeräte — deren Last steckt bereits im Residual |
 | `timestamp` | string | **Maschinenformat** `JJJJ-MM-TT hh:mm:ss`, nicht zur Anzeige gedacht |
 | `devices` | Liste | siehe unten |
 | `devices_inactive_runtime` | Liste | Geräte-IDs, die diesen Zyklus technisch nicht regelbar waren (Schreibziel fehlt oder Schreiben schlug fehl) |
@@ -212,6 +215,15 @@ Jedes Gerät trägt zusätzlich:
 | `runtime_active` | bool | `false`, wenn ein Schreibziel fehlt, unbrauchbar ist oder der letzte Schreibversuch fehlschlug |
 | `inactive_reasons` | Liste | `schreibziel_fehlt`, `schreibziel_nicht_verfuegbar`, `schreibziel_ungueltig`, `schreiben_fehlgeschlagen` |
 | `write_error` | string oder `null` | Bereinigte Fehlermeldung des letzten Schreibversuchs |
+
+Regelbare und binäre Geräte tragen außerdem die Zwangsfelder (D-053):
+
+| Feld | Typ | Bedeutung |
+|---|---|---|
+| `force_requested` | bool | Roher Zustand des Helfers `ems_<prefix>_force` |
+| `force_active` | bool | Wirksame Entscheidung: angefordert und kein Sperrgrund. `true` bei `eligible: false` ist kein Widerspruch — Zwang ist eine eigene Achse |
+| `force_blocked_reason` | string oder `null` | `technische_freigabe`, `runtime` oder `keine_leistung` (nur regelbar); `null`, wenn der Zwang wirkt oder nicht angefordert ist |
+| `force_w` | float oder `null` | Nur regelbar: effektive, geklemmte Zwangsleistung in Watt; `null`, solange kein Zwang wirkt |
 
 `state` ist `valid`, `missing`, `unavailable` oder `invalid`; bei Schreibzielen zusätzlich
 `write_failed`. `source` ist `ha`, `addon` oder `internal`.
@@ -267,6 +279,9 @@ Fallstricke, die schon Fehler verursacht haben:
   Schreibziel fehlt oder das Schreiben schlug fehl; das Gerät steht weiterhin in `devices`. Ein
   Eintrag, der wegen fehlender Pflichtfelder gar nicht erst registriert wurde, steht in
   `inactive_devices` und taucht in `devices` überhaupt nicht auf.
+- **Und ein „aktiv" quer dazu.** `force_active: true` bei `eligible: false` ist der Normalfall
+  eines Zwangsgeräts mit gesperrter Freigabe: es läuft, aber nicht aus dem Pool. Wer „regelt
+  gerade mit" wissen will, prüft `runtime_active and (eligible or force_active)`.
 - Restzeiten sind zum Zyklus-Zeitpunkt gültig. Die Oberfläche zählt zwischen den Zyklen selbst
   herunter, statt eingefrorene Werte zu zeigen.
 

@@ -77,7 +77,12 @@ Ein Zyklus (`EMSController.run_cycle()`), ausgelöst alle `interval_s` Sekunden:
    der Entitäts-Pfad. Welche Quelle wirkte, steht als `residual_source`/`battery_residual_source`
    im Status.
 2. **Eligibility** je Gerät: Der globale Modus muss in `allowed_modes` liegen, `freigabe`,
-   `technische_freigabe` und der Gerätemodus müssen passen.
+   `technische_freigabe` und der Gerätemodus müssen passen. Nach dem Gate der
+   Schreibziel-Gesundheit (unten) liest jedes Gerät zusätzlich seinen **Zwang** (D-053,
+   `input_boolean.ems_<prefix>_force`): er übersteuert Bedienfreigabe, Gerätemodus, globale
+   Sperren und die Notabschaltung, nie die technische Freigabe und nie ein kaputtes
+   Schreibziel. `eligible` bleibt davon unberührt — ein Zwangsgerät ist kein Pool-Teilnehmer,
+   sondern eine eigene Achse (`force_active`).
 3. **Netz bereinigen:** `residual_bereinigt_w = residual_w − Σ netz_support_w`. Nur Speicher
    liefern hier etwas; für alle Verbraucher ist `netz_support_w` gleich `0`. Ein Speicher ist kein
    Verbraucher mit Vorzeichen — seine Entladung erhöht `residual_w`, ist aber kein Überschuss.
@@ -93,16 +98,20 @@ Ein Zyklus (`EMSController.run_cycle()`), ausgelöst alle `interval_s` Sekunden:
    hausdefizit_w                 = max(−entlade_basis_w, 0)
    ```
 
-   Die zweite Summe filtert den Force-Modus **nicht** heraus: eine von Hand eingeschaltete
+   Die zweite Summe filtert die Fremdsteuerung **nicht** heraus: eine von Hand eingeschaltete
    HEMS-Last bleibt Überschussverbraucher und wird von keinem Speicher gedeckt. `current_w` zählt
-   nur die **vom EMS angeforderte** Leistung — extern erzwungene Last („Force-Modus") steckt
-   bereits im Überschuss-Sensor und wird nicht doppelt gutgeschrieben. Weil Pool und Entladung
+   nur die **aus dem Pool angeforderte** Leistung — fremdgesteuerte Last steckt bereits im
+   Überschuss-Sensor und wird nicht doppelt gutgeschrieben. Eine **Zwangslast** (D-053) fällt
+   aus beiden Summen heraus: sie ist kein Pool-Teilnehmer *und* gilt als Hausverbrauch, den ein
+   Speicher deckt — die einzige Ausnahme von „HEMS-Last wird nie vom Speicher gedeckt" (D-B14).
+   Weil Pool und Entladung
    unterschiedliche Sensorverträge haben, können `pool_w` und `hausdefizit_w` diagnostisch
    gleichzeitig positiv sein; die Richtungsauflösung eines Speichers schreibt trotzdem immer nur
    einen signierten Sollwert. Liefert die Hausleistungsbilanz keinen gültigen Zahlenwert, fahren
    alle AC-Speicher sicher auf `standby`; der Pool für übrige Verbraucher bleibt verfügbar.
 5. **Phasenauswahl** für regelbare Ampere-Geräte mit `phases="1,3"`: höchste Phasenzahl, für die
    `floor(pool_w / (phases × U)) ≥ min_technisch_a` gilt, gebremst durch `phase_switch_delay_s`.
+   Unter Zwang tritt die Zwangsleistung an die Stelle von `pool_w`; die Umschaltsperre bleibt.
 6. **Defizit** aus `residual_bereinigt_w` ermitteln und prüfen, ob die regelbaren Geräte es
    allein abregeln können (`binary_immediate_off`). Bereinigt, nicht roh: sonst verschwindet das
    Defizit, sobald ein Speicher die Hauslast deckt, und die Verbraucher liefen faktisch aus der
@@ -112,8 +121,15 @@ Ein Zyklus (`EMSController.run_cycle()`), ausgelöst alle `interval_s` Sekunden:
    ob der Schutz ausschließlich gegen Binärgeräte wirkt (`binary_only`) oder anschließend auch
    die Reihenfolge der regelbaren Zuteilung bestimmt (`binary_and_controllable`).
 8. **Kandidat** je binärem Gerät unter Mindestlaufzeit, Abschaltverzögerung und Mindestauszeit.
-9. **Prioritätskaskade** (Demotion/Promotion) und **One-Change-Limit** anwenden.
-10. **Allocation** der regelbaren Geräte aus dem verbleibenden Pool: Im Standardmodus zuerst
+   Ein Zwangsgerät ist immer Kandidat — ohne Mindestauszeit; endet der Zwang, greifen
+   Mindestlaufzeit und Abschaltverzögerung ab dann normal.
+9. **Prioritätskaskade** (Demotion/Promotion) und **One-Change-Limit** anwenden. Zwangsgeräte
+   bleiben auf beiden Seiten außen vor: sie sind kein Grund für eine Promotion, brauchen selbst
+   keine und zählen nicht gegen das One-Change-Budget.
+10. **Allocation** der regelbaren Geräte aus dem verbleibenden Pool (`pool_w − binary_total_w`,
+    wobei `binary_total_w` Zwangsgeräte auslässt — ihre Last steckt bereits im Residual). Ein
+    regelbares Zwangsgerät bekommt statt einer Pool-Zuteilung seine Zwangsleistung, geklemmt auf
+    `[min_technisch_w, max_technisch_w]`, und nimmt nichts aus dem Pool. Im Standardmodus zuerst
     technische Minima, danach Zusatzleistung. Im erweiterten Modus zuerst die geschützten
     Mindestleistungen in Prioritätsreihenfolge — der reine Helferwert, ohne `reserve_w` und
     globalen Puffer —, danach Zusatzleistung. Bei sinkendem Pool verschwinden dadurch erst
@@ -122,7 +138,8 @@ Ein Zyklus (`EMSController.run_cycle()`), ausgelöst alle `interval_s` Sekunden:
     aufgeteilt, strikt nach `entlade_prioritat`. Rechnete jeder Speicher für sich, entladen bei
     drei Speichern und 2 kW Defizit alle drei mit 2 kW. Muss nach Schritt 10 und vor Schritt 12
     laufen — der Speicher löst dort seine Richtung auf.
-12. **Rampenbegrenzung** der Sollwerte, bei Defizit sofortiger Run-down.
+12. **Rampenbegrenzung** der Sollwerte, bei Defizit sofortiger Run-down. Ein Zwangs-Sollwert wird
+    ohne Rampe, Schrittlimit und Totband sofort geschrieben und bei Defizit nicht abgeregelt.
 13. **Write-Ops** sammeln, bei `output_unit=ampere` von Watt in ganze Ampere abrunden und gegen die
     HA-REST-API ausführen; optional das Post-Cycle-Skript auslösen. Jede Operation trägt ihr
     verursachendes Gerät; das Ergebnis geht an den Controller zurück.
@@ -218,6 +235,12 @@ Zusagen, auf die sich der gesamte Code verlässt. Wer eine davon bricht, bricht 
     Status (`residual_source`/`battery_residual_source`), nie nur im Log (Lehre aus
     [D-041](design-entscheidungen.md)). Der Formel-Interpreter selbst wirft nie: jeder Fehler wird
     zu `valid: false`, ein Regelzyklus bricht an einer kaputten Formel nicht ab.
+12. **Zwang übersteuert Freigaben und Regelgüte, nie den Geräteschutz.** Ein Zwangsgerät (D-053)
+    läuft ohne Bedienfreigabe, ohne Gerätemodus und ohne globale Freigabe — aber nie ohne
+    technische Freigabe und nie mit kaputtem Schreibziel. Es ist kein Pool-Teilnehmer: es
+    reserviert nichts, bekommt nichts zugeteilt und wird nicht in den Pool zurückgerechnet. Seine
+    Last ist Hausverbrauch. Ein Zwang ist im Status immer als `force_active` sichtbar, nie nur im
+    Log.
 
 ## Start und Betrieb
 

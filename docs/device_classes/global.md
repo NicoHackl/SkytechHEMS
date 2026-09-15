@@ -56,17 +56,26 @@ abzuschalten.
 
 ## Gemeinsame HA-Helfer
 
-Diese vier Helfer werden von jeder Geräteklasse gelesen:
+Diese vier Helfer werden von jeder Geräteklasse gelesen; der fünfte nur von Verbrauchern:
 
 | Entität | Werte | Pflicht | Verhalten bei fehlendem State | Funktion |
 |---|---|---:|---|---|
 | `input_boolean.ems_<prefix>_freigabe` | `on`, `off` | ja | `off` | Bedienfreigabe; im EP-Modus zugleich Fallback für den EP-Freigabevorschlag |
-| `input_boolean.ems_<prefix>_technische_freigabe` | `on`, `off` | ja | `off` | Hartes technisches Gate, das auch im EP-Modus gilt |
+| `input_boolean.ems_<prefix>_technische_freigabe` | `on`, `off` | ja | `off` | Hartes technisches Gate, das auch im EP-Modus und unter Zwang gilt |
 | `input_select.ems_<prefix>_modus` | `auto`, `manuell`, `aus` | ja | außerhalb des globalen EP-Modus wie `manuell` | `auto` übernimmt gültige EP-Vorschläge, `manuell` nutzt HA-Helferwerte, `aus` ist der gerätespezifische Kill-Switch |
 | `input_number.ems_<prefix>_prioritat` | ganze Zahl | ja | `99` | Lade- beziehungsweise Verbraucherpriorität; kleinere Zahl wird zuerst bedient |
+| `input_boolean.ems_<prefix>_force` | `on`, `off` | nein | `off` | Zwang (D-053): Gerät läuft unabhängig von Pool, Bedienfreigabe, Gerätemodus, globalen Sperren und Notabschaltung. Nur bei `controllable` und `binary`; ein Speicher liest ihn nicht |
 
 Die Bedienfreigabe und die technische Freigabe müssen beide wirksam sein. Zusätzlich müssen die
 globale Freigabe, der globale Modus und `allowed_modes` das Gerät zulassen.
+
+**Zwang** ist eine eigene Achse neben dieser Freigabeentscheidung: ein Zwangsgerät verlässt den
+Pool vollständig (es reserviert nichts, bekommt nichts zugeteilt, wird nicht zurückgerechnet) und
+schreibt seinen Sollwert direkt. Zwang übersteuert nie die technische Freigabe und nie ein
+kaputtes Schreibziel; ein angeforderter, aber unwirksamer Zwang steht mit seinem Grund im Status
+(`force_blocked_reason`). Regelbare Geräte brauchen zusätzlich eine gültige Zwangsleistung, siehe
+[controllable.md](controllable.md#über-namenskonvention-gelesene-ha-helfer). Die Zwangslast gilt
+als Hausverbrauch und wird von einem AC-Speicher gedeckt — die einzige Ausnahme von D-B14.
 
 ## Schreibziele und inaktive Geräte
 

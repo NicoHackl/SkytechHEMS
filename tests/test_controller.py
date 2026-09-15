@@ -229,6 +229,46 @@ def test_cascade_promotes_higher_priority_on():
     assert high.final_on is True
 
 
+def test_cascade_ignoriert_zwang_auf_beiden_seiten():
+    ctrl = EMSController([])
+    high = make_binary(1, actual_on=False, final_on=False)
+    high.eligible = True
+    high._candidate_on = True
+    low = make_binary(2, actual_on=False, final_on=True)
+    low._force_active = True
+    ctrl._apply_priority_cascade([high, low])
+    assert high.final_on is False          # Zwang ist kein Grund für Promotion
+
+    high = make_binary(1, actual_on=False, final_on=True)
+    high._force_active = True
+    high.eligible = False
+    low = make_binary(2, actual_on=False, final_on=True)
+    ctrl._apply_priority_cascade([high, low])
+    assert high.final_on is True           # bleibt unangetastet
+
+
+def test_limit_one_change_ignoriert_zwang_einschaltung():
+    ctrl = EMSController([])
+    a = make_binary(1, actual_on=False, final_on=True)
+    z = make_binary(9, actual_on=False, final_on=True)
+    z._force_active = True
+    ctrl._limit_one_change([a, z], binary_immediate_off=False)
+    assert a.final_on is True
+    assert z.final_on is True
+
+
+def test_limit_one_change_schaltet_zwang_nicht_aus_bei_turn_off_zweig():
+    ctrl = EMSController([])
+    a = make_binary(1, actual_on=True, final_on=False)
+    b = make_binary(2, actual_on=True, final_on=False)
+    z = make_binary(9, actual_on=False, final_on=True)
+    z._force_active = True
+    ctrl._limit_one_change([a, b, z], binary_immediate_off=False)
+    assert b.final_on is False
+    assert a.final_on is True
+    assert z.final_on is True              # früher: turn_ons -> False
+
+
 # ---- Charakterisierung: Modus-Migration der Geräte-Registry ----
 
 def test_allowed_modes_auto_wird_auf_manuell_abgebildet():

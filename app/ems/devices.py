@@ -30,6 +30,13 @@ log = logging.getLogger(__name__)
 EPS_W = 1.0
 EP_COMMIT_ENTITY = "sensor.ep_plan_commit"
 
+# Gründe, warum ein angeforderter Zwang (D-053) nicht wirkt. Die technische
+# Freigabe und die Schreibziel-Gesundheit bleiben auch unter Zwang hartes Gate;
+# ein regelbares Gerät braucht zusätzlich eine gültige Zwangsleistung > 0 W.
+FORCE_BLOCKED_TECHNISCHE_FREIGABE = "technische_freigabe"
+FORCE_BLOCKED_RUNTIME = "runtime"
+FORCE_BLOCKED_KEINE_LEISTUNG = "keine_leistung"
+
 
 def _optional_number(value: Optional[float]) -> Optional[float]:
     """`None` bleibt `None` – nur so ist „kein Add-on-Wert" von `0` unterscheidbar."""
@@ -72,6 +79,16 @@ class Device(ABC):
         # nicht sagen, WELCHE der beiden Freigaben fehlt.
         self._freigabe_technisch: Optional[bool] = None
         self._freigabe_bedien: Optional[bool] = None
+        # Zwang (D-053): eine eigene Achse neben `eligible`. `eligible` bleibt
+        # die Freigabeentscheidung für den Pool; ein Zwangsgerät verlässt den
+        # Pool vollständig und schreibt seinen Sollwert direkt. `requested` ist
+        # der rohe Helferzustand, `active` die wirksame Entscheidung.
+        self._force_requested: bool = False
+        self._force_active: bool = False
+        self._force_blocked_reason: Optional[str] = None
+        # Merker für das Transitions-Log – bewusst nicht je Zyklus geleert.
+        # Startwert „kein Zwang", damit der erste Zyklus kein Ende meldet.
+        self._force_log_state: Tuple[bool, Optional[str]] = (False, None)
 
     # Vom Nutzer wählbare Gerätemodi. `auto` = Energy Pilot, `manuell` = normale
     # Regeln, `aus` = gerätespezifischer Kill-Switch.
@@ -87,6 +104,9 @@ class Device(ABC):
         self._write_error = ""
         self._freigabe_technisch = None
         self._freigabe_bedien = None
+        self._force_requested = False
+        self._force_active = False
+        self._force_blocked_reason = None
 
     # ------------------------------------------------------------------
     # Laufzeitgesundheit: Schreibziele und Schreibfehler
@@ -277,6 +297,71 @@ class Device(ABC):
         }
 
     # ------------------------------------------------------------------
+    # Zwang (D-053)
+    # ------------------------------------------------------------------
+
+    def resolve_force(self, st: StateProxy) -> None:
+        """Liest den Zwang-Helfer und entscheidet, ob er wirkt.
+
+        Zwang übersteuert Bedienfreigabe, Gerätemodus, globale Gates und die
+        Notabschaltung – nie die technische Freigabe und nie die Schreibziel-
+        Gesundheit. Läuft deshalb NACH check_runtime_health, und unabhängig von
+        `source`: auch bei global ausgeschalteter Regelung muss ein Zwang wirken.
+        """
+        pfx = self._entity_prefix
+        self._force_requested = self._flag(st, f"input_boolean.ems_{pfx}_force", "force")
+        if not self._force_requested:
+            self._log_force_transition()
+            return
+
+        # Bei source == 'aus' hat die Freigabeprüfung die technische Freigabe
+        # noch nicht gelesen; sie gehört trotzdem in den Status, weil sie
+        # gefragt wurde. _note ist je Entität keyed – kein Doppeleintrag.
+        if self._freigabe_technisch is None:
+            self._freigabe_technisch = self._flag(
+                st, f"input_boolean.ems_{pfx}_technische_freigabe", "technische_freigabe")
+
+        if not self._freigabe_technisch:
+            reason: Optional[str] = FORCE_BLOCKED_TECHNISCHE_FREIGABE
+        elif not self._runtime_active:
+            reason = FORCE_BLOCKED_RUNTIME
+        else:
+            reason = self._resolve_force_power(st)
+
+        self._force_blocked_reason = reason
+        self._force_active = reason is None
+        self._log_force_transition()
+
+    def _resolve_force_power(self, st: StateProxy) -> Optional[str]:
+        """Klassenspezifischer Teil: liefert einen Sperrgrund oder None."""
+        return None
+
+    def _log_force_transition(self) -> None:
+        state = (self._force_active, self._force_blocked_reason if self._force_requested else None)
+        if state == self._force_log_state:
+            return
+        self._force_log_state = state
+        if self._force_active:
+            log.info("EMS [%s] Zwang aktiv – Gerät läuft außerhalb des Pools", self.id)
+        elif self._force_requested:
+            log.warning("EMS [%s] Zwang angefordert, aber unwirksam: %s",
+                        self.id, self._force_blocked_reason)
+        else:
+            log.info("EMS [%s] Zwang beendet – normale Regeln greifen wieder", self.id)
+
+    @property
+    def force_active(self) -> bool:
+        return self._force_active
+
+    def force_status(self) -> Dict[str, object]:
+        """Die Zwangsfelder für `to_status_dict` – wie `freigabe_status`."""
+        return {
+            "force_requested": self._force_requested,
+            "force_active": self._force_active,
+            "force_blocked_reason": self._force_blocked_reason,
+        }
+
+    # ------------------------------------------------------------------
     # EP-Vorschlagswerte (Energy Pilot) lesen – mit Fallback auf Nutzerwert.
     # Fällt ein Vorschlagssensor aus, greift der Nutzerwert (KI-Ausfall darf die
     # Anlage nie blockieren).
@@ -368,13 +453,14 @@ class Device(ABC):
 
     @property
     def gemessene_last_w(self) -> float:
-        """Gemessene Leistungsaufnahme, OHNE Force-Modus-Filter.
+        """Gemessene Leistungsaufnahme, OHNE Fremdsteuerungs-Filter.
 
         Basis der Entladeplanung: Was hier zurückaddiert wird, gilt NICHT als
         Hausverbrauch und wird von einem Speicher nicht gedeckt. Anders als
         current_w ohne eligible-Gate und ohne Deckelung auf die HEMS-Anforderung
         – sobald eine Last den Netzpunkt verfälscht, zählt sie hier, unabhängig
-        davon wer sie eingeschaltet hat.
+        davon wer sie eingeschaltet hat. Einzige Ausnahme ist der Zwang (D-053):
+        eine Zwangslast ist Hausverbrauch und wird vom Speicher gedeckt.
         """
         return 0.0
 
@@ -489,6 +575,10 @@ class ControllableDevice(Device):
         self._ha_phases             = self._allowed_phases[0]  # zuletzt aus HA gelesene Phasen
         self._last_phase_change_ts  = 0.0
 
+        # ---- Zwang (D-053): angeforderte und effektiv geklemmte Leistung ----
+        self._force_request_w = 0.0
+        self._force_w         = 0.0
+
         # ---- Ergebnisse pro Zyklus ----
         self._alloc_w = 0.0
         self._new_w   = 0.0
@@ -563,14 +653,15 @@ class ControllableDevice(Device):
     # ------------------------------------------------------------------
 
     def _hems_power_w(self) -> float:
-        """Tatsächliche Leistung, soweit sie vom HEMS angefordert wurde.
+        """Tatsächliche Leistung, soweit sie vom HEMS aus dem Pool angefordert wurde.
 
-        Wird das Gerät extern angesteuert (Force-Modus außerhalb des HEMS), liegt
-        _actual_w über der Anforderung. Dieser Anteil ist für das HEMS nicht
-        freigebbar und darf daher weder in den Pool zurückgerechnet noch als
-        abregelbare Entlastung gezählt werden.
+        Wird das Gerät extern angesteuert (Fremdsteuerung außerhalb des HEMS),
+        liegt _actual_w über der Anforderung. Dieser Anteil ist für das HEMS
+        nicht freigebbar und darf daher weder in den Pool zurückgerechnet noch
+        als abregelbare Entlastung gezählt werden. Dasselbe gilt für ein
+        Zwangsgerät (D-053): sein Sollwert stammt nicht aus dem Pool.
         """
-        if not self.eligible:
+        if self.force_active or not self.eligible:
             return 0.0
         return min(self._actual_w, self._anforderung_current_w)
 
@@ -585,8 +676,12 @@ class ControllableDevice(Device):
     @property
     def gemessene_last_w(self) -> float:
         # Bewusst der rohe Messwert: kein eligible-Gate, keine Deckelung auf die
-        # Anforderung. Ein extern erzwungener Heizstab ist Überschussverbraucher
+        # Anforderung. Ein fremdgesteuerter Heizstab ist Überschussverbraucher
         # und bleibt es, auch wenn das HEMS ihn gerade nicht angefordert hat.
+        # Eine Zwangslast dagegen ist Hausverbrauch (D-053): sie wird nicht
+        # zurückaddiert, damit der Speicher sie deckt.
+        if self.force_active:
+            return 0.0
         return self._actual_w
 
     def update_from_ha(self, st: StateProxy, now_ts: float,
@@ -686,6 +781,30 @@ class ControllableDevice(Device):
         self._note(entity, role, resolved)
         return float(resolved.value)
 
+    def _resolve_force_power(self, st: StateProxy) -> Optional[str]:
+        """Zwangsleistung lesen – immer Watt, auch im Ampere-Modus (wie reserve_w).
+
+        Fehlt der Helfer, ist er ungültig oder steht auf 0, ist der Zwang
+        unwirksam: ein Gerät ohne Sollwert kann nicht erzwungen werden. Die
+        Ursache steht bereits in entity_diagnostics.
+        """
+        raw = self._num(st, f"input_number.ems_{self._entity_prefix}_force_leistung_w",
+                        "force_power_w", internal=0.0, minimum=0.0)
+        self._force_request_w = raw
+        if raw <= 0 or self._clamp_force_w() <= 0:
+            return FORCE_BLOCKED_KEINE_LEISTUNG
+        return None
+
+    def _clamp_force_w(self) -> float:
+        """Zwangsleistung an den technischen Grenzen geklemmt.
+
+        Wird je Zuteilung neu gerechnet, weil select_phases die Grenzen
+        über _apply_raw_to_watt ändern kann.
+        """
+        self._force_w = min(max(self._force_request_w, self.min_technisch_w),
+                            self.max_technisch_w)
+        return self._force_w
+
     def select_phases(self, pool_w: float, now_ts: float) -> None:
         """Wählt die Phasenanzahl für diesen Zyklus (zurückhaltende Umschaltstrategie).
 
@@ -699,8 +818,13 @@ class ControllableDevice(Device):
           - Nur RUNTER schalten, wenn die aktuelle Phasenanzahl das min_a nicht mehr trägt.
         Die Hysterese-Sperrzeit gilt nur im aktiven Laden, nicht beim Ladestart.
         """
-        if self.output_unit != 'ampere' or len(self._allowed_phases) == 1 or not self.eligible:
+        if (self.output_unit != 'ampere' or len(self._allowed_phases) == 1
+                or not (self.eligible or self.force_active)):
             return
+        # Unter Zwang entscheidet die Zwangsleistung statt des Pools, welche
+        # Phasenanzahl passt. Die Umschaltsperre bleibt – sie schützt Hardware.
+        if self.force_active:
+            pool_w = self._force_request_w
 
         is_initial_start = self._anforderung_current_w < EPS_W
 
@@ -770,6 +894,8 @@ class ControllableDevice(Device):
 
     def consume_from_pool(self, remaining_w: float, _: float) -> float:
         """Reserviert schutz_w, damit binäre Geräte diese Leistung nicht verbrauchen."""
+        if self.force_active:
+            return remaining_w  # Zwangsgerät ist kein Pool-Teilnehmer
         return remaining_w - self._schutz_w if self.eligible else remaining_w
 
     def allocate_minimum(self, remaining_w: float) -> float:
@@ -783,6 +909,9 @@ class ControllableDevice(Device):
         Verbraucher (via _schutz_w in consume_from_pool) und darf das Gerät nicht
         ausschalten, wenn der Pool zwar min_technisch_w trägt, aber nicht die volle
         geschützte Leistung."""
+        if self.force_active:
+            self._alloc_w = self._clamp_force_w()
+            return remaining_w
         if not self.eligible or remaining_w <= 0:
             self._alloc_w = 0.0
             return remaining_w
@@ -813,6 +942,9 @@ class ControllableDevice(Device):
         technische Untergrenze, bleibt das Gerät aus und ein niedriger-priores Gerät
         darf seinen kleineren Startwert noch prüfen.
         """
+        if self.force_active:
+            self._alloc_w = self._clamp_force_w()
+            return remaining_w
         if not self.eligible or remaining_w <= 0:
             self._alloc_w = 0.0
             return remaining_w
@@ -835,7 +967,7 @@ class ControllableDevice(Device):
         """Durchlauf 2: nachdem alle Geräte ihr technisches Minimum haben, den
         Überschuss in Prioritätsreihenfolge (höchste Priorität zuerst) bis
         max_technisch_w verteilen."""
-        if not self.eligible or remaining_w <= 0:
+        if self.force_active or not self.eligible or remaining_w <= 0:
             return remaining_w
         if self.min_technisch_w > 0 and self._alloc_w == 0:
             # Hat in Durchlauf 1 das technische Minimum nicht erhalten → Gerät bleibt aus
@@ -848,6 +980,11 @@ class ControllableDevice(Device):
 
     def calculate_ramp(self, current_deficit_w: float = 0.0) -> None:
         """Wendet die Rampenbegrenzung an; Ergebnis in _new_w."""
+        if self.force_active:
+            # Zwang schreibt sofort: keine Hoch-/Runter-Regelzeit, kein
+            # Schrittlimit, kein Abregeln bei Defizit. Geklemmt ist bereits.
+            self._new_w = round(self._alloc_w)
+            return
         if not self.eligible:
             self._new_w = 0.0
             return
@@ -889,7 +1026,10 @@ class ControllableDevice(Device):
         # bedingungslos geschrieben. Bei einem unbrauchbaren Schreibziel ist
         # nicht bekannt, was dort steht – „hat sich nichts geändert" wäre eine
         # Annahme, und das Rampen-Timing spielt ohnehin keine Rolle mehr.
+        # Unter Zwang zählt das Totband nicht – aber auch dann nur bei echter
+        # Änderung, sonst altert last_changed nie.
         write = (not self._runtime_active) or is_on_off or (
+            self._force_active and delta > 0) or (
             delta > 0 and (self.deadband_w <= 0 or delta >= self.deadband_w))
 
         ops: List[WriteOp] = []
@@ -921,6 +1061,9 @@ class ControllableDevice(Device):
             "priority":              self.priority,
             "eligible":              self.eligible,
             **self.freigabe_status(),
+            **self.force_status(),
+            # Effektive, geklemmte Zwangsleistung; None, solange kein Zwang wirkt.
+            "force_w":               self._force_w if self._force_active else None,
             "source":                self.source,
             "ep_proposal_status":    self._ep_proposal_status,
             "entity_diagnostics":    self._entity_diagnostics,
@@ -1050,15 +1193,21 @@ class BinaryDevice(Device):
 
     @property
     def current_w(self) -> float:
-        # Nur Leistung zurückrechnen, die das HEMS selbst angefordert hat. Ein extern
-        # (Force-Modus) eingeschalteter Schalter ist für das HEMS nicht freigebbar; seine
-        # Last steckt bereits in residual_w und darf den Pool nicht zusätzlich aufblähen.
+        # Nur Leistung zurückrechnen, die das HEMS selbst aus dem Pool angefordert
+        # hat. Ein extern (Fremdsteuerung) eingeschalteter Schalter ist für das
+        # HEMS nicht freigebbar; seine Last steckt bereits in residual_w und darf
+        # den Pool nicht zusätzlich aufblähen. Ein Zwangsgerät (D-053) ebenso.
+        if self.force_active:
+            return 0.0
         return self.power_w if (self._actual_on and self._anforderung_an) else 0.0
 
     @property
     def gemessene_last_w(self) -> float:
         # Gegenstück zu current_w: hier zählt der Schalterzustand allein, auch
-        # ohne HEMS-Anforderung (Force-Modus).
+        # ohne HEMS-Anforderung (Fremdsteuerung). Eine Zwangslast ist dagegen
+        # Hausverbrauch und wird vom Speicher gedeckt (D-053).
+        if self.force_active:
+            return 0.0
         return self.power_w if self._actual_on else 0.0
 
     def update_from_ha(self, st: StateProxy, now_ts: float,
@@ -1104,6 +1253,9 @@ class BinaryDevice(Device):
     def consume_from_pool(self, remaining_w: float,
                           global_einschaltreserve_w: float) -> float:
         """Bestimmt den Wunschzustand per Hysterese; verbraucht power_w wenn gewünscht an."""
+        if self.force_active:
+            self._desired_on = True
+            return remaining_w  # Zwang zieht nichts aus dem Pool
         if not self.eligible:
             return remaining_w
         on_threshold = self.power_w + self.on_reserve_w + global_einschaltreserve_w
@@ -1121,6 +1273,12 @@ class BinaryDevice(Device):
         Mindestlaufzeit erfüllt hat *und* die Abschaltverzögerung abgelaufen
         ist, wird der Aus-Befehl freigegeben.
         """
+        if self.force_active:
+            # Zwang schaltet sofort ein – ohne Mindestauszeit. Endet der Zwang,
+            # laufen Mindestlaufzeit und Abschaltverzögerung ab hier normal.
+            self._candidate_on = True
+            self._off_since_ts = 0.0
+            return
         if not self.eligible:
             self._candidate_on = False
             self._off_since_ts = 0.0
@@ -1177,6 +1335,7 @@ class BinaryDevice(Device):
             "priority":             self.priority,
             "eligible":             self.eligible,
             **self.freigabe_status(),
+            **self.force_status(),
             "source":               self.source,
             "ep_proposal_status":   self._ep_proposal_status,
             "entity_diagnostics":   self._entity_diagnostics,
@@ -1418,6 +1577,9 @@ class BatteryDevice(ControllableDevice):
 
     def select_phases(self, pool_w: float, now_ts: float) -> None:
         return  # Speicher werden immer in Watt geregelt
+
+    def resolve_force(self, st: StateProxy) -> None:
+        return  # Speicher kennen keinen Zwang (D-053); netzladen_aktiv bleibt ihr Weg
 
     # ------------------------------------------------------------------
     # HA-Zustand lesen

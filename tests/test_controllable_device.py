@@ -504,3 +504,103 @@ def test_phasenwechselsperre_gueltige_null_gewinnt_gegen_den_addon_wert():
 
     read(d, make_states({}))
     assert d.phase_switch_delay_s == 300.0
+
+
+# ---- Zwang (D-053) ----
+
+def _zwang(d, wunsch_w):
+    """Setzt einen wirksamen Zwang direkt, ohne HA-Auflösung."""
+    d._force_requested = True
+    d._force_active = True
+    d._force_request_w = wunsch_w
+    return d
+
+
+def test_hems_power_und_gemessene_last_null_bei_zwang():
+    d = _zwang(make_watt(min_w=500.0, max_w=3000.0), 2000.0)
+    d._actual_w = 2000.0
+    d._anforderung_current_w = 2000.0
+    assert d.current_w == 0.0
+    assert d.max_relief_w == 0.0
+    assert d.gemessene_last_w == 0.0        # Zwangslast ist Hausverbrauch
+
+
+def test_consume_from_pool_reserviert_nichts_bei_zwang():
+    d = _zwang(make_watt(min_w=500.0, max_w=3000.0, geschuetzt=1500.0), 2000.0)
+    d._schutz_w = 1500.0
+    assert d.consume_from_pool(1000.0, 0.0) == 1000.0
+
+
+@pytest.mark.parametrize("zuteilung", ["allocate_minimum", "allocate_protected_minimum"])
+def test_allocate_setzt_zwangswert_ohne_pool(zuteilung):
+    d = _zwang(make_watt(min_w=500.0, max_w=3000.0), 2000.0)
+    assert getattr(d, zuteilung)(0.0) == 0.0
+    assert d._alloc_w == 2000.0
+    assert d.allocate_surplus(5000.0) == 5000.0   # nimmt auch danach nichts
+    assert d._alloc_w == 2000.0
+
+
+@pytest.mark.parametrize(("wunsch", "erwartet"), [(200.0, 500.0), (9000.0, 3000.0)])
+def test_zwangswert_wird_an_technischen_grenzen_geklemmt(wunsch, erwartet):
+    d = _zwang(make_watt(min_w=500.0, max_w=3000.0), wunsch)
+    d.allocate_minimum(0.0)
+    assert d._alloc_w == erwartet
+    assert d._force_w == erwartet
+
+
+def test_calculate_ramp_schreibt_zwangswert_sofort():
+    d = _zwang(make_watt(min_w=500.0, max_w=3000.0), 2000.0)
+    d.hoch_regelzeit_s = 600.0
+    d.max_anderung_pro_schritt_w = 100.0
+    d._anforderung_current_w = 0.0
+    d._anforderung_age_s = 0.0
+    d.allocate_minimum(0.0)
+    d.calculate_ramp(current_deficit_w=5000.0)   # Defizit regelt Zwang nicht ab
+    assert d._new_w == 2000.0
+
+
+def test_write_ops_bei_zwang_ohne_totband_aber_nicht_bei_delta_null():
+    d = _zwang(make_watt(min_w=500.0, max_w=3000.0), 2000.0)
+    d.deadband_w = 500.0
+    d._anforderung_current_w = 1900.0
+    d.allocate_minimum(0.0)
+    d.calculate_ramp()
+    ops = d.get_write_ops()
+    assert len(ops) == 1 and ops[0][2]["value"] == 2000.0
+    d._anforderung_current_w = 2000.0
+    d.calculate_ramp()
+    assert d.get_write_ops() == []
+
+
+def test_select_phases_nutzt_zwangsleistung_statt_pool():
+    d = _zwang(make_ampere([1, 3]), 3680.0)
+    d.eligible = False                        # Zwang wirkt auch ohne Freigabe
+    d._raw_min, d._raw_max = 6.0, 16.0
+    d._current_phases = d._ha_phases = 3
+    d._anforderung_current_w = 0.0
+    d.select_phases(0.0, now_ts=1000.0)       # Pool 0 – zählt unter Zwang nicht
+    assert d._current_phases == 1
+
+
+def test_force_leistung_w_ist_auch_im_ampere_modus_watt():
+    """Der Helfer heißt immer `_force_leistung_w` – wie reserve_w."""
+    d = make_ampere([1, 3])
+    d._runtime_active = True
+    d._freigabe_technisch = True
+    d.min_technisch_w, d.max_technisch_w = 1380.0, 3680.0
+    d.resolve_force(make_states({
+        "input_boolean.ems_wallbox_force": "on",
+        "input_number.ems_wallbox_force_leistung_w": "3000",
+    }))
+    assert d.force_active is True
+    assert d._force_w == 3000.0
+    assert d.entity_diagnostics["input_number.ems_wallbox_force_leistung_w"]["role"] == "force_power_w"
+
+
+def test_resolve_force_ohne_anforderung_bleibt_still():
+    d = make_watt()
+    d.resolve_force(make_states({}))
+    assert d.force_active is False
+    assert d.force_status() == {
+        "force_requested": False, "force_active": False, "force_blocked_reason": None}
+    assert d.entity_diagnostics["input_boolean.ems_heizstab_force"]["state"] == "missing"

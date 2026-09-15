@@ -89,10 +89,12 @@ Es gibt keine autonome Rückfallebene, die das auffängt. Deshalb:
 
 ### Ein Hinweis zur Anzeige
 
-Läuft ein HEMS-Gerät von Hand (Force-Modus), sinkt das Hausdefizit um dessen volle Istleistung und
+Läuft ein HEMS-Gerät von Hand (Fremdsteuerung), sinkt das Hausdefizit um dessen volle Istleistung und
 der Restbezug erscheint am Netz statt aus dem Speicher. **Das ist gewollt** — ein von Hand
 eingeschalteter Heizstab bleibt ein Überschussverbraucher. Im Energiedashboard sieht es trotzdem
 wie ein Regelfehler aus; die Statuskachel „Hausdefizit" benennt den Betrag deshalb ausdrücklich.
+Anders die **Zwangslast** (Helfer `ems_<prefix>_force`, D-053): wer ein Gerät bewusst erzwingt,
+will es laufen sehen — sie zählt als Hausverbrauch und wird vom Speicher gedeckt.
 
 Ein Speicher, der sich **selbst** regelt und nicht vom HEMS gesteuert wird, gehört **nicht** in die
 Geräteliste. Seine Leistung steckt bereits im Überschuss-Sensor; als `battery` eingetragen würde

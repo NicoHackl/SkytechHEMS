@@ -320,11 +320,18 @@ Wird nach **jedem** abgeschlossenen Regelzyklus geschrieben.
     "heizstab": {
       "leistung_w": 1400.0,                  // float oder null
       "runtime_active": true,                // bool, regelt gerade mit
-      "inactive_reasons": []                 // string[], deutsche Klartextgründe
+      "inactive_reasons": [],                // string[], deutsche Klartextgründe
+      "zwang": false                         // bool, additiv seit 15.09.2026 (D-053)
     }
   }
 }
 ```
+
+`zwang` ist additiv, `schema_version` bleibt `1` (D-047). `true` heißt: das Gerät läuft per
+Zwang-Helfer (`input_boolean.ems_<prefix>_force`) außerhalb des Pools, unabhängig von Freigabe und
+Modus. Ein Zwangsgerät ist immer `runtime_active: true` mit leeren `inactive_reasons` — auch bei
+gesperrter Freigabe oder global ausgeschalteter Regelung, denn es zieht tatsächlich Leistung.
+`runtime_active` bedeutet damit präzise „regelt gerade mit **oder** läuft per Zwang".
 
 `inactive_reasons` ist **nach Handlungsrelevanz sortiert**: der erste Eintrag ist der Grund, den
 der Nutzer am ehesten selbst beheben kann. Die Karte zeigt genau diesen einen. Konkret steht die

@@ -311,6 +311,22 @@ def test_ein_abgeschaltetes_geraet_nennt_nur_den_modus():
     assert entry["inactive_reasons"] == ["Gerätemodus aus"]
 
 
+def test_zwang_geraet_gilt_als_aktiv_ohne_gruende():
+    # D-053: ein Zwangsgerät regelt mit, auch wenn die Freigabeachse sperrt.
+    entry = _gesperrt(source="aus", freigabe=None, technische_freigabe=None,
+                      force_active=True)
+    assert entry["runtime_active"] is True
+    assert entry["inactive_reasons"] == []
+    assert entry["zwang"] is True
+
+
+def test_zwang_unwirksam_nennt_weiter_die_freigabe():
+    entry = _gesperrt(freigabe=False, force_requested=True, force_active=False)
+    assert entry["runtime_active"] is False
+    assert entry["inactive_reasons"] == ["Freigabe aus"]
+    assert entry["zwang"] is False
+
+
 def test_inaktive_gruende_werden_als_deutscher_text_geliefert():
     status = _status([
         {"id": "heizstab", "type": "controllable", "actual_w": 0.0,
@@ -561,6 +577,19 @@ def test_speicher_nennt_die_richtige_freigabe(freigabe, technische, erwartet):
          "input_boolean.ems_acspeicher1_technische_freigabe": technische},
     )
     assert gruende["acspeicher1"] == erwartet
+
+
+def test_zwang_aus_echtem_zyklus_hat_keine_gruende():
+    gruende = _gruende_aus_echtem_zyklus(
+        [{"name": "heizstab", "class": "controllable", "allowed_modes": "auto",
+          "actual_power_entity": "sensor.heizstab_ist", **CTRL_FALLBACKS}],
+        {**_controllable_w("heizstab"),
+         "input_boolean.ems_pv_regelung_aktiv": "off",
+         "input_boolean.ems_heizstab_force": "on",
+         "input_number.ems_heizstab_force_leistung_w": 2000,
+         "sensor.heizstab_ist": 0},
+    )
+    assert gruende["heizstab"] == []
 
 
 def test_ein_abgeschaltetes_geraet_meldet_keine_freigabe():

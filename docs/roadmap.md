@@ -22,6 +22,7 @@ verteilt.
 | Ampere-Ausgabe und automatische Phasenumschaltung | fertig | |
 | Hard-Lockout bei ungültigem Überschuss-Sensor | fertig | |
 | Konfigurationsgetriebene Geräteliste ohne Codeänderung | fertig | [konfiguration.md](konfiguration.md) |
+| Zwangsbetrieb je Gerät über `_force`-Helfer, regelbar mit Leistungsvorgabe | fertig | D-053 |
 
 ### M2 — Energy-Pilot-Anbindung
 
