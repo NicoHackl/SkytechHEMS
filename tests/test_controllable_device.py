@@ -597,6 +597,60 @@ def test_force_leistung_w_ist_auch_im_ampere_modus_watt():
     assert d.entity_diagnostics["input_number.ems_wallbox_force_leistung_w"]["role"] == "force_power_w"
 
 
+def test_calculate_ramp_bei_zwang_ende_ohne_rampe():
+    d = make_watt(min_w=500.0, max_w=3000.0)
+    d._force_released = True
+    d.runter_regelzeit_s = 600.0
+    d.max_anderung_pro_schritt_w = 100.0
+    d._anforderung_current_w = 2000.0
+    d._anforderung_age_s = 0.0
+    d._alloc_w = 0.0
+    d.calculate_ramp()
+    assert d._new_w == 0.0
+    d._alloc_w = 1000.0
+    d.calculate_ramp()
+    assert d._new_w == 1000.0
+    d._alloc_w = 200.0                # unter min_technisch → 0, nicht 200
+    d.calculate_ramp()
+    assert d._new_w == 0.0
+
+
+def test_write_ops_bei_zwang_ende_ohne_totband():
+    d = make_watt(min_w=500.0, max_w=3000.0)
+    d._force_released = True
+    d.deadband_w = 5000.0
+    d._anforderung_current_w = 2000.0
+    d._alloc_w = 1000.0
+    d.calculate_ramp()
+    ops = d.get_write_ops()
+    assert len(ops) == 1 and ops[0][2]["value"] == 1000.0
+
+
+def test_resolve_force_erkennt_das_ende_als_uebergang():
+    d = make_watt(min_w=500.0, max_w=3000.0)
+    d._runtime_active = True
+    d._freigabe_technisch = True
+    an = make_states({"input_boolean.ems_heizstab_force": "on",
+                      "input_number.ems_heizstab_force_leistung_w": "2000"})
+    aus = make_states({"input_boolean.ems_heizstab_force": "off"})
+
+    def zyklus(now, states, technisch=True):
+        d.begin_cycle(now)
+        d._freigabe_technisch = technisch
+        d.resolve_force(states)
+
+    zyklus(1.0, an)
+    assert d.force_active is True and d.force_released is False
+    zyklus(2.0, aus)
+    assert d.force_active is False and d.force_released is True
+    zyklus(3.0, aus)
+    assert d.force_released is False            # nur ein Zyklus
+    # Auch ein blockierter Zwang ist ein Ende.
+    zyklus(4.0, an)
+    zyklus(5.0, an, technisch=False)
+    assert d.force_active is False and d.force_released is True
+
+
 def test_resolve_force_ohne_anforderung_bleibt_still():
     d = make_watt()
     d.resolve_force(make_states({}))

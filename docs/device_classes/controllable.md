@@ -65,7 +65,8 @@ Wert `0` ist dagegen ein Wert und wird nie ersetzt — auch nicht bei `min_umsch
 abgeregelt. Fehlt `force_leistung_w`, ist der Wert ungültig oder `0`, bleibt das Gerät in der
 Normalregelung und der Status nennt `force_blocked_reason: "keine_leistung"`; die Ursache steht in
 `entity_diagnostics`. Die Umschaltsperre `min_umschaltzeit_s` gilt auch unter Zwang. Endet der
-Zwang, greift die Rampe wieder normal. Einzelheiten:
+Zwang, springt der Sollwert im selben Zyklus ohne Rampe und Totband auf die Pool-Zuteilung — ohne
+Überschuss also sofort auf `0`. Ab dem Folgezyklus gilt die Rampe wieder. Einzelheiten:
 [global.md](global.md#gemeinsame-ha-helfer).
 
 Ob die geschützte Mindestleistung ausschließlich gegenüber Binärverbrauchern oder zusätzlich

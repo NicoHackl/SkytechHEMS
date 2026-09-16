@@ -76,7 +76,9 @@ Für den Zwang (D-053) zusätzlich verpflichtend:
     `aus`, Hard-Lockout, Gerätemodus `aus`, fehlende Bedienfreigabe — und nie bei
     `runtime_active: false`. Er ignoriert Notabschaltung, Mindestauszeit, Rampe, Totband,
     Kaskade und One-Change; reserviert nichts und rechnet nichts in den Pool zurück; die
-    Zwangslast wird vom Speicher gedeckt; nach dem Zwang schützt die Mindestlaufzeit. Für
+    Zwangslast wird vom Speicher gedeckt. Das Zwang-Ende schaltet im selben Zyklus sofort ohne
+    Mindestlaufzeit, Abschaltverzögerung, Rampe und Totband; die Mindestauszeit ist für den
+    ersten regulären Neustart ausgesetzt; ab dem Folgezyklus gilt der Zeitschutz wieder. Für
     `force` und `force_leistung_w` gilt die volle Matrix aus Punkt 13, für Ampere-Geräte
     zusätzlich Phasenwahl und Umschaltsperre unter Zwang.
 

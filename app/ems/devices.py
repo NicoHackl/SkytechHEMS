@@ -86,6 +86,11 @@ class Device(ABC):
         self._force_requested: bool = False
         self._force_active: bool = False
         self._force_blocked_reason: Optional[str] = None
+        # Zwang-Ende als Übergang: `_force_was_active` überlebt Zyklen,
+        # `_force_released` gilt genau für den Zyklus, in dem der Zwang wegfällt.
+        # In diesem Zyklus regelt der Pool sofort – ohne Zeitschutz und Rampe.
+        self._force_was_active: bool = False
+        self._force_released: bool = False
         # Merker für das Transitions-Log – bewusst nicht je Zyklus geleert.
         # Startwert „kein Zwang", damit der erste Zyklus kein Ende meldet.
         self._force_log_state: Tuple[bool, Optional[str]] = (False, None)
@@ -107,6 +112,7 @@ class Device(ABC):
         self._force_requested = False
         self._force_active = False
         self._force_blocked_reason = None
+        self._force_released = False
 
     # ------------------------------------------------------------------
     # Laufzeitgesundheit: Schreibziele und Schreibfehler
@@ -310,26 +316,28 @@ class Device(ABC):
         """
         pfx = self._entity_prefix
         self._force_requested = self._flag(st, f"input_boolean.ems_{pfx}_force", "force")
-        if not self._force_requested:
-            self._log_force_transition()
-            return
+        if self._force_requested:
+            # Bei source == 'aus' hat die Freigabeprüfung die technische Freigabe
+            # noch nicht gelesen; sie gehört trotzdem in den Status, weil sie
+            # gefragt wurde. _note ist je Entität keyed – kein Doppeleintrag.
+            if self._freigabe_technisch is None:
+                self._freigabe_technisch = self._flag(
+                    st, f"input_boolean.ems_{pfx}_technische_freigabe", "technische_freigabe")
 
-        # Bei source == 'aus' hat die Freigabeprüfung die technische Freigabe
-        # noch nicht gelesen; sie gehört trotzdem in den Status, weil sie
-        # gefragt wurde. _note ist je Entität keyed – kein Doppeleintrag.
-        if self._freigabe_technisch is None:
-            self._freigabe_technisch = self._flag(
-                st, f"input_boolean.ems_{pfx}_technische_freigabe", "technische_freigabe")
+            if not self._freigabe_technisch:
+                reason: Optional[str] = FORCE_BLOCKED_TECHNISCHE_FREIGABE
+            elif not self._runtime_active:
+                reason = FORCE_BLOCKED_RUNTIME
+            else:
+                reason = self._resolve_force_power(st)
 
-        if not self._freigabe_technisch:
-            reason: Optional[str] = FORCE_BLOCKED_TECHNISCHE_FREIGABE
-        elif not self._runtime_active:
-            reason = FORCE_BLOCKED_RUNTIME
-        else:
-            reason = self._resolve_force_power(st)
+            self._force_blocked_reason = reason
+            self._force_active = reason is None
 
-        self._force_blocked_reason = reason
-        self._force_active = reason is None
+        # Zwang-Ende – auch ein blockierter Zwang ist eines: der Sollwert folgt
+        # dem Schalter sofort, nicht erst nach Mindestlaufzeit oder Rampe.
+        self._force_released = self._force_was_active and not self._force_active
+        self._force_was_active = self._force_active
         self._log_force_transition()
 
     def _resolve_force_power(self, st: StateProxy) -> Optional[str]:
@@ -352,6 +360,11 @@ class Device(ABC):
     @property
     def force_active(self) -> bool:
         return self._force_active
+
+    @property
+    def force_released(self) -> bool:
+        """True genau im Zyklus, in dem der Zwang wegfällt."""
+        return self._force_released
 
     def force_status(self) -> Dict[str, object]:
         """Die Zwangsfelder für `to_status_dict` – wie `freigabe_status`."""
@@ -988,6 +1001,14 @@ class ControllableDevice(Device):
         if not self.eligible:
             self._new_w = 0.0
             return
+        if self._force_released:
+            # Zwang-Ende: der Sollwert springt ohne Rampe auf die Pool-Zuteilung
+            # (meist 0). Der Zwangswert soll nicht minutenlang nachlaufen.
+            new_w = self._alloc_w
+            if 0 < new_w < self.min_technisch_w:
+                new_w = 0.0
+            self._new_w = round(max(min(new_w, self.max_technisch_w), 0.0))
+            return
 
         ideal_w   = self._alloc_w
         current_w = self._anforderung_current_w
@@ -1026,10 +1047,10 @@ class ControllableDevice(Device):
         # bedingungslos geschrieben. Bei einem unbrauchbaren Schreibziel ist
         # nicht bekannt, was dort steht – „hat sich nichts geändert" wäre eine
         # Annahme, und das Rampen-Timing spielt ohnehin keine Rolle mehr.
-        # Unter Zwang zählt das Totband nicht – aber auch dann nur bei echter
-        # Änderung, sonst altert last_changed nie.
+        # Unter Zwang und an seinem Ende zählt das Totband nicht – aber auch
+        # dann nur bei echter Änderung, sonst altert last_changed nie.
         write = (not self._runtime_active) or is_on_off or (
-            self._force_active and delta > 0) or (
+            (self._force_active or self._force_released) and delta > 0) or (
             delta > 0 and (self.deadband_w <= 0 or delta >= self.deadband_w))
 
         ops: List[WriteOp] = []
@@ -1153,6 +1174,9 @@ class BinaryDevice(Device):
 
         # ---- Interner persistenter Zustand (überlebt über Zyklen hinweg) ----
         self._off_since_ts: float = 0.0
+        # Nach einem Zwang-Aus darf der Pool das Gerät sofort wieder einschalten:
+        # die Mindestauszeit ist bis zum ersten regulären Einschalten ausgesetzt.
+        self._offtime_waived: bool = False
 
         # ---- Berechnung pro Zyklus ----
         self._desired_on   = False
@@ -1274,11 +1298,15 @@ class BinaryDevice(Device):
         ist, wird der Aus-Befehl freigegeben.
         """
         if self.force_active:
-            # Zwang schaltet sofort ein – ohne Mindestauszeit. Endet der Zwang,
-            # laufen Mindestlaufzeit und Abschaltverzögerung ab hier normal.
+            # Zwang schaltet sofort ein – ohne Mindestauszeit.
             self._candidate_on = True
             self._off_since_ts = 0.0
             return
+        if self._force_released:
+            # Zwang-Ende: der Pool entscheidet sofort, ohne Mindestlaufzeit und
+            # Abschaltverzögerung. Geht das Gerät dabei aus, darf es ohne
+            # Mindestauszeit wieder anlaufen.
+            self._offtime_waived = True
         if not self.eligible:
             self._candidate_on = False
             self._off_since_ts = 0.0
@@ -1287,6 +1315,11 @@ class BinaryDevice(Device):
         if self._actual_on:
             if self._desired_on:
                 self._candidate_on = True
+                self._off_since_ts = 0.0
+                self._offtime_waived = False   # regulär an – nächstes Aus ist regulär
+                return
+            if self._force_released:
+                self._candidate_on = False
                 self._off_since_ts = 0.0
                 return
 
@@ -1305,9 +1338,11 @@ class BinaryDevice(Device):
                 self._candidate_on = True
         else:
             self._off_since_ts = 0.0
-            self._candidate_on = (
-                self._desired_on and self._switch_age_s >= self.min_offtime_s
+            self._candidate_on = self._desired_on and (
+                self._switch_age_s >= self.min_offtime_s or self._offtime_waived
             )
+            if self._candidate_on:
+                self._offtime_waived = False
 
     def reset_off_timer(self) -> None:
         """Setzt den Abschaltverzögerungs-Timer zurück. Wird nach der Prioritätskaskade aufgerufen, wenn das Gerät AUS geht."""

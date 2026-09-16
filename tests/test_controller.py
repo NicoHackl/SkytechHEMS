@@ -257,6 +257,16 @@ def test_limit_one_change_ignoriert_zwang_einschaltung():
     assert z.final_on is True
 
 
+def test_limit_one_change_ignoriert_zwang_ende_ausschaltung():
+    ctrl = EMSController([])
+    a = make_binary(1, actual_on=True, final_on=False)   # reguläres Aus
+    z = make_binary(9, actual_on=True, final_on=False)   # Zwang-Ende-Aus
+    z._force_released = True
+    ctrl._limit_one_change([a, z], binary_immediate_off=False)
+    assert a.final_on is False                           # bleibt das einzige reguläre Aus
+    assert z.final_on is False                           # wird nicht aufgeschoben
+
+
 def test_limit_one_change_schaltet_zwang_nicht_aus_bei_turn_off_zweig():
     ctrl = EMSController([])
     a = make_binary(1, actual_on=True, final_on=False)

@@ -34,8 +34,12 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
   technische Freigabe und ein kaputtes Schreibziel bleiben hartes Gate. Regelbare Geräte bekommen
   ihre Leistung aus `input_number.ems_<prefix>_force_leistung_w` (immer Watt, auch bei Ampere-
   Geräten; geklemmt auf die technischen Grenzen; fehlend oder 0 = Zwang unwirksam) und schreiben
-  sie sofort ohne Rampe und Totband. Ein Zwangsgerät nimmt nichts aus dem Pool, wird nicht in ihn
-  zurückgerechnet und zählt nicht gegen Kaskade oder One-Change-Limit; seine Last gilt als
+  sie sofort ohne Rampe und Totband. Endet der Zwang, folgt die Anforderung sofort: ohne
+  Überschuss geht das Gerät im selben Zyklus aus bzw. auf 0 W — ohne Mindestlaufzeit,
+  Abschaltverzögerung und Rampe; mit Überschuss übernimmt sofort die Normalregelung. Nach einem
+  Zwang-Aus darf der Pool das Gerät ohne Mindestauszeit wieder einschalten. Ein Zwangsgerät nimmt
+  nichts aus dem Pool, wird nicht in ihn zurückgerechnet und zählt nicht gegen Kaskade oder
+  One-Change-Limit; seine Last gilt als
   Hausverbrauch und wird vom AC-Speicher gedeckt. Der Status trägt `force_requested`,
   `force_active`, `force_blocked_reason` und `force_w`; die Statuskarte zeigt „Zwang" bzw. „Zwang
   unwirksam" mit Grund, der Steuerung-Tab beide Helfer, die Power Flow Card additiv `zwang`.

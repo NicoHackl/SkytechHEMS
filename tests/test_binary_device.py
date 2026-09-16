@@ -345,21 +345,55 @@ def test_candidate_bei_zwang_setzt_off_timer_zurueck():
     assert b._off_since_ts == 0.0
 
 
-def test_nach_zwang_ende_greift_abschaltverzoegerung_neu():
+def _zwang_ende(b):
+    b._force_requested = False
+    b._force_active = False
+    b._force_released = True
+    return b
+
+
+def test_zwang_ende_ueberspringt_mindestlaufzeit_und_abschaltverzoegerung():
     b = make_binary()
     b._actual_on = True
-    b._switch_age_s = 1000.0
+    b._switch_age_s = 10.0            # tief in der Mindestlaufzeit
+    b.min_runtime_s = 300.0
     b.off_delay_s = 30.0
-    # Unter Zwang: Timer bleibt zurückgesetzt.
-    _zwang(b)
+    _zwang_ende(b)
+    b.consume_from_pool(0.0, 0.0)     # Pool leer → nicht gewünscht
+    b.calculate_candidate(now_ts=1000.0)
+    assert b.candidate_on is False
+    assert b._off_since_ts == 0.0
+
+
+def test_zwang_ende_mit_pool_bleibt_regulaer_an():
+    b = make_binary(power=1000.0)
+    b._actual_on = True
+    _zwang_ende(b)
+    b.consume_from_pool(1000.0, 0.0)
+    b.calculate_candidate(now_ts=1000.0)
+    assert b.candidate_on is True
+    assert b._offtime_waived is False     # regulär an → nächstes Aus ist regulär
+
+
+def test_mindestauszeit_nach_zwang_ende_ausgesetzt_bis_regulaer_an():
+    b = make_binary(power=1000.0)
+    b.min_offtime_s = 600.0
+    # Zwang-Ende-Zyklus: Gerät geht aus.
+    b._actual_on = True
+    _zwang_ende(b)
     b.consume_from_pool(0.0, 0.0)
     b.calculate_candidate(now_ts=1000.0)
-    assert b._off_since_ts == 0.0
-    # Zwang endet, Pool leer: die Verzögerung beginnt jetzt erst zu laufen.
-    b._force_active = False
-    b.consume_from_pool(0.0, 0.0)
+    assert b.candidate_on is False and b._offtime_waived is True
+    # Folgezyklus: Schalter seit 5 s aus, Pool reicht → trotz Mindestauszeit an.
+    b._force_released = False
+    b._actual_on = False
+    b._switch_age_s = 5.0
+    b.consume_from_pool(1000.0, 0.0)
     b.calculate_candidate(now_ts=1010.0)
-    assert b.candidate_on is True
-    assert b._off_since_ts == 1010.0
-    b.calculate_candidate(now_ts=1045.0)
+    assert b.candidate_on is True and b._offtime_waived is False
+    # Danach gilt die Mindestauszeit wieder.
+    b._actual_on = False
+    b._switch_age_s = 5.0
+    b.consume_from_pool(1000.0, 0.0)
+    b.calculate_candidate(now_ts=1020.0)
     assert b.candidate_on is False
