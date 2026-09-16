@@ -685,11 +685,13 @@ class EMSController:
             return
 
         # Zwangsgeräte zählen nicht gegen das Budget – sonst würde der
-        # turn_offs-Zweig eine Zwangs-Einschaltung wieder zurücknehmen.
-        turn_offs = [d for d in binary_devices
-                     if d.actual_on and not d.final_on and not d.force_active]
-        turn_ons  = [d for d in binary_devices
-                     if not d.actual_on and d.final_on and not d.force_active]
+        # turn_offs-Zweig eine Zwangs-Einschaltung wieder zurücknehmen. Ein
+        # Zwang-Ende ebenso wenig: sein Ausschalten wird nicht aufgeschoben.
+        def regular(d: BinaryDevice) -> bool:
+            return not d.force_active and not d.force_released
+
+        turn_offs = [d for d in binary_devices if d.actual_on and not d.final_on and regular(d)]
+        turn_ons  = [d for d in binary_devices if not d.actual_on and d.final_on and regular(d)]
 
         if len(turn_offs) + len(turn_ons) <= 1:
             return
@@ -715,6 +717,7 @@ class EMSController:
             if d.actual_on != d.final_on:
                 direction = "AUS→AN" if d.final_on else "AN→AUS"
                 reason    = ("Zwang" if d.force_active
+                             else "Zwang-Ende" if d.force_released
                              else "Notabschaltung" if binary_immediate_off and not d.final_on
                              else "desired" + ("=JA" if d.final_on else "=NEIN"))
                 log.info("EMS [%s] %s  prio=%d  pool=%.0fW  %s",

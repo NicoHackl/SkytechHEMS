@@ -1515,26 +1515,152 @@ def test_zwang_binaer_zieht_nichts_aus_dem_pool():
     assert _setpoint_op(res)[2]["value"] == pytest.approx(1500)
 
 
-def test_zwang_ende_mindestlaufzeit_schuetzt():
-    """Nach dem Zwang greifen die normalen Zeitschutzregeln wieder."""
+def _jetzt_minus(sekunden):
     import datetime
-    ctrl = EMSController([_luft_cfg()], residual_power_entity="sensor.s")
-    res = ctrl.run_cycle(make_states(_zwang_luft()))
-    assert _op_for(res["write_ops"], "input_boolean.ems_luft_anforderung_an")[1] == "turn_on"
+    return (datetime.datetime.now(datetime.timezone.utc)
+            - datetime.timedelta(seconds=sekunden)).isoformat()
 
-    vor_10s = (datetime.datetime.now(datetime.timezone.utc)
-               - datetime.timedelta(seconds=10)).isoformat()
-    states = _zwang_luft(**{
+
+def _luft_an_op(res):
+    return _op_for(res["write_ops"], "input_boolean.ems_luft_anforderung_an")[1]
+
+
+def _zwang_luft_ende(**over):
+    """Zyklus nach dem Zwang: Schalter an, Anforderung an, Zwang aus, kein PV."""
+    return _zwang_luft(**{
         **_force("luft", on=False),
         "switch.luft": "on",
         "input_boolean.ems_luft_anforderung_an": "on",
         "input_number.ems_luft_mindestlaufzeit_s": 300,
+        "input_number.ems_luft_abschaltverzogerung_s": 120,
+        "sensor.s": -2000,           # der Lüfter zieht aus dem Netz – kein Überschuss
+        **over,
     })
-    res = ctrl.run_cycle(make_states(states, last_changed=vor_10s))
+
+
+def test_zwang_ende_schaltet_sofort_aus_trotz_mindestlaufzeit():
+    """Zwang aus → Anforderung sofort aus, ohne Mindestlaufzeit/Abschaltverzögerung."""
+    ctrl = EMSController([_luft_cfg()], residual_power_entity="sensor.s")
+    assert _luft_an_op(ctrl.run_cycle(make_states(_zwang_luft()))) == "turn_on"
+
+    res = ctrl.run_cycle(make_states(_zwang_luft_ende(), last_changed=_jetzt_minus(10)))
     dev = _dev(res, "luft")
     assert dev["force_active"] is False
-    assert dev["in_min_runtime"] is True
-    assert _op_for(res["write_ops"], "input_boolean.ems_luft_anforderung_an")[1] == "turn_on"
+    assert dev["in_min_runtime"] is True          # Schutz wäre da – greift aber nicht
+    assert _luft_an_op(res) == "turn_off"
+
+
+def test_zwang_ende_mit_ueberschuss_laesst_geraet_an():
+    """Deckt PV die Last, bleibt das Gerät regulär an – ohne Zeitschutz nötig."""
+    ctrl = EMSController([_luft_cfg()], residual_power_entity="sensor.s")
+    ctrl.run_cycle(make_states(_zwang_luft()))
+    res = ctrl.run_cycle(make_states(_zwang_luft_ende(**{"sensor.s": 0}),
+                                     last_changed=_jetzt_minus(10)))
+    assert _luft_an_op(res) == "turn_on"
+    assert _dev(res, "luft")["desired_on"] is True
+
+
+def test_zwang_ende_nur_ein_zyklus_frei():
+    """Bleibt das Gerät nach dem Zwang regulär an, schützt die Mindestlaufzeit wieder."""
+    ctrl = EMSController([_luft_cfg()], residual_power_entity="sensor.s")
+    ctrl.run_cycle(make_states(_zwang_luft()))
+    ctrl.run_cycle(make_states(_zwang_luft_ende(**{"sensor.s": 0}),
+                               last_changed=_jetzt_minus(10)))
+    # Zyklus 3: kein Überschuss mehr – aber der Zwang-Ende-Zyklus ist vorbei.
+    res = ctrl.run_cycle(make_states(_zwang_luft_ende(), last_changed=_jetzt_minus(20)))
+    assert _dev(res, "luft")["in_min_runtime"] is True
+    assert _luft_an_op(res) == "turn_on"
+
+
+def test_zwang_ende_hebt_mindestauszeit_fuer_ersten_neustart_auf():
+    ctrl = EMSController([_luft_cfg()], residual_power_entity="sensor.s")
+    ctrl.run_cycle(make_states(_zwang_luft()))
+    assert _luft_an_op(ctrl.run_cycle(make_states(
+        _zwang_luft_ende(), last_changed=_jetzt_minus(10)))) == "turn_off"
+
+    # Zyklus 3: Schalter seit 5 s aus, Mindestauszeit 600 s, Überschuss da → sofort an.
+    aus = _zwang_luft(**{**_force("luft", on=False),
+                         "input_number.ems_luft_mindestauszeit_s": 600,
+                         "sensor.s": 2000})
+    assert _luft_an_op(ctrl.run_cycle(make_states(aus, last_changed=_jetzt_minus(5)))) == "turn_on"
+
+    # Zyklus 4/5: regulär an, regulär aus, wieder Überschuss → jetzt gilt die Mindestauszeit.
+    an = {**aus, "switch.luft": "on", "input_boolean.ems_luft_anforderung_an": "on", "sensor.s": 0}
+    ctrl.run_cycle(make_states(an, last_changed=_jetzt_minus(1000)))
+    assert _luft_an_op(ctrl.run_cycle(make_states(
+        {**an, "sensor.s": -2000}, last_changed=_jetzt_minus(1000)))) == "turn_off"
+    assert _luft_an_op(ctrl.run_cycle(make_states(aus, last_changed=_jetzt_minus(5)))) == "turn_off"
+
+
+def test_zwang_ende_zaehlt_nicht_gegen_one_change():
+    """Reguläres Aus (boiler) und Zwang-Ende-Aus (luft) im selben Zyklus: beide aus."""
+    ctrl = EMSController([_luft_cfg("boiler"), _luft_cfg()], residual_power_entity="sensor.s")
+    boiler_an = {**_binary("boiler", prio=1, power=1000, switch="on"), "switch.boiler": "on"}
+    ctrl.run_cycle(make_states({**_zwang_luft(), **boiler_an, "sensor.s": 0}))
+    res = ctrl.run_cycle(make_states(_zwang_luft_ende(**boiler_an, **{"sensor.s": -3000}),
+                                     last_changed=_jetzt_minus(10)))
+    assert _op_for(res["write_ops"], "input_boolean.ems_boiler_anforderung_an")[1] == "turn_off"
+    assert _luft_an_op(res) == "turn_off"
+
+
+def test_zwang_blockiert_durch_technische_freigabe_endet_sofort():
+    ctrl = EMSController([_luft_cfg()], residual_power_entity="sensor.s")
+    ctrl.run_cycle(make_states(_zwang_luft()))
+    res = ctrl.run_cycle(make_states(_zwang_luft_ende(**{
+        **_force("luft"),
+        "input_boolean.ems_luft_technische_freigabe": "off",
+    }), last_changed=_jetzt_minus(10)))
+    assert _dev(res, "luft")["force_blocked_reason"] == "technische_freigabe"
+    assert _luft_an_op(res) == "turn_off"
+
+
+def _zwang_heizstab_ende(**over):
+    """Zyklus nach dem Zwang: Sollwert steht auf 2000 W, Zwang aus, Rampen scharf."""
+    import datetime
+    states = _zwang_heizstab(**{
+        **_force("heizstab", on=False),
+        "input_number.ems_heizstab_anforderung_leistung_w": 2000,
+        "sensor.heizstab_ist": 2000,
+        "input_number.ems_heizstab_runter_regelzeit_s": 600,
+        "input_number.ems_heizstab_hoch_regelzeit_s": 600,
+        "input_number.ems_heizstab_max_anderung_pro_schritt_w": 100,
+        "input_number.ems_heizstab_min_anderung_pro_schritt_w": 500,
+        "sensor.s": -2000,
+        **over,
+    })
+    return make_states(states, last_changed=datetime.datetime.now(datetime.timezone.utc).isoformat())
+
+
+def test_zwang_ende_regelbar_springt_ohne_rampe_auf_null():
+    ctrl = EMSController([_heizstab_cfg()], residual_power_entity="sensor.s")
+    ctrl.run_cycle(make_states(_zwang_heizstab()))
+    res = ctrl.run_cycle(_zwang_heizstab_ende())
+    assert _setpoint_op(res)[2]["value"] == pytest.approx(0)
+    assert _dev(res)["force_active"] is False
+
+
+def test_zwang_ende_regelbar_springt_ohne_rampe_auf_pool_zuteilung():
+    """Mit 1000 W Überschuss neben der laufenden Last: sofort 1000 W, keine Runter-Rampe."""
+    ctrl = EMSController([_heizstab_cfg()], residual_power_entity="sensor.s")
+    ctrl.run_cycle(make_states(_zwang_heizstab()))
+    res = ctrl.run_cycle(_zwang_heizstab_ende(**{"sensor.s": -1000}))
+    assert res["status"]["pool_w"] == pytest.approx(1000)
+    assert _setpoint_op(res)[2]["value"] == pytest.approx(1000)
+
+
+def test_zwang_ende_regelbar_nur_ein_zyklus_frei():
+    """Im Folgezyklus gilt die Hoch-Regelzeit wieder."""
+    ctrl = EMSController([_heizstab_cfg()], residual_power_entity="sensor.s")
+    ctrl.run_cycle(make_states(_zwang_heizstab()))
+    ctrl.run_cycle(_zwang_heizstab_ende(**{"sensor.s": -1000}))   # → 1000 W
+    res = ctrl.run_cycle(_zwang_heizstab_ende(**{
+        "input_number.ems_heizstab_anforderung_leistung_w": 1000,
+        "sensor.heizstab_ist": 1000,
+        "sensor.s": 1000,                     # Pool 2000 → Ziel 2000, Sollwert erst 1000
+    }))
+    assert _dev(res)["alloc_w"] == pytest.approx(2000)
+    assert _setpoint_op(res) is None          # Hoch-Regelzeit 600 s hält den Sollwert
+    assert _dev(res)["new_w"] == pytest.approx(1000)
 
 
 # ---- Ampere ----

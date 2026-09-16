@@ -121,11 +121,15 @@ Ein Zyklus (`EMSController.run_cycle()`), ausgelöst alle `interval_s` Sekunden:
    ob der Schutz ausschließlich gegen Binärgeräte wirkt (`binary_only`) oder anschließend auch
    die Reihenfolge der regelbaren Zuteilung bestimmt (`binary_and_controllable`).
 8. **Kandidat** je binärem Gerät unter Mindestlaufzeit, Abschaltverzögerung und Mindestauszeit.
-   Ein Zwangsgerät ist immer Kandidat — ohne Mindestauszeit; endet der Zwang, greifen
-   Mindestlaufzeit und Abschaltverzögerung ab dann normal.
+   Ein Zwangsgerät ist immer Kandidat — ohne Mindestauszeit. Im Zyklus des Zwang-Endes
+   entscheidet sofort der Pool, ohne Mindestlaufzeit und Abschaltverzögerung: ohne Überschuss
+   geht das Gerät sofort aus, mit Überschuss bleibt es regulär an. Hat das Zwang-Ende es
+   ausgeschaltet, gilt die Mindestauszeit für den ersten regulären Neustart nicht. Alles, was
+   danach regulär läuft, unterliegt wieder dem vollen Zeitschutz.
 9. **Prioritätskaskade** (Demotion/Promotion) und **One-Change-Limit** anwenden. Zwangsgeräte
    bleiben auf beiden Seiten außen vor: sie sind kein Grund für eine Promotion, brauchen selbst
-   keine und zählen nicht gegen das One-Change-Budget.
+   keine und zählen nicht gegen das One-Change-Budget. Auch ein Zwang-Ende-Ausschalten wird vom
+   One-Change-Limit nicht aufgeschoben.
 10. **Allocation** der regelbaren Geräte aus dem verbleibenden Pool (`pool_w − binary_total_w`,
     wobei `binary_total_w` Zwangsgeräte auslässt — ihre Last steckt bereits im Residual). Ein
     regelbares Zwangsgerät bekommt statt einer Pool-Zuteilung seine Zwangsleistung, geklemmt auf
@@ -139,7 +143,8 @@ Ein Zyklus (`EMSController.run_cycle()`), ausgelöst alle `interval_s` Sekunden:
     drei Speichern und 2 kW Defizit alle drei mit 2 kW. Muss nach Schritt 10 und vor Schritt 12
     laufen — der Speicher löst dort seine Richtung auf.
 12. **Rampenbegrenzung** der Sollwerte, bei Defizit sofortiger Run-down. Ein Zwangs-Sollwert wird
-    ohne Rampe, Schrittlimit und Totband sofort geschrieben und bei Defizit nicht abgeregelt.
+    ohne Rampe, Schrittlimit und Totband sofort geschrieben und bei Defizit nicht abgeregelt; im
+    Zyklus des Zwang-Endes springt der Sollwert ebenso ohne Rampe auf die Pool-Zuteilung.
 13. **Write-Ops** sammeln, bei `output_unit=ampere` von Watt in ganze Ampere abrunden und gegen die
     HA-REST-API ausführen; optional das Post-Cycle-Skript auslösen. Jede Operation trägt ihr
     verursachendes Gerät; das Ergebnis geht an den Controller zurück.
@@ -239,8 +244,9 @@ Zusagen, auf die sich der gesamte Code verlässt. Wer eine davon bricht, bricht 
     läuft ohne Bedienfreigabe, ohne Gerätemodus und ohne globale Freigabe — aber nie ohne
     technische Freigabe und nie mit kaputtem Schreibziel. Es ist kein Pool-Teilnehmer: es
     reserviert nichts, bekommt nichts zugeteilt und wird nicht in den Pool zurückgerechnet. Seine
-    Last ist Hausverbrauch. Ein Zwang ist im Status immer als `force_active` sichtbar, nie nur im
-    Log.
+    Last ist Hausverbrauch. `_anforderung` folgt dem Zwangsschalter in beide Richtungen sofort:
+    auch das Zwang-Ende wirkt ohne Zeitschutz und Rampe. Ein Zwang ist im Status immer als
+    `force_active` sichtbar, nie nur im Log.
 
 ## Start und Betrieb
 

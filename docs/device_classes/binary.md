@@ -43,8 +43,11 @@ Zusätzlich liest ein binäres Gerät den Zwang-Helfer `input_boolean.ems_<prefi
 optional, siehe [global.md](global.md#gemeinsame-ha-helfer)): mit `on` wird `anforderung_an`
 sofort gesetzt — ohne Mindestauszeit, ohne One-Change-Limit, ohne Prioritätskaskade und auch bei
 Notabschaltung. Seine `leistung_w` wird weder aus dem Pool reserviert noch in ihn zurückgerechnet.
-Endet der Zwang, greifen Mindestlaufzeit und Abschaltverzögerung ab dann normal. Eine
-Zwangsleistung gibt es bei binären Geräten nicht.
+Endet der Zwang, entscheidet im selben Zyklus sofort der Pool — ohne Mindestlaufzeit und
+Abschaltverzögerung: ohne Überschuss geht `anforderung_an` sofort auf `off`, mit Überschuss bleibt
+das Gerät regulär an. Hat das Zwang-Ende es ausgeschaltet, darf der Pool es ohne Mindestauszeit
+wieder einschalten. Danach gilt der Zeitschutz wieder vollständig. Eine Zwangsleistung gibt es
+bei binären Geräten nicht.
 
 Ein negativer Wert ist ungültig und löst den Ersatzwert aus. Ein gültiger Wert `0` ist ein Wert und
 wird nie ersetzt.

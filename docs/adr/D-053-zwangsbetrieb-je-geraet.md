@@ -76,8 +76,11 @@ Randbedingungen:
 4. **Sofort, ohne Regelgüte.** Der Zwangs-Sollwert wird ohne Hoch-/Runter-Regelzeit, ohne
    Schrittlimit und ohne Totband geschrieben und bei Defizit nicht abgeregelt. Ein binäres
    Zwangsgerät schaltet ohne Mindestauszeit ein und zählt weder gegen das One-Change-Limit noch
-   in die Prioritätskaskade — auf keiner Seite. Endet der Zwang, greifen Mindestlaufzeit,
-   Abschaltverzögerung und Rampe ab dann normal.
+   in die Prioritätskaskade — auf keiner Seite. Endet der Zwang, entscheidet im selben Zyklus
+   sofort der Pool — ohne Mindestlaufzeit, Abschaltverzögerung, Rampe und Totband; ein
+   Zwang-Ende-Ausschalten wird vom One-Change-Limit nicht aufgeschoben. Hat das Zwang-Ende ein
+   binäres Gerät ausgeschaltet, gilt die Mindestauszeit für den ersten regulären Neustart nicht.
+   Ab dem Folgezyklus gilt der Zeitschutz wieder vollständig (Nachtrag 16.09.2026, siehe unten).
 5. **Die Zwangslast ist Hausverbrauch.** `gemessene_last_w` liefert unter Zwang `0`; der
    Speicher deckt die Last. Das ist die bewusste, einzige Ausnahme von D-B14: wer ein Gerät
    erzwingt, will es laufen sehen — anders als bei einer Fremdsteuerung, die das HEMS nur
@@ -106,6 +109,21 @@ Randbedingungen:
   Kaskade/One-Change/`binary_total_w` im Controller, Flow-Publisher, Steuerungs-Schema,
   Statustypen und Karte in der Oberfläche, Doku in `device_classes/`, `datenmodell.md`,
   `architektur.md`, `api-referenz.md`, `test-strategie.md`; Umbenennung des alten Begriffs.
+
+## Nachtrag 16.09.2026 — Zwang-Ende ohne Nachwirkung
+
+Die erste Fassung ließ nach dem Zwang-Ende Mindestlaufzeit, Abschaltverzögerung und Rampe normal
+greifen. In der Praxis widersprach das der Erwartung, die den Zwang überhaupt begründet: „Die
+Anforderung folgt dem Schalter." Ein Lüfter, der nach dem Ausschalten des Zwangs noch zehn Minuten
+Mindestlaufzeit abwartet, sieht aus wie ein Fehler — der Nutzer hat ihn bewusst und von Hand
+beendet. Geräteschutz gegen Taktung bleibt über die technische Freigabe und den regulären
+Zeitschutz erreichbar; der Zwang ist eine Nutzerentscheidung in beide Richtungen.
+
+Umsetzung: `Device.resolve_force()` erkennt das Ende als Übergang (`force_released`, genau ein
+Zyklus). In diesem Zyklus ist das Gerät wieder regulärer Pool-Teilnehmer, überspringt aber die
+Zeitschutz- und Rampen-Zweige. Ein binäres Gerät merkt sich ein Zwang-Aus (`_offtime_waived`) und
+darf beim ersten regulären Einschalten die Mindestauszeit ignorieren. Entscheidungspunkt 4 oben
+ist entsprechend geändert.
 
 ## Rücknahmebedingung
 
