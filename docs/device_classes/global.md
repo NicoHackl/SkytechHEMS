@@ -43,7 +43,7 @@ Entitätsnamen.
 | `entity_prefix` | alle | nein | Wert von `name` | Überschreibt ausschließlich das Präfix der HEMS-Helfer |
 | `allowed_modes` | alle | nein | `manuell` | Kommagetrennte globale Regelmodi, in denen normale Nutzerregeln wirken; zulässig sind `manuell`, `nur_heizen` und `nur_laden`. Der Alt-Wert `auto` wird auf `manuell` abgebildet |
 | `flow_show` | alle | nein | `true` | Gerät auf der Power Flow Card anzeigen. `false` heißt: es kommt gar nicht erst in die veröffentlichte Geräteliste |
-| `flow_icon` | alle | nein | – | mdi-Name für den Knoten auf der Karte, z. B. `mdi:radiator`. Leer = die Karte wählt nach Geräteklasse. Muss mit `mdi:` beginnen |
+| `flow_icon` | alle | nein | – | Icon-Name für den Knoten auf der Karte, z. B. `mdi:radiator` oder aus einem eigenen Icon-Set wie `cli:beispiel`. Leer = die Karte wählt nach Geräteklasse. Muss die Form `satz:name` haben |
 | `flow_color` | alle | nein | – | CSS-Farbe als Override für diesen Knoten. Leer = Skytech-Akzent |
 
 Ein fehlendes `name` oder eine unbekannte `class` führt dazu, dass nur dieser Geräteeintrag mit

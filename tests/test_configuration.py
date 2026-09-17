@@ -626,10 +626,16 @@ def test_leere_pv_zeile_ist_ein_feldfehler():
     assert "flow_pv_power_entities[0].entity" in errors
 
 
-def test_flow_icon_ohne_mdi_praefix_ist_ein_feldfehler():
-    result = cfg.validate_options(options(binary(flow_icon="fan")))
-    assert "devices[0].flow_icon" in result.field_errors
-    assert not cfg.validate_options(options(binary(flow_icon="mdi:fan"))).field_errors
+def test_flow_icon_ohne_praefix_ist_ein_feldfehler():
+    for icon in ("fan", "mdi:", ":fan", "mdi:fan speed", "mdi:Fan"):
+        result = cfg.validate_options(options(binary(flow_icon=icon)))
+        assert "devices[0].flow_icon" in result.field_errors, icon
+
+
+def test_flow_icon_akzeptiert_jedes_icon_set():
+    # Eigene Icon-Sets sind gleichwertig zu mdi — die Karte reicht den Namen nur durch.
+    for icon in ("mdi:fan", "cli:heizstab", "phu:solar-panel_2"):
+        assert not cfg.validate_options(options(binary(flow_icon=icon))).field_errors, icon
 
 
 def test_umschaltschwelle_ausserhalb_des_bereichs_ist_ungueltig():

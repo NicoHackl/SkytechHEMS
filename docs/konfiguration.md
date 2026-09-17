@@ -260,8 +260,8 @@ sein**; ein Test wacht darüber.
 | `flow_nav_pv`, `flow_nav_grid`, `flow_nav_house`, `flow_nav_battery`, `flow_nav_rest` | str | `""` | Navigationsziel je Knoten, z. B. `/dashboard-pv/pv` |
 
 Je Gerät kommen drei Felder dazu — sie gehören zum Gerät, damit sie ein Umsortieren der Liste
-überleben: `flow_show` (bool, Default `true`), `flow_icon` (mdi-Name, leer = die Karte wählt nach
-Geräteklasse) und `flow_color` (CSS-Farbe als Override, leer = Skytech-Akzent). Siehe
+überleben: `flow_show` (bool, Default `true`), `flow_icon` (Icon-Name der Form `satz:name`, leer = die Karte wählt
+nach Geräteklasse) und `flow_color` (CSS-Farbe als Override, leer = Skytech-Akzent). Siehe
 [Gemeinsame Felder in `devices[]`](device_classes/global.md#gemeinsame-felder-in-devices).
 
 **Erzeugung: Summe oder Aufschlüsselung.** Eine Anlage hat oft einen Sensor für die
@@ -288,7 +288,8 @@ Wie die drei Anzeigefelder ist auch `flow_navigation` vom Abschaltvergleich ausg
 Einspeisung, nie beides; analog bei der Batterie. Wird die Batterie überhaupt gezeichnet (Label
 oder SoC gesetzt), ist genau eine Leistungsvariante Pflicht. `flow_publish: true` verlangt
 mindestens einen Anlagenwert. Jede PV-Zeile braucht eine Entität, Duplikate sind ein Feldfehler.
-`flow_icon` muss mit `mdi:` beginnen. Eine Entität, die bereits als Netzsensor eingetragen ist,
+`flow_icon` muss die Form `satz:name` haben (`mdi:radiator`, `cli:beispiel`) — das Icon-Set ist
+frei, nur ein fehlendes Präfix ist ein Fehler. Eine Entität, die bereits als Netzsensor eingetragen ist,
 darf nicht zusätzlich als Erzeugung dienen — Netzleistung ist keine Erzeugung, und die Karte
 rechnet die Hausbilanz daraus. Leere Werte sind sonst überall gültig — die Karte kommt mit
 fehlenden Knoten zurecht.
