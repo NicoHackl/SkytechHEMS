@@ -114,7 +114,7 @@ Liste überleben:
 | Schlüssel | Typ | Default | Bedeutung |
 |---|---|---|---|
 | `flow_show` | bool | `true` | Gerät auf der Karte anzeigen. |
-| `flow_icon` | str | `""` | mdi-Name. Leer = die Karte wählt nach Geräteklasse. |
+| `flow_icon` | str | `""` | Icon-Name der Form `satz:name`, jedes Icon-Set. Leer = die Karte wählt nach Geräteklasse. |
 | `flow_color` | str | `""` | CSS-Farbe als Override. Leer = Skytech-Akzent. |
 
 ### Abbildung Option → Vertragsfeld
@@ -178,7 +178,7 @@ Feldfehler im gewohnten `field_errors`-Format.
   *„Für die Veröffentlichung wird mindestens ein Standardwert benötigt."*
 - **`flow_pv_power_entities`:** jede Zeile braucht eine nichtleere `entity`; Duplikate sind ein
   Feldfehler.
-- **`flow_icon`:** wenn belegt, muss es mit `mdi:` beginnen.
+- **`flow_icon`:** wenn belegt, muss es die Form `satz:name` haben; das Icon-Set ist frei.
 - Leere Werte sind überall gültig — die Karte kommt mit fehlenden Knoten zurecht.
 
 Alles gespiegelt in `config.yaml` (`options:`, `schema:` und der Beschreibungstext oben) sowie in

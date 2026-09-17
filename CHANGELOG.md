@@ -10,6 +10,10 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ### Geändert
 
+- **`flow_icon` akzeptiert jedes Icon-Set.** Bisher musste das Symbol eines Geräts auf der Power
+  Flow Card mit `mdi:` beginnen; eigene Icon-Sets wie `cli:` oder `phu:` waren damit
+  ausgeschlossen. Geprüft wird jetzt nur noch die Form `satz:name` — ein fehlendes Präfix bleibt
+  ein Feldfehler, weil die Karte ein solches Symbol stumm leer ließe.
 - **„Force-Modus" heißt jetzt Fremdsteuerung.** Der Begriff für ein extern eingeschaltetes Gerät
   ohne HEMS-Anforderung wurde in Code-Kommentaren, Doku und Oberfläche umbenannt, damit `force`
   eindeutig den neuen Zwang bezeichnet. Verhalten unverändert.

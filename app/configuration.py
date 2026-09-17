@@ -65,6 +65,10 @@ _ENTITY_RE = re.compile(r"^[a-z][a-z0-9_]*\.[a-z0-9_]+$")
 # im Namespace einer Formel, _NAME_RE erlaubt aber z. B. führende Ziffern ("123"),
 # was kein gültiger Bezeichner ist.
 _FORMULA_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+# HA-Icon-Name der Form "satz:name". Bewusst nicht auf "mdi:" festgelegt: eigene
+# Icon-Sets (z. B. "cli:", "phu:") sind gleichwertig; nur ein fehlendes Präfix
+# ist ein Tippfehler, den die Karte stumm mit einem leeren Symbol quittierte.
+_ICON_RE = re.compile(r"^[a-z0-9_-]+:[a-z0-9_-]+$")
 
 # ---------------------------------------------------------------------------
 # Formular-Startwerte der verpflichtenden Add-on-Fallbacks
@@ -650,8 +654,9 @@ def _validate_device(device: Dict[str, Any], index: int, available: List[str],
         seen_prefixes[prefix] = index
 
     icon = device.get("flow_icon") or ""
-    if icon and not icon.startswith("mdi:"):
-        fail("flow_icon", "Leer lassen oder einen Namen der Form mdi:beispiel eintragen.")
+    if icon and not _ICON_RE.match(icon):
+        fail("flow_icon", "Leer lassen oder einen Namen der Form satz:beispiel eintragen, "
+             "z. B. mdi:radiator oder cli:beispiel.")
 
     if not ist_navigationsziel(device.get("flow_navigation") or ""):
         fail("flow_navigation", NAVIGATION_FEHLER)
