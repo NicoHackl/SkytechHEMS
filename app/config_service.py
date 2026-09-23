@@ -23,6 +23,7 @@ from configuration import (
     BATTERY_POWER_FIELDS,
     BATTERY_STATIC_DEFAULTS,
     BINARY_FALLBACK_DEFAULTS,
+    BINARY_STATIC_DEFAULTS,
     CONTROLLABLE_FALLBACK_DEFAULTS,
     DEVICE_CLASSES,
     GLOBAL_DEFAULTS,
@@ -188,7 +189,7 @@ class ConfigService:
             "global_defaults": dict(GLOBAL_DEFAULTS),
             "device_defaults": {
                 "controllable": dict(CONTROLLABLE_FALLBACK_DEFAULTS),
-                "binary": dict(BINARY_FALLBACK_DEFAULTS),
+                "binary": {**BINARY_FALLBACK_DEFAULTS, **BINARY_STATIC_DEFAULTS},
                 "battery": {
                     **{key: None for key in BATTERY_POWER_FIELDS},
                     **BATTERY_STATIC_DEFAULTS,

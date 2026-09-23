@@ -91,6 +91,7 @@ Spannungssensoren L1/L2/L3.
 | `mindestlaufzeit_s` | s | Schutz gegen zu frühes Abschalten — gilt **auch** bei Notabschaltung |
 | `mindestauszeit_s` | s | Schutz gegen zu frühes Wiedereinschalten |
 | `abschaltverzogerung_s` | s | Verzögert den Aus-Befehl; gilt **immer**, auch bei Notabschaltung |
+| `einschaltverzogerung_s` | s | So lange muss die Einschaltbedingung ununterbrochen erfüllt sein, bevor eingeschaltet wird; die Bedienfreigabe zählt nicht dazu (D-054) |
 | `anforderung_an` **(Ausgabe, `input_boolean`)** | `on`/`off` | Anforderung des EMS. Eine HA-Automation übersetzt sie in echtes Schalten |
 
 Der reale Schalter (`switch_entity`) wird nur gelesen — daraus stammen `actual_on` und die
@@ -238,7 +239,7 @@ Regelbares Gerät: `type`, `id`, `label`, `priority`, `eligible`, `source`, `act
 
 Binäres Gerät: `type`, `id`, `label`, `priority`, `eligible`, `source`, `power_w`, `actual_on`,
 `anforderung_an`, `desired_on`, `candidate_on`, `final_on`, `in_min_runtime`, `switch_age_s`,
-`min_runtime_s`, `min_offtime_s`, `off_delay_remaining_s`. Dazu `power_actual_w`, sofern
+`min_runtime_s`, `min_offtime_s`, `off_delay_remaining_s`, `on_delay_s`, `on_delay_remaining_s`. Dazu `power_actual_w`, sofern
 `power_actual_entity` konfiguriert ist und der Sensor einen gültigen Wert liefert.
 
 Speicher (`type: "battery"`): `id`, `label`, `priority` (Laden), `entlade_prioritat`, `eligible`,
@@ -273,7 +274,9 @@ Fallstricke, die schon Fehler verursacht haben:
   Richtungsauflösung (`umschaltsperre`, `totzone`). Ein Speicher in `nur_entladen` hat einen
   gesperrten Ladepfad und trotzdem keinen Fehler.
 - **`off_delay_remaining_s` ist `null`**, wenn keine Abschaltverzögerung läuft — `0` bedeutet
-  „läuft ab", nicht „nicht vorhanden".
+  „läuft ab", nicht „nicht vorhanden". Dasselbe gilt für **`on_delay_remaining_s`**: `null`, solange
+  die Einschaltbedingung nicht erfüllt ist oder keine Einschaltverzögerung konfiguriert ist; `0`
+  bei Freigabe AUS heißt „schaltet ein, sobald die Freigabe kommt".
 - **Drei verschiedene „inaktiv".** `eligible: false` ist die Freigabeentscheidung dieses Zyklus
   (Schalter, Modus, Lockout). `runtime_active: false` heißt „technisch nicht regelbar" — ein
   Schreibziel fehlt oder das Schreiben schlug fehl; das Gerät steht weiterhin in `devices`. Ein

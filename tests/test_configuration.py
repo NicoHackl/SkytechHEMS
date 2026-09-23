@@ -378,6 +378,23 @@ def test_binary_leistung_null_ist_ungueltig():
     assert "devices[0].power_w" in result.field_errors
 
 
+def test_binary_einschaltverzoegerung_ist_optional_mit_default_null():
+    result = cfg.validate_options(options(binary()))
+    assert result.valid, result.field_errors
+    assert result.devices[0]["on_delay_s"] == 0.0
+
+
+def test_binary_einschaltverzoegerung_wird_uebernommen():
+    result = cfg.validate_options(options(binary(on_delay_s=90)))
+    assert result.valid, result.field_errors
+    assert result.devices[0]["on_delay_s"] == 90.0
+
+
+def test_binary_negative_einschaltverzoegerung_ist_ungueltig():
+    result = cfg.validate_options(options(binary(on_delay_s=-5)))
+    assert "devices[0].on_delay_s" in result.field_errors
+
+
 def test_fehlende_pflichtentitaet_wird_benannt():
     assert "devices[0].switch_entity" in cfg.validate_options(
         options(binary(switch_entity=""))).field_errors

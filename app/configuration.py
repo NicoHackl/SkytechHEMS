@@ -93,6 +93,13 @@ BINARY_FALLBACK_DEFAULTS: Dict[str, float] = {
     "off_delay_s":   0.0,
 }
 
+# Optionale Add-on-Fallbacks eines Binärgeräts (D-054). Fehlen sie in einer
+# Bestandskonfiguration, greift der Default – das Gerät wird davon nicht
+# inaktiv. 0 s Einschaltverzögerung ist das Verhalten vor D-054.
+BINARY_STATIC_DEFAULTS: Dict[str, float] = {
+    "on_delay_s": 0.0,
+}
+
 # Ersetzen die entfallenen HA-Helfer soc_max_hysterese_prozent und
 # min_umschaltzeit_s des Speichers. Fehlen sie in einer Bestandskonfiguration,
 # greift der Default – anders als bei den Feldern oben wird der Speicher davon
@@ -393,6 +400,9 @@ def _normalize_device(raw: Dict[str, Any]) -> Dict[str, Any]:
         device["power_actual_entity"] = _as_text(raw.get("power_actual_entity"))
         for key in BINARY_FALLBACK_DEFAULTS:
             device[key] = _as_float(raw.get(key), None) if key in raw else None
+        for key, default in BINARY_STATIC_DEFAULTS.items():
+            value = _as_float(raw.get(key), None) if key in raw else None
+            device[key] = default if value is None else value
     elif cls == "battery":
         device.update({
             "soc_entity": _as_text(raw.get("soc_entity")),
@@ -778,6 +788,8 @@ def _validate_binary(device: Dict[str, Any], fail) -> None:
         unit = "W" if key.endswith("_w") else "Sekunden"
         _number(device, key, fail, minimum=0.0,
                 text=f"Pflichtfeld: endliche Zahl ab 0 {unit}.")
+    _number(device, "on_delay_s", fail, minimum=0.0,
+            text="Endliche Zahl ab 0 Sekunden.")
 
 
 def _validate_battery(device: Dict[str, Any], fail) -> None:

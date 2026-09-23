@@ -8,6 +8,16 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Hinzugefügt
+
+- **Einschaltverzögerung für binäre Geräte (D-054).** Neuer optionaler Helfer
+  `input_number.ems_<prefix>_einschaltverzogerung_s` (Add-on-Fallback `on_delay_s`, Default `0`):
+  Ein Binärgerät schaltet erst ein, wenn der Überschuss und alle übrigen Bedingungen so lange
+  ununterbrochen erfüllt sind. Die Bedienfreigabe zählt nicht dazu — wird sie eingeschaltet,
+  während die Bedingung schon lange genug anliegt, schaltet das Gerät sofort ein. Mindestauszeit
+  läuft parallel, die Leistung bleibt in der Wartezeit reserviert. Status und Oberfläche zeigen
+  die Restzeit; im Geräteformular gibt es das neue Feld „Einschaltverzögerung".
+
 ### Geändert
 
 - **`flow_icon` akzeptiert jedes Icon-Set.** Bisher musste das Symbol eines Geräts auf der Power

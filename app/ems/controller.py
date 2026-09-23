@@ -110,6 +110,7 @@ def _build_devices(device_configs: List[dict]) -> List[Device]:
                 min_runtime_s=cfg["min_runtime_s"],
                 min_offtime_s=cfg["min_offtime_s"],
                 off_delay_s=cfg["off_delay_s"],
+                on_delay_s=cfg.get("on_delay_s"),
                 power_actual_entity=cfg["power_actual_entity"] or None,
             ))
 
@@ -728,6 +729,10 @@ class EMSController:
                 elif d.candidate_on and d._off_since_ts > 0:
                     elapsed = now_ts - d._off_since_ts
                     log.info("EMS [%s] BLEIBT AN  off_delay läuft (%.0fs)", d.id, elapsed)
+            elif (not d.actual_on and d.desired_on and not d.candidate_on
+                  and d.on_delay_s > 0 and d._on_since_ts > 0):
+                elapsed = now_ts - d._on_since_ts
+                log.info("EMS [%s] BLEIBT AUS  on_delay läuft (%.0fs)", d.id, elapsed)
 
         for d in self._devices:
             if isinstance(d, BatteryDevice):

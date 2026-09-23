@@ -148,9 +148,9 @@ export function DeviceFieldsBinary({ device, patch, entities, error }: Props) {
           onChange={(value) => patch({ power_actual_entity: value })}
         />
         <p className="hint-box">
-          Die fünf Werte unten sind Pflicht. Sie greifen, wenn der gleichnamige HA-Helfer fehlt,
-          ausgefallen oder unbrauchbar ist. Mindestlaufzeit und Abschaltverzögerung gelten
-          <b> auch bei einer Notabschaltung</b>.
+          Die fünf Pflichtwerte unten greifen, wenn der gleichnamige HA-Helfer fehlt, ausgefallen
+          oder unbrauchbar ist; die Einschaltverzögerung ist optional (leer = 0 s). Mindestlaufzeit
+          und Abschaltverzögerung gelten <b> auch bei einer Notabschaltung</b>.
         </p>
         <div className="form-grid">
           <NumberField label="Leistung im EIN-Zustand" unit="W" required min={0}
@@ -167,9 +167,13 @@ export function DeviceFieldsBinary({ device, patch, entities, error }: Props) {
           <NumberField label="Mindestauszeit" unit="s" required min={0}
                        value={device.min_offtime_s} error={error('min_offtime_s')}
                        onChange={(value) => patch({ min_offtime_s: value })} />
-          <NumberField label="Abschaltverzögerung" unit="s" required min={0} wide
+          <NumberField label="Abschaltverzögerung" unit="s" required min={0}
                        value={device.off_delay_s} error={error('off_delay_s')}
                        onChange={(value) => patch({ off_delay_s: value })} />
+          <NumberField label="Einschaltverzögerung" unit="s" min={0}
+                       value={device.on_delay_s} error={error('on_delay_s')}
+                       hint="So lange muss der Überschuss anliegen. Die Bedienfreigabe zählt nicht dazu."
+                       onChange={(value) => patch({ on_delay_s: value })} />
         </div>
       </div>
     </section>

@@ -397,3 +397,150 @@ def test_mindestauszeit_nach_zwang_ende_ausgesetzt_bis_regulaer_an():
     b.consume_from_pool(1000.0, 0.0)
     b.calculate_candidate(now_ts=1020.0)
     assert b.candidate_on is False
+
+
+# ---- Einschaltverzögerung (D-054) ----
+
+def _aus_mit_verzoegerung(on_delay=120.0, power=1000.0):
+    b = make_binary(power=power)
+    b.source = "user"
+    b._freigabe_technisch = True
+    b._freigabe_bedien = True
+    b._actual_on = False
+    b._switch_age_s = 10_000.0
+    b.on_delay_s = on_delay
+    return b
+
+
+def _zyklus(b, pool_w, now_ts):
+    b._now_ts = now_ts
+    rest = b.consume_from_pool(pool_w, 0.0)
+    b.calculate_candidate(now_ts)
+    return rest
+
+
+def test_einschaltverzoegerung_haelt_aus_bis_ablauf():
+    b = _aus_mit_verzoegerung(on_delay=120.0)
+    _zyklus(b, 1000.0, 1000.0)
+    assert b.desired_on is True and b.candidate_on is False
+    _zyklus(b, 1000.0, 1119.0)
+    assert b.candidate_on is False
+    assert b.to_status_dict()["on_delay_remaining_s"] == 1
+    _zyklus(b, 1000.0, 1120.0)
+    assert b.candidate_on is True
+
+
+def test_einschaltverzoegerung_reserviert_pool_waehrend_wartezeit():
+    b = _aus_mit_verzoegerung(on_delay=120.0)
+    assert _zyklus(b, 1500.0, 1000.0) == 500.0
+    assert b.candidate_on is False
+
+
+def test_einbruch_des_ueberschusses_setzt_timer_zurueck():
+    b = _aus_mit_verzoegerung(on_delay=120.0)
+    _zyklus(b, 1000.0, 1000.0)
+    _zyklus(b, 999.0, 1060.0)
+    assert b.to_status_dict()["on_delay_remaining_s"] is None
+    _zyklus(b, 1000.0, 1090.0)
+    _zyklus(b, 1000.0, 1150.0)
+    assert b.candidate_on is False       # erst ab 1210 erfüllt
+    _zyklus(b, 1000.0, 1210.0)
+    assert b.candidate_on is True
+
+
+def test_bedienfreigabe_zaehlt_nicht_zur_bedingung():
+    """Timer läuft bei Freigabe AUS; Freigabe AN nach Ablauf → sofort an."""
+    b = _aus_mit_verzoegerung(on_delay=120.0)
+    b.eligible = False
+    b._freigabe_bedien = False
+    assert _zyklus(b, 1000.0, 1000.0) == 1000.0     # keine Reservierung
+    assert b.candidate_on is False
+    _zyklus(b, 1000.0, 1200.0)
+    assert b.candidate_on is False
+    b.eligible = True
+    b._freigabe_bedien = True
+    _zyklus(b, 1000.0, 1210.0)
+    assert b.candidate_on is True
+
+
+def test_freigabe_aus_ohne_ueberschuss_startet_keinen_timer():
+    b = _aus_mit_verzoegerung(on_delay=120.0)
+    b.eligible = False
+    b._freigabe_bedien = False
+    _zyklus(b, 500.0, 1000.0)
+    b.eligible = True
+    b._freigabe_bedien = True
+    _zyklus(b, 1000.0, 1200.0)
+    assert b.candidate_on is False
+
+
+def test_technische_freigabe_aus_setzt_timer_zurueck():
+    b = _aus_mit_verzoegerung(on_delay=120.0)
+    _zyklus(b, 1000.0, 1000.0)
+    b.eligible = False
+    b._freigabe_technisch = False
+    _zyklus(b, 1000.0, 1100.0)
+    b.eligible = True
+    b._freigabe_technisch = True
+    _zyklus(b, 1000.0, 1150.0)
+    assert b.candidate_on is False
+
+
+def test_quelle_aus_setzt_timer_zurueck():
+    b = _aus_mit_verzoegerung(on_delay=120.0)
+    _zyklus(b, 1000.0, 1000.0)
+    b.eligible = False
+    b.source = "aus"
+    b._freigabe_bedien = None
+    b._freigabe_technisch = None
+    _zyklus(b, 1000.0, 1100.0)
+    assert b.to_status_dict()["on_delay_remaining_s"] is None
+
+
+def test_ohne_einschaltverzoegerung_sofort_an():
+    b = _aus_mit_verzoegerung(on_delay=0.0)
+    _zyklus(b, 1000.0, 1000.0)
+    assert b.candidate_on is True
+    assert b.to_status_dict()["on_delay_remaining_s"] is None
+
+
+def test_einschaltverzoegerung_laeuft_parallel_zur_mindestauszeit():
+    b = _aus_mit_verzoegerung(on_delay=120.0)
+    b.min_offtime_s = 300.0
+    b._switch_age_s = 0.0
+    _zyklus(b, 1000.0, 1000.0)
+    b._switch_age_s = 200.0              # Verzögerung abgelaufen, Auszeit nicht
+    _zyklus(b, 1000.0, 1200.0)
+    assert b.candidate_on is False
+    b._switch_age_s = 300.0              # beide erfüllt – nicht 300 + 120
+    _zyklus(b, 1000.0, 1300.0)
+    assert b.candidate_on is True
+
+
+def test_zwang_ende_hebt_einschaltverzoegerung_auf():
+    b = _aus_mit_verzoegerung(on_delay=600.0)
+    b._actual_on = True
+    _zwang_ende(b)
+    _zyklus(b, 0.0, 1000.0)
+    assert b.candidate_on is False and b._offtime_waived is True
+    b._force_released = False
+    b._actual_on = False
+    b._switch_age_s = 5.0
+    _zyklus(b, 1000.0, 1010.0)
+    assert b.candidate_on is True
+
+
+def test_einschaltverzoegerung_aus_helfer_und_fallback():
+    b = BinaryDevice(
+        id="luft", allowed_modes=["manuell"], entity_switch="switch.luft",
+        entity_anforderung_an="input_boolean.ems_luft_anforderung_an",
+        on_delay_s=45.0,
+    )
+    read(b, binary_states(**{"input_number.ems_luft_einschaltverzogerung_s": "90"}))
+    assert b.on_delay_s == 90.0
+    assert b.entity_diagnostics["input_number.ems_luft_einschaltverzogerung_s"]["role"] \
+        == "on_delay_s"
+    read(b, binary_states())
+    assert b.on_delay_s == 45.0
+    ohne = read(make_binary(), binary_states())
+    assert ohne.on_delay_s == 0.0
