@@ -1129,7 +1129,7 @@ class ControllableDevice(Device):
 # =============================================================================
 
 class BinaryDevice(Device):
-    """AN/AUS-Gerät mit Zeitschutz: Mindestlaufzeit, Mindestauszeit, Abschaltverzögerung."""
+    """AN/AUS-Gerät mit Zeitschutz: Mindestlaufzeit, Mindestauszeit, Ein- und Abschaltverzögerung."""
 
     def __init__(self, id: str, allowed_modes: List[str],
                  entity_switch: str, entity_anforderung_an: str,
@@ -1140,6 +1140,7 @@ class BinaryDevice(Device):
                  min_runtime_s: Optional[float] = None,
                  min_offtime_s: Optional[float] = None,
                  off_delay_s: Optional[float] = None,
+                 on_delay_s: Optional[float] = None,
                  power_actual_entity: Optional[str] = None):
         super().__init__(id, allowed_modes, entity_prefix, label)
         self.entity_switch         = entity_switch
@@ -1156,6 +1157,8 @@ class BinaryDevice(Device):
         self._addon_min_runtime_s = _optional_number(min_runtime_s)
         self._addon_min_offtime_s = _optional_number(min_offtime_s)
         self._addon_off_delay_s   = _optional_number(off_delay_s)
+        # Optional (D-054): fehlt das Feld, greift intern 0 = sofort einschalten.
+        self._addon_on_delay_s    = _optional_number(on_delay_s)
 
         # ---- Konfig-Parameter (je Zyklus aus HA aktualisiert) ----
         self.power_w       = 0.0
@@ -1163,6 +1166,7 @@ class BinaryDevice(Device):
         self.min_runtime_s = 0.0
         self.min_offtime_s = 0.0
         self.off_delay_s   = 0.0
+        self.on_delay_s    = 0.0
 
         # ---- Laufzeitzustand (je Zyklus aus HA gelesen) ----
         self._actual_on       = False
@@ -1174,14 +1178,20 @@ class BinaryDevice(Device):
 
         # ---- Interner persistenter Zustand (überlebt über Zyklen hinweg) ----
         self._off_since_ts: float = 0.0
+        # Seit wann die Einschaltbedingung ununterbrochen erfüllt ist (D-054).
+        # 0 heißt „Bedingung aktuell nicht erfüllt".
+        self._on_since_ts: float = 0.0
         # Nach einem Zwang-Aus darf der Pool das Gerät sofort wieder einschalten:
-        # die Mindestauszeit ist bis zum ersten regulären Einschalten ausgesetzt.
+        # Mindestauszeit und Einschaltverzögerung sind bis zum ersten regulären
+        # Einschalten ausgesetzt.
         self._offtime_waived: bool = False
 
         # ---- Berechnung pro Zyklus ----
         self._desired_on   = False
         self._candidate_on = False
         self._final_on     = False
+        # Einschaltbedingung dieses Zyklus ohne Bedienfreigabe (D-054).
+        self._on_condition = False
 
     # --- Zustand für den Controller ---
 
@@ -1253,6 +1263,8 @@ class BinaryDevice(Device):
                                        addon=self._addon_min_offtime_s, internal=0.0, minimum=0.0)
         self.off_delay_s = self._num(st, helper("abschaltverzogerung_s"), "off_delay_s",
                                      addon=self._addon_off_delay_s, internal=0.0, minimum=0.0)
+        self.on_delay_s = self._num(st, helper("einschaltverzogerung_s"), "on_delay_s",
+                                    addon=self._addon_on_delay_s, internal=0.0, minimum=0.0)
 
         # EP-Übernahme: Priorität aus dem Vorschlag (Fallback: Nutzerwert)
         if self.source == "ep":
@@ -1276,27 +1288,57 @@ class BinaryDevice(Device):
 
     def consume_from_pool(self, remaining_w: float,
                           global_einschaltreserve_w: float) -> float:
-        """Bestimmt den Wunschzustand per Hysterese; verbraucht power_w wenn gewünscht an."""
+        """Bestimmt den Wunschzustand per Hysterese; verbraucht power_w wenn gewünscht an.
+
+        Merkt sich zusätzlich die Einschaltbedingung für die Einschaltverzögerung
+        (D-054). Sie gilt ohne Bedienfreigabe: fehlt nur diese, wird an der
+        Prioritätsposition geprüft, ob der Überschuss reichen würde – ohne
+        Leistung zu reservieren.
+        """
+        self._on_condition = False
         if self.force_active:
             self._desired_on = True
             return remaining_w  # Zwang zieht nichts aus dem Pool
-        if not self.eligible:
-            return remaining_w
         on_threshold = self.power_w + self.on_reserve_w + global_einschaltreserve_w
+        if not self.eligible:
+            if self._blocked_only_by_bedienfreigabe():
+                self._on_condition = remaining_w >= on_threshold
+            return remaining_w
         if self._actual_on:
             self._desired_on = remaining_w >= self.power_w
         else:
             self._desired_on = remaining_w >= on_threshold
+            self._on_condition = self._desired_on
         return remaining_w - self.power_w if self._desired_on else remaining_w
 
+    def _blocked_only_by_bedienfreigabe(self) -> bool:
+        """True, wenn allein die (wirksame) Bedienfreigabe das Gerät sperrt."""
+        return (self.source != "aus" and bool(self._freigabe_technisch)
+                and self.runtime_active and self._freigabe_bedien is False)
+
+    def _update_on_timer(self, now_ts: float) -> None:
+        """Pflegt den Timer der Einschaltverzögerung – nur im Aus-Zustand."""
+        if self.force_active or self._actual_on or not self._on_condition:
+            self._on_since_ts = 0.0
+        elif self._on_since_ts <= 0:
+            self._on_since_ts = now_ts
+
+    def _on_delay_elapsed(self, now_ts: float) -> bool:
+        return (self.on_delay_s == 0
+                or (self._on_since_ts > 0 and now_ts - self._on_since_ts >= self.on_delay_s))
+
     def calculate_candidate(self, now_ts: float) -> None:
-        """Wendet die Zeit-Guards (Mindestlaufzeit, Abschaltverzögerung, Mindestauszeit) auf den Wunschzustand an.
+        """Wendet die Zeit-Guards (Mindestlaufzeit, Abschaltverzögerung, Mindestauszeit,
+        Einschaltverzögerung) auf den Wunschzustand an.
 
         Mindestlaufzeit UND Abschaltverzögerung gelten IMMER – auch bei einer
         Notabschaltung (binary_immediate_off). Erst wenn das Gerät die
         Mindestlaufzeit erfüllt hat *und* die Abschaltverzögerung abgelaufen
-        ist, wird der Aus-Befehl freigegeben.
+        ist, wird der Aus-Befehl freigegeben. Eingeschaltet wird erst, wenn
+        Mindestauszeit *und* Einschaltverzögerung abgelaufen sind; beide laufen
+        parallel (D-054).
         """
+        self._update_on_timer(now_ts)
         if self.force_active:
             # Zwang schaltet sofort ein – ohne Mindestauszeit.
             self._candidate_on = True
@@ -1305,7 +1347,7 @@ class BinaryDevice(Device):
         if self._force_released:
             # Zwang-Ende: der Pool entscheidet sofort, ohne Mindestlaufzeit und
             # Abschaltverzögerung. Geht das Gerät dabei aus, darf es ohne
-            # Mindestauszeit wieder anlaufen.
+            # Mindestauszeit und Einschaltverzögerung wieder anlaufen.
             self._offtime_waived = True
         if not self.eligible:
             self._candidate_on = False
@@ -1338,9 +1380,9 @@ class BinaryDevice(Device):
                 self._candidate_on = True
         else:
             self._off_since_ts = 0.0
-            self._candidate_on = self._desired_on and (
-                self._switch_age_s >= self.min_offtime_s or self._offtime_waived
-            )
+            self._candidate_on = self._desired_on and (self._offtime_waived or (
+                self._switch_age_s >= self.min_offtime_s and self._on_delay_elapsed(now_ts)
+            ))
             if self._candidate_on:
                 self._offtime_waived = False
 
@@ -1362,6 +1404,11 @@ class BinaryDevice(Device):
                 and self._off_since_ts > 0 and self.off_delay_s > 0):
             off_delay_remaining = round(
                 max(0.0, self.off_delay_s - (self._now_ts - self._off_since_ts))
+            )
+        on_delay_remaining: Optional[float] = None
+        if not self._actual_on and self._on_since_ts > 0 and self.on_delay_s > 0:
+            on_delay_remaining = round(
+                max(0.0, self.on_delay_s - (self._now_ts - self._on_since_ts))
             )
         d: Dict = {
             "type":                 "binary",
@@ -1388,6 +1435,8 @@ class BinaryDevice(Device):
             "min_runtime_s":        self.min_runtime_s,
             "min_offtime_s":        self.min_offtime_s,
             "off_delay_remaining_s": off_delay_remaining,
+            "on_delay_s":           self.on_delay_s,
+            "on_delay_remaining_s": on_delay_remaining,
         }
         if self.power_actual_w is not None:
             d["power_actual_w"] = self.power_actual_w

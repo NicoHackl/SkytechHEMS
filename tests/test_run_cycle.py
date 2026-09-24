@@ -1758,3 +1758,64 @@ def test_status_traegt_zwangsfelder_additiv():
     assert luft["force_requested"] is False
     assert luft["force_active"] is False
     assert "force_w" not in luft
+
+
+# ---------------------------------------------------------------------------
+# Einschaltverzögerung (D-054)
+# ---------------------------------------------------------------------------
+
+def _uhr(monkeypatch, start):
+    """Steuerbare Zykluszeit: gibt einen Setter für time.time() zurück."""
+    jetzt = {"t": start}
+    monkeypatch.setattr("ems.controller.time.time", lambda: jetzt["t"])
+    return lambda t: jetzt.__setitem__("t", t)
+
+
+def _luft_verzoegert(**over):
+    states = {
+        **_global(),
+        **_binary("luft", prio=1, power=1000),
+        "switch.luft": "off",
+        "input_number.ems_luft_einschaltverzogerung_s": 120,
+        "sensor.s": 1500,
+    }
+    states.update(over)
+    return states
+
+
+def test_einschaltverzoegerung_ueber_helfer(monkeypatch):
+    import time as _time
+    t0 = _time.time()
+    setze = _uhr(monkeypatch, t0)
+    ctrl = EMSController([_luft_cfg()], residual_power_entity="sensor.s")
+    lc = _jetzt_minus(10_000)
+
+    res = ctrl.run_cycle(make_states(_luft_verzoegert(), last_changed=lc))
+    assert _luft_an_op(res) == "turn_off"
+    assert _dev(res, "luft")["on_delay_remaining_s"] == 120
+
+    setze(t0 + 119)
+    assert _luft_an_op(ctrl.run_cycle(make_states(_luft_verzoegert(), last_changed=lc))) \
+        == "turn_off"
+    setze(t0 + 120)
+    assert _luft_an_op(ctrl.run_cycle(make_states(_luft_verzoegert(), last_changed=lc))) \
+        == "turn_on"
+
+
+def test_einschaltverzoegerung_zaehlt_bei_freigabe_aus(monkeypatch):
+    import time as _time
+    t0 = _time.time()
+    setze = _uhr(monkeypatch, t0)
+    ctrl = EMSController([_luft_cfg()], residual_power_entity="sensor.s")
+    lc = _jetzt_minus(10_000)
+    aus = {"input_boolean.ems_luft_freigabe": "off"}
+
+    res = ctrl.run_cycle(make_states(_luft_verzoegert(**aus), last_changed=lc))
+    assert _luft_an_op(res) == "turn_off"
+    assert _dev(res, "luft")["eligible"] is False
+    setze(t0 + 200)
+    ctrl.run_cycle(make_states(_luft_verzoegert(**aus), last_changed=lc))
+    # Freigabe geht an – Bedingung liegt schon länger als 120 s an: sofort an.
+    setze(t0 + 230)
+    assert _luft_an_op(ctrl.run_cycle(make_states(_luft_verzoegert(), last_changed=lc))) \
+        == "turn_on"

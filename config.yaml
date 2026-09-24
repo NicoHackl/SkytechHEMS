@@ -27,7 +27,7 @@ description: >-
 
   Nur binary: switch_entity (Pflicht) sowie die fünf verpflichtenden
   Add-on-Fallbacks power_w, on_reserve_w, min_runtime_s, min_offtime_s und
-  off_delay_s.
+  off_delay_s. Optional on_delay_s (Einschaltverzögerung, Default 0).
 
   Nur battery: soc_entity (Pflicht), genau eine Ist-Leistungsvariante
   (charge_power_entity zusammen mit discharge_power_entity ODER power_entity
@@ -163,6 +163,7 @@ options:
       min_runtime_s: 600
       min_offtime_s: 300
       off_delay_s: 120
+      on_delay_s: 0
       power_actual_entity: ""
     - name: heizlufter_2
       label: "Heizlüfter 2"
@@ -174,6 +175,7 @@ options:
       min_runtime_s: 600
       min_offtime_s: 300
       off_delay_s: 120
+      on_delay_s: 0
     - name: acspeicher1
       label: "AC-Speicher"
       class: battery
@@ -260,6 +262,7 @@ schema:
       min_runtime_s: float?
       min_offtime_s: float?
       off_delay_s: float?
+      on_delay_s: float?
       power_actual_entity: str?
       soc_entity: str?
       charge_power_entity: str?

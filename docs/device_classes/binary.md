@@ -17,6 +17,7 @@ Zusätzlich zu den hier beschriebenen Feldern und Entitäten gelten die
 | `min_runtime_s` | ja | Formular `0` | Fallback für `mindestlaufzeit_s`; endlich und `>= 0` |
 | `min_offtime_s` | ja | Formular `0` | Fallback für `mindestauszeit_s`; endlich und `>= 0` |
 | `off_delay_s` | ja | Formular `0` | Fallback für `abschaltverzogerung_s`; endlich und `>= 0` |
+| `on_delay_s` | nein | `0` | Fallback für `einschaltverzogerung_s`; endlich und `>= 0`. Fehlt es, gilt `0` (sofort einschalten) — das Gerät bleibt aktiv |
 | `power_actual_entity` | nein | – | Ist-Leistungssensor als reine Datenquelle für spätere Ausbaustufen; aktuell ohne Wirkung auf die Regelung |
 
 Fehlt `switch_entity` oder eines der fünf Fallbackfelder, wird der Geräteeintrag beim Start nicht
@@ -38,6 +39,29 @@ Entität in `entity_diagnostics`, siehe
 | `input_number.ems_<prefix>_mindestlaufzeit_s` | s | Add-on-Feld `min_runtime_s` | Verhindert zu frühes Ausschalten; gilt auch bei Notabschaltung |
 | `input_number.ems_<prefix>_mindestauszeit_s` | s | Add-on-Feld `min_offtime_s` | Verhindert zu frühes Wiedereinschalten |
 | `input_number.ems_<prefix>_abschaltverzogerung_s` | s | Add-on-Feld `off_delay_s` | Verzögert den Aus-Befehl nach Ablauf der Mindestlaufzeit; gilt auch bei Notabschaltung |
+| `input_number.ems_<prefix>_einschaltverzogerung_s` | s | Add-on-Feld `on_delay_s`, sonst `0` | Verzögert das Einschalten, bis die Einschaltbedingung so lange ununterbrochen erfüllt ist (D-054) |
+
+### Einschaltverzögerung (D-054)
+
+Ein ausgeschaltetes Gerät schaltet erst ein, wenn die **Einschaltbedingung** mindestens
+`einschaltverzogerung_s` lang ununterbrochen erfüllt ist. Zur Bedingung gehören: kein Zwang,
+Steuerquelle nicht `aus` (Gerätemodus, globaler Modus, Sperren), technische Freigabe an,
+Schreibziel gesund und ein Pool an der Prioritätsposition des Geräts von mindestens
+`leistung_w + einschaltreserve_w + globale Einschaltreserve`. Fällt einer dieser Punkte weg,
+beginnt die Zeit von vorn.
+
+Die **Bedienfreigabe** (`_freigabe`, unter Energy Pilot der Freigabe-Vorschlag) zählt bewusst
+**nicht** dazu: Die Zeit läuft auch bei Freigabe `off`. Geht die Freigabe an und ist die
+Bedingung schon mindestens so lange erfüllt, schaltet das Gerät im selben Zyklus ein. Bei
+Freigabe `off` reserviert das Gerät keine Leistung; geprüft wird nur, ob der Überschuss an seiner
+Prioritätsposition reichen würde.
+
+Ist das Gerät freigegeben und läuft die Einschaltverzögerung noch, reserviert es seine
+`leistung_w` bereits im Pool — niedriger priorisierte Binärgeräte können sie nicht übernehmen,
+regelbare Geräte nutzen sie in der Wartezeit weiter. Die Mindestauszeit läuft parallel:
+eingeschaltet wird, wenn **beide** abgelaufen sind. One-Change-Limit und Prioritätskaskade gelten
+unverändert. Die Zeit wird nur im Speicher des Add-ons gezählt und beginnt nach einem Neustart
+von vorn. `0` schaltet wie bisher sofort ein.
 
 Zusätzlich liest ein binäres Gerät den Zwang-Helfer `input_boolean.ems_<prefix>_force` (D-053,
 optional, siehe [global.md](global.md#gemeinsame-ha-helfer)): mit `on` wird `anforderung_an`
@@ -45,8 +69,8 @@ sofort gesetzt — ohne Mindestauszeit, ohne One-Change-Limit, ohne Prioritätsk
 Notabschaltung. Seine `leistung_w` wird weder aus dem Pool reserviert noch in ihn zurückgerechnet.
 Endet der Zwang, entscheidet im selben Zyklus sofort der Pool — ohne Mindestlaufzeit und
 Abschaltverzögerung: ohne Überschuss geht `anforderung_an` sofort auf `off`, mit Überschuss bleibt
-das Gerät regulär an. Hat das Zwang-Ende es ausgeschaltet, darf der Pool es ohne Mindestauszeit
-wieder einschalten. Danach gilt der Zeitschutz wieder vollständig. Eine Zwangsleistung gibt es
+das Gerät regulär an. Hat das Zwang-Ende es ausgeschaltet, darf der Pool es ohne Mindestauszeit und
+ohne Einschaltverzögerung wieder einschalten. Danach gilt der Zeitschutz wieder vollständig. Eine Zwangsleistung gibt es
 bei binären Geräten nicht.
 
 Ein negativer Wert ist ungültig und löst den Ersatzwert aus. Ein gültiger Wert `0` ist ein Wert und
@@ -103,7 +127,7 @@ Für beide gelten der [Commit-Vertrag und der Fallback auf die HA-Helfer](global
 - `input_boolean.ems_<prefix>_anforderung_an`
 - eine HA-Automation, die `anforderung_an` auf den realen Schalter überträgt
 
-Die fünf klassenspezifischen Eingangshelfer sind dagegen optional: ohne sie regelt das Gerät mit
+Die sechs klassenspezifischen Eingangshelfer sind dagegen optional: ohne sie regelt das Gerät mit
 den Add-on-Werten weiter. Auch `force` ist optional.
 
 ## Beispiel
@@ -120,4 +144,5 @@ devices:
     min_runtime_s: 600
     min_offtime_s: 300
     off_delay_s: 120
+    on_delay_s: 60
 ```

@@ -219,6 +219,10 @@ def _ctrl_items_binary(p: str) -> list:
             f"input_number.ems_{p}_abschaltverzogerung_s", "Abschaltverzögerung",
             "abschaltverzogerung_s", "timing_guard", unit="s",
         ),
+        _control_item(
+            f"input_number.ems_{p}_einschaltverzogerung_s", "Einschaltverzögerung",
+            "einschaltverzogerung_s", "timing_guard", unit="s",
+        ),
     ]
 
 

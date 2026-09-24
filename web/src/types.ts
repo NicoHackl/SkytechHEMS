@@ -84,6 +84,9 @@ export interface BinaryDevice extends DeviceBase, ForceStatus {
   min_offtime_s: number
   /** null heißt „keine Abschaltverzögerung aktiv" — 0 heißt „läuft gerade ab". */
   off_delay_remaining_s: number | null
+  on_delay_s: number
+  /** null heißt „keine Einschaltverzögerung aktiv" — 0 heißt „läuft gerade ab". */
+  on_delay_remaining_s: number | null
 }
 
 /** AC-gekoppelter Speicher. Einziges Gerät, das Leistung auch abgeben kann. */
@@ -296,6 +299,7 @@ export interface ConfigDevice {
   min_runtime_s?: number | null
   min_offtime_s?: number | null
   off_delay_s?: number | null
+  on_delay_s?: number | null
 
   /* battery */
   soc_entity?: string

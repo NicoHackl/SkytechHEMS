@@ -255,7 +255,7 @@ oder unbrauchbaren HA-Helferwert unmittelbar ersetzen:
 | Klasse | Fallbackfelder | Referenz |
 |---|---|---|
 | `controllable` | `technical_minimum`, `technical_maximum`, `increase_delay_s`, `decrease_delay_s`, `maximum_step_change`, `minimum_step_change`, zusätzlich `phase_switch_delay_s` | [controllable.md](controllable.md#über-namenskonvention-gelesene-ha-helfer) |
-| `binary` | `power_w`, `on_reserve_w`, `min_runtime_s`, `min_offtime_s`, `off_delay_s` | [binary.md](binary.md#über-namenskonvention-gelesene-ha-helfer) |
+| `binary` | `power_w`, `on_reserve_w`, `min_runtime_s`, `min_offtime_s`, `off_delay_s`, zusätzlich optional `on_delay_s` (Default `0`) | [binary.md](binary.md#über-namenskonvention-gelesene-ha-helfer) |
 | `battery` | `soc_max_hysteresis_percent`, `direction_switch_delay_s` | [battery.md](battery.md) |
 
 `entity_prefix` fällt auf `name` zurück, erzeugt damit aber lediglich Entitätsnamen. Es liefert

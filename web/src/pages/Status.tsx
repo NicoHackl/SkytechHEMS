@@ -392,6 +392,7 @@ function BinaryCard({ device, elapsed }: { device: BinaryDevice; elapsed: number
       : null
 
   const offDelay = device.off_delay_remaining_s
+  const onDelay = device.on_delay_remaining_s
 
   return (
     <DeviceCard
@@ -416,6 +417,7 @@ function BinaryCard({ device, elapsed }: { device: BinaryDevice; elapsed: number
       />
       {runtimeRow}
       {offDelay != null ? remainingRow('Abschaltverzögerung', offDelay - elapsed, 'abschalten') : null}
+      {onDelay != null ? remainingRow('Einschaltverzögerung', onDelay - elapsed) : null}
     </DeviceCard>
   )
 }
