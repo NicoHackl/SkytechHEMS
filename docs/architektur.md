@@ -142,7 +142,8 @@ Ein Zyklus (`EMSController.run_cycle()`), ausgelöst alle `interval_s` Sekunden:
     aufgeteilt, strikt nach `entlade_prioritat`. Rechnete jeder Speicher für sich, entladen bei
     drei Speichern und 2 kW Defizit alle drei mit 2 kW. Muss nach Schritt 10 und vor Schritt 12
     laufen — der Speicher löst dort seine Richtung auf.
-12. **Rampenbegrenzung** der Sollwerte, bei Defizit sofortiger Run-down. Ein Zwangs-Sollwert wird
+12. **Rampenbegrenzung** der Sollwerte: Hoch- und Runter-Regelzeit sowie Schrittbegrenzung gelten
+    auch bei Netzbezug und beim Zurücknehmen einer Entladung (D-055). Ein Zwangs-Sollwert wird
     ohne Rampe, Schrittlimit und Totband sofort geschrieben und bei Defizit nicht abgeregelt; im
     Zyklus des Zwang-Endes springt der Sollwert ebenso ohne Rampe auf die Pool-Zuteilung.
 13. **Write-Ops** sammeln, bei `output_unit=ampere` von Watt in ganze Ampere abrunden und gegen die

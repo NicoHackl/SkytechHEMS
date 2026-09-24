@@ -49,9 +49,9 @@ Ursache steht je Entität in `entity_diagnostics`, siehe
 | `input_number.ems_<prefix>_min_technisch_<u>` | W oder A | Add-on-Feld `technical_minimum` | Untere technische Grenze; Werte darunter rasten auf `0` oder auf das Minimum |
 | `input_number.ems_<prefix>_max_technisch_<u>` | W oder A | Add-on-Feld `technical_maximum` | Obere technische Grenze; mit `0` kann das Gerät keine Leistung erhalten |
 | `input_number.ems_<prefix>_hoch_regelzeit_s` | s | Add-on-Feld `increase_delay_s` | Mindestabstand beim Erhöhen des Sollwerts |
-| `input_number.ems_<prefix>_runter_regelzeit_s` | s | Add-on-Feld `decrease_delay_s` | Mindestabstand beim normalen Absenken; bei Defizit wird sofort abgesenkt |
+| `input_number.ems_<prefix>_runter_regelzeit_s` | s | Add-on-Feld `decrease_delay_s` | Mindestabstand beim Absenken; gilt auch bei Netzbezug (D-055) |
 | `input_number.ems_<prefix>_max_anderung_pro_schritt_<u>` | W oder A | Add-on-Feld `maximum_step_change` | Maximale Sollwertänderung je Regelzyklus |
-| `input_number.ems_<prefix>_min_anderung_pro_schritt_<u>` | W oder A | Add-on-Feld `minimum_step_change` | Totband; kleinere Änderungen werden nicht geschrieben |
+| `input_number.ems_<prefix>_min_anderung_pro_schritt_<u>` | W oder A | Add-on-Feld `minimum_step_change` | Totband; kleinere Änderungen werden nicht geschrieben. Das Abschalten auf `0` geht immer durch; ein Start aus `0` erst ab dem Totband oder ab einem kleineren `min_technisch` |
 | `input_number.ems_<prefix>_geschutzte_mindestleistung_<u>` | W oder A | intern `0` | Reservierter Sockel gegenüber Binärverbrauchern; mit `protected_minimum_scope: binary_and_controllable` zusätzlich vor der Zusatzleistung höher priorisierter regelbarer Verbraucher |
 | `input_number.ems_<prefix>_reserve_w` | W | intern `0` | Gerätespezifischer Zusatzpuffer; auch im Ampere-Modus immer Watt |
 | `input_number.ems_<prefix>_min_umschaltzeit_s` | s | Add-on-Feld `phase_switch_delay_s`, sonst intern `30` | Sperrzeit zwischen Phasenwechseln; nur bei `phases: "1,3"` gelesen |

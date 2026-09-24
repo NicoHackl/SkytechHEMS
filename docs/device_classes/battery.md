@@ -91,9 +91,9 @@ ein *ausgefallener* Schalter ist dagegen kein Grund, weiterzuregeln.
 | `input_number.ems_<prefix>_geschutzte_mindestleistung_w` | W | intern `0` | Reservierter Ladesockel gegenüber binären Geräten |
 | `input_number.ems_<prefix>_reserve_w` | W | intern `50` | Gerätespezifischer Zusatzpuffer beim Laden; eine vorhandene Entität mit gültiger `0` setzt ihn bewusst ab |
 | `input_number.ems_<prefix>_hoch_regelzeit_s` | s | intern `0` | Mindestabstand beim Erhöhen von Lade- oder Entladeleistung |
-| `input_number.ems_<prefix>_runter_regelzeit_s` | s | intern `0` | Mindestabstand beim normalen Absenken der Ladeleistung |
+| `input_number.ems_<prefix>_runter_regelzeit_s` | s | intern `0` | Mindestabstand beim Absenken von Lade- oder Entladeleistung; gilt auch bei Netzbezug |
 | `input_number.ems_<prefix>_max_anderung_pro_schritt_w` | W | **keine Begrenzung** | Maximale Änderung je Regelzyklus; ohne gültigen Wert wird das Ziel unmittelbar erreicht |
-| `input_number.ems_<prefix>_min_anderung_pro_schritt_w` | W | intern `0` | Schreib-Totband |
+| `input_number.ems_<prefix>_min_anderung_pro_schritt_w` | W | intern `0` | Schreib-Totband; ausgenommen sind nur das Stoppen auf `0` und der Richtungswechsel, ein Start aus `0` braucht es ebenfalls |
 | `input_number.ems_<prefix>_umschalt_totzone_w` | W | intern `100` | Nettoanforderungen innerhalb der Totzone führen zu `standby` |
 
 Die vier [gemeinsamen HA-Helfer](global.md#gemeinsame-ha-helfer) werden ebenfalls gelesen.
@@ -151,14 +151,22 @@ Wechselrichter verlangten Reihenfolge nach Modbus, MQTT oder eine andere Schnitt
 
 ## Rampen und Sofort-Klemmen
 
-Erhöhungen und normale Absenkungen laufen ausschließlich über
-`max_anderung_pro_schritt_w`. Eine eigene Sofort-Schwelle für den Lastabwurf gibt es nicht mehr —
-die Fälle, die wirklich unverzüglich auf `0 W` müssen, greifen ohnehin vor der Rampe:
+Laden und Entladen werden gleich behandelt (D-055): Eine Erhöhung wartet auf
+`hoch_regelzeit_s`, eine Absenkung auf `runter_regelzeit_s`. Danach begrenzt
+`max_anderung_pro_schritt_w` die Schrittweite. Das gilt auch für das Zurücknehmen einer
+Entladung, und ein Netzbezug hebt die Wartezeit nicht auf. Eine eigene Sofort-Schwelle für den
+Lastabwurf gibt es nicht. Die Fälle, die wirklich unverzüglich auf `0 W` müssen, greifen vor der
+Rampe:
 
 - sicherer Standby (nicht freigegeben, Lockout, Betriebsart `standby`),
 - ein ungültiger SoC- oder Ist-Leistungssensor,
-- ein Richtungswechsel innerhalb der Umschaltsperre,
-- ein Netzdefizit auf der Ladeseite.
+- ein Nettoziel innerhalb der `umschalt_totzone_w` oder ein weggefallenes Ziel,
+- ein Richtungswechsel innerhalb der Umschaltsperre.
+
+Das Totband `min_anderung_pro_schritt_w` gilt für jede Änderung des signierten Sollwerts. Ohne
+Totband geschrieben werden nur das Stoppen auf `0 W` und ein direkter Richtungswechsel. Ein Start
+aus `0 W` wird erst geschrieben, wenn der neue Betrag das Totband erreicht. Bis dahin bleiben
+Sollwert und Betriebsart (`standby`) unverändert.
 
 ## Reservierte Netzlade-Helfer: nicht aktivieren
 

@@ -193,7 +193,7 @@ def test_ramp_up_limited_by_step_when_aged():
     d._anforderung_age_s = 100.0
     d.hoch_regelzeit_s = 60.0
     d.max_anderung_pro_schritt_w = 1000.0
-    d.calculate_ramp(0.0)
+    d.calculate_ramp()
     assert d.new_w == 1000.0            # ein Schritt nach oben
 
 
@@ -203,25 +203,30 @@ def test_ramp_up_blocked_when_too_young():
     d._anforderung_current_w = 500.0
     d._anforderung_age_s = 10.0
     d.hoch_regelzeit_s = 60.0
-    d.calculate_ramp(0.0)
+    d.calculate_ramp()
     assert d.new_w == 500.0             # noch nicht alt genug
 
 
-def test_ramp_down_immediate_on_deficit():
+def test_ramp_down_waits_for_runter_regelzeit():
+    """Keine Defizit-Ausnahme mehr (D-055): auch das Absenken wartet."""
     d = make_watt(min_w=500.0, max_w=3000.0)
     d._alloc_w = 500.0
     d._anforderung_current_w = 2500.0
-    d._anforderung_age_s = 0.0
+    d._anforderung_age_s = 10.0
     d.runter_regelzeit_s = 60.0
-    d.calculate_ramp(current_deficit_w=300.0)
-    assert d.new_w == 500.0             # sofort herunter trotz junger Anforderung
+    d.max_anderung_pro_schritt_w = 1000.0
+    d.calculate_ramp()
+    assert d.new_w == 2500.0            # Anforderung zu jung
+    d._anforderung_age_s = 60.0
+    d.calculate_ramp()
+    assert d.new_w == 1500.0            # dann ein Schritt nach unten
 
 
 def test_ramp_not_eligible_is_zero():
     d = make_watt()
     d.eligible = False
     d._alloc_w = 2000.0
-    d.calculate_ramp(0.0)
+    d.calculate_ramp()
     assert d.new_w == 0.0
 
 
@@ -254,6 +259,41 @@ def test_deadband_suppresses_small_change():
     d.deadband_w = 100.0                # Änderung < Deadband
     assert d.get_write_ops() == []
     assert d.new_w == 1000.0            # auf alten Wert zurückgesetzt
+
+
+def test_start_aus_null_unter_totband_schreibt_nichts():
+    """Kein 0 -> 2 W: ein Start braucht die Mindeständerung (D-055)."""
+    d = make_watt(max_w=3000.0)
+    d._anforderung_current_w = 0.0
+    d._new_w = 20.0
+    d.deadband_w = 50.0
+    assert d.get_write_ops() == []
+    assert d.new_w == 0.0
+
+
+def test_start_aus_null_ab_totband_schreibt():
+    d = make_watt(max_w=3000.0)
+    d._anforderung_current_w = 0.0
+    d._new_w = 50.0
+    d.deadband_w = 50.0
+    assert d.get_write_ops()[0].data["value"] == 50.0
+
+
+def test_start_mit_technischem_minimum_unter_totband():
+    """Liegt das technische Minimum unter dem Totband, darf das Gerät starten."""
+    d = make_watt(min_w=400.0, max_w=3000.0)
+    d._anforderung_current_w = 0.0
+    d._new_w = 400.0
+    d.deadband_w = 500.0
+    assert d.get_write_ops()[0].data["value"] == 400.0
+
+
+def test_stopp_auf_null_ignoriert_totband():
+    d = make_watt(max_w=3000.0)
+    d._anforderung_current_w = 20.0
+    d._new_w = 0.0
+    d.deadband_w = 50.0
+    assert d.get_write_ops()[0].data["value"] == 0.0
 
 
 # ---- Phasenwahl (A3) ----
@@ -555,7 +595,7 @@ def test_calculate_ramp_schreibt_zwangswert_sofort():
     d._anforderung_current_w = 0.0
     d._anforderung_age_s = 0.0
     d.allocate_minimum(0.0)
-    d.calculate_ramp(current_deficit_w=5000.0)   # Defizit regelt Zwang nicht ab
+    d.calculate_ramp()   # Defizit regelt Zwang nicht ab
     assert d._new_w == 2000.0
 
 

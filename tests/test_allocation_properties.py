@@ -229,14 +229,14 @@ def _ready_battery(params, alloc_w=0.0, ziel_w=0.0):
 @given(params=_battery_state(), alloc=_watt, ziel=_watt)
 def test_p1_nie_gleichzeitig_laden_und_entladen(params, alloc, ziel):
     b = _ready_battery(params, alloc, ziel)
-    b.calculate_ramp(0.0)
+    b.calculate_ramp()
     assert b.new_lade_w == 0.0 or b.new_entlade_w == 0.0
 
 
 @given(params=_battery_state(), alloc=_watt, ziel=_watt)
 def test_p5_soc_grenzen_werden_nie_verletzt(params, alloc, ziel):
     b = _ready_battery(params, alloc, ziel)
-    b.calculate_ramp(0.0)
+    b.calculate_ramp()
     if b.soc_prozent >= b.soc_max_prozent:
         assert b.new_lade_w == 0.0
     if b.soc_prozent <= b.soc_min_prozent:
@@ -248,7 +248,7 @@ def test_p6_entladung_steigt_nie_ueber_ziel_und_bisherigen_wert(params, ziel):
     b = _ready_battery(params, 0.0, ziel)
     vorher = b.entlade_anforderung_w
     zugeteilt = b.entlade_ziel_w
-    b.calculate_ramp(0.0)
+    b.calculate_ramp()
     assert b.new_entlade_w <= max(zugeteilt, vorher) + 1.0
 
 
@@ -256,7 +256,7 @@ def test_p6_entladung_steigt_nie_ueber_ziel_und_bisherigen_wert(params, ziel):
 def test_p6b_ladung_steigt_nie_ueber_zuteilung_und_bisherigen_wert(params, ziel):
     b = _ready_battery(params, ziel, 0.0)
     vorher = b.lade_anforderung_w
-    b.calculate_ramp(0.0)
+    b.calculate_ramp()
     assert b.new_lade_w <= max(b.alloc_w, vorher, b.max_technisch_w) + 1.0
 
 
