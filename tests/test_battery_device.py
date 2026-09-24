@@ -213,7 +213,7 @@ def test_leistungssensor_unavailable_faellt_aus_regelung():
     """Ohne Messwert ist netz_support_w unbekannt und die Pool-Bereinigung blind."""
     b = prepare(make_battery(), entlade_ist="unavailable")
     assert b.sensoren_gueltig is False
-    b.calculate_ramp(0.0)
+    b.calculate_ramp()
     assert (b.new_lade_w, b.new_entlade_w) == (0.0, 0.0)
     assert b.new_betriebsart == "standby"
 
@@ -234,7 +234,7 @@ def test_niemals_laden_bei_hausdefizit():
     b = prepare(make_battery())
     b._alloc_w = 2000.0
     b.set_discharge_target(1500.0)
-    b.calculate_ramp(0.0)
+    b.calculate_ramp()
     assert b.new_lade_w == 0.0
     assert b.new_entlade_w == 1500.0
     assert b._lade_block == "hausdefizit"
@@ -244,14 +244,14 @@ def test_niemals_gleichzeitig_laden_und_entladen():
     b = prepare(make_battery())
     b._alloc_w = 2000.0
     b.set_discharge_target(0.0)
-    b.calculate_ramp(0.0)
+    b.calculate_ramp()
     assert b.new_lade_w == 0.0 or b.new_entlade_w == 0.0
 
 
 def test_totzone_fuehrt_zu_standby():
     b = prepare(make_battery(), totzone=100)
     b.set_discharge_target(60.0)
-    b.calculate_ramp(0.0)
+    b.calculate_ramp()
     assert (b.new_lade_w, b.new_entlade_w) == (0.0, 0.0)
     assert b.new_betriebsart == "standby"
     assert b.to_status_dict()["blockiert_grund"] == "totzone"
@@ -262,7 +262,7 @@ def test_umschaltsperre_blockiert_richtungswechsel():
     b = prepare(make_battery(direction_switch_delay_s=300), sollwert=2000)
     b._last_direction_change_ts = 10_000.0 - 60.0     # vor 60 s gewechselt
     b.set_discharge_target(1500.0)
-    b.calculate_ramp(0.0)
+    b.calculate_ramp()
     assert (b.new_lade_w, b.new_entlade_w) == (0.0, 0.0)
     assert b.to_status_dict()["blockiert_grund"] == "umschaltsperre"
 
@@ -273,7 +273,7 @@ def test_umschaltsperre_faehrt_standby_nicht_alte_richtung():
     b = prepare(make_battery(direction_switch_delay_s=300), sollwert=-1800)
     b._last_direction_change_ts = 10_000.0 - 10.0
     b._alloc_w = 2500.0
-    b.calculate_ramp(0.0)
+    b.calculate_ramp()
     assert b.new_betriebsart == "standby"
     assert b.new_entlade_w == 0.0
 
@@ -282,7 +282,7 @@ def test_umschaltsperre_laeuft_ab():
     b = prepare(make_battery(direction_switch_delay_s=300), sollwert=2000)
     b._last_direction_change_ts = 10_000.0 - 400.0    # Sperre abgelaufen
     b.set_discharge_target(1500.0)
-    b.calculate_ramp(0.0)
+    b.calculate_ramp()
     assert b.new_entlade_w == 1500.0
 
 
@@ -295,7 +295,7 @@ def test_entladung_runter_folgt_der_schrittbegrenzung():
     über max_anderung_pro_schritt_w."""
     b = prepare(make_battery(), sollwert=-3000, schritt=100)
     b.set_discharge_target(500.0)
-    b.calculate_ramp(0.0)
+    b.calculate_ramp()
     assert b.new_entlade_w == 2900.0
 
 
@@ -307,14 +307,14 @@ def test_entladung_runter_ohne_schrittbegrenzung_sofort():
     b.begin_cycle(10_000.0)
     b.update_from_ha(states, 10_000.0, 0.0)
     b.set_discharge_target(500.0)
-    b.calculate_ramp(0.0)
+    b.calculate_ramp()
     assert b.new_entlade_w == 500.0
 
 
 def test_entladung_hoch_gerampt():
     b = prepare(make_battery(), sollwert=-1000, schritt=200)
     b.set_discharge_target(3000.0)
-    b.calculate_ramp(0.0)
+    b.calculate_ramp()
     assert b.new_entlade_w == 1200.0
 
 
@@ -329,22 +329,58 @@ def test_entladung_hoch_wartet_auf_hoch_regelzeit():
     )
     b._anforderung_age_s = 10.0                       # jünger als hoch_regelzeit_s
     b.set_discharge_target(3000.0)
-    b.calculate_ramp(0.0)
+    b.calculate_ramp()
     assert b.new_entlade_w == 1000.0
 
 
-def test_laden_bei_defizit_sofort_zurueck():
+def test_laden_stopp_auf_null_sofort():
+    """Das Stoppen auf 0 wartet weder auf die Runter-Regelzeit noch auf die
+    Schrittbegrenzung."""
     b = prepare(make_battery(), sollwert=3000, runter=600, schritt=100)
+    b._anforderung_age_s = 0.0
     b._alloc_w = 0.0
-    b.calculate_ramp(current_deficit_w=500.0)
+    b.calculate_ramp()
     assert b.new_lade_w == 0.0
+
+
+def test_laden_runter_wartet_auf_runter_regelzeit():
+    """Ohne Defizit-Ausnahme (D-055): auch eine kleinere Ladezuteilung wartet."""
+    b = prepare(make_battery(), sollwert=3000, runter=60)
+    b._anforderung_age_s = 10.0
+    b._alloc_w = 1000.0
+    b.calculate_ramp()
+    assert b.new_lade_w == 3000.0
+
+
+def test_entladung_runter_wartet_auf_runter_regelzeit():
+    """Das Zurücknehmen einer Entladung ist kein Sonderfall mehr (D-055)."""
+    b = prepare(make_battery(), sollwert=-1500, runter=3)
+    b._anforderung_age_s = 2.0
+    b.set_discharge_target(1000.0)
+    b.calculate_ramp()
+    assert b.new_entlade_w == 1500.0
+    b._anforderung_age_s = 3.0
+    b.calculate_ramp()
+    assert b.new_entlade_w == 1000.0
+
+
+def test_entladung_stopp_auf_null_sofort():
+    """Fällt das Entladeziel weg, geht der Speicher sofort in Standby."""
+    b = prepare(make_battery(), sollwert=-1500, anforderung_betriebsart="entladen",
+                runter=600, deadband=500)
+    b._anforderung_age_s = 0.0
+    b.set_discharge_target(0.0)
+    b.calculate_ramp()
+    ops = b.get_write_ops()
+    assert op_for(ops, ANF_ENTITY)[2]["value"] == 0.0
+    assert op_for(ops, ANF_MODE)[2]["option"] == "standby"
 
 
 def test_zu_kleine_zuteilung_rastet_auf_null():
     """Unterhalb der technischen Untergrenze gibt es nur 0 – nie überschießen."""
     b = prepare(make_battery(), min_entlade=800)
     b.set_discharge_target(300.0)
-    b.calculate_ramp(0.0)
+    b.calculate_ramp()
     assert b.new_entlade_w == 0.0
 
 
@@ -356,7 +392,7 @@ def test_write_reihenfolge_beim_einschalten():
     """Erst Betriebsart, dann Leistung."""
     b = prepare(make_battery(), sollwert=0, anforderung_betriebsart="standby")
     b.set_discharge_target(1500.0)
-    b.calculate_ramp(0.0)
+    b.calculate_ramp()
     ops = b.get_write_ops()
     assert [op[2]["entity_id"] for op in ops] == [ANF_MODE, ANF_ENTITY]
     assert ops[0][2]["option"] == "entladen"
@@ -368,7 +404,7 @@ def test_write_reihenfolge_beim_abschalten():
     kann am Gerät einen Stromstoss erzeugen."""
     b = prepare(make_battery(), sollwert=-1500, anforderung_betriebsart="entladen",
                 betriebsart="standby")
-    b.calculate_ramp(0.0)
+    b.calculate_ramp()
     ops = b.get_write_ops()
     assert [op[2]["entity_id"] for op in ops] == [ANF_ENTITY, ANF_MODE]
     assert ops[0][2]["value"] == 0.0
@@ -379,27 +415,50 @@ def test_deadband_unterdrueckt_kleine_aenderung():
     b = prepare(make_battery(), sollwert=-1500, anforderung_betriebsart="entladen",
                 deadband=100)
     b.set_discharge_target(1540.0)
-    b.calculate_ramp(0.0)
+    b.calculate_ramp()
     assert b.get_write_ops() == []
     # Anzeige muss zeigen, was wirklich in HA steht
     assert b.new_entlade_w == 1500.0
 
 
-def test_deadband_beim_senken_der_entladung_aus():
-    """Beim Zurücknehmen einer Entladung zählt Geschwindigkeit mehr als
-    Schreibsparsamkeit."""
+def test_deadband_gilt_beim_senken_der_entladung():
+    """Das Zurücknehmen einer Entladung unterliegt dem Totband (D-055) – sonst
+    schlägt jedes Rauschen um den Netzpunkt als eigener Schreibvorgang durch."""
     b = prepare(make_battery(), sollwert=-1500, anforderung_betriebsart="entladen",
                 deadband=500)
     b.set_discharge_target(1400.0)
-    b.calculate_ramp(0.0)
-    assert op_for(b.get_write_ops(), ANF_ENTITY)[2]["value"] == -1400.0
+    b.calculate_ramp()
+    assert b.get_write_ops() == []
+    assert b.new_entlade_w == 1500.0
+    assert b.new_betriebsart == "entladen"
+
+
+def test_start_aus_null_unter_totband_schreibt_nichts():
+    """Ein Start aus 0 braucht die Mindeständerung – auch keine Betriebsart."""
+    b = prepare(make_battery(), sollwert=0, anforderung_betriebsart="standby",
+                deadband=100)
+    b.set_discharge_target(60.0)
+    b.calculate_ramp()
+    assert b.get_write_ops() == []
+    assert b.new_entlade_w == 0.0
+    assert b.new_betriebsart == "standby"
+
+
+def test_start_aus_null_ab_totband_schreibt():
+    b = prepare(make_battery(), sollwert=0, anforderung_betriebsart="standby",
+                deadband=100)
+    b.set_discharge_target(100.0)
+    b.calculate_ramp()
+    ops = b.get_write_ops()
+    assert op_for(ops, ANF_MODE)[2]["option"] == "entladen"
+    assert op_for(ops, ANF_ENTITY)[2]["value"] == -100.0
 
 
 def test_deadband_beim_vorzeichenwechsel_aus():
     b = prepare(make_battery(direction_switch_delay_s=0), sollwert=-50,
                 anforderung_betriebsart="entladen", deadband=500, min_entlade=0)
     b._alloc_w = 60.0
-    b.calculate_ramp(0.0)
+    b.calculate_ramp()
     assert op_for(b.get_write_ops(), ANF_ENTITY)[2]["value"] == 60.0
 
 
@@ -408,7 +467,7 @@ def test_schreibt_sicheren_zustand_aktiv_bei_lockout():
     Speicher entlädt bis leer weiter."""
     b = prepare(make_battery(), sollwert=-4000, anforderung_betriebsart="entladen")
     b.eligible = False
-    b.calculate_ramp(0.0)
+    b.calculate_ramp()
     ops = b.get_write_ops()
     assert op_for(ops, ANF_ENTITY)[2]["value"] == 0.0
     assert op_for(ops, ANF_MODE)[2]["option"] == "standby"
@@ -425,7 +484,7 @@ def test_kein_schreiben_im_eingeschwungenen_zustand():
     """Bei 3 s Takt und n Speichern ist Schreibsparsamkeit auch HA-Last."""
     b = prepare(make_battery(), sollwert=-1500, anforderung_betriebsart="entladen")
     b.set_discharge_target(1500.0)
-    b.calculate_ramp(0.0)
+    b.calculate_ramp()
     assert b.get_write_ops() == []
 
 
@@ -471,7 +530,7 @@ def test_status_dict_grundform():
     b = prepare(make_battery(capacity_kwh=10.0), soc=72.5, entlade_ist=1840,
                 sollwert=-1800, entlade_prio=30)
     b.set_discharge_target(1900.0)
-    b.calculate_ramp(0.0)
+    b.calculate_ramp()
     d = b.to_status_dict()
     assert d["type"] == "battery"
     assert d["entlade_prioritat"] == 30
@@ -613,12 +672,12 @@ def test_vorhandene_reserve_null_ueberschreibt_den_default():
 def test_schrittbegrenzung_gilt_in_beiden_richtungen():
     b = prepare(make_battery(), sollwert=1000, schritt=200)
     b._alloc_w = 5000.0
-    b.calculate_ramp(0.0)
+    b.calculate_ramp()
     assert b.new_lade_w == 1200.0
 
     b = prepare(make_battery(), sollwert=-1000, schritt=200)
     b.set_discharge_target(4000.0)
-    b.calculate_ramp(0.0)
+    b.calculate_ramp()
     assert b.new_entlade_w == 1200.0
 
 
@@ -630,7 +689,7 @@ def test_ohne_schrittbegrenzung_wird_das_ziel_direkt_erreicht():
     b.update_from_ha(states, 10_000.0, 0.0)
     assert b._step_limit_w is None
     b._alloc_w = 4000.0
-    b.calculate_ramp(0.0)
+    b.calculate_ramp()
     assert b.new_lade_w == 4000.0
 
 
@@ -643,7 +702,7 @@ def test_ohne_schrittbegrenzung_wird_das_ziel_direkt_erreicht():
 ])
 def test_sicherheitsgruende_stoppen_sofort_ohne_rampe(kwargs):
     b = prepare(make_battery(), sollwert=-4000, schritt=50, **kwargs)
-    b.calculate_ramp(0.0)
+    b.calculate_ramp()
     assert (b.new_lade_w, b.new_entlade_w) == (0.0, 0.0)
     assert b.new_betriebsart == "standby"
 
@@ -653,13 +712,13 @@ def test_gesunkenes_wr_limit_wird_nach_der_rampe_nie_ueberschritten():
     b = prepare(make_battery(available_discharge_power_w=800),
                 sollwert=-4000, schritt=100)
     b.set_discharge_target(4000.0)
-    b.calculate_ramp(0.0)
+    b.calculate_ramp()
     assert b.new_entlade_w <= 800.0
 
     b = prepare(make_battery(available_charge_power_w=600),
                 sollwert=4000, schritt=100)
     b._alloc_w = 4000.0
-    b.calculate_ramp(0.0)
+    b.calculate_ramp()
     assert b.new_lade_w <= 600.0
 
 

@@ -20,6 +20,13 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ### Geändert
 
+- **Regelzeiten und Mindeständerung gelten ohne Ausnahme (D-055).** Das Zurücknehmen einer
+  Speicher-Entladung wartet jetzt auf die Runter-Regelzeit und unterliegt der Mindeständerung.
+  Bisher kam es jeden Zyklus und auch in Kleinstschritten durch, und der Entlade-Sollwert lief
+  als Sägezahn. Die Ausnahme „bei Defizit sofort" entfällt: Auch bei Netzbezug senken Heizstab,
+  Wallbox und Speicherladung nur im Takt ihrer Runter-Regelzeit und Schrittbegrenzung ab. Ein
+  Start aus 0 wird erst ab der Mindeständerung geschrieben (vorher z. B. 0 → 2 W). Das Stoppen
+  auf 0 und der Richtungswechsel am Speicher gehen weiterhin sofort durch.
 - **`flow_icon` akzeptiert jedes Icon-Set.** Bisher musste das Symbol eines Geräts auf der Power
   Flow Card mit `mdi:` beginnen; eigene Icon-Sets wie `cli:` oder `phu:` waren damit
   ausgeschlossen. Geprüft wird jetzt nur noch die Form `satz:name` — ein fehlendes Präfix bleibt

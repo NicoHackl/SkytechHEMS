@@ -487,7 +487,7 @@ class Device(ABC):
         """Reserviert/verbraucht Leistung aus dem priorisierten Pool. Gibt aktualisiertes remaining_w zurück."""
         return remaining_w
 
-    def calculate_ramp(self, current_deficit_w: float = 0.0) -> None:
+    def calculate_ramp(self) -> None:
         """Begrenzt die Sollwertänderung. Bei nicht regelbaren Geräten ein No-Op."""
 
     @abstractmethod
@@ -991,8 +991,13 @@ class ControllableDevice(Device):
             return remaining_w - additional
         return remaining_w
 
-    def calculate_ramp(self, current_deficit_w: float = 0.0) -> None:
-        """Wendet die Rampenbegrenzung an; Ergebnis in _new_w."""
+    def calculate_ramp(self) -> None:
+        """Wendet die Rampenbegrenzung an; Ergebnis in _new_w.
+
+        Ein Netzbezug hebt die Runter-Regelzeit nicht auf (D-055): geregelt wird
+        auf Netzpunkt +-0, und jedes Rauschen um 0 W würde sonst jeden Zyklus
+        ungebremst durchschlagen.
+        """
         if self.force_active:
             # Zwang schreibt sofort: keine Hoch-/Runter-Regelzeit, kein
             # Schrittlimit, kein Abregeln bei Defizit. Geklemmt ist bereits.
@@ -1020,13 +1025,10 @@ class ControllableDevice(Device):
                 if age_s >= self.hoch_regelzeit_s else current_w
             )
         elif ideal_w < current_w:
-            if current_deficit_w > 0:
-                new_w = ideal_w  # sofortiges Abregeln bei Defizit
-            else:
-                new_w = (
-                    max(ideal_w, current_w - self.max_anderung_pro_schritt_w)
-                    if age_s >= self.runter_regelzeit_s else current_w
-                )
+            new_w = (
+                max(ideal_w, current_w - self.max_anderung_pro_schritt_w)
+                if age_s >= self.runter_regelzeit_s else current_w
+            )
         else:
             new_w = current_w
 
@@ -1037,7 +1039,15 @@ class ControllableDevice(Device):
 
     def get_write_ops(self) -> List[WriteOp]:
         delta     = abs(self._new_w - self._anforderung_current_w)
-        is_on_off = (self._new_w < EPS_W) != (self._anforderung_current_w < EPS_W)
+        # Abschalten geht immer sofort durch. Einschalten aus 0 dagegen erst ab
+        # der Mindeständerung (D-055) – sonst landen Kleinstwerte wie 2 W im
+        # Sollwert. Ein technisches Minimum unterhalb des Totbands darf starten,
+        # sonst käme ein solches Gerät nie in Gang.
+        is_stop   = self._new_w < EPS_W <= self._anforderung_current_w
+        is_start  = self._anforderung_current_w < EPS_W <= self._new_w
+        start_ok  = is_start and (
+            self.deadband_w <= 0 or self._new_w >= self.deadband_w
+            or (self.min_technisch_w > 0 and self._new_w >= self.min_technisch_w))
         # Nur schreiben, wenn sich der Wert tatsächlich ändert – würde man jeden
         # Zyklus denselben Wert schreiben, setzte das last_changed zurück und
         # anforderung_age_s könnte nicht korrekt altern, was das Rampen-Timing
@@ -1049,9 +1059,10 @@ class ControllableDevice(Device):
         # Annahme, und das Rampen-Timing spielt ohnehin keine Rolle mehr.
         # Unter Zwang und an seinem Ende zählt das Totband nicht – aber auch
         # dann nur bei echter Änderung, sonst altert last_changed nie.
-        write = (not self._runtime_active) or is_on_off or (
+        write = (not self._runtime_active) or is_stop or start_ok or (
             (self._force_active or self._force_released) and delta > 0) or (
-            delta > 0 and (self.deadband_w <= 0 or delta >= self.deadband_w))
+            not is_start and delta > 0
+            and (self.deadband_w <= 0 or delta >= self.deadband_w))
 
         ops: List[WriteOp] = []
 
@@ -1943,36 +1954,24 @@ class BatteryDevice(ControllableDevice):
             return aktuell_w - self._step_limit_w
         return ziel_w
 
-    def _ramp_laden(self, ziel_w: float, current_deficit_w: float) -> float:
-        aktuell = self._lade_anf_w
-        age_s   = self._anforderung_age_s
-        if ziel_w > aktuell:
-            if age_s < self.hoch_regelzeit_s:
-                return aktuell
-            return self._begrenze_schritt(ziel_w, aktuell)
-        if ziel_w < aktuell:
-            if current_deficit_w > 0:
-                return ziel_w          # bei Defizit sofort abregeln, wie jeder Verbraucher
-            if age_s < self.runter_regelzeit_s:
-                return aktuell
-            return self._begrenze_schritt(ziel_w, aktuell)
-        return aktuell
+    def _ramp(self, ziel_w: float, aktuell_w: float) -> float:
+        """Gemeinsame Rampe für beide Richtungen (D-055).
 
-    def _ramp_entladen(self, ziel_w: float) -> float:
-        """Erhöhungen und normale Absenkungen laufen über die Schrittbegrenzung.
-
-        Eine eigene Sofort-Schwelle für den Lastabwurf gibt es nicht mehr: die
-        Fälle, die wirklich sofort auf 0 müssen – sicherer Standby, ungültiger
-        Sensor, Richtungswechsel – greifen bereits vor dieser Funktion in
-        calculate_ramp. Fehlt die Schrittbegrenzung, wird das Ziel unmittelbar
-        erreicht.
+        Erhöhen wartet auf hoch_regelzeit_s, Absenken auf runter_regelzeit_s –
+        beim Laden wie beim Entladen, und ein Netzbezug hebt die Wartezeit nicht
+        auf. Die Fälle, die wirklich sofort auf 0 müssen – sicherer Standby,
+        ungültiger Sensor, Totzone, Richtungswechsel – greifen bereits vor dieser
+        Funktion in calculate_ramp. Fehlt die Schrittbegrenzung, wird das Ziel
+        nach Ablauf der Regelzeit unmittelbar erreicht.
         """
-        aktuell = self._entlade_anf_w
-        if ziel_w > aktuell and self._anforderung_age_s < self.hoch_regelzeit_s:
-            return aktuell
-        return self._begrenze_schritt(ziel_w, aktuell)
+        age_s = self._anforderung_age_s
+        if ziel_w > aktuell_w and age_s < self.hoch_regelzeit_s:
+            return aktuell_w
+        if ziel_w < aktuell_w and age_s < self.runter_regelzeit_s:
+            return aktuell_w
+        return self._begrenze_schritt(ziel_w, aktuell_w)
 
-    def calculate_ramp(self, current_deficit_w: float = 0.0) -> None:
+    def calculate_ramp(self) -> None:
         """Löst die Richtung auf, wendet Totzone und Umschaltsperre an, rampt.
 
         Wird vom Controller für ALLE Geräte aufgerufen – die Entladeplanung muss
@@ -2022,11 +2021,11 @@ class BatteryDevice(ControllableDevice):
             self._last_direction_change_ts = self._now_ts
 
         if netto > 0:
-            self._new_lade_w    = self._ramp_laden(netto, current_deficit_w)
+            self._new_lade_w    = self._ramp(netto, self._lade_anf_w)
             self._new_entlade_w = 0.0
         elif netto < 0:
             self._new_lade_w    = 0.0
-            self._new_entlade_w = self._ramp_entladen(-netto)
+            self._new_entlade_w = self._ramp(-netto, self._entlade_anf_w)
         else:
             self._new_lade_w = self._new_entlade_w = 0.0
 
@@ -2080,24 +2079,33 @@ class BatteryDevice(ControllableDevice):
 
         # Totband wie bei ControllableDevice: würde jeden Zyklus derselbe Wert
         # geschrieben, setzte das last_changed zurück und die Rampen-Alterung
-        # wäre kaputt. Zwei Ausnahmen, in denen Geschwindigkeit vorgeht:
-        # Vorzeichenwechsel und das Zurücknehmen einer laufenden Entladung.
-        vorzeichenwechsel  = (neu_signed > 0) != (alt_signed > 0) or (neu_signed < 0) != (alt_signed < 0)
-        entladung_zurueck  = alt_signed < 0 and neu_signed > alt_signed
+        # wäre kaputt. Sofort und ohne Totband gehen nur das Stoppen auf 0 und
+        # ein direkter Richtungswechsel durch. Ein Start aus 0 braucht die
+        # Mindeständerung, und auch das Zurücknehmen einer Entladung unterliegt
+        # dem Totband (D-055).
+        stopp            = neu_signed == 0 and alt_signed != 0
+        richtungswechsel = (neu_signed > 0 > alt_signed) or (neu_signed < 0 < alt_signed)
         # Ein zur Laufzeit inaktiver Speicher schreibt seinen sicheren Zustand
         # bedingungslos: 'nichts tun' liesse den letzten Sollwert stehen.
         erzwungen = not self._runtime_active
-        schreibt_leistung  = erzwungen or (delta > 0 and (
-            vorzeichenwechsel or entladung_zurueck
-            or self.deadband_w <= 0 or delta >= self.deadband_w
-        ))
-        schreibt_betriebsart = erzwungen or self._new_betriebsart != self._betriebsart_anf
+        schreibt_leistung  = erzwungen or stopp or richtungswechsel or (
+            delta > 0 and (self.deadband_w <= 0 or delta >= self.deadband_w))
 
         if not schreibt_leistung:
             # Totband aktiv – die Anzeige soll zeigen, was wirklich in HA steht.
+            # Auch die Betriebsart folgt dem stehenden Wert: ein unterdrückter
+            # Start darf nicht 'laden' mit 0 W melden.
             self._new_lade_w    = self._lade_anf_w
             self._new_entlade_w = self._entlade_anf_w
             neu_signed          = alt_signed
+            if alt_signed == 0:
+                self._new_betriebsart = "standby"
+            elif alt_signed > 0:
+                self._new_betriebsart = "laden"
+            else:
+                self._new_betriebsart = "entladen"
+
+        schreibt_betriebsart = erzwungen or self._new_betriebsart != self._betriebsart_anf
 
         leistung_op = WriteOp("input_number", "set_value", {
             "entity_id": self.entity_anforderung_w,

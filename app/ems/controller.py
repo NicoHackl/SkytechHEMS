@@ -535,8 +535,10 @@ class EMSController:
         self._allocate_discharge(batteries, hausdefizit_w, entlade_abschlag_w)
 
         # ── 11. Rampenbegrenzung ─────────────────────────────────────────
+        # Ohne Defizit-Ausnahme (D-055): auch bei Netzbezug gelten Runter-
+        # Regelzeit und Schrittbegrenzung.
         for device in self._devices:
-            device.calculate_ramp(current_deficit_w)
+            device.calculate_ramp()
 
         # ── 12. Debug-Logging ───────────────────────────────────────────
         if debug_output:

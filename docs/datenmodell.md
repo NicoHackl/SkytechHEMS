@@ -71,9 +71,9 @@ Ampere. `reserve_w` ist **immer** in Watt.
 | `max_technisch_w` / `_a` | W / A | Obere technische Grenze |
 | `geschutzte_mindestleistung_w` / `_a` | W / A | Garantiert reservierter Sockel dieses Geräts |
 | `reserve_w` | W | Zusätzlicher Puffer des Geräts |
-| `hoch_regelzeit_s`, `runter_regelzeit_s` | s | Mindestabstand zwischen Regelschritten; bei Defizit wird sofort heruntergeregelt |
+| `hoch_regelzeit_s`, `runter_regelzeit_s` | s | Mindestabstand zwischen Regelschritten; gilt auch bei Netzbezug (D-055) |
 | `max_anderung_pro_schritt_w` / `_a` | W / A | Maximale Änderung je Zyklus |
-| `min_anderung_pro_schritt_w` / `_a` | W / A | Totband — kleinere Änderungen werden nicht geschrieben |
+| `min_anderung_pro_schritt_w` / `_a` | W / A | Totband — kleinere Änderungen werden nicht geschrieben; Abschalten auf `0` geht immer durch, ein Start aus `0` erst ab dem Totband |
 | `min_umschaltzeit_s` | s | Phasenwechsel-Hysterese; Fallback `phase_switch_delay_s`, dann 30 s. Ein gültiger Wert `0` gilt als „keine Sperrzeit" und wird nicht ersetzt |
 | `force_leistung_w` | W (**immer** Watt) | Zwangsleistung (D-053), nur mit `force: on` wirksam; geklemmt auf `[min_technisch, max_technisch]`, sofort ohne Rampe und Totband geschrieben; das Zwang-Ende springt ebenso sofort auf die Pool-Zuteilung. Fehlend, ungültig oder `0` → Zwang unwirksam |
 | `anforderung_leistung_w` / `_a` **(Ausgabe)** | W / A | Vom EMS geschriebener Sollwert, im Ampere-Modus ganzzahlig abgerundet |
