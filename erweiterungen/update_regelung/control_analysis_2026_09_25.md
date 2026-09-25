@@ -52,7 +52,7 @@ negativen Netzwert (`sensor.netz_leistung_ed`), positiv = Einspeisung.
 - Das Heizstab-Soll-Flattern um 10:09:34–42 (500 ↔ 797 ↔ 487 W) fällt zeitlich mit dem Verstellen
   der Sockel-Helfer zusammen — kein Reglerfehler.
 
-→ **Rückfrage F-7:** Ist das so gewollt?
+→ **F-7 beantwortet:** so gewollt. Kein Handlungsbedarf.
 
 ### 3.2 Mittag: pulsierende Last schaukelt beide Speicher auf (Hauptbefund)
 
@@ -89,7 +89,11 @@ Ursachen im Code (`app/ems/devices.py`, `BatteryDevice.calculate_ramp`):
 | d | Entladeziel = **Momentanwert** des Hausdefizits. Ein 2-s-Puls wird voll ausgeregelt, obwohl der Aktor langsamer ist als der Puls | `_allocate_discharge` im Controller |
 | e | Zwei Speicher teilen sich schnelle Pulse: um 12:13:19 wechselt die Deckung vom AC-Speicher auf den E3DC, der dann ebenfalls mitpendelt | Entladeplanung |
 
-→ **Rückfragen F-1 und F-3.**
+**Nach F-1 und F-3 geklärt:** Die Pulslast ist das **taktende Kochfeld** beim Heizen. Die
+E3DC-eigene Automatikregelung ist abgeschaltet, solange die HEMS-Steuerung aktiv ist; der Sollwert
+geht über den HEMS-Battery-Wrapper an den E3DC. Das HEMS ist damit der **einzige** Regler beider
+Speicher — jede Unruhe im HEMS-Sollwert kommt 1:1 am Gerät an. Eine Aufteilung „HEMS lädt,
+E3DC entlädt selbst" scheidet aus. Umso wichtiger sind R-1 und R-3.
 
 ### 3.3 Nachmittag: Heizlüfter takten, Heizstab schreibt zu oft
 
@@ -106,35 +110,65 @@ Ursachen im Code (`app/ems/devices.py`, `BatteryDevice.calculate_ramp`):
   (gemessen). Überschuss darüber bleibt liegen, bis ein Heizlüfter zuschaltet.
 - **Heizlüfter-Leistung:** konfiguriert 1500 W, gemessen UV1 ≈ 1320–1410 W, UV2 ≈ 1260–1330 W.
 
-### 3.4 Unvollständige Sensor-Verträge
+### 3.4 Sensor-Verträge — geklärt, Doku veraltet
 
-- Die lokale Vorlage
-  `erweiterungen/zusatz_sensor_für_speicher_null_einspeisung/ueberschusssensor_von_ha.yaml` passt
-  **nicht** zu den Live-Werten: Live gilt `residual_w` = Hausleistungsbilanz = −Netz (z. B.
-  18:14 Uhr: Netz −3 W, beide Sensoren 3 W, E3DC-Batterie −12 W). Nach der lokalen Formel müssten
-  Netzhysterese (200 W) und Batterie-Entladung abgezogen sein.
-- [docs/bekannte-luecken.md](../../docs/bekannte-luecken.md) und
-  [docs/konfiguration.md](../../docs/konfiguration.md) beschreiben den E3DC als **kein HEMS-Gerät**,
-  dessen Batterieleistung bewusst in der Hausleistungsbilanz steckt. Inzwischen ist er aber als
-  `e3dc_speicher` (Klasse `battery`) im HEMS und wird über
-  `switch.technik_e3dc_speicher_hems_steuerung` gesteuert. Steckt seine Batterieleistung noch in
-  der Bilanz, würde seine eigene Entladung von `netz_support_w` ein zweites Mal abgezogen
-  (Mitkopplung). Die Live-Werte sprechen dafür, dass die Bilanz inzwischen nur noch −Netz ist —
-  **bestätigt ist das nicht.**
+**F-2 beantwortet:** Überschuss-Sensor und Hausleistungsbilanz sind beide **direkt der
+Netzübergabepunkt**. Damit ist die Rechnung im HEMS korrekt: E3DC und AC-Speicher sind beide
+HEMS-Geräte, ihre Entladung steckt im Netzwert und wird über `netz_support_w` genau einmal
+abgezogen (`speicher_in_residual_enthalten: true` passt). Keine Doppelzählung.
 
-→ **Rückfrage F-2.** Die Doku wird erst nach der Antwort angepasst.
+Veraltet ist dagegen:
+
+- die lokale Vorlage
+  `erweiterungen/zusatz_sensor_für_speicher_null_einspeisung/ueberschusssensor_von_ha.yaml`
+  (Formel mit Netzhysterese, SoC-Stufen und E3DC-Batterie);
+- [docs/bekannte-luecken.md](../../docs/bekannte-luecken.md) („Der E3DC ist **kein** HEMS-Gerät",
+  „Bilanz enthält Netz- plus E3DC-Batterieleistung") und
+  [docs/konfiguration.md](../../docs/konfiguration.md), Abschnitt „Hausleistungsbilanz für
+  AC-Speicher" samt den `700-W`-Kontrollfällen.
+
+→ **Offen (F-9):** Soll die Doku auf „beide Sensoren = Netzübergabepunkt, E3DC ist HEMS-Speicher"
+umgestellt werden? Das ist eine Aussage über das Soll-Konzept, deshalb nicht ohne Freigabe.
 
 ## 4. Datenlage — was schlecht ist und verbessert werden muss
 
 | # | Problem | Folge | Vorschlag |
 |---|---|---|---|
-| D-1 | Recorder zeichnet die **Kern-Regelsensoren nicht auf**: `sensor.verfugbare_leistung_fur_uberschusverbraucher`, `sensor.hausleistung_bilanz_fur_ac_speicher`, `sensor.e3dc_leistung_netz_modbus`, `…_ertrag_gesamt_modbus`, `…_batterie_modbus`, `…_haus_modbus`, `…_netz_einspeisung/_bezug`, `…_batterie_laden/_entladen`, `sensor.elwa_istleistung_modbus`. `sensor.mqtt_ac_speicher_1_leistung` zuletzt am 20.09.2026 um 17:48 | Keine direkte Nachanalyse von PV, Netz und E3DC-Batterie möglich; nur der Umweg über `flow_status` | Mindestens Netz, PV, E3DC-Batterie und die beiden HEMS-Eingangssensoren wieder aufzeichnen (bei Platzsorge: `recorder`-Filter nur für diese, oder Aufbewahrung kurz) |
+| D-1 | Recorder zeichnet die **Kern-Regelsensoren bewusst nicht auf** (F-5): `sensor.e3dc_leistung_netz_modbus`, `…_ertrag_gesamt_modbus`, `…_batterie_modbus`, `…_haus_modbus` u. a. | Keine direkte Nachanalyse von PV, Netz und E3DC-Batterie möglich; nur der Umweg über `flow_status` | Nur **vier** Sensoren wieder aufnehmen, der Rest sind Duplikate — siehe Abschnitt 4.1 |
 | D-2 | Keine `state_class` an den Leistungssensoren (Modbus und Template) | Keine Langzeitstatistik (5-min/Stunde) — Trends über 10 Tage hinaus fehlen | `state_class: measurement` und `device_class: power` setzen |
 | D-3 | `sensor.netz_leistung_ed` nur im 10-s-Raster | Zu grob für die Analyse eines 2-s-Reglers | Für die Analyse `sensor.e3dc_leistung_netz_modbus` aufzeichnen (D-1) |
 | D-4 | `flow_status.devices.<speicher>.leistung_w` ist der **Sollwert**, bei den anderen Geräten der Istwert | Leicht falsch zu lesen; Soll/Ist der Speicher lässt sich nicht vergleichen | Im Status getrennt `soll_w` und `ist_w` führen (siehe R-6) |
-| D-5 | `sensor.e3dc_leistung_batterie_modbus` steht seit 13:17 unverändert auf −12 W | Bei SoC 99 % plausibel (Ruhe), aber ein eingefrorener Wert wäre nicht zu erkennen | Mit dem E3DC-Portal gegenprüfen; im HEMS einen Veraltungs-Check (`last_reported`) erwägen |
-| D-6 | Lokale YAML-Vorlage des Überschuss-Sensors ist veraltet (3.4) | Doku und Analyse arbeiten mit falschem Vertrag | Aktuelle YAML ins Repo legen |
+| D-5 | ~~`sensor.e3dc_leistung_batterie_modbus` stand von 13:17 bis abends auf −12 W~~ | **Erledigt:** abends um 19:00 zeigt er −717 W (Nachtentladung), der Sensor lebt. Die −12 W waren Ruhe bei SoC 99 % | Optional: Veraltungs-Check (`last_reported`) im HEMS |
+| D-6 | Lokale YAML-Vorlage des Überschuss-Sensors und Doku sind veraltet (3.4) | Doku beschreibt einen Vertrag, der nicht mehr gilt | Vorlage löschen oder ersetzen, Doku nach F-9 anpassen |
 | D-7 | Heizlüfter `power_w` 1500 W vs. gemessen ~1300 W; Heizstab-Maximum 3500 W vs. real ~3400 W | Einschaltschwellen und Sockelrechnung zu konservativ | Werte an die Messung angleichen (P-5, P-6) |
+
+### 4.1 Recorder: was wieder aufgezeichnet werden sollte
+
+Am 25.09.2026 abends live verglichen: mehrere ausgeschlossene Sensoren sind reine Duplikate von
+bereits aufgezeichneten. Sie dürfen **ausgeschlossen bleiben**.
+
+**Wieder aufnehmen (Pflicht für jede Regelanalyse):**
+
+| Sensor | Warum |
+|---|---|
+| `sensor.e3dc_leistung_netz_modbus` | Netzübergabepunkt = Überschuss-Sensor = Hausleistungsbilanz. **Die** Regelgröße des HEMS |
+| `sensor.e3dc_leistung_batterie_modbus` | Istleistung des E3DC — ohne ihn lässt sich Soll ↔ Ist und die E3DC-Latenz nicht messen |
+| `sensor.e3dc_leistung_ertrag_gesamt_modbus` | PV — trennt Wolken von Laständerungen |
+| `sensor.e3dc_leistung_haus_modbus` | Hauslast — macht Pulslasten wie das Kochfeld direkt sichtbar |
+
+**Ausgeschlossen lassen (Duplikate):**
+
+| Sensor | Duplikat von (bereits aufgezeichnet bzw. oben neu) |
+|---|---|
+| `sensor.verfugbare_leistung_fur_uberschusverbraucher`, `sensor.hausleistung_bilanz_fur_ac_speicher` | −`sensor.e3dc_leistung_netz_modbus`; zusätzlich als `residual_w` im Flow-Status |
+| `sensor.e3dc_leistung_netz_einspeisung/_bezug`, `…_batterie_laden/_entladen` | Aus Netz- bzw. Batteriesensor abgeleitet |
+| `sensor.mqtt_ac_speicher_1_leistung` | `sensor.shelly_em4_ac_speicher_1_leistung` (identischer Wert, wird aufgezeichnet) |
+| `sensor.elwa_istleistung_modbus` | `sensor.elwa_istleistung` (wird aufgezeichnet) |
+
+Hinweis Datenbankgröße: Die vier Sensoren ändern sich etwa alle 1–2 s. Den größten Posten
+schreibt aber bereits heute `sensor.skytech_hems_flow_status` (~1750 Zeilen/h mit vollem
+Attribut-Block). Wird R-6 umgesetzt, kann man die vier Modbus-Sensoren alternativ weglassen und
+ihre Werte im Flow-Status mitführen. Dann bleibt es bei **einer** aufgezeichneten Entität.
 
 ## 5. Optimierungsvorschläge
 
@@ -175,7 +209,9 @@ Entladung weiterhin den Momentanwert, damit keine Speicherenergie ins Netz geht.
 2–4-s-Puls wird kurz aus dem Netz gedeckt (≈ 2 kW × 3 s ≈ 1,7 Wh je Puls), statt dass
 anschließend 2 kW × 4 s aus dem Speicher eingespeist werden — und der Speicher pendelt nicht.
 Das Fenster als Helfer (`…_entlade_filter_s`) mit Default 0 = heutiges Verhalten, damit nichts
-Bestehendes bricht.
+Bestehendes bricht. Für das taktende Kochfeld (an 2–4 s, Periode ~30 s) reichen **8 s**: länger
+als ein Puls, deutlich kürzer als die Periode. Ein dauerhaft eingeschaltetes Kochfeld wird nach
+8 s voll gedeckt.
 
 **R-4 Ziel 0 durch Totzone rampen statt springen (Befund 3.2 b).**
 Nur wenn R-1 und R-3 nicht reichen: Fällt das Ziel **wegen Totzone** auf 0, gilt
@@ -200,24 +236,26 @@ loggen, wenn der Zustand länger als z. B. 10 s anhält, und höchstens einmal p
 
 ### 5.3 Reihenfolge
 
-1. Rückfragen F-1 bis F-3 klären (Lastquelle, Sensorvertrag, E3DC-Steuerweg).
-2. P-1, P-3, P-4, P-5, P-7, P-8 setzen und einen Tag beobachten.
-3. R-6 umsetzen, damit die Wirkung messbar wird.
-4. R-3, dann R-1 — mit Pflicht-Testfällen für einen 2-s-Puls alle 30 s. R-2 nebenbei.
-5. R-4 und R-5 nur bei Restbedarf.
+1. ~~Rückfragen F-1 bis F-8 klären~~ — erledigt, offen nur F-9 (Doku).
+2. Recorder nach 4.1 erweitern.
+3. P-1, P-3, P-4, P-5, P-7, P-8 setzen und einen Tag beobachten.
+4. R-6 umsetzen, damit die Wirkung messbar wird.
+5. R-3, dann R-1 — mit Pflicht-Testfällen für einen 2-s-Puls alle 30 s. R-2 nebenbei.
+6. R-4 und R-5 nur bei Restbedarf.
 
-## 6. Offene Rückfragen
+## 6. Rückfragen und Antworten (25.09.2026)
 
-| # | Frage | Warum wichtig |
-|---|---|---|
-| F-1 | Was ist die **~2-kW-Last, die mittags alle ~30 s für 2–4 s anspringt** (12:05–12:50, auch 09:54, 10:19, 10:26 und nachts)? Induktionskochfeld, Backofen, Durchlauferhitzer, Pumpe? | Bestimmt die Filterlänge für R-3 und ob die Last überhaupt vom Speicher gedeckt werden soll |
-| F-2 | Wie sind `sensor.verfugbare_leistung_fur_uberschusverbraucher` und `sensor.hausleistung_bilanz_fur_ac_speicher` **heute** definiert (aktuelle YAML)? Steckt die E3DC-Batterie noch in der Bilanz? | Seit der E3DC HEMS-Gerät ist, würde sie sonst doppelt gezählt; Doku muss danach korrigiert werden |
-| F-3 | Schaltet der E3DC bei `switch.technik_e3dc_speicher_hems_steuerung: on` seine **eigene Nulleinspeisung ab**? Über welchen Weg (Automation/Modbus) und mit welcher Latenz kommt der Sollwert an? | Laufen beide Regler parallel, arbeiten sie gegeneinander. Falls der E3DC selbst schnell ausregelt, wäre „HEMS lädt, E3DC entlädt selbst" (Betriebsart `nur_laden`) die stabilere Aufteilung |
-| F-4 | Welche Automation überträgt `input_number.ems_heizstab_anforderung_leistung_w` an den ELWA? `script.hems_postskript` ruft `script.mqtt_test_2` auf, das als YAML-Skript für MCP nicht lesbar ist | Schreibrate auf Modbus (P-4) und Latenz |
-| F-5 | Sind die Recorder-Ausschlüsse (D-1) bewusst (Datenbankgröße)? Welche Sensoren dürfen wieder rein? | Grundlage jeder weiteren Analyse |
-| F-6 | Welche Version läuft? Installiert ist laut Supervisor **2.0.17**, `config.yaml` im Repo sagt **2.0.6**. War D-055 (Commit vom 24.09.2026) heute aktiv? | Befunde 3.2 a–c beziehen sich auf den Code-Stand im Repo |
-| F-7 | Ist gewollt, dass bei `binary_and_controllable` der E3DC (Priorität 1) auf seinem Sockel bleibt, solange niederpriore Geräte ihre Sockel noch nicht voll haben (3.1)? | Sonst müssten Sockel oder Scope angepasst werden |
-| F-8 | Was wurde um 11:34 in der Konfiguration geändert (Neustart über die Konfigurationsseite, Supervisor meldete „nicht erreichbar")? | Ordnet Vormittag und Nachmittag der richtigen Konfiguration zu |
+| # | Frage | Antwort | Folge |
+|---|---|---|---|
+| F-1 | Was ist die ~2-kW-Pulslast? | Hauptsächlich das **Kochfeld**, das beim Heizen taktet | Filterfenster für R-3: 8 s |
+| F-2 | Wie sind Überschuss-Sensor und Hausleistungsbilanz definiert? | Beide sind **direkt der Netzübergabepunkt** | Keine Doppelzählung; Doku und lokale YAML-Vorlage veraltet (3.4) |
+| F-3 | Schaltet der E3DC bei HEMS-Steuerung seine eigene Regelung ab? | **Ja.** Der Sollwert geht über den HEMS-Battery-Wrapper | HEMS ist einziger Regler beider Speicher; R-1/R-3 umso wichtiger |
+| F-4 | Wie kommt der Heizstab-Sollwert zum ELWA? | Das Post-Cycle-Skript schreibt `…_anforderung_leistung_w` direkt auf die Modbus-Adresse | Jeder Sollwertwechsel ist ein Modbus-Schreibvorgang — P-4 senkt die Buslast |
+| F-5 | Sind die Recorder-Ausschlüsse Absicht? | **Ja** | Nur vier Sensoren wieder aufnehmen, siehe 4.1 |
+| F-6 | Welche Version läuft? | Die aktuelle, lokal im Repo verfügbare | Befunde 3.2 a–c gelten für den heutigen Code-Stand inkl. D-055 |
+| F-7 | Ist die Sockel-zuerst-Verteilung gewollt? | **Ja** | Kein Handlungsbedarf |
+| F-8 | Was wurde um 11:34 geändert? | Werte der reservierten Mindestleistung | Kein Einfluss auf die Befunde |
+| F-9 | Doku (`bekannte-luecken.md`, `konfiguration.md`) auf „beide Sensoren = Netzübergabepunkt, E3DC ist HEMS-Speicher" umstellen und die lokale YAML-Vorlage ersetzen? | **offen** | — |
 
 ## 7. Annahmen
 
