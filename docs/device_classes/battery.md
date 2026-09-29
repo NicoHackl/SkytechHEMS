@@ -102,6 +102,37 @@ Die vier [gemeinsamen HA-Helfer](global.md#gemeinsame-ha-helfer) werden ebenfall
 `min_technisch_w` und `max_technisch_w` werden für den Speicher **nicht** gelesen: die Basisklasse
 bekommt ihre Grenzen aus `min_ladeleistung_w` und dem konfigurierten Ladelimit.
 
+### Ladestufen (optional, D-056)
+
+Beliebig viele Stufen begrenzen die **maximale** Ladeleistung abhängig vom SoC. Eine Stufe `<n>`
+(ab `1`, ohne führende Nullen) besteht aus drei Helfern:
+
+| Entität | Einheit | Funktion |
+|---|---|---|
+| `input_boolean.ems_<prefix>_ladestufe_<n>_aktiv` | `on`/`off` | Schaltet die Stufe ein oder aus |
+| `input_number.ems_<prefix>_ladestufe_<n>_soc_prozent` | % (`0`–`100`) | Ab diesem SoC greift die Stufe (SoC ≥ Schwelle) |
+| `input_number.ems_<prefix>_ladestufe_<n>_max_ladeleistung_w` | W (≥ `0`) | Maximale Ladeleistung, solange die Stufe greift |
+
+- **Einlesen:** Das HEMS zählt `n = 1, 2, …` hoch, bis eine Stufe fehlt (höchstens 20). Fehlen
+  alle drei Helfer einer Stufe, ist die Liste regulär zu Ende.
+- **Lücke:** Fehlt nur einer der drei Helfer, ist er `unavailable`/`unknown` oder ungültig (SoC
+  außerhalb `0`–`100`, negative Leistung, kein Schalterwert), ist die Stufe eine Lücke. Die Liste
+  endet dort; **spätere Stufen wirken nicht**. Die Statuskarte zeigt Stufe und Helfer an.
+- **Schalter `off`** ist keine Lücke: die Stufe greift nur nicht, die Liste läuft weiter.
+- **Auswahl:** Es greifen alle eingeschalteten Stufen, deren Schwelle der SoC erreicht hat. Die
+  **kleinste** Maximal-Ladeleistung gewinnt; die Reihenfolge der Stufen ist damit egal.
+- **Wirkung:** `lade_limit = min(available_charge_power_w, Stufenmaximum)`. Ein sinkendes Limit
+  gilt sofort, ein steigendes läuft über Hoch-Regelzeit und Schrittbegrenzung. Überschuss oberhalb
+  des Limits geht an die nachrangigen Verbraucher.
+- Liegt das Stufenmaximum unter `min_ladeleistung_w`, rastet die Anforderung auf `0 W`.
+- Ein Stufenmaximum von `0 W` sperrt den Ladepfad mit dem Sperrgrund `ladestufe`.
+- Keine SoC-Hysterese. Bei ungültigem SoC wird keine Stufe ausgewertet (Laden ist ohnehin gesperrt).
+- Die Stufen wirken unabhängig von `source` (`user` oder `ep`). Der Energy Pilot liefert dafür
+  **noch keine** Vorschläge, und die Helfer stehen bewusst nicht im Steuerschema
+  (`GET /api/device_controls_schema`), weil ihre Anzahl dynamisch ist.
+- Das wirksame Ergebnis steht zusätzlich im Sensor `sensor.ems_<prefix>_lade_limit_w`
+  (siehe [Ladelimit-Sensor](#ladelimit-sensor-d-057)).
+
 ### Entfallene Helfer
 
 Diese Entitäten werden nicht mehr gelesen und haben keine Wirkung mehr. Sie dürfen gelöscht werden:
@@ -120,6 +151,35 @@ Die beiden `available_*_w`-Felder ersetzen die entfallenen Maximalleistungs-Helf
 (`soc_reserve_prozent`), Drosselband (`soc_taper_band_prozent`) und Entlade-Sofort-Schwelle
 (`entlade_sofort_schwelle_w`) **entfallen ersatzlos**; Hysterese und Umschaltsperre sind jetzt
 statische Add-on-Felder.
+
+## Ladelimit-Sensor (D-057)
+
+Nach jedem Regelzyklus schreibt das Add-on je Speicher einen reinen Anzeige-Sensor über
+`POST /api/states`. Ein Schalter dafür existiert nicht: jeder `class: battery` bekommt ihn.
+
+| Entität | State | Einheit |
+|---|---|---|
+| `sensor.ems_<prefix>_lade_limit_w` | Wirksames Ladelimit des Zyklus, auf ganze Watt gerundet | W |
+
+Der State ist genau das Limit, mit dem die Regelung im selben Zyklus rechnet (Statusfeld
+`lade_limit_w`): `available_charge_power_w`, gegebenenfalls gesenkt durch eine greifende Ladestufe,
+und `0`, wenn `laden_erlaubt` aus ist, der SoC-Deckel erreicht ist oder der SoC ungültig ist.
+Freigabe, Betriebsart und Regelzeiten fließen **nicht** ein — sie bestimmen, ob und wie schnell
+geladen wird, nicht wie viel höchstens.
+
+| Attribut | Quelle im Status | Bedeutung |
+|---|---|---|
+| `ladestufe_aktiv` | `ladestufe_aktiv` | Nummer der greifenden Ladestufe, sonst `null` |
+| `ladestufe_max_w` | `ladestufe_max_w` | Maximum der greifenden Stufe, sonst `null` |
+| `wr_max_ladeleistung_w` | `max_ladeleistung_w` | Statische Grenze `available_charge_power_w` |
+| `blockiert_grund` | `lade_blockiert_grund` | Erster Sperrgrund des Ladepfads, sonst `null` |
+| `soc_prozent` | `soc_prozent` | SoC des Zyklus |
+
+Dazu `unit_of_measurement: W`, `device_class: power`, `state_class: measurement`. Die Attribute
+tragen keinen Zeitstempel: solange sich nichts ändert, zeichnet Home Assistant keine neue
+Zustandsänderung auf. Per `POST /api/states` erzeugte Entitäten überleben keinen HA-Neustart; da
+jeder Zyklus schreibt, ist der Sensor spätestens ein Regelintervall später wieder da. Beispiel
+Präfix `e3dc_speicher`: `sensor.ems_e3dc_speicher_lade_limit_w`.
 
 ## Externe, nur gelesene Entitäten
 

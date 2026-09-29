@@ -19,6 +19,7 @@ from config_service import ConfigProblem, ConfigService
 from configuration import GLOBAL_DEFAULTS, parse_modes, validate_options
 from ha_client import HAClient
 from ems import EMSController, StateProxy
+import battery_publisher
 import flow_publisher
 from flow_publisher import FlowPublisher
 from supervisor_client import SupervisorClient
@@ -497,6 +498,8 @@ class HEMSApp:
                 now=self._last_cycle_at,
                 interval_s=self.interval_s,
             )
+            # Wirksames Ladelimit je Speicher als Anzeige-Sensor (D-057).
+            await battery_publisher.publish_battery_limits(self.ha, result["status"])
             self._last_cycle_at_iso = now.replace(microsecond=0).isoformat()
             log.debug("Cycle %d completed.", self._cycle_count)
         except Exception as exc:

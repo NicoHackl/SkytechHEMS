@@ -68,3 +68,28 @@ input_number:
     unit_of_measurement: "W"
     mode: box
     initial: 0
+
+  # Optionale Ladestufen (D-056) — bewusst auskommentiert: angelegt begrenzen sie sofort die
+  # Ladeleistung. Je Stufe gehören drei Helfer zusammen (dazu input_boolean
+  # ems_acspeicher1_ladestufe_<n>_aktiv); fehlt einer, endet die Stufenliste dort.
+  # Werte sind Beispiele, keine Empfehlung.
+  #
+  # ems_acspeicher1_ladestufe_1_soc_prozent:
+  #   name: "EMS Speicher 1 Ladestufe 1 SoC"
+  #   icon: mdi:battery-arrow-up
+  #   min: 0
+  #   max: 100
+  #   step: 5
+  #   unit_of_measurement: "%"
+  #   mode: slider
+  #
+  # ems_acspeicher1_ladestufe_1_max_ladeleistung_w:
+  #   name: "EMS Speicher 1 Ladestufe 1 max. Ladeleistung"
+  #   icon: mdi:battery-arrow-up
+  #   min: 0
+  #   max: 2500
+  #   step: 50
+  #   unit_of_measurement: "W"
+  #   mode: box
+  #
+  # Stufe 2 analog: ems_acspeicher1_ladestufe_2_soc_prozent / _2_max_ladeleistung_w

@@ -157,6 +157,10 @@ Ein Zyklus (`EMSController.run_cycle()`), ausgelöst alle `interval_s` Sekunden:
     geändert hat oder sie im Zustandsabbild fehlt — Letzteres deckt den HA-Neustart ab, nach dem
     per `POST /api/states` erzeugte Entitäten verschwinden. Datenvertrag:
     [`vertrag_powerflow_card_hems/kontrakt.md`](../vertrag_powerflow_card_hems/kontrakt.md).
+15. **Ladelimit der Speicher veröffentlichen** (`app/battery_publisher.py`, immer): je Speicher
+    `sensor.ems_<prefix>_lade_limit_w` aus dem Statusfeld `lade_limit_w` (D-057). Gleiche
+    Grenzen wie Schritt 14: nach dem Zyklus, ohne eigene HA-Abfrage, ohne Regelentscheidung,
+    jeder Fehler wird verschluckt.
 
 Zwischen Schritt 2 und 3 steht ein hartes Gate: **Schreibziel-Gesundheit.** Für jedes Gerät wird
 geprüft, ob seine Ausgabe-Entitäten im Schnappschuss vorhanden, verfügbar, von der richtigen Domain
@@ -215,7 +219,7 @@ Zusagen, auf die sich der gesamte Code verlässt. Wer eine davon bricht, bricht 
 4. **Im Regelpfad werden ausschließlich `input_*`-Helfer geschrieben.** Reale Geräte schaltet
    Home Assistant. Darüber hinaus veröffentlicht das Add-on reine Anzeigedaten als eigene
    `sensor.*`-Entitäten, die kein Gerät schalten und in keiner Regelentscheidung vorkommen
-   (D-046). Der Regelpfad selbst bleibt davon unberührt.
+   (D-046, D-057). Der Regelpfad selbst bleibt davon unberührt.
 5. **Ein Zyklusfehler schaltet nichts.** Schlägt der Zyklus fehl, bleibt der letzte Sollwert
    stehen; die Anlage fällt nicht in einen undefinierten Zustand.
 6. **Ein Speicher lädt und entlädt nie gleichzeitig.** Sein einzelner signierter Sollwert und die

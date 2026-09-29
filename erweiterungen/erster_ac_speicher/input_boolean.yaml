@@ -26,3 +26,13 @@ input_boolean:
     name: "EMS Speicher 1 Entladen erlaubt"
     icon: mdi:home-battery
     initial: on
+
+  # Optionale Ladestufen (D-056) — bewusst auskommentiert, siehe input_number.yaml.
+  #
+  # ems_acspeicher1_ladestufe_1_aktiv:
+  #   name: "EMS Speicher 1 Ladestufe 1 aktiv"
+  #   icon: mdi:battery-arrow-up
+  #
+  # ems_acspeicher1_ladestufe_2_aktiv:
+  #   name: "EMS Speicher 1 Ladestufe 2 aktiv"
+  #   icon: mdi:battery-arrow-up

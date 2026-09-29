@@ -16,6 +16,11 @@ Stand: 15.09.2026.
 
 Dinge, die schon einmal Zeit gekostet haben:
 
+- **Verwaister Ladelimit-Sensor.** Wird ein Speicher aus der Konfiguration entfernt oder sein
+  Präfix geändert, bleibt `sensor.ems_<alter_prefix>_lade_limit_w` mit dem letzten Wert stehen,
+  bis Home Assistant neu startet. Das HEMS löscht keine Entitäten (D-057). Ebenso bleibt der
+  Wert stehen, wenn ein Zyklus fehlschlägt oder das Add-on steht — der Sensor zeigt dann nicht
+  „unbekannt“, sondern den Stand des letzten erfolgreichen Zyklus.
 - **`force` heißt Zwang, nicht Fremdsteuerung.** Seit D-053 bezeichnet `force` ausschließlich
   den Zwang-Helfer `ems_<prefix>_force`. Das frühere „Force-Modus" — Schalter extern an, ohne
   HEMS-Anforderung — heißt in Code und Doku **Fremdsteuerung**; die Testnamen
