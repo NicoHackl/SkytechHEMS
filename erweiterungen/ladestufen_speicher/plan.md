@@ -32,6 +32,8 @@ Ladeleistung SoC-abhängig begrenzen. Ohne Stufen-Helfer ändert sich nichts.
    Maximum** — die Reihenfolge der Stufen ist damit egal.
 3. Einlesen durch **Hochzählen ab 1 bis zur ersten Lücke**.
 4. **Keine** SoC-Hysterese; Rampe und Totband dämpfen.
+5. Fehlt einer der drei Helfer einer Stufe oder ist er ungültig, gilt das als Lücke (29.09.2026).
+6. Energy Pilot vorerst außen vor (29.09.2026).
 
 ## Namenskonvention (Vorschlag)
 
@@ -64,23 +66,25 @@ lade_limit = min(available_charge_power_w, stufen_max)   # ohne passende Stufe: 
 ## Einlesen
 
 - In `BatteryDevice.update_from_ha()` je Zyklus: `n = 1, 2, …` lesen, bis eine Stufe **fehlt**.
-- Eine Stufe „existiert“, wenn der SoC-Helfer existiert (Anker). Fehlt er → Ende der Liste.
+- Eine Stufe ist nur vorhanden, wenn **alle drei** Helfer existieren und einen gültigen State haben.
+  Fehlt einer, ist er `unavailable`/`unknown` oder nicht auswertbar, ist die Stufe inaktiv und
+  wird wie eine Lücke behandelt → **Ende der Liste**; spätere Stufen wirken nicht.
+- Ein gültiger Schalter `off` ist keine Lücke: die Stufe greift nur nicht, die Liste läuft weiter.
 - Obergrenze als Schutz: höchstens 20 Stufen.
+- Eine abgebrochene Liste erscheint als Diagnose im Status (welche Stufe, welcher Helfer).
 
-## Annahmen — bitte bestätigen
+## Energy Pilot
 
-| # | Fall | Vorschlag |
-|---|---|---|
-| A1 | Schalter fehlt, SoC- und Max-Helfer vorhanden | Stufe gilt als **aktiv** (analog `laden_erlaubt`: nie angelegt = keine Zusatzbedingung) |
-| A2 | Schalter `unavailable`/ungültig | Stufe gilt als **aktiv** — die strengere Grenze ist der sichere Zustand |
-| A3 | SoC- oder Max-Wert `unavailable`/ungültig | Stufe wird ignoriert, Diagnose im Status |
-| A4 | Max-Helfer fehlt ganz | wie Lücke → Ende der Liste |
-| A5 | Energy Pilot | liefert keine Stufenvorschläge; physische Grenzen bleiben HA/Add-on-Sache |
+Vorerst **nur im HEMS**: der EP liefert keine Stufenvorschläge. Geplant für später (nicht Teil
+dieses Arbeitspakets): Der EP setzt Ladestufen und `min_ladeleistung_w` für alle Speicher anhand
+der Prognose und gibt so Leistung für Überschussverbraucher frei, sobald feststeht, dass die
+Speicher über den Tag voll werden.
 
 ## Status und Oberfläche
 
 - Neue Statusfelder je Speicher: `ladestufe_aktiv` (Nummer oder `null`), `ladestufe_max_w`,
-  `ladestufen` (Liste mit `n`, `aktiv`, `soc_prozent`, `max_w`, `gueltig`, `greift`).
+  `ladestufen` (Liste mit `n`, `aktiv`, `soc_prozent`, `max_w`, `greift`), `ladestufen_abbruch`
+  (Stufe und Helfer, an dem die Liste endete, sonst `null`).
 - `web/src/pages/Status.tsx`: Zeile „Laden ≤ …“ um „(Stufe n)“ ergänzen; `types.ts` erweitern.
 - Keine Bearbeitung in der Oberfläche — gepflegt wird über die HA-Helfer.
 
@@ -88,8 +92,8 @@ lade_limit = min(available_charge_power_w, stufen_max)   # ohne passende Stufe: 
 
 - keine Stufen → Verhalten wie bisher
 - eine Stufe über/unter Schwelle; mehrere passend → kleinstes Maximum
-- Lücke (Stufe 1, 3 vorhanden → nur 1 wirkt); Schalter aus
-- A1–A3; Max `0` → Sperrgrund `ladestufe`; Limit sinkt sofort, steigt über Rampe
+- Lücke (Stufe 1, 3 vorhanden → nur 1 wirkt); Schalter `off` → übersprungen, Liste läuft weiter
+- ein Helfer fehlt / `unavailable` / ungültig → Ende der Liste ab dieser Stufe; Max `0` → Sperrgrund `ladestufe`; Limit sinkt sofort, steigt über Rampe
 - Überschuss oberhalb des Stufenmaximums geht an nachrangige Verbraucher
 
 ## Doku und Pflichten im selben Arbeitspaket
