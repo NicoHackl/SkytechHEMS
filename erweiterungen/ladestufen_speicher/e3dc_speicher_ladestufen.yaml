@@ -1,0 +1,85 @@
+# Skytech HEMS — Ladestufen-Helfer (D-056) für den Speicher mit Präfix e3dc_speicher
+# Grundlage: plan.md in diesem Ordner. Format: HA-Package (input_boolean + input_number in einer
+# Datei), z. B. als packages/e3dc_speicher_ladestufen.yaml einbinden.
+#
+# Je Stufe gehören drei Helfer zusammen: aktiv, SoC-Schwelle, max. Ladeleistung. Fehlt einer oder
+# ist er ungültig, endet die Stufenliste dort. Eine Stufe greift bei SoC ≥ Schwelle; passen
+# mehrere aktive Stufen, gilt das kleinste Maximum.
+#
+# Technische max. Ladeleistung des Speichers: 6000 W → Obergrenze der Leistungs-Helfer.
+#
+# Bewusst ohne "initial": Home Assistant stellt so nach jedem Neustart den zuletzt gesetzten Wert
+# wieder her. Beim ersten Anlegen stehen die Schalter auf "aus" und die Zahlen auf 0 — erst
+# Schwelle und Leistung eintragen, dann die Stufe einschalten. Eine eingeschaltete Stufe mit
+# 0 % / 0 W sperrt das Laden vollständig.
+
+input_boolean:
+  ems_e3dc_speicher_ladestufe_1_aktiv:
+    name: "EMS E3DC Speicher Ladestufe 1 aktiv"
+    icon: mdi:battery-arrow-up
+
+  ems_e3dc_speicher_ladestufe_2_aktiv:
+    name: "EMS E3DC Speicher Ladestufe 2 aktiv"
+    icon: mdi:battery-arrow-up
+
+  ems_e3dc_speicher_ladestufe_3_aktiv:
+    name: "EMS E3DC Speicher Ladestufe 3 aktiv"
+    icon: mdi:battery-arrow-up
+
+input_number:
+  # Stufe 1
+  ems_e3dc_speicher_ladestufe_1_soc_prozent:
+    name: "EMS E3DC Speicher Ladestufe 1 SoC"
+    icon: mdi:battery-arrow-up
+    min: 0
+    max: 100
+    step: 1
+    unit_of_measurement: "%"
+    mode: box
+
+  ems_e3dc_speicher_ladestufe_1_max_ladeleistung_w:
+    name: "EMS E3DC Speicher Ladestufe 1 max. Ladeleistung"
+    icon: mdi:battery-arrow-up
+    min: 0
+    max: 6000
+    step: 50
+    unit_of_measurement: "W"
+    mode: box
+
+  # Stufe 2
+  ems_e3dc_speicher_ladestufe_2_soc_prozent:
+    name: "EMS E3DC Speicher Ladestufe 2 SoC"
+    icon: mdi:battery-arrow-up
+    min: 0
+    max: 100
+    step: 1
+    unit_of_measurement: "%"
+    mode: box
+
+  ems_e3dc_speicher_ladestufe_2_max_ladeleistung_w:
+    name: "EMS E3DC Speicher Ladestufe 2 max. Ladeleistung"
+    icon: mdi:battery-arrow-up
+    min: 0
+    max: 6000
+    step: 50
+    unit_of_measurement: "W"
+    mode: box
+
+  # Stufe 3
+  ems_e3dc_speicher_ladestufe_3_soc_prozent:
+    name: "EMS E3DC Speicher Ladestufe 3 SoC"
+    icon: mdi:battery-arrow-up
+    min: 0
+    max: 100
+    step: 1
+    unit_of_measurement: "%"
+    mode: box
+
+  ems_e3dc_speicher_ladestufe_3_max_ladeleistung_w:
+    name: "EMS E3DC Speicher Ladestufe 3 max. Ladeleistung"
+    icon: mdi:battery-arrow-up
+    min: 0
+    max: 6000
+    step: 50
+    unit_of_measurement: "W"
+    mode: box
