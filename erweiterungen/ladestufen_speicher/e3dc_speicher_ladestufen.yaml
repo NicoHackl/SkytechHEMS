@@ -12,6 +12,8 @@
 # wieder her. Beim ersten Anlegen stehen die Schalter auf "aus" und die Zahlen auf 0 — erst
 # Schwelle und Leistung eintragen, dann die Stufe einschalten. Eine eingeschaltete Stufe mit
 # 0 % / 0 W sperrt das Laden vollständig.
+#
+# Das wirksame Ergebnis veröffentlicht das HEMS als sensor.ems_e3dc_speicher_lade_limit_w (D-057).
 
 input_boolean:
   ems_e3dc_speicher_ladestufe_1_aktiv:

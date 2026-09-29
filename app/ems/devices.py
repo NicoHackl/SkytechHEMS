@@ -2212,6 +2212,7 @@ class BatteryDevice(ControllableDevice):
         d: Dict = {
             "type":                  "battery",
             "id":                    self.id,
+            "entity_prefix":         self._entity_prefix,
             "label":                 self.label,
             "priority":              self.priority,
             "entlade_prioritat":     self.entlade_priority,

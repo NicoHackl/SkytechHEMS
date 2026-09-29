@@ -10,6 +10,12 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ### Hinzugefügt
 
+- **Ladelimit-Sensor je AC-Speicher (D-057).** Nach jedem Regelzyklus schreibt das Add-on für
+  jeden Speicher `sensor.ems_<prefix>_lade_limit_w` nach Home Assistant — z. B.
+  `sensor.ems_e3dc_speicher_lade_limit_w`. Der Wert ist genau die maximale Ladeleistung, mit der
+  das HEMS im selben Zyklus rechnet: Wechselrichtergrenze, gesenkt durch eine greifende Ladestufe,
+  und `0 W`, wenn Laden gesperrt oder der SoC-Deckel erreicht ist. Greifende Stufe, WR-Grenze,
+  Sperrgrund und SoC stehen als Attribute. Immer aktiv, keine neue Option.
 - **Ladestufen für AC-Speicher (D-056).** Optional je Speicher beliebig viele Stufen aus
   `input_boolean.ems_<prefix>_ladestufe_<n>_aktiv`, `input_number.ems_<prefix>_ladestufe_<n>_soc_prozent`
   und `input_number.ems_<prefix>_ladestufe_<n>_max_ladeleistung_w`. Ab der SoC-Schwelle begrenzt

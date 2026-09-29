@@ -126,9 +126,10 @@ class HAClient:
                         attributes: Optional[Dict[str, Any]] = None) -> bool:
         """Schreibt einen Zustand direkt in die HA-Zustandsmaschine.
 
-        Ausschließlich für die Anzeigedaten der Flow Card (D-046). Der Regelpfad
-        schreibt weiterhin nur input_*-Helfer über Service-Aufrufe; die hier
-        erzeugten sensor.*-Entitäten schalten kein Gerät.
+        Ausschließlich für Anzeigedaten: die Flow Card (D-046) und das wirksame
+        Ladelimit je Speicher (D-057). Der Regelpfad schreibt weiterhin nur
+        input_*-Helfer über Service-Aufrufe; die hier erzeugten sensor.*-Entitäten
+        schalten kein Gerät.
 
         Wirft nie: ein fehlgeschlagener Anzeigeschrieb darf den Regelzyklus
         nicht abbrechen. Liefert True bei Erfolg, sonst False.

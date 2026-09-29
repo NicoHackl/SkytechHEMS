@@ -130,6 +130,8 @@ Beliebig viele Stufen begrenzen die **maximale** Ladeleistung abhängig vom SoC.
 - Die Stufen wirken unabhängig von `source` (`user` oder `ep`). Der Energy Pilot liefert dafür
   **noch keine** Vorschläge, und die Helfer stehen bewusst nicht im Steuerschema
   (`GET /api/device_controls_schema`), weil ihre Anzahl dynamisch ist.
+- Das wirksame Ergebnis steht zusätzlich im Sensor `sensor.ems_<prefix>_lade_limit_w`
+  (siehe [Ladelimit-Sensor](#ladelimit-sensor-d-057)).
 
 ### Entfallene Helfer
 
@@ -149,6 +151,35 @@ Die beiden `available_*_w`-Felder ersetzen die entfallenen Maximalleistungs-Helf
 (`soc_reserve_prozent`), Drosselband (`soc_taper_band_prozent`) und Entlade-Sofort-Schwelle
 (`entlade_sofort_schwelle_w`) **entfallen ersatzlos**; Hysterese und Umschaltsperre sind jetzt
 statische Add-on-Felder.
+
+## Ladelimit-Sensor (D-057)
+
+Nach jedem Regelzyklus schreibt das Add-on je Speicher einen reinen Anzeige-Sensor über
+`POST /api/states`. Ein Schalter dafür existiert nicht: jeder `class: battery` bekommt ihn.
+
+| Entität | State | Einheit |
+|---|---|---|
+| `sensor.ems_<prefix>_lade_limit_w` | Wirksames Ladelimit des Zyklus, auf ganze Watt gerundet | W |
+
+Der State ist genau das Limit, mit dem die Regelung im selben Zyklus rechnet (Statusfeld
+`lade_limit_w`): `available_charge_power_w`, gegebenenfalls gesenkt durch eine greifende Ladestufe,
+und `0`, wenn `laden_erlaubt` aus ist, der SoC-Deckel erreicht ist oder der SoC ungültig ist.
+Freigabe, Betriebsart und Regelzeiten fließen **nicht** ein — sie bestimmen, ob und wie schnell
+geladen wird, nicht wie viel höchstens.
+
+| Attribut | Quelle im Status | Bedeutung |
+|---|---|---|
+| `ladestufe_aktiv` | `ladestufe_aktiv` | Nummer der greifenden Ladestufe, sonst `null` |
+| `ladestufe_max_w` | `ladestufe_max_w` | Maximum der greifenden Stufe, sonst `null` |
+| `wr_max_ladeleistung_w` | `max_ladeleistung_w` | Statische Grenze `available_charge_power_w` |
+| `blockiert_grund` | `lade_blockiert_grund` | Erster Sperrgrund des Ladepfads, sonst `null` |
+| `soc_prozent` | `soc_prozent` | SoC des Zyklus |
+
+Dazu `unit_of_measurement: W`, `device_class: power`, `state_class: measurement`. Die Attribute
+tragen keinen Zeitstempel: solange sich nichts ändert, zeichnet Home Assistant keine neue
+Zustandsänderung auf. Per `POST /api/states` erzeugte Entitäten überleben keinen HA-Neustart; da
+jeder Zyklus schreibt, ist der Sensor spätestens ein Regelintervall später wieder da. Beispiel
+Präfix `e3dc_speicher`: `sensor.ems_e3dc_speicher_lade_limit_w`.
 
 ## Externe, nur gelesene Entitäten
 
