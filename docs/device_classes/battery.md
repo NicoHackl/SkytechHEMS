@@ -102,6 +102,35 @@ Die vier [gemeinsamen HA-Helfer](global.md#gemeinsame-ha-helfer) werden ebenfall
 `min_technisch_w` und `max_technisch_w` werden für den Speicher **nicht** gelesen: die Basisklasse
 bekommt ihre Grenzen aus `min_ladeleistung_w` und dem konfigurierten Ladelimit.
 
+### Ladestufen (optional, D-056)
+
+Beliebig viele Stufen begrenzen die **maximale** Ladeleistung abhängig vom SoC. Eine Stufe `<n>`
+(ab `1`, ohne führende Nullen) besteht aus drei Helfern:
+
+| Entität | Einheit | Funktion |
+|---|---|---|
+| `input_boolean.ems_<prefix>_ladestufe_<n>_aktiv` | `on`/`off` | Schaltet die Stufe ein oder aus |
+| `input_number.ems_<prefix>_ladestufe_<n>_soc_prozent` | % (`0`–`100`) | Ab diesem SoC greift die Stufe (SoC ≥ Schwelle) |
+| `input_number.ems_<prefix>_ladestufe_<n>_max_ladeleistung_w` | W (≥ `0`) | Maximale Ladeleistung, solange die Stufe greift |
+
+- **Einlesen:** Das HEMS zählt `n = 1, 2, …` hoch, bis eine Stufe fehlt (höchstens 20). Fehlen
+  alle drei Helfer einer Stufe, ist die Liste regulär zu Ende.
+- **Lücke:** Fehlt nur einer der drei Helfer, ist er `unavailable`/`unknown` oder ungültig (SoC
+  außerhalb `0`–`100`, negative Leistung, kein Schalterwert), ist die Stufe eine Lücke. Die Liste
+  endet dort; **spätere Stufen wirken nicht**. Die Statuskarte zeigt Stufe und Helfer an.
+- **Schalter `off`** ist keine Lücke: die Stufe greift nur nicht, die Liste läuft weiter.
+- **Auswahl:** Es greifen alle eingeschalteten Stufen, deren Schwelle der SoC erreicht hat. Die
+  **kleinste** Maximal-Ladeleistung gewinnt; die Reihenfolge der Stufen ist damit egal.
+- **Wirkung:** `lade_limit = min(available_charge_power_w, Stufenmaximum)`. Ein sinkendes Limit
+  gilt sofort, ein steigendes läuft über Hoch-Regelzeit und Schrittbegrenzung. Überschuss oberhalb
+  des Limits geht an die nachrangigen Verbraucher.
+- Liegt das Stufenmaximum unter `min_ladeleistung_w`, rastet die Anforderung auf `0 W`.
+- Ein Stufenmaximum von `0 W` sperrt den Ladepfad mit dem Sperrgrund `ladestufe`.
+- Keine SoC-Hysterese. Bei ungültigem SoC wird keine Stufe ausgewertet (Laden ist ohnehin gesperrt).
+- Die Stufen wirken unabhängig von `source` (`user` oder `ep`). Der Energy Pilot liefert dafür
+  **noch keine** Vorschläge, und die Helfer stehen bewusst nicht im Steuerschema
+  (`GET /api/device_controls_schema`), weil ihre Anzahl dynamisch ist.
+
 ### Entfallene Helfer
 
 Diese Entitäten werden nicht mehr gelesen und haben keine Wirkung mehr. Sie dürfen gelöscht werden:

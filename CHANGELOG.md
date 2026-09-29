@@ -10,6 +10,14 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ### Hinzugefügt
 
+- **Ladestufen für AC-Speicher (D-056).** Optional je Speicher beliebig viele Stufen aus
+  `input_boolean.ems_<prefix>_ladestufe_<n>_aktiv`, `input_number.ems_<prefix>_ladestufe_<n>_soc_prozent`
+  und `input_number.ems_<prefix>_ladestufe_<n>_max_ladeleistung_w`. Ab der SoC-Schwelle begrenzt
+  eine eingeschaltete Stufe die maximale Ladeleistung; greifen mehrere, gilt das kleinste
+  Maximum. Der Überschuss darüber geht an die nachrangigen Verbraucher. Gelesen wird ab Stufe 1
+  bis zur ersten Lücke — ein fehlender oder ausgefallener Helfer beendet die Liste. Die
+  Statuskarte zeigt die greifende Stufe in der Zeile „Limits" und einen Hinweis, wenn die Liste an
+  einer unvollständigen Stufe abbricht; neuer Sperrgrund „Ladestufe begrenzt auf 0 W".
 - **Einschaltverzögerung für binäre Geräte (D-054).** Neuer optionaler Helfer
   `input_number.ems_<prefix>_einschaltverzogerung_s` (Add-on-Fallback `on_delay_s`, Default `0`):
   Ein Binärgerät schaltet erst ein, wenn der Überschuss und alle übrigen Bedingungen so lange

@@ -6,7 +6,7 @@ import { Icon } from '../components/Icon'
 import { fmtDur, fmtW, modeLabel } from '../format'
 import type {
   BatteryDevice, BinaryDevice, ControllableDevice, CycleStatus, Device,
-  InactiveDeviceIssue, StatusResponse,
+  InactiveDeviceIssue, LadestufenAbbruch, StatusResponse,
 } from '../types'
 
 /* Live-Anzeige des letzten Regelzyklus.
@@ -441,10 +441,18 @@ const BLOCK_LABELS: Record<string, string> = {
   soc_min: 'SoC-Minimum erreicht',
   soc_max: 'SoC-Maximum erreicht',
   wr_derating: 'Verfügbare Leistung ist auf 0 W gesetzt',
+  ladestufe: 'Ladestufe begrenzt auf 0 W',
   netzladen: 'Netzladen aktiv',
   hausdefizit: 'Hausdefizit – Laden gesperrt',
   umschaltsperre: 'Umschaltsperre',
   totzone: 'Totzone um Null',
+}
+
+/* Warum eine Ladestufe als Lücke gilt und die Liste dort endet (D-056). */
+const ABBRUCH_LABELS: Record<LadestufenAbbruch['state'], string> = {
+  missing: 'Helfer fehlt',
+  unavailable: 'Helfer nicht verfügbar',
+  invalid: 'Helfer ungültig',
 }
 
 function blockLabel(grund: string | null): string | null {
@@ -528,10 +536,24 @@ function BatteryCard({ device, elapsed }: { device: BatteryDevice; elapsed: numb
       ) : null}
       <KeyValue
         label="Limits"
-        value={`Laden ≤ ${limitText(device.lade_limit_w, device.lade_limit_gueltig)} · `
-               + `Entladen ≤ ${limitText(device.entlade_limit_w, device.entlade_limit_gueltig)}`}
+        value={`Laden ≤ ${limitText(device.lade_limit_w, device.lade_limit_gueltig)}`
+               + (device.ladestufe_aktiv != null ? ` (Stufe ${device.ladestufe_aktiv})` : '')
+               + ` · Entladen ≤ ${limitText(device.entlade_limit_w, device.entlade_limit_gueltig)}`}
         tone={device.lade_limit_gueltig && device.entlade_limit_gueltig ? 'muted' : 'warn'}
       />
+      {device.ladestufen_abbruch ? (
+        <KeyValue
+          label="Ladestufen"
+          value={
+            <>
+              {`Stufe ${device.ladestufen_abbruch.stufe} unvollständig – `
+                + `${ABBRUCH_LABELS[device.ladestufen_abbruch.state]}, spätere Stufen wirken nicht `}
+              <span className="mono helper-entity">{device.ladestufen_abbruch.entity}</span>
+            </>
+          }
+          tone="warn"
+        />
+      ) : null}
       {device.energie_kwh != null ? (
         <KeyValue
           label="Energie"

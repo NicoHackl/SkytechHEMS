@@ -124,6 +124,13 @@ export interface BatteryDevice extends DeviceBase {
   /** Derselbe Wert nach Freigaben und SoC-Grenzen. */
   lade_limit_w: number
   entlade_limit_w: number
+  /** Optionale Ladestufen (D-056), gelesen bis zur ersten Lücke. */
+  ladestufen: Ladestufe[]
+  /** Nummer der Stufe, die gerade die Ladeleistung begrenzt; null = keine. */
+  ladestufe_aktiv: number | null
+  ladestufe_max_w: number | null
+  /** Unvollständige Stufe, an der die Liste endete — spätere Stufen wirken nicht. */
+  ladestufen_abbruch: LadestufenAbbruch | null
   /** Vom Controller zugeteilter Anteil am Hausdefizit. */
   hausdefizit_anteil_w: number
   schutz_w: number
@@ -143,6 +150,21 @@ export interface BatteryDevice extends DeviceBase {
   entlade_blockiert_grund: string | null
   /** Grund auf Auflösungsebene: umschaltsperre oder totzone. */
   blockiert_grund: string | null
+}
+
+/** Eine gültig gelesene Ladestufe; greift = aktiv und SoC ≥ Schwelle. */
+export interface Ladestufe {
+  n: number
+  aktiv: boolean
+  soc_prozent: number
+  max_w: number
+  greift: boolean
+}
+
+export interface LadestufenAbbruch {
+  stufe: number
+  entity: string
+  state: 'missing' | 'unavailable' | 'invalid'
 }
 
 export type Device = ControllableDevice | BinaryDevice | BatteryDevice

@@ -298,7 +298,7 @@ Zwei Muster, die die Speicherkarte zusätzlich braucht:
   negativ beim Entladen. In der Karte steht `1.760 W (Entladen)`, nicht `-1760 W` — das Vorzeichen
   ist Datenvertrag, keine Anzeigeform.
 - **Technische Sperrgründe übersetzen.** `blockiert_grund` und die beiden Pfad-Felder liefern
-  Schlüssel wie `wr_derating`. Die Karte bildet sie über eine Map auf deutschen Klartext ab;
+  Schlüssel wie `wr_derating` oder `ladestufe`. Die Karte bildet sie über eine Map auf deutschen Klartext ab;
   ein unbekannter Schlüssel wird unverändert gezeigt, statt zu verschwinden. Dasselbe gilt für
   `inactive_reasons` — dort ist der Unterschied zwischen einem fehlenden Schreibziel und einem
   fehlgeschlagenen Schreibversuch die ganze Information.

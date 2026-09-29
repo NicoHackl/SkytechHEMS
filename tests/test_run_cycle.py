@@ -1819,3 +1819,33 @@ def test_einschaltverzoegerung_zaehlt_bei_freigabe_aus(monkeypatch):
     setze(t0 + 230)
     assert _luft_an_op(ctrl.run_cycle(make_states(_luft_verzoegert(), last_changed=lc))) \
         == "turn_on"
+
+
+def test_ladestufe_gibt_ueberschuss_an_nachrangige_verbraucher_frei():
+    """D-056: Über dem Stufenmaximum bekommt der Speicher nichts mehr – der Rest
+    geht an das nachrangige Gerät, obwohl der Speicher die höhere Priorität hat."""
+    ctrl = EMSController(
+        [_battery_cfg("speicher"), _heizstab_cfg()],
+        residual_power_entity="sensor.ueberschuss",
+        battery_residual_power_entity="sensor.hausleistungsbilanz",
+    )
+    states = {
+        **_global(),
+        **_battery("speicher", soc=80, prio=1),
+        **_controllable_w("heizstab", prio=2, min_w=0, max_w=5000),
+        "input_boolean.ems_speicher_ladestufe_1_aktiv":             "on",
+        "input_number.ems_speicher_ladestufe_1_soc_prozent":        50,
+        "input_number.ems_speicher_ladestufe_1_max_ladeleistung_w": 1500,
+        "sensor.ueberschuss": 4000,
+        "sensor.hausleistungsbilanz": 4000,
+        "sensor.heizstab_ist": 0,
+        "input_number.ems_ac_speicher_entlade_abschlag_w": 0,
+    }
+    res = ctrl.run_cycle(make_states(states))
+    speicher = _dev(res, "speicher")
+
+    assert speicher["ladestufe_aktiv"] == 1
+    assert speicher["netto_w"] == pytest.approx(1500)
+    assert _op_for(res["write_ops"],
+                   "input_number.ems_heizstab_anforderung_leistung_w")[2]["value"] \
+        == pytest.approx(2500)

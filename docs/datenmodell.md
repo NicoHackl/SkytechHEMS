@@ -111,6 +111,7 @@ regelbaren Geräte (`hoch_regelzeit_s`, `runter_regelzeit_s`, `max_anderung_pro_
 | `soc_min_prozent` | % | 10 | Entladeschluss und **einziger** Entladeboden |
 | `soc_max_prozent` | % | 100 | Ladeschluss |
 | `umschalt_totzone_w` | W | 100 | Totzone um 0; ein Netto-Wunsch darunter führt zu `standby` |
+| `ladestufe_<n>_aktiv` (`input_boolean`), `ladestufe_<n>_soc_prozent`, `ladestufe_<n>_max_ladeleistung_w` | –, %, W | keiner | **Optionale Ladestufen (D-056).** Begrenzen die Ladeleistung ab einer SoC-Schwelle; gelesen ab `n = 1` bis zur ersten Lücke. Details: [device_classes/battery.md](device_classes/battery.md#ladestufen-optional-d-056) |
 | `netzlade_leistung_w` | W | 0 | Reservierte, noch nicht sicher freigegebene Netzlade-Schnittstelle; muss wegen [B-4](bekannte-luecken.md#offene-bugs) auf `0` bleiben |
 | `anforderung_leistung_w` **(Ausgabe)** | W | – | **Ein signierter Sollwert: + laden / − entladen.** Der Helfer braucht ein **negatives Minimum** |
 | `anforderung_betriebsart` **(Ausgabe, `input_select`)** | – | – | `laden` / `entladen` / `standby`; genau diese drei Optionen sind erforderlich |
@@ -250,7 +251,9 @@ Speicher (`type: "battery"`): `id`, `label`, `priority` (Laden), `entlade_priori
 `geschuetzte_mindestleistung_w`, `laden_erlaubt`, `entladen_erlaubt`, `netzladen_aktiv`,
 `soc_min_prozent`, `soc_max_prozent`, `soc_max_hysteresis_percent`, `direction_switch_delay_s`,
 `lade_limit_gueltig`, `entlade_limit_gueltig`, `umschaltsperre_rest_s`, `lade_blockiert_grund`,
-`entlade_blockiert_grund`, `blockiert_grund`. Dazu `energie_kwh`, sofern `capacity_kwh > 0`
+`entlade_blockiert_grund`, `blockiert_grund`, `ladestufen` (Liste `{n, aktiv, soc_prozent, max_w,
+greift}`), `ladestufe_aktiv`, `ladestufe_max_w`, `ladestufen_abbruch` (`{stufe, entity, state}` oder
+`null`). Dazu `energie_kwh`, sofern `capacity_kwh > 0`
 konfiguriert ist. `soc_reserve_prozent` ist **entfallen**.
 
 Fallstricke, die schon Fehler verursacht haben:
@@ -264,6 +267,9 @@ Fallstricke, die schon Fehler verursacht haben:
   beiden statischen `available_*_w`-Werte, `lade_limit_w` und `entlade_limit_w` denselben Wert
   **nach** Freigaben und SoC-Grenzen. `lade_limit_gueltig` und `entlade_limit_gueltig` bleiben
   kompatibel erhalten und sind für eine validierte Konfiguration immer `true`.
+- **`lade_limit_w` enthält die Ladestufe, `max_ladeleistung_w` nicht.** Greift eine Ladestufe,
+  steht ihre Nummer in `ladestufe_aktiv`. `ladestufen` endet an der ersten Lücke: eine Stufe, die
+  dort nicht auftaucht, wirkt nicht — der Grund steht in `ladestufen_abbruch`.
 - **`netto_w` ist signiert:** positiv = laden, negativ = entladen. Genauso der geschriebene
   Sollwert `anforderung_leistung_w`.
 - **Die Hausleistungsbilanz ersetzt den Überschuss-Sensor nicht.** `battery_residual_w` ist nur

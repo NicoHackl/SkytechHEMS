@@ -734,3 +734,167 @@ def test_ep_maximalvorschlaege_werden_ignoriert():
     })
     assert b._lade_limit_w() == 1500.0
     assert b._entlade_limit_w() == 1500.0
+
+
+# ---------------------------------------------------------------------------
+# Optionale Ladestufen (D-056)
+# ---------------------------------------------------------------------------
+
+def stufe(n, *, aktiv="on", soc=50, max_w=1000):
+    """Die drei Helfer einer Ladestufe; `None` lässt den Helfer weg."""
+    werte = {
+        f"input_boolean.ems_{PREFIX}_ladestufe_{n}_aktiv":             aktiv,
+        f"input_number.ems_{PREFIX}_ladestufe_{n}_soc_prozent":        soc,
+        f"input_number.ems_{PREFIX}_ladestufe_{n}_max_ladeleistung_w": max_w,
+    }
+    return {k: v for k, v in werte.items() if v is not None}
+
+
+def test_ohne_ladestufen_gilt_das_konfigurierte_limit():
+    b = prepare(make_battery(available_charge_power_w=5000), soc=80)
+    assert b._lade_limit_w() == 5000.0
+    d = b.to_status_dict()
+    assert d["ladestufen"] == []
+    assert d["ladestufe_aktiv"] is None
+    assert d["ladestufe_max_w"] is None
+    assert d["ladestufen_abbruch"] is None
+
+
+@pytest.mark.parametrize("soc,limit", [(49, 5000.0), (50, 1500.0), (80, 1500.0)])
+def test_ladestufe_greift_ab_soc_schwelle(soc, limit):
+    b = prepare(make_battery(), soc=soc, **stufe(1, soc=50, max_w=1500))
+    assert b._lade_limit_w() == limit
+
+
+def test_ladestufe_ueber_available_begrenzt_nicht():
+    b = prepare(make_battery(available_charge_power_w=2000), soc=80,
+                **stufe(1, soc=50, max_w=4000))
+    assert b._lade_limit_w() == 2000.0
+
+
+def test_mehrere_passende_ladestufen_kleinstes_maximum_gewinnt():
+    b = prepare(make_battery(), soc=70,
+                **stufe(1, soc=50, max_w=4500), **stufe(2, soc=65, max_w=1500),
+                **stufe(3, soc=30, max_w=3000))
+    assert b._lade_limit_w() == 1500.0
+    d = b.to_status_dict()
+    assert d["ladestufe_aktiv"] == 2
+    assert d["ladestufe_max_w"] == 1500.0
+    assert [s["greift"] for s in d["ladestufen"]] == [True, True, True]
+
+
+def test_reihenfolge_der_ladestufen_ist_egal():
+    """Auch eine höhere Schwelle mit größerem Maximum lockert die Grenze nicht."""
+    b = prepare(make_battery(), soc=90,
+                **stufe(1, soc=50, max_w=1000), **stufe(2, soc=80, max_w=3000))
+    assert b._lade_limit_w() == 1000.0
+    assert b.to_status_dict()["ladestufe_aktiv"] == 1
+
+
+def test_ausgeschaltete_ladestufe_wird_uebersprungen_liste_laeuft_weiter():
+    b = prepare(make_battery(), soc=80,
+                **stufe(1, aktiv="off", soc=50, max_w=500), **stufe(2, soc=60, max_w=2000))
+    assert b._lade_limit_w() == 2000.0
+    d = b.to_status_dict()
+    assert [s["n"] for s in d["ladestufen"]] == [1, 2]
+    assert d["ladestufen"][0]["greift"] is False
+    assert d["ladestufen_abbruch"] is None
+
+
+def test_luecke_in_der_nummerierung_beendet_die_liste():
+    """Stufe 2 fehlt ganz: regulär zu Ende, Stufe 3 wird nicht gelesen."""
+    b = prepare(make_battery(), soc=80,
+                **stufe(1, soc=50, max_w=3000), **stufe(3, soc=50, max_w=500))
+    assert b._lade_limit_w() == 3000.0
+    d = b.to_status_dict()
+    assert [s["n"] for s in d["ladestufen"]] == [1]
+    assert d["ladestufen_abbruch"] is None
+
+
+@pytest.mark.parametrize("fehler,rolle,zustand", [
+    ({"aktiv": None},          "aktiv",                "missing"),
+    ({"soc": None},            "soc_prozent",          "missing"),
+    ({"max_w": None},          "max_ladeleistung_w",   "missing"),
+    ({"aktiv": "unavailable"}, "aktiv",                "unavailable"),
+    ({"soc": "unknown"},       "soc_prozent",          "unavailable"),
+    ({"max_w": "unavailable"}, "max_ladeleistung_w",   "unavailable"),
+    ({"aktiv": "abc"},         "aktiv",                "invalid"),
+    ({"soc": 150},             "soc_prozent",          "invalid"),
+    ({"max_w": -1},            "max_ladeleistung_w",   "invalid"),
+])
+def test_unvollstaendige_ladestufe_beendet_die_liste(fehler, rolle, zustand):
+    """Ein fehlender oder ungültiger Helfer macht die Stufe zur Lücke – auch
+    alle späteren Stufen wirken dann nicht."""
+    b = prepare(make_battery(), soc=80,
+                **stufe(1, soc=50, max_w=3000),
+                **stufe(2, **{"soc": 50, "max_w": 1000, **fehler}),
+                **stufe(3, soc=50, max_w=500))
+    assert b._lade_limit_w() == 3000.0
+    d = b.to_status_dict()
+    assert [s["n"] for s in d["ladestufen"]] == [1]
+    domain = "input_boolean" if rolle == "aktiv" else "input_number"
+    assert d["ladestufen_abbruch"] == {
+        "stufe": 2,
+        "entity": f"{domain}.ems_{PREFIX}_ladestufe_2_{rolle}",
+        "state": zustand,
+    }
+
+
+def test_ladestufe_null_sperrt_laden_mit_eigenem_grund():
+    b = prepare(make_battery(), soc=80, **stufe(1, soc=50, max_w=0))
+    assert b._darf_laden() is False
+    assert b._lade_block == "ladestufe"
+
+
+def test_soc_max_bleibt_eigener_sperrgrund_trotz_ladestufe():
+    b = prepare(make_battery(), soc=100, soc_max=100, **stufe(1, soc=50, max_w=0))
+    b._darf_laden()
+    assert b._lade_block == "soc_max"
+
+
+def test_ungueltiger_soc_wertet_keine_ladestufe_aus():
+    b = prepare(make_battery(), soc="unavailable", **stufe(1, soc=0, max_w=500))
+    assert b.to_status_dict()["ladestufe_aktiv"] is None
+    assert b._darf_laden() is False
+    assert b._lade_block == "sensor_ungueltig"
+
+
+def test_gesunkenes_ladestufen_limit_gilt_sofort():
+    """Eine greifende Stufe klemmt ohne Rücksicht auf Regelzeit oder Schrittweite."""
+    b = prepare(make_battery(), soc=80, sollwert=4000, runter=600, schritt=100,
+                **stufe(1, soc=50, max_w=1500))
+    b._anforderung_age_s = 0.0
+    b._alloc_w = 4000.0
+    b.calculate_ramp()
+    assert b.new_lade_w == 1500.0
+
+
+def test_gestiegenes_ladestufen_limit_laeuft_ueber_die_rampe():
+    b = prepare(make_battery(), soc=40, sollwert=1500, schritt=100,
+                **stufe(1, soc=50, max_w=1500))
+    b._alloc_w = 4000.0
+    b.calculate_ramp()
+    assert b.new_lade_w == 1600.0
+
+
+def test_gestiegenes_ladestufen_limit_wartet_auf_hoch_regelzeit():
+    b = prepare(make_battery(), soc=40, sollwert=1500, hoch=60,
+                **stufe(1, soc=50, max_w=1500))
+    b._anforderung_age_s = 10.0
+    b._alloc_w = 4000.0
+    b.calculate_ramp()
+    assert b.new_lade_w == 1500.0
+
+
+def test_ladestufe_unter_min_ladeleistung_rastet_auf_null():
+    b = prepare(make_battery(), soc=80, min_lade=1000, **stufe(1, soc=50, max_w=600))
+    b._alloc_w = 4000.0
+    b.calculate_ramp()
+    assert b.new_lade_w == 0.0
+
+
+def test_ladestufen_helfer_erscheinen_in_der_diagnose():
+    b = prepare(make_battery(), soc=80, **stufe(1, soc=50, max_w=1500))
+    diag = b.entity_diagnostics
+    assert diag[f"input_number.ems_{PREFIX}_ladestufe_1_max_ladeleistung_w"]["state"] == "valid"
+    assert f"input_number.ems_{PREFIX}_ladestufe_2_soc_prozent" not in diag

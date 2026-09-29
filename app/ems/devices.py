@@ -1485,6 +1485,10 @@ class BatteryDevice(ControllableDevice):
     # ohne autonome Rückfallregelung im Gerät wäre der Zustand nicht erreichbar.
     BETRIEBSARTEN = ("auto", "nur_laden", "nur_entladen", "standby")
 
+    # Obergrenze der optionalen Ladestufen (D-056). Schützt nur vor einer
+    # endlosen Suche; eingelesen wird ohnehin nur bis zur ersten Lücke.
+    MAX_LADESTUFEN = 20
+
     def __init__(self, id: str, allowed_modes: List[str], *,
                  soc_entity: str,
                  available_charge_power_w: float,
@@ -1558,6 +1562,12 @@ class BatteryDevice(ControllableDevice):
         # ---- Interner Zustand, überlebt Zyklen ----
         self._last_direction_change_ts: float = 0.0
         self._soc_max_latch = False
+
+        # ---- Optionale Ladestufen (D-056), je Zyklus aus HA gelesen ----
+        # Einträge {n, aktiv, soc_prozent, max_w} bis zur ersten Lücke.
+        self._ladestufen: List[Dict] = []
+        # Unvollständige Stufe, an der die Liste endete – sonst None.
+        self._ladestufen_abbruch: Optional[Dict] = None
 
         # ---- Ergebnisse pro Zyklus ----
         self._entlade_ziel_w        = 0.0
@@ -1757,6 +1767,7 @@ class BatteryDevice(ControllableDevice):
         self._soc_valid = soc is not None and soc.state == STATE_VALID
         self._soc = float(soc.value) if self._soc_valid else 0.0
         self._update_soc_latch()
+        self._read_ladestufen(st)
 
         self._power_valid, self._lade_ist_w, self._entlade_ist_w = self._read_power(st)
         # Für die geerbte Pool-Rückrechnung ist der Speicher ein Verbraucher:
@@ -1801,6 +1812,59 @@ class BatteryDevice(ControllableDevice):
             return False, 0.0, 0.0
         return True, max(float(lade.value), 0.0), max(float(entlade.value), 0.0)
 
+    def _read_ladestufen(self, st: StateProxy) -> None:
+        """Liest die optionalen Ladestufen 1, 2, … bis zur ersten Lücke (D-056).
+
+        Eine Stufe besteht aus Schalter, SoC-Schwelle und Maximal-Ladeleistung.
+        Fehlen alle drei Helfer, ist die Liste regulär zu Ende. Fehlt nur einer
+        oder ist einer ausgefallen oder ungültig, ist die Stufe ebenfalls eine
+        Lücke – die Liste endet dort, spätere Stufen wirken nicht. Der Abbruch
+        wird gemerkt, damit der Status ihn anzeigen kann.
+        """
+        pfx = self._entity_prefix
+        self._ladestufen = []
+        self._ladestufen_abbruch = None
+        for n in range(1, self.MAX_LADESTUFEN + 1):
+            aktiv_id = f"input_boolean.ems_{pfx}_ladestufe_{n}_aktiv"
+            soc_id   = f"input_number.ems_{pfx}_ladestufe_{n}_soc_prozent"
+            max_id   = f"input_number.ems_{pfx}_ladestufe_{n}_max_ladeleistung_w"
+            if not any(st.has(e) for e in (aktiv_id, soc_id, max_id)):
+                return
+            gelesen = (
+                (aktiv_id, self._note(aktiv_id, f"ladestufe_{n}_aktiv",
+                                      st.resolve_bool(aktiv_id))),
+                (soc_id, self._note(soc_id, f"ladestufe_{n}_soc_prozent",
+                                    st.resolve_number(soc_id, minimum=0.0, maximum=100.0))),
+                (max_id, self._note(max_id, f"ladestufe_{n}_max_ladeleistung_w",
+                                    st.resolve_number(max_id, minimum=0.0))),
+            )
+            for entity_id, resolved in gelesen:
+                if resolved.state != STATE_VALID:
+                    self._ladestufen_abbruch = {
+                        "stufe": n, "entity": entity_id, "state": resolved.state,
+                    }
+                    return
+            self._ladestufen.append({
+                "n":           n,
+                "aktiv":       bool(gelesen[0][1].value),
+                "soc_prozent": float(gelesen[1][1].value),
+                "max_w":       float(gelesen[2][1].value),
+            })
+
+    def _ladestufe_wirksam(self) -> Optional[Dict]:
+        """Die Stufe, die gerade die Ladeleistung begrenzt, oder None.
+
+        Es greifen alle aktiven Stufen, deren Schwelle der SoC erreicht hat; die
+        strengste Grenze gewinnt. Die Reihenfolge der Stufen ist damit egal.
+        """
+        if not self._soc_valid:
+            return None
+        passend = [s for s in self._ladestufen
+                   if s["aktiv"] and self._soc >= s["soc_prozent"]]
+        if not passend:
+            return None
+        return min(passend, key=lambda s: (s["max_w"], s["n"]))
+
     def _update_soc_latch(self) -> None:
         """Hysterese am Ladedeckel: ab soc_max gesperrt, Freigabe erst
         soc_max_hysteresis_percent darunter. Ohne sie flippt der Speicher bei
@@ -1819,15 +1883,19 @@ class BatteryDevice(ControllableDevice):
     def _lade_limit_w(self) -> float:
         """Momentan zulässige Ladeleistung.
 
-        Innerhalb der SoC-Grenzen gilt allein das konfigurierte Leistungslimit; an der
-        Grenze wird die Richtung 0. Ein lineares Drosselband gibt es nicht mehr:
-        die Leistungsgrenze wird direkt in der Add-on-Konfiguration gepflegt.
+        Innerhalb der SoC-Grenzen gilt das konfigurierte Leistungslimit, gegebenenfalls
+        gesenkt durch eine greifende Ladestufe (D-056); an der Grenze wird die
+        Richtung 0. Ein lineares Drosselband gibt es nicht mehr.
         """
         if not self.laden_erlaubt or not self._soc_valid or self._soc_max_latch:
             return 0.0
         if self._soc >= self.soc_max_prozent:
             return 0.0
-        return max(self._wr_lade_limit_w, 0.0)
+        limit = max(self._wr_lade_limit_w, 0.0)
+        stufe = self._ladestufe_wirksam()
+        if stufe is not None:
+            limit = min(limit, stufe["max_w"])
+        return limit
 
     def _entlade_limit_w(self) -> float:
         """Momentan zulässige Entladeleistung; Entladeboden ist soc_min_prozent."""
@@ -1856,7 +1924,8 @@ class BatteryDevice(ControllableDevice):
             (self.betriebsart not in ("auto", "nur_laden"),    "betriebsart"),
             (not self.laden_erlaubt,                           "laden_gesperrt"),
             (self._wr_lade_limit_w <= 0,                       "wr_derating"),
-            (self._lade_limit_w() <= 0,                        "soc_max"),
+            (self._soc_max_latch or self._soc >= self.soc_max_prozent, "soc_max"),
+            (self._lade_limit_w() <= 0,                        "ladestufe"),
         )
         for trifft_zu, grund in gruende:
             if trifft_zu:
@@ -2139,6 +2208,7 @@ class BatteryDevice(ControllableDevice):
             rest_s = max(0.0, round(
                 self.direction_switch_delay_s - (self._now_ts - self._last_direction_change_ts)
             ))
+        wirksam = self._ladestufe_wirksam()
         d: Dict = {
             "type":                  "battery",
             "id":                    self.id,
@@ -2175,6 +2245,16 @@ class BatteryDevice(ControllableDevice):
             # Effektiv nach Freigaben und SoC-Grenzen.
             "lade_limit_w":          self._lade_limit_w(),
             "entlade_limit_w":       self._entlade_limit_w(),
+            # Optionale Ladestufen (D-056): alle gelesenen Stufen, die gerade
+            # begrenzende und – falls die Liste an einer Lücke abbrach – wo.
+            "ladestufen": [
+                {**s, "greift": self._soc_valid and s["aktiv"]
+                    and self._soc >= s["soc_prozent"]}
+                for s in self._ladestufen
+            ],
+            "ladestufe_aktiv":       wirksam["n"] if wirksam else None,
+            "ladestufe_max_w":       wirksam["max_w"] if wirksam else None,
+            "ladestufen_abbruch":    self._ladestufen_abbruch,
             "hausdefizit_anteil_w":  self._entlade_ziel_w,
             "schutz_w":              self._schutz_w,
             "geschuetzte_mindestleistung_w": self.geschuetzte_mindestleistung_w,

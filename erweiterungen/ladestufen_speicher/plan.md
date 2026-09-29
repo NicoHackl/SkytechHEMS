@@ -1,6 +1,6 @@
 # Plan: SoC-abhängige Maximal-Ladestufen für AC-Speicher
 
-Stand: 29.09.2026 · Status: Entwurf, noch nicht umgesetzt
+Stand: 29.09.2026 · Status: umgesetzt (D-056, siehe `docs/adr/D-056-ladestufen-speicher.md`)
 
 ## Ausgangslage (Bestand in HA, per MCP gelesen)
 
