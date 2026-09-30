@@ -34,6 +34,12 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ### Geändert
 
+- **Totzone um Null am Speicher nur beim Start aus Standby (D-058).** `umschalt_totzone_w`
+  verhindert nur noch das Verlassen von `0 W` und einen Richtungswechsel auf ein kleines Ziel.
+  Läuft der Speicher bereits, darf er in derselben Richtung unter die Totzone absenken. Beispiel
+  Totzone 75 W: aus Standby bleibt ein Ziel von 45 W bei 0 W; läuft der Speicher mit 100 W, wird
+  im nächsten Zyklus 45 W gesetzt. Mindeständerung, Regelzeiten und Mindestleistungen gelten
+  unverändert.
 - **Regelzeiten und Mindeständerung gelten ohne Ausnahme (D-055).** Das Zurücknehmen einer
   Speicher-Entladung wartet jetzt auf die Runter-Regelzeit und unterliegt der Mindeständerung.
   Bisher kam es jeden Zyklus und auch in Kleinstschritten durch, und der Entlade-Sollwert lief

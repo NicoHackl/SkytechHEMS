@@ -94,7 +94,7 @@ ein *ausgefallener* Schalter ist dagegen kein Grund, weiterzuregeln.
 | `input_number.ems_<prefix>_runter_regelzeit_s` | s | intern `0` | Mindestabstand beim Absenken von Lade- oder Entladeleistung; gilt auch bei Netzbezug |
 | `input_number.ems_<prefix>_max_anderung_pro_schritt_w` | W | **keine Begrenzung** | Maximale Änderung je Regelzyklus; ohne gültigen Wert wird das Ziel unmittelbar erreicht |
 | `input_number.ems_<prefix>_min_anderung_pro_schritt_w` | W | intern `0` | Schreib-Totband; ausgenommen sind nur das Stoppen auf `0` und der Richtungswechsel, ein Start aus `0` braucht es ebenfalls |
-| `input_number.ems_<prefix>_umschalt_totzone_w` | W | intern `100` | Nettoanforderungen innerhalb der Totzone führen zu `standby` |
+| `input_number.ems_<prefix>_umschalt_totzone_w` | W | intern `100` | Totzone um Null: ein Nettoziel darunter verlässt `standby` nicht und löst keinen Richtungswechsel aus; läuft der Speicher bereits in Zielrichtung, darf das Ziel darunter sinken (D-058) |
 
 Die vier [gemeinsamen HA-Helfer](global.md#gemeinsame-ha-helfer) werden ebenfalls gelesen.
 `prioritat` ist dabei ausschließlich die Ladepriorität.
@@ -220,7 +220,8 @@ Rampe:
 
 - sicherer Standby (nicht freigegeben, Lockout, Betriebsart `standby`),
 - ein ungültiger SoC- oder Ist-Leistungssensor,
-- ein Nettoziel innerhalb der `umschalt_totzone_w` oder ein weggefallenes Ziel,
+- ein Nettoziel innerhalb der `umschalt_totzone_w`, solange der Speicher steht oder das Ziel in
+  der Gegenrichtung liegt (D-058), oder ein weggefallenes Ziel,
 - ein Richtungswechsel innerhalb der Umschaltsperre.
 
 Das Totband `min_anderung_pro_schritt_w` gilt für jede Änderung des signierten Sollwerts. Ohne
