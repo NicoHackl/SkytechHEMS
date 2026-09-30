@@ -2076,7 +2076,12 @@ class BatteryDevice(ControllableDevice):
 
         netto = lade_wunsch - entlade_wunsch                  # + laden / - entladen
 
-        if netto != 0.0 and abs(netto) < self.umschalt_totzone_w:
+        # Die Totzone verhindert nur das Verlassen von 0 W (D-058). Läuft der
+        # Speicher bereits in Zielrichtung, darf das Ziel auch unter die Totzone
+        # sinken; ein Wechsel in die Gegenrichtung zählt wie ein Start aus 0.
+        richtung_ziel = 0 if netto == 0 else (1 if netto > 0 else -1)
+        if (netto != 0.0 and abs(netto) < self.umschalt_totzone_w
+                and richtung_ziel != self._aktuelle_richtung()):
             netto, totzone = 0.0, True
 
         # Umschaltsperre: in der Sperrzeit wird STANDBY gefahren, nicht die alte

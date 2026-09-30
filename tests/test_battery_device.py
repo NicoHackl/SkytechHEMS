@@ -257,6 +257,48 @@ def test_totzone_fuehrt_zu_standby():
     assert b.to_status_dict()["blockiert_grund"] == "totzone"
 
 
+def test_totzone_verhindert_start_aus_standby():
+    """Die Totzone greift beim Verlassen von 0 W (D-058)."""
+    b = prepare(make_battery(), sollwert=0, totzone=75)
+    b._alloc_w = 45.0
+    b.calculate_ramp()
+    assert (b.new_lade_w, b.new_entlade_w) == (0.0, 0.0)
+    assert b.new_betriebsart == "standby"
+    assert b.to_status_dict()["blockiert_grund"] == "totzone"
+
+
+def test_totzone_gilt_nicht_beim_absenken_des_ladens():
+    """Läuft der Speicher mit 100 W, darf er auf 45 W absenken (D-058)."""
+    b = prepare(make_battery(), sollwert=100, anforderung_betriebsart="laden",
+                totzone=75)
+    b._alloc_w = 45.0
+    b.calculate_ramp()
+    assert b.new_lade_w == 45.0
+    assert b.to_status_dict()["blockiert_grund"] is None
+    assert op_for(b.get_write_ops(), ANF_ENTITY)[2]["value"] == 45.0
+
+
+def test_totzone_gilt_nicht_beim_absenken_der_entladung():
+    b = prepare(make_battery(), sollwert=-100, anforderung_betriebsart="entladen",
+                totzone=75)
+    b.set_discharge_target(45.0)
+    b.calculate_ramp()
+    assert b.new_entlade_w == 45.0
+    assert b.to_status_dict()["blockiert_grund"] is None
+    assert op_for(b.get_write_ops(), ANF_ENTITY)[2]["value"] == -45.0
+
+
+def test_totzone_gilt_beim_richtungswechsel():
+    """Ein Wechsel in die Gegenrichtung zählt wie ein Start aus 0 (D-058)."""
+    b = prepare(make_battery(direction_switch_delay_s=0), sollwert=100,
+                anforderung_betriebsart="laden", totzone=75)
+    b.set_discharge_target(45.0)
+    b.calculate_ramp()
+    assert (b.new_lade_w, b.new_entlade_w) == (0.0, 0.0)
+    assert b.new_betriebsart == "standby"
+    assert b.to_status_dict()["blockiert_grund"] == "totzone"
+
+
 def test_umschaltsperre_blockiert_richtungswechsel():
     """Läuft der Speicher auf Laden, darf er nicht sofort auf Entladen springen."""
     b = prepare(make_battery(direction_switch_delay_s=300), sollwert=2000)
