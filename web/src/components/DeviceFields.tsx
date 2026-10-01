@@ -150,7 +150,7 @@ export function DeviceFieldsBinary({ device, patch, entities, error }: Props) {
         <p className="hint-box">
           Die fünf Pflichtwerte unten greifen, wenn der gleichnamige HA-Helfer fehlt, ausgefallen
           oder unbrauchbar ist; die Einschaltverzögerung ist optional (leer = 0 s). Mindestlaufzeit
-          und Abschaltverzögerung gelten <b> auch bei einer Notabschaltung</b>.
+          und Abschaltverzögerung gelten <b> auch bei erlaubter Mehrfachabschaltung</b>.
         </p>
         <div className="form-grid">
           <NumberField label="Leistung im EIN-Zustand" unit="W" required min={0}

@@ -3,7 +3,7 @@ description: >-
   PV-Überschuss-Energiemanagementsystem für Home Assistant. Verteilt den
   Solarüberschuss automatisch und prioritätsbasiert auf regelbare Verbraucher
   (Heizstab, Wallbox), binäre Verbraucher (Heizlüfter) und AC-gekoppelte
-  Speicher – mit Zeitschutz, Hysterese, Rampenbegrenzung und Notabschaltung.
+  Speicher – mit Zeitschutz, Hysterese, Rampenbegrenzung und Mehrfachabschaltung bei Defizit.
   Bedienung über ein integriertes Web-UI und HA-Helfer-Entitäten.
 
   KONFIGURATION: Diese Seite ist der YAML-Editor des Supervisors, weil das

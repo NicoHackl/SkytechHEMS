@@ -95,8 +95,8 @@ configuration:
 
       • min_runtime_s / min_offtime_s / off_delay_s (Pflicht, jeweils ab 0) –
       Mindestlaufzeit, Mindestauszeit und Abschaltverzögerung in Sekunden.
-      Mindestlaufzeit und Abschaltverzögerung gelten auch bei einer
-      Notabschaltung – Geräteschutz schlägt Regelgüte.
+      Mindestlaufzeit und Abschaltverzögerung gelten auch bei erlaubter
+      Mehrfachabschaltung – Geräteschutz schlägt Regelgüte.
 
       Alle fünf Felder sind Fallback für die gleichnamigen HA-Helfer
       leistung_w, einschaltreserve_w, mindestlaufzeit_s, mindestauszeit_s und

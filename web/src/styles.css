@@ -48,6 +48,8 @@
   --ok-soft: #e7f4ed;
   --warn: #9a6700;
   --warn-soft: #fbf3df;
+  --caution: #b54708;
+  --caution-soft: #fdefe3;
   --danger: #b42318;
   --danger-soft: #fbeae8;
   --on-status: #ffffff;
@@ -76,6 +78,8 @@
   --ok-soft: rgba(69, 192, 127, 0.15);
   --warn: #d4a13c;
   --warn-soft: rgba(212, 161, 60, 0.15);
+  --caution: #fd853a;
+  --caution-soft: rgba(253, 133, 58, 0.15);
   --danger: #f2695f;
   --danger-soft: rgba(242, 105, 95, 0.15);
   --on-status: #0c0d0f;
@@ -105,6 +109,8 @@
     --ok-soft: rgba(69, 192, 127, 0.15);
     --warn: #d4a13c;
     --warn-soft: rgba(212, 161, 60, 0.15);
+    --caution: #fd853a;
+    --caution-soft: rgba(253, 133, 58, 0.15);
     --danger: #f2695f;
     --danger-soft: rgba(242, 105, 95, 0.15);
     --on-status: #0c0d0f;
@@ -355,6 +361,7 @@ table.data tbody tr:hover { background: var(--surface-2); cursor: pointer; }
 .pill { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--surface-2); color: var(--text-2); white-space: nowrap; }
 .pill.ok { background: var(--ok-soft); color: var(--ok); }
 .pill.warn { background: var(--warn-soft); color: var(--warn); }
+.pill.caution { background: var(--caution-soft); color: var(--caution); }
 .pill.err { background: var(--danger-soft); color: var(--danger); }
 .pill.off, .pill.muted { background: var(--surface-2); color: var(--text-3); }
 .pill.primary { background: var(--primary-soft); color: var(--primary); }

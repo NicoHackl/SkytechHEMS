@@ -58,7 +58,7 @@ für [globale Werte](device_classes/global.md), [regelbare Geräte](device_class
 | `input_boolean.ems_<prefix>_technische_freigabe` | `input_boolean` | Technische Freigabe. Nur wenn **beide** Freigaben `on` sind, wirkt das Gerät mit — hartes Gate in jedem Modus |
 | `input_select.ems_<prefix>_modus` | `input_select` | `auto` = EP-Vorschlag für dieses Gerät, `manuell` = normale Regeln, `aus` = Kill-Switch |
 | `input_number.ems_<prefix>_prioritat` | `input_number` | Kleinere Zahl = höhere Priorität |
-| `input_boolean.ems_<prefix>_force` | `input_boolean` | Zwang (D-053), optional. `on` = Gerät läuft unabhängig von Pool, Bedien-Freigabe, Modus, globalen Sperren und Notabschaltung; nie ohne technische Freigabe oder mit kaputtem Schreibziel. Nicht beim Speicher |
+| `input_boolean.ems_<prefix>_force` | `input_boolean` | Zwang (D-053), optional. `on` = Gerät läuft unabhängig von Pool, Bedien-Freigabe, Modus, globalen Sperren und Mehrfachabschaltung; nie ohne technische Freigabe oder mit kaputtem Schreibziel. Nicht beim Speicher |
 
 ### Regelbare Geräte
 
@@ -88,9 +88,9 @@ Spannungssensoren L1/L2/L3.
 |---|---|---|
 | `leistung_w` | W | Angenommene Leistung im EIN-Zustand |
 | `einschaltreserve_w` | W | Hysterese dieses Geräts, zusätzlich zur globalen |
-| `mindestlaufzeit_s` | s | Schutz gegen zu frühes Abschalten — gilt **auch** bei Notabschaltung |
+| `mindestlaufzeit_s` | s | Schutz gegen zu frühes Abschalten — gilt **auch** bei erlaubter Mehrfachabschaltung |
 | `mindestauszeit_s` | s | Schutz gegen zu frühes Wiedereinschalten |
-| `abschaltverzogerung_s` | s | Verzögert den Aus-Befehl; gilt **immer**, auch bei Notabschaltung |
+| `abschaltverzogerung_s` | s | Verzögert den Aus-Befehl; gilt **immer**, auch bei erlaubter Mehrfachabschaltung |
 | `einschaltverzogerung_s` | s | So lange muss die Einschaltbedingung ununterbrochen erfüllt sein, bevor eingeschaltet wird; die Bedienfreigabe zählt nicht dazu (D-054) |
 | `anforderung_an` **(Ausgabe, `input_boolean`)** | `on`/`off` | Anforderung des EMS. Eine HA-Automation übersetzt sie in echtes Schalten |
 
@@ -202,7 +202,7 @@ Global:
 | `pool_roh_w` | float | Ungeklemmter Pool aus dem Überschuss-Sensor. Positiv = verteilter Überschuss, negativ = kein verteilter Überschuss |
 | `entlade_basis_w` | float | Basis der Entladeplanung aus der separaten Hausleistungsbilanz; enthält die gemessenen HEMS-Lasten zurückgerechnet |
 | `hausdefizit_w` | float | Hausverbrauchs-Fehlbetrag, den die Speicher decken sollen. **Enthält keine HEMS-Gerätelast**, auch keine fremdgesteuerte — wohl aber eine Zwangslast (D-053); bei ungültiger Hausleistungsbilanz `0` |
-| `binary_immediate_off` | bool | Notabschaltung binärer Geräte; ein Zwangsgerät bleibt davon unberührt |
+| `binary_immediate_off` | bool | Mehrfachabschaltung erlaubt: das Defizit übersteigt, was regelbare Geräte und Speicher sofort abregeln können; das One-Change-Limit für Binärgeräte entfällt in diesem Zyklus. Schaltet selbst nichts ab; ein Zwangsgerät bleibt davon unberührt |
 | `binary_total_w` | float | Σ `power_w` der final eingeschalteten Binärgeräte **ohne** Zwangsgeräte — deren Last steckt bereits im Residual |
 | `timestamp` | string | **Maschinenformat** `JJJJ-MM-TT hh:mm:ss`, nicht zur Anzeige gedacht |
 | `devices` | Liste | siehe unten |

@@ -55,7 +55,7 @@ stillschweigend vorausgesetzt.
   außerhalb der festen Funktions-Whitelist (`abs`, `min`, `max`, `round`) ausdrücken kann. Der
   `SUPERVISOR_TOKEN` und alle Umgebungsvariablen sind aus einer Formel heraus nicht erreichbar.
 - **Kein Absturz, keine Blockade.** Der Regelzyklus läuft synchron in einem einzigen
-  asyncio-Prozess (`app/main.py`); hängender Code würde dort auch die Notabschaltung blockieren.
+  asyncio-Prozess (`app/main.py`); hängender Code würde dort den ganzen Regelzyklus blockieren.
   Ohne Schleifen ist die Ausführung strukturell auf die Anzahl der Ausdrucksbausteine im Quelltext
   beschränkt — kein Timeout, kein Thread- oder Prozesswechsel nötig. Jeder Fehler (Syntax, verbotenes
   Konstrukt, Laufzeitfehler, NaN/Unendlich) kommt als `valid: false` zurück statt eine Exception nach

@@ -112,7 +112,7 @@ export function Status() {
                 </span>
               ) : null}
               {cycle.hard_lockout ? <span className="pill err">Sperre – Überschuss-Sensor ungültig</span> : null}
-              {cycle.binary_immediate_off ? <span className="pill err">Notabschaltung</span> : null}
+              {cycle.binary_immediate_off ? <span className="pill caution">Mehrfachabschaltung erlaubt</span> : null}
               {!cycle.residual_sensor_valid && !cycle.hard_lockout
                 ? <span className="pill warn">Überschuss-Sensor liefert keinen Wert</span>
                 : null}

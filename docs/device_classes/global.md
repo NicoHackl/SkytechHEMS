@@ -64,7 +64,7 @@ Diese vier Helfer werden von jeder Geräteklasse gelesen; der fünfte nur von Ve
 | `input_boolean.ems_<prefix>_technische_freigabe` | `on`, `off` | ja | `off` | Hartes technisches Gate, das auch im EP-Modus und unter Zwang gilt |
 | `input_select.ems_<prefix>_modus` | `auto`, `manuell`, `aus` | ja | außerhalb des globalen EP-Modus wie `manuell` | `auto` übernimmt gültige EP-Vorschläge, `manuell` nutzt HA-Helferwerte, `aus` ist der gerätespezifische Kill-Switch |
 | `input_number.ems_<prefix>_prioritat` | ganze Zahl | ja | `99` | Lade- beziehungsweise Verbraucherpriorität; kleinere Zahl wird zuerst bedient |
-| `input_boolean.ems_<prefix>_force` | `on`, `off` | nein | `off` | Zwang (D-053): Gerät läuft unabhängig von Pool, Bedienfreigabe, Gerätemodus, globalen Sperren und Notabschaltung. Nur bei `controllable` und `binary`; ein Speicher liest ihn nicht |
+| `input_boolean.ems_<prefix>_force` | `on`, `off` | nein | `off` | Zwang (D-053): Gerät läuft unabhängig von Pool, Bedienfreigabe, Gerätemodus, globalen Sperren und Mehrfachabschaltung. Nur bei `controllable` und `binary`; ein Speicher liest ihn nicht |
 
 Die Bedienfreigabe und die technische Freigabe müssen beide wirksam sein. Zusätzlich müssen die
 globale Freigabe, der globale Modus und `allowed_modes` das Gerät zulassen.

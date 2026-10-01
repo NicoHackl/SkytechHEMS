@@ -34,6 +34,12 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ### Geändert
 
+- **„Notabschaltung" heißt jetzt „Mehrfachabschaltung erlaubt".** Der alte Name klang nach
+  Gefahr, die Funktion hebt aber nur das One-Change-Limit auf: Übersteigt das Defizit, was
+  regelbare Geräte und Speicher sofort abregeln können, dürfen mehrere Binärgeräte im selben
+  Zyklus umschalten. Verhalten unverändert, das Statusfeld bleibt `binary_immediate_off`. Die
+  Pille im Status-Panel ist jetzt orange statt rot (neues Design-Token `--caution`, Klasse
+  `.pill.caution`); der Schaltgrund im Debug-Log lautet „Mehrfachabschaltung".
 - **Totzone um Null am Speicher nur beim Start aus Standby (D-058).** `umschalt_totzone_w`
   verhindert nur noch das Verlassen von `0 W` und einen Richtungswechsel auf ein kleines Ziel.
   Läuft der Speicher bereits, darf er in derselben Richtung unter die Totzone absenken. Beispiel

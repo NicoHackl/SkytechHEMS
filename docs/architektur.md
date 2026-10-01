@@ -7,7 +7,7 @@
 
 PV-Überschuss-Energiemanagementsystem als Home-Assistant-Add-on. Es verteilt den Solarüberschuss
 zyklisch und prioritätsbasiert auf regelbare Verbraucher (Heizstab, Wallbox) und binäre
-Verbraucher (Heizlüfter) — mit Zeitschutz, Hysterese, Rampenbegrenzung und Notabschaltung.
+Verbraucher (Heizlüfter) — mit Zeitschutz, Hysterese, Rampenbegrenzung und Mehrfachabschaltung bei Defizit.
 
 **Nicht** Aufgabe dieses Projekts:
 
@@ -80,7 +80,7 @@ Ein Zyklus (`EMSController.run_cycle()`), ausgelöst alle `interval_s` Sekunden:
    `technische_freigabe` und der Gerätemodus müssen passen. Nach dem Gate der
    Schreibziel-Gesundheit (unten) liest jedes Gerät zusätzlich seinen **Zwang** (D-053,
    `input_boolean.ems_<prefix>_force`): er übersteuert Bedienfreigabe, Gerätemodus, globale
-   Sperren und die Notabschaltung, nie die technische Freigabe und nie ein kaputtes
+   Sperren und die Mehrfachabschaltung, nie die technische Freigabe und nie ein kaputtes
    Schreibziel. `eligible` bleibt davon unberührt — ein Zwangsgerät ist kein Pool-Teilnehmer,
    sondern eine eigene Achse (`force_active`).
 3. **Netz bereinigen:** `residual_bereinigt_w = residual_w − Σ netz_support_w`. Nur Speicher
@@ -115,7 +115,10 @@ Ein Zyklus (`EMSController.run_cycle()`), ausgelöst alle `interval_s` Sekunden:
 6. **Defizit** aus `residual_bereinigt_w` ermitteln und prüfen, ob die regelbaren Geräte es
    allein abregeln können (`binary_immediate_off`). Bereinigt, nicht roh: sonst verschwindet das
    Defizit, sobald ein Speicher die Hauslast deckt, und die Verbraucher liefen faktisch aus der
-   Batterie.
+   Batterie. Können sie es nicht, ist die **Mehrfachabschaltung erlaubt** (Panel: orange Pille):
+   In Schritt 9 entfällt das One-Change-Limit, mehrere Binärgeräte dürfen im selben Zyklus
+   umschalten. Sie schaltet selbst nichts ab — ob ein Gerät aus soll, entscheiden weiterhin Pool,
+   Hysterese und Zeitschutz.
 7. **Pool nach Priorität verteilen**: regelbare Geräte reservieren ihre Schutzleistung, binäre
    Geräte ermitteln ihre hysteresebehaftete Wunschvorgabe. `protected_minimum_scope` entscheidet,
    ob der Schutz ausschließlich gegen Binärgeräte wirkt (`binary_only`) oder anschließend auch
@@ -229,7 +232,7 @@ Zusagen, auf die sich der gesamte Code verlässt. Wer eine davon bricht, bricht 
 7. **Der sichere Zustand eines Speichers wird aktiv geschrieben.** Bei Lockout, fehlender
    Freigabe oder unbrauchbaren Messwerten schreibt das HEMS `0 W` und `standby` — es lässt den
    Sollwert nicht einfach stehen. Sonst entlädt der Speicher nach einem Add-on-Absturz bis leer.
-8. **Mindestlaufzeit und Abschaltverzögerung gelten auch bei Notabschaltung** — Geräteschutz
+8. **Mindestlaufzeit und Abschaltverzögerung gelten auch bei erlaubter Mehrfachabschaltung** — Geräteschutz
    schlägt Regelgüte (siehe [design-entscheidungen.md](design-entscheidungen.md)).
 9. **Ein defektes Gerät legt nur sich selbst still.** Ein fehlendes oder nicht beschreibbares
    Schreibziel und ein fehlgeschlagener Service-Aufruf werden dem verursachenden Gerät zugeordnet

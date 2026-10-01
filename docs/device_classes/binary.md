@@ -36,9 +36,9 @@ Entität in `entity_diagnostics`, siehe
 |---|---|---|---|
 | `input_number.ems_<prefix>_leistung_w` | W | Add-on-Feld `power_w` | Angenommene Leistungsaufnahme im EIN-Zustand; Grundlage der Pool-Reservierung |
 | `input_number.ems_<prefix>_einschaltreserve_w` | W | Add-on-Feld `on_reserve_w` | Gerätespezifischer Hysterese-Aufschlag beim Einschalten, zusätzlich zur globalen Einschaltreserve |
-| `input_number.ems_<prefix>_mindestlaufzeit_s` | s | Add-on-Feld `min_runtime_s` | Verhindert zu frühes Ausschalten; gilt auch bei Notabschaltung |
+| `input_number.ems_<prefix>_mindestlaufzeit_s` | s | Add-on-Feld `min_runtime_s` | Verhindert zu frühes Ausschalten; gilt auch bei erlaubter Mehrfachabschaltung |
 | `input_number.ems_<prefix>_mindestauszeit_s` | s | Add-on-Feld `min_offtime_s` | Verhindert zu frühes Wiedereinschalten |
-| `input_number.ems_<prefix>_abschaltverzogerung_s` | s | Add-on-Feld `off_delay_s` | Verzögert den Aus-Befehl nach Ablauf der Mindestlaufzeit; gilt auch bei Notabschaltung |
+| `input_number.ems_<prefix>_abschaltverzogerung_s` | s | Add-on-Feld `off_delay_s` | Verzögert den Aus-Befehl nach Ablauf der Mindestlaufzeit; gilt auch bei erlaubter Mehrfachabschaltung |
 | `input_number.ems_<prefix>_einschaltverzogerung_s` | s | Add-on-Feld `on_delay_s`, sonst `0` | Verzögert das Einschalten, bis die Einschaltbedingung so lange ununterbrochen erfüllt ist (D-054) |
 
 ### Einschaltverzögerung (D-054)
@@ -66,7 +66,7 @@ von vorn. `0` schaltet wie bisher sofort ein.
 Zusätzlich liest ein binäres Gerät den Zwang-Helfer `input_boolean.ems_<prefix>_force` (D-053,
 optional, siehe [global.md](global.md#gemeinsame-ha-helfer)): mit `on` wird `anforderung_an`
 sofort gesetzt — ohne Mindestauszeit, ohne One-Change-Limit, ohne Prioritätskaskade und auch bei
-Notabschaltung. Seine `leistung_w` wird weder aus dem Pool reserviert noch in ihn zurückgerechnet.
+erlaubter Mehrfachabschaltung. Seine `leistung_w` wird weder aus dem Pool reserviert noch in ihn zurückgerechnet.
 Endet der Zwang, entscheidet im selben Zyklus sofort der Pool — ohne Mindestlaufzeit und
 Abschaltverzögerung: ohne Überschuss geht `anforderung_an` sofort auf `off`, mit Überschuss bleibt
 das Gerät regulär an. Hat das Zwang-Ende es ausgeschaltet, darf der Pool es ohne Mindestauszeit und

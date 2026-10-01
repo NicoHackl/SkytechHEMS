@@ -310,7 +310,7 @@ class Device(ABC):
         """Liest den Zwang-Helfer und entscheidet, ob er wirkt.
 
         Zwang übersteuert Bedienfreigabe, Gerätemodus, globale Gates und die
-        Notabschaltung – nie die technische Freigabe und nie die Schreibziel-
+        Mehrfachabschaltung – nie die technische Freigabe und nie die Schreibziel-
         Gesundheit. Läuft deshalb NACH check_runtime_health, und unabhängig von
         `source`: auch bei global ausgeschalteter Regelung muss ein Zwang wirken.
         """
@@ -1343,7 +1343,7 @@ class BinaryDevice(Device):
         Einschaltverzögerung) auf den Wunschzustand an.
 
         Mindestlaufzeit UND Abschaltverzögerung gelten IMMER – auch bei einer
-        Notabschaltung (binary_immediate_off). Erst wenn das Gerät die
+        erlaubten Mehrfachabschaltung (binary_immediate_off). Erst wenn das Gerät die
         Mindestlaufzeit erfüllt hat *und* die Abschaltverzögerung abgelaufen
         ist, wird der Aus-Befehl freigegeben. Eingeschaltet wird erst, wenn
         Mindestauszeit *und* Einschaltverzögerung abgelaufen sind; beide laufen

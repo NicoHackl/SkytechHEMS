@@ -3,7 +3,7 @@
 Wertet den Python-ähnlichen Code aus, den der Nutzer im Ingress-Panel unter
 „Sensoren" hinterlegt. Der Regelzyklus läuft synchron in einem einzigen
 asyncio-Prozess (app/main.py `_scheduler()`/`_run_cycle()`, app/ems/controller.py
-`run_cycle()`) – hängender Code würde dort auch die Notabschaltung blockieren.
+`run_cycle()`) – hängender Code würde dort den ganzen Regelzyklus blockieren.
 Deshalb kein `eval`/`exec` auf kompiliertem Python, sondern ein eigener,
 baumwandelnder Auswerter über eine AST-Whitelist: nur Zuweisungen, Arithmetik,
 Vergleiche, boolesche Verknüpfungen und if/else sind erlaubt. Ohne Schleifen,

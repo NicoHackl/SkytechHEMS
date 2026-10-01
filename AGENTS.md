@@ -8,7 +8,7 @@
 
 PV-Überschuss-Energiemanagementsystem als Home-Assistant-Add-on. Verteilt den Solarüberschuss
 zyklisch und prioritätsbasiert auf regelbare Verbraucher (Heizstab, Wallbox) und binäre
-Verbraucher (Heizlüfter) — mit Zeitschutz, Hysterese, Rampenbegrenzung und Notabschaltung.
+Verbraucher (Heizlüfter) — mit Zeitschutz, Hysterese, Rampenbegrenzung und Mehrfachabschaltung bei Defizit.
 Bedienung über ein Ingress-Panel und Home-Assistant-Helfer-Entitäten; eigene Persistenz gibt es
 nicht, gelesen und geschrieben wird ausschließlich der HA-State.
 

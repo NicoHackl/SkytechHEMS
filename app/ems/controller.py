@@ -721,7 +721,7 @@ class EMSController:
                 direction = "AUS→AN" if d.final_on else "AN→AUS"
                 reason    = ("Zwang" if d.force_active
                              else "Zwang-Ende" if d.force_released
-                             else "Notabschaltung" if binary_immediate_off and not d.final_on
+                             else "Mehrfachabschaltung" if binary_immediate_off and not d.final_on
                              else "desired" + ("=JA" if d.final_on else "=NEIN"))
                 log.info("EMS [%s] %s  prio=%d  pool=%.0fW  %s",
                          d.id, direction, d.priority, pool_w, reason)

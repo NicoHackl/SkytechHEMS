@@ -41,7 +41,7 @@ Für jede neue Funktion mindestens:
 Für die Regellogik zusätzlich verpflichtend:
 
 4. **Zeitschutz** — Mindestlaufzeit, Mindestauszeit und Abschaltverzögerung gelten **auch** bei
-   Notabschaltung. Wer daran etwas ändert, ändert eine Invariante (siehe
+   erlaubter Mehrfachabschaltung. Wer daran etwas ändert, ändert eine Invariante (siehe
    [architektur.md](architektur.md)).
 5. **Hard-Lockout** — ungültiger oder stark negativer Überschuss-Sensor schaltet alles ab.
 
@@ -74,7 +74,7 @@ Für den Zwang (D-053) zusätzlich verpflichtend:
 
 14. **Zwang wirkt bei jeder Sperre außer der technischen Freigabe** — globales Aus, Regelmodus
     `aus`, Hard-Lockout, Gerätemodus `aus`, fehlende Bedienfreigabe — und nie bei
-    `runtime_active: false`. Er ignoriert Notabschaltung, Mindestauszeit, Rampe, Totband,
+    `runtime_active: false`. Er ignoriert die Mehrfachabschaltung, Mindestauszeit, Rampe, Totband,
     Kaskade und One-Change; reserviert nichts und rechnet nichts in den Pool zurück; die
     Zwangslast wird vom Speicher gedeckt. Das Zwang-Ende schaltet im selben Zyklus sofort ohne
     Mindestlaufzeit, Abschaltverzögerung, Rampe und Totband; die Mindestauszeit ist für den

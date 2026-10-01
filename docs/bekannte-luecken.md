@@ -130,7 +130,7 @@ Der Code ist gebaut und getestet; diese Fragen betreffen die **Inbetriebnahme am
 | Node-Build im Add-on-Image | Schneidet `i386` und `armhf` von Updates ab und macht die Installation auf schwacher Hardware minutenlang | D-035 |
 | `BrowserRouter` und absolute API-Pfade | Der Ingress-Pfad steht zur Bauzeit nicht fest | D-036 |
 | Automatisierte Frontend-Tests | Die Seiten enthalten keine Fachlogik; abgesichert über `tsc --noEmit` und die Sichtprüfung | [test-strategie.md](test-strategie.md) |
-| Zeitschutz bei Notabschaltung aushebeln | Geräteschutz schlägt Regelgüte — Mindestlaufzeit und Abschaltverzögerung gelten immer | [architektur.md](architektur.md), Invarianten |
+| Zeitschutz bei Mehrfachabschaltung aushebeln | Geräteschutz schlägt Regelgüte — Mindestlaufzeit und Abschaltverzögerung gelten immer | [architektur.md](architektur.md), Invarianten |
 
 ---
 
