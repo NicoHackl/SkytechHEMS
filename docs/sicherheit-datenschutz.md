@@ -55,7 +55,7 @@ stillschweigend vorausgesetzt.
   außerhalb der festen Funktions-Whitelist (`abs`, `min`, `max`, `round`) ausdrücken kann. Der
   `SUPERVISOR_TOKEN` und alle Umgebungsvariablen sind aus einer Formel heraus nicht erreichbar.
 - **Kein Absturz, keine Blockade.** Der Regelzyklus läuft synchron in einem einzigen
-  asyncio-Prozess (`app/main.py`); hängender Code würde dort auch die Notabschaltung blockieren.
+  asyncio-Prozess (`app/main.py`); hängender Code würde dort den ganzen Regelzyklus blockieren.
   Ohne Schleifen ist die Ausführung strukturell auf die Anzahl der Ausdrucksbausteine im Quelltext
   beschränkt — kein Timeout, kein Thread- oder Prozesswechsel nötig. Jeder Fehler (Syntax, verbotenes
   Konstrukt, Laufzeitfehler, NaN/Unendlich) kommt als `valid: false` zurück statt eine Exception nach
@@ -80,8 +80,10 @@ stillschweigend vorausgesetzt.
 |---|---|---|---|
 | Nutzerkonten, Namen, Adressen | nein | — | — |
 | Verbrauchs- und Erzeugungsdaten | ja, flüchtig im Speicher für die Dauer eines Zyklus | nirgends persistiert | entfällt |
+| Merker der Notabschaltung (D-059) | ja: aktiv ja/nein, Auslösezeit, Bedingung und gemessener Wert | `/data/notabschaltung.json` | wird beim Quittieren auf „nicht aktiv“ zurückgesetzt |
 
-Das Add-on legt keine Datei und keine Datenbank an. Historie führt allein Home Assistant.
+Das Add-on legt keine Datenbank an. Einzige eigene Datei ist der Merker der Notabschaltung; er
+enthält keine personenbezogenen Daten und keine Zugangsdaten. Historie führt allein Home Assistant.
 
 ## Externe Dienste
 

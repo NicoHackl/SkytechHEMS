@@ -22,6 +22,7 @@ stehen in der Referenz [Geräteklassen](device_classes/global.md).
 | `HA_TOKEN` | nein | Wert von `SUPERVISOR_TOKEN` | Long-Lived Access Token für die lokale Entwicklung. |
 | `SUPERVISOR_URL` | nein | `http://supervisor` | Nur für Tests und lokale Entwicklung. |
 | `HEMS_OPTIONS_PATH` | nein | `/data/options.json` | Nur für die lokale Entwicklung: von wo die Add-on-Optionen **gelesen** werden. |
+| `HEMS_DATA_DIR` | nein | `/data` | Nur für die lokale Entwicklung: Verzeichnis des Merkers der Notabschaltung (`notabschaltung.json`, D-059). |
 
 Gelesen werden sie in [`app/ha_client.py`](../app/ha_client.py) (HA-Zugriff),
 [`app/supervisor_client.py`](../app/supervisor_client.py) (`SUPERVISOR_TOKEN`, `SUPERVISOR_URL`) und
@@ -217,6 +218,37 @@ die Statusseite bleibt bis zum Neustart beim tatsächlichen Laufzeitstand.
 > Die Feldbeschreibungen aus `translations/*.yaml` erscheinen in diesem Modus nicht — maßgeblich
 > ist die Referenz unter [`device_classes/`](device_classes/global.md).
 
+### Notabschaltung (`emergency_*`)
+
+Quittierpflichtige Notabschaltung (D-059). Gepflegt wird sie im Panel unter „Notabschaltung“;
+wirksam wird sie wie alle Optionen nach „Speichern und neu starten“. Keiner der Schlüssel steht in
+`GLOBAL_KEYS_FORCING_SHUTDOWN`.
+
+| Schlüssel | Typ | Default | Bedeutung |
+|---|---|---|---|
+| `emergency_condition_entity` | str | `""` | Bedingungs-Entität, jede Sekunde geprüft. Leer = Notabschaltung aus |
+| `emergency_condition_operator` | str | `"=="` | `==`, `!=`, `>`, `>=`, `<`, `<=` (Anzeige `=`, `≠`, `>`, `≥`, `<`, `≤`) |
+| `emergency_condition_value` | str | `""` | Sollwert. Pflicht, sobald eine Entität eingetragen ist |
+| `emergency_targets` | `[{entity, value}]` | `[]` | Zielzeilen, nach dem Abwurf in eingetragener Reihenfolge geschrieben |
+
+**Vergleich.** `>`, `≥`, `<` und `≤` vergleichen nur Zahlen; ein nicht numerischer Zustand oder
+Sollwert gilt als „nicht prüfbar“. `=` und `≠` vergleichen numerisch, wenn beide Seiten Zahlen
+sind (`1.0` = `1`), sonst als Text ohne Groß-/Kleinschreibung. Ein Dezimalkomma wird akzeptiert.
+`unavailable`, `unknown` und eine fehlende Entität lösen **nie** aus.
+
+**Zielzeilen.** Was `value` bedeutet, entscheidet die Domain der Entität:
+
+| Domain | `value` | Service |
+|---|---|---|
+| `switch`, `input_boolean`, `light`, `fan` | `on` oder `off` | `turn_on` / `turn_off` |
+| `select`, `input_select` | Option, genau wie in HA | `select_option` |
+| `number`, `input_number` | Zahl | `set_value` |
+| `button`, `input_button` | leer | `press` |
+| `script` | leer | `script.turn_on` |
+
+Eine ungültige Bedingung schaltet die Überwachung ab und steht als `config_error` im Status, im
+Panel und im Log. Eine ungültige Zielzeile wird beim Auslösen übersprungen und geloggt.
+
 ### Flow Card (`flow_*`)
 
 Anzeigeoptionen der **Skytech Power Flow Card** (D-046). Sie beeinflussen die Regelung nicht:
@@ -313,6 +345,7 @@ recorder:
 | `repository.yaml` | Manifest des Custom-Repositories | ja |
 | `translations/de.yaml`, `translations/en.yaml` | Feldbeschreibungen der Optionen | ja |
 | `/data/options.json` | Vom Supervisor erzeugte Laufzeitkonfiguration; wird nur **gelesen** | nein (nicht im Repo) |
+| `/data/notabschaltung.json` | Merker der Notabschaltung (D-059), vom Add-on atomar geschrieben. Fehlt = nicht aktiv, unlesbar = aktiv | nein (nicht im Repo) |
 
 ## Secrets
 

@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import os
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import aiohttp
 
@@ -70,6 +70,33 @@ class HAClient:
             for s in states_list
         }
 
+    async def fetch_state(self, entity_id: str) -> Optional[Dict[str, Any]]:
+        """Liefert den Zustand EINER Entität, None wenn HA sie nicht kennt.
+
+        Für den Wächter der Notabschaltung (D-059): jede Sekunde eine kleine
+        Abfrage statt des ganzen Zustandsabbilds. Wirft RuntimeError, wenn HA
+        nicht erreichbar ist – „fehlt“ und „nicht erreichbar“ sind verschieden.
+        """
+        url = f"{_HA_URL}/api/states/{entity_id}"
+        session = self._get_session()
+        try:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                if resp.status == 404:
+                    return None
+                if resp.status != 200:
+                    text = await resp.text()
+                    raise RuntimeError(f"HA /api/states/{entity_id} returned {resp.status}: {text[:200]}")
+                data = await resp.json()
+        except aiohttp.ClientError as exc:
+            raise RuntimeError(str(exc) or type(exc).__name__) from exc
+        except asyncio.TimeoutError as exc:
+            raise RuntimeError("Zeitüberschreitung") from exc
+        return {
+            "state": data.get("state"),
+            "attributes": data.get("attributes", {}),
+            "last_changed": data.get("last_changed"),
+        }
+
     async def call_service(self, domain: str, service: str,
                            data: Optional[Dict[str, Any]] = None) -> None:
         """Setzt einen einzelnen HA-Service-Aufruf ab.
@@ -89,19 +116,28 @@ class HAClient:
                     f"HA service {domain}.{service} returned {resp.status}: {text[:200]}"
                 )
 
-    async def execute_write_ops(self, write_ops: List[WriteOp]) -> List[WriteResult]:
+    async def execute_write_ops(self, write_ops: List[WriteOp],
+                                abort: Optional[Callable[[], bool]] = None) -> List[WriteResult]:
         """Führt die Operationen aus und meldet je Operation Erfolg oder Fehler.
 
         Ein Nicht-2xx-Status wird NICHT mehr verschluckt: der Aufrufer ordnet den
         Fehler über `WriteOp.owner` dem verursachenden Gerät zu und macht ihn im
         Status sichtbar. Geworfen wird trotzdem nicht – ein kaputtes Schreibziel
         darf die übrigen Geräte nicht mitreißen.
+
+        `abort` wird vor jeder Operation gefragt. Liefert es True, bleiben die
+        restlichen Operationen ungesendet und ohne Ergebnis – so schreibt der
+        Regelzyklus nach einer Notabschaltung (D-059) keinen Sollwert mehr.
         """
         results: List[WriteResult] = []
         if not write_ops:
             return results
         session = self._get_session()
-        for op in write_ops:
+        for index, op in enumerate(write_ops):
+            if abort is not None and abort():
+                log.warning("Notabschaltung: %d ausstehende Regel-Schreibbefehl(e) verworfen.",
+                            len(write_ops) - index)
+                break
             url = f"{_HA_URL}/api/services/{op.domain}/{op.service}"
             try:
                 async with session.post(

@@ -8,6 +8,10 @@
   `web/src/`, die HA-Helfer-Verträge in [device_classes/](../device_classes/) und der
   Statusvertrag in [datenmodell.md](../datenmodell.md)
 
+> **Begriff:** „Notabschaltung" meint in diesem ADR die Mehrfachabschaltung binärer Geräte bei
+> Defizit (`binary_immediate_off`), die seit dem 01.10.2026 „Mehrfachabschaltung erlaubt" heißt.
+> Mit der heutigen Notabschaltung (D-059) hat sie nichts zu tun.
+
 ## Kontext
 
 Das HEMS kannte bis hierher nur Achsen, die ein Gerät **sperren**: Bedienfreigabe, technische

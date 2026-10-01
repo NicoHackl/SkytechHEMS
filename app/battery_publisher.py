@@ -25,12 +25,21 @@ def battery_limit_entity_id(prefix: str) -> str:
     return f"sensor.ems_{prefix}_lade_limit_w"
 
 
-def build_battery_limit_states(status: Dict[str, Any]) -> List[Tuple[str, str, Dict[str, Any]]]:
+# Sperrgrund, solange die Notabschaltung (D-059) aktiv ist.
+EMERGENCY_REASON = "Notabschaltung aktiv"
+
+
+def build_battery_limit_states(status: Dict[str, Any],
+                               emergency: bool = False) -> List[Tuple[str, str, Dict[str, Any]]]:
     """Je Speicher im Status ein Tripel (entity_id, state, attributes).
 
     Die Attribute tragen bewusst keinen Zeitstempel: bei unveraendertem Limit
     bleiben State und Attribute gleich, und Home Assistant zeichnet keine neue
     Zustandsaenderung auf.
+
+    Bei aktiver Notabschaltung (D-059) laeuft kein Regelzyklus; der Status ist
+    der letzte davor. Das HEMS laedt dann nicht – das Limit ist 0 W mit
+    eigenem Sperrgrund, die uebrigen Attribute bleiben als letzter Stand.
     """
     result: List[Tuple[str, str, Dict[str, Any]]] = []
     for device in (status or {}).get("devices") or []:
@@ -49,18 +58,21 @@ def build_battery_limit_states(status: Dict[str, Any]) -> List[Tuple[str, str, D
             "ladestufe_aktiv":        device.get("ladestufe_aktiv"),
             "ladestufe_max_w":        device.get("ladestufe_max_w"),
             "wr_max_ladeleistung_w":  device.get("max_ladeleistung_w"),
-            "blockiert_grund":        device.get("lade_blockiert_grund"),
+            "blockiert_grund":        (EMERGENCY_REASON if emergency
+                                       else device.get("lade_blockiert_grund")),
             "soc_prozent":            device.get("soc_prozent"),
         }
-        state = f"{round(float(device.get('lade_limit_w') or 0.0))}"
+        limit_w = 0.0 if emergency else float(device.get("lade_limit_w") or 0.0)
+        state = f"{round(limit_w)}"
         result.append((battery_limit_entity_id(prefix), state, attributes))
     return result
 
 
-async def publish_battery_limits(ha_client, status: Dict[str, Any]) -> None:
+async def publish_battery_limits(ha_client, status: Dict[str, Any],
+                                 emergency: bool = False) -> None:
     """Schreibt die Ladelimit-Sensoren aller Speicher. Wirft nie."""
     try:
-        for entity_id, state, attributes in build_battery_limit_states(status):
+        for entity_id, state, attributes in build_battery_limit_states(status, emergency):
             await ha_client.set_state(entity_id, state, attributes)
     except Exception as exc:
         log.warning("Ladelimit der Speicher konnte nicht veröffentlicht werden: %s", exc)

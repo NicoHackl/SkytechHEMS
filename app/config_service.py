@@ -40,6 +40,7 @@ from configuration import (
     revision,
     validate_options,
 )
+from emergency_rules import OPERATOR_LABELS, OPERATORS, TARGET_KINDS
 from ems.ops import safe_shutdown_ops
 from ems.state import StateProxy
 from formula import run_formula
@@ -187,6 +188,12 @@ class ConfigService:
             "power_signs": list(POWER_SIGNS),
             "protected_minimum_scopes": list(PROTECTED_MINIMUM_SCOPES),
             "global_defaults": dict(GLOBAL_DEFAULTS),
+            # Notabschaltung (D-059): Operatoren in Speicher- und Anzeigeform,
+            # und welche Art Wert eine Zielzeile je Domain trägt.
+            "emergency_operators": [
+                {"value": op, "label": OPERATOR_LABELS[op]} for op in OPERATORS
+            ],
+            "emergency_target_kinds": dict(TARGET_KINDS),
             "device_defaults": {
                 "controllable": dict(CONTROLLABLE_FALLBACK_DEFAULTS),
                 "binary": {**BINARY_FALLBACK_DEFAULTS, **BINARY_STATIC_DEFAULTS},
@@ -197,11 +204,13 @@ class ConfigService:
             },
         }
 
-    def entities(self, domains: Optional[List[str]] = None) -> List[Dict[str, str]]:
+    def entities(self, domains: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         """Reduzierte Entitätsliste für die Suchauswahl der Oberfläche.
 
         Bewusst ohne die vollständigen Attribute: die Auswahl braucht Name und
-        Zustand, nicht jeden Messwert der Anlage.
+        Zustand, nicht jeden Messwert der Anlage. Additiv dazu nur, was ein
+        Eingabefeld braucht (D-059): Optionen eines Selects, Grenzen und Einheit
+        einer Zahl – und nur, wenn die Entität sie trägt.
         """
         erlaubt = tuple(domains or DEFAULT_ENTITY_DOMAINS)
         ergebnis = []
@@ -210,12 +219,23 @@ class ConfigService:
             if domain not in erlaubt:
                 continue
             attributes = entry.get("attributes") or {}
-            ergebnis.append({
+            eintrag: Dict[str, Any] = {
                 "entity_id": entity_id,
                 "domain": domain,
                 "state": str(entry.get("state") or ""),
                 "friendly_name": str(attributes.get("friendly_name") or ""),
-            })
+            }
+            options = attributes.get("options")
+            if isinstance(options, list):
+                eintrag["options"] = [str(option) for option in options]
+            for key in ("min", "max", "step"):
+                value = attributes.get(key)
+                if isinstance(value, (int, float)) and not isinstance(value, bool):
+                    eintrag[key] = value
+            unit = attributes.get("unit_of_measurement")
+            if unit:
+                eintrag["unit"] = str(unit)
+            ergebnis.append(eintrag)
         ergebnis.sort(key=lambda item: item["entity_id"])
         return ergebnis
 

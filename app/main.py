@@ -16,7 +16,17 @@ from zoneinfo import ZoneInfo
 from aiohttp import web
 
 from config_service import ConfigProblem, ConfigService
-from configuration import GLOBAL_DEFAULTS, parse_modes, validate_options
+from configuration import DEVICE_CLASSES, GLOBAL_DEFAULTS, parse_modes, validate_options
+from emergency import (
+    CONDITION_INVALID,
+    CONDITION_MET,
+    LATCH_FILENAME,
+    EmergencyConfig,
+    EmergencyStop,
+    LatchStore,
+    evaluate,
+)
+from emergency_rules import condition_error
 from ha_client import HAClient
 from ems import EMSController, StateProxy
 import battery_publisher
@@ -52,6 +62,13 @@ log = logging.getLogger(__name__)
 # werden Add-on-Optionen ausschließlich über die Supervisor-API. Der Pfad ist für
 # die lokale Entwicklung außerhalb des Containers überschreibbar.
 OPTIONS_PATH = Path(os.environ.get("HEMS_OPTIONS_PATH", "/data/options.json"))
+# Persistentes Add-on-Verzeichnis. Einziger eigener Inhalt: der Merker der
+# Notabschaltung (D-059). Für die lokale Entwicklung überschreibbar.
+DATA_DIR = Path(os.environ.get("HEMS_DATA_DIR", "/data"))
+
+# Der Wächter der Notabschaltung fragt die Bedingungs-Entität in diesem Takt
+# ab – unabhängig vom Regelzyklus, damit „sofort“ nicht bis zu interval_s heißt.
+EMERGENCY_WATCH_INTERVAL_S = 1.0
 
 
 def _load_raw_options() -> dict:
@@ -404,12 +421,9 @@ class HEMSApp:
         self._raw_options = _load_raw_options()
         validated = validate_options(self._raw_options)
         options = validated.options
-
-        # Ein ungültiger globaler Wert darf den Start nicht verhindern: er fällt
-        # auf den dokumentierten Default zurück und bleibt als Feldfehler sichtbar.
-        def option(key: str):
-            return (GLOBAL_DEFAULTS[key] if key in validated.field_errors
-                    else options[key])
+        self._options = options
+        self._option_errors = validated.field_errors
+        option = self._option
 
         self.interval_s: int = int(option("interval_s"))
         self.post_cycle_script: str = str(option("post_cycle_script"))
@@ -419,24 +433,21 @@ class HEMSApp:
 
         self.ha  = HAClient()
         self.supervisor = SupervisorClient()
-        # Die VOLLSTÄNDIGE Geräteliste, auch die ungültigen Einträge: der
-        # Controller ist die eine autoritative Validierung und macht daraus
-        # sowohl die Registry als auch die inactive_devices im Status. Filterte
-        # main.py hier vor, bliebe die Liste im Status immer leer.
-        self.ems = EMSController(
-            options["devices"],
-            residual_power_entity=str(option("residual_power_entity")),
-            battery_residual_power_entity=str(option("battery_residual_power_entity")),
-            speicher_in_residual_enthalten=bool(options["speicher_in_residual_enthalten"]),
-            protected_minimum_scope=str(option("protected_minimum_scope")),
-            available_modes=options["available_modes"],
-            residual_formula_variables=option("residual_formula_variables"),
-            residual_formula_code=str(option("residual_formula_code")),
-            battery_residual_formula_variables=option("battery_residual_formula_variables"),
-            battery_residual_formula_code=str(option("battery_residual_formula_code")),
-        )
+        self.ems = self._build_controller()
         # Helfer-Karten im Steuerung-Tab nur für tatsächlich registrierte Geräte.
         self._device_configs: list = self.ems.device_configs
+
+        # Notabschaltung (D-059). Der Merker wird vor dem ersten Zyklus gelesen:
+        # ist er gesetzt, regelt das HEMS nach einem Neustart gar nicht erst.
+        self.emergency = EmergencyStop(
+            ha=self.ha,
+            store=LatchStore(DATA_DIR / LATCH_FILENAME),
+            config=self._emergency_config(),
+            device_configs=self._emergency_devices(),
+            post_cycle_script=self.post_cycle_script,
+            config_error=self._emergency_config_error(),
+        )
+        self.emergency.load()
 
         self.config = ConfigService(
             supervisor=self.supervisor,
@@ -462,8 +473,92 @@ class HEMSApp:
         self._addon_version: str = ""
 
     # ------------------------------------------------------------------
+    # Aufbau
+    # ------------------------------------------------------------------
+
+    def _option(self, key: str):
+        """Ein ungültiger globaler Wert darf den Start nicht verhindern: er fällt
+        auf den dokumentierten Default zurück und bleibt als Feldfehler sichtbar."""
+        return (GLOBAL_DEFAULTS[key] if key in self._option_errors
+                else self._options[key])
+
+    def _build_controller(self) -> EMSController:
+        """Ein frischer Controller aus der geladenen Konfiguration.
+
+        Beim Start und nach dem Quittieren einer Notabschaltung (D-059): so
+        bleibt kein Rampen-, Timer- oder Zwangsspeicher aus der Zeit davor.
+        """
+        option = self._option
+        # Die VOLLSTÄNDIGE Geräteliste, auch die ungültigen Einträge: der
+        # Controller ist die eine autoritative Validierung und macht daraus
+        # sowohl die Registry als auch die inactive_devices im Status. Filterte
+        # main.py hier vor, bliebe die Liste im Status immer leer.
+        return EMSController(
+            self._options["devices"],
+            residual_power_entity=str(option("residual_power_entity")),
+            battery_residual_power_entity=str(option("battery_residual_power_entity")),
+            speicher_in_residual_enthalten=bool(self._options["speicher_in_residual_enthalten"]),
+            protected_minimum_scope=str(option("protected_minimum_scope")),
+            available_modes=self._options["available_modes"],
+            residual_formula_variables=option("residual_formula_variables"),
+            residual_formula_code=str(option("residual_formula_code")),
+            battery_residual_formula_variables=option("battery_residual_formula_variables"),
+            battery_residual_formula_code=str(option("battery_residual_formula_code")),
+        )
+
+    def _emergency_config(self) -> EmergencyConfig:
+        """Eine ungültige Bedingung schaltet die Überwachung ab – laut, nicht still:
+        der Grund steht im Status (`config_error`) und im Log."""
+        if any(key.startswith("emergency_condition_") for key in self._option_errors):
+            return EmergencyConfig(targets=self._options["emergency_targets"])
+        return EmergencyConfig.from_options(self._options)
+
+    def _emergency_config_error(self) -> str:
+        teile = []
+        if any(key.startswith("emergency_condition_") for key in self._option_errors):
+            teile.append("Die Auslösebedingung ist ungültig – die Überwachung ist aus.")
+        if any(key.startswith("emergency_targets[") for key in self._option_errors):
+            teile.append("Ungültige Zielzeilen werden beim Auslösen übersprungen.")
+        text = " ".join(teile)
+        if text:
+            log.error("Notabschaltung: %s Bitte im Tab „Notabschaltung“ korrigieren.", text)
+        return text
+
+    def _emergency_devices(self) -> list:
+        """Ohne Ausnahme: auch Geräte, die der Controller wegen eines Feldfehlers
+        nicht registriert hat, haben womöglich laufende Helfer. Nur Einträge ohne
+        jeden Präfix oder ohne bekannte Klasse ergeben keine Schreibziele."""
+        return [device for device in self._options["devices"]
+                if (device.get("entity_prefix") or device.get("name"))
+                and device.get("class") in DEVICE_CLASSES]
+
+    # ------------------------------------------------------------------
     # Regelzyklus
     # ------------------------------------------------------------------
+
+    async def _emergency_cycle(self, states: dict) -> bool:
+        """Notabschaltung im Zyklus. True = das HEMS regelt in diesem Zyklus nicht.
+
+        Prüft die Bedingung zusätzlich zum Wächter auf dem Sammelabbild – fällt
+        der Wächter aus, löst der Zyklus spätestens nach interval_s aus.
+        """
+        em = self.emergency
+        if em.config.configured:
+            result = em.check(states.get(em.config.condition_entity))
+            if result.state == CONDITION_MET and not em.active:
+                await em.trigger_now(result)
+        if not em.active:
+            # Jeden Zyklus: HA vergisst per POST /api/states gesetzte Zustände
+            # beim eigenen Neustart.
+            await em.publish_sensor()
+            return False
+
+        await em.run_due_sequence()
+        await em.retry_pending()
+        await em.publish_sensor()
+        await battery_publisher.publish_battery_limits(self.ha, self._last_status, emergency=True)
+        self._last_error = ""
+        return True
 
     async def _run_cycle(self) -> None:
         try:
@@ -471,18 +566,29 @@ class HEMSApp:
             # Für die Entitätsauswahl der Konfigurationsseite vorhalten: sie
             # braucht denselben Schnappschuss, nicht einen eigenen HA-Abruf.
             self._last_states = states
+            if await self._emergency_cycle(states):
+                return
             st     = StateProxy(states)
             result = self.ems.run_cycle(st)
-            write_results = await self.ha.execute_write_ops(result["write_ops"])
-            # Ergebnis zurückmelden: der Controller ordnet einen Fehlschlag dem
-            # verursachenden Gerät zu und macht ihn im Status sichtbar (B-2).
-            self.ems.report_write_results(write_results)
-            if self.post_cycle_script:
-                try:
-                    await self.ha.call_service("script", "turn_on",
-                                               {"entity_id": self.post_cycle_script})
-                except Exception as exc:
-                    log.warning("Post-cycle script '%s' failed: %s", self.post_cycle_script, exc)
+            # Der Schreib-Lock gehört auch der Notabschaltung: löst sie während
+            # dieser Charge aus, bricht `abort` die restlichen Befehle ab, und
+            # ihre Abschaltfolge läuft erst danach – nie ein Sollwert hinterher.
+            async with self.emergency.write_lock:
+                if self.emergency.active:
+                    return
+                write_results = await self.ha.execute_write_ops(
+                    result["write_ops"], abort=self.emergency.is_active)
+                # Ergebnis zurückmelden: der Controller ordnet einen Fehlschlag dem
+                # verursachenden Gerät zu und macht ihn im Status sichtbar (B-2).
+                self.ems.report_write_results(write_results)
+                if self.post_cycle_script and not self.emergency.active:
+                    try:
+                        await self.ha.call_service("script", "turn_on",
+                                                   {"entity_id": self.post_cycle_script})
+                    except Exception as exc:
+                        log.warning("Post-cycle script '%s' failed: %s", self.post_cycle_script, exc)
+            if self.emergency.active:
+                return
             now = datetime.datetime.now(BERLIN)
             self._last_status       = result["status"]
             self._last_error        = ""
@@ -512,6 +618,40 @@ class HEMSApp:
             await self._run_cycle()
             await asyncio.sleep(self.interval_s)
 
+    async def _emergency_watcher(self) -> None:
+        """Fragt die Bedingungs-Entität jede Sekunde ab (D-059).
+
+        Läuft auch bei aktiver Notabschaltung weiter: dann hält er nur die
+        Prüfung frisch, an der das Quittieren hängt.
+        """
+        em = self.emergency
+        if not em.config.configured:
+            return
+        log.info("Notabschaltung überwacht %s (%s %s).", em.config.condition_entity,
+                 em.config.condition_operator, em.config.condition_value)
+        letzter_fehler = ""
+        letzter_zustand = ""
+        while True:
+            try:
+                try:
+                    entry = await self.ha.fetch_state(em.config.condition_entity)
+                except RuntimeError as exc:
+                    em.mark_unreachable(str(exc))
+                    if str(exc) != letzter_fehler:
+                        log.warning("Notabschaltung: Bedingung nicht abrufbar – %s", exc)
+                    letzter_fehler = str(exc)
+                else:
+                    letzter_fehler = ""
+                    result = em.check(entry)
+                    if result.state == CONDITION_INVALID and letzter_zustand != CONDITION_INVALID:
+                        log.warning("Notabschaltung: Überwachung blind – %s", result.reason)
+                    letzter_zustand = result.state
+                    if result.state == CONDITION_MET and not em.active:
+                        await em.trigger_now(result)
+            except Exception as exc:
+                log.error("Notabschaltung: Wächter-Fehler: %s", exc, exc_info=True)
+            await asyncio.sleep(EMERGENCY_WATCH_INTERVAL_S)
+
     # ------------------------------------------------------------------
     # Web-Handler
     # ------------------------------------------------------------------
@@ -533,6 +673,9 @@ class HEMSApp:
             # Wechselt bei jedem Prozessstart – so erkennt die Oberfläche einen
             # abgeschlossenen Neustart zuverlässig.
             "instance_id":       self.instance_id,
+            # Neben `status`, nicht darin: bei aktiver Notabschaltung läuft
+            # kein Regelzyklus, und `status` bleibt der letzte Stand davor.
+            "emergency":         self.emergency.to_status_dict(),
         })
 
     def _controls_schema(self) -> list:
@@ -710,6 +853,69 @@ class HEMSApp:
         code = str(body.get("code") or "")
         return web.json_response(self.config.test_formula(kind, variables, code))
 
+    # ------------------------------------------------------------------
+    # Notabschaltung (D-059)
+    # ------------------------------------------------------------------
+
+    async def _handle_emergency_acknowledge(self, request: web.Request) -> web.Response:
+        """Quittiert gegen einen FRISCHEN Zustand der Bedingungs-Entität.
+
+        409, solange die Bedingung zutrifft oder nicht prüfbar ist. Danach regelt
+        ein neu aufgebauter Controller – ohne Erinnerung an die Zeit davor.
+        """
+        em = self.emergency
+        if not em.active:
+            return web.json_response({"error": "Es ist keine Notabschaltung aktiv.",
+                                      "emergency": em.to_status_dict()}, status=409)
+        entry = None
+        if em.config.configured:
+            try:
+                entry = await self.ha.fetch_state(em.config.condition_entity)
+            except RuntimeError as exc:
+                em.mark_unreachable(str(exc))
+                return web.json_response({"error": em.ack_block_reason(),
+                                          "emergency": em.to_status_dict()}, status=409)
+        reason = await em.acknowledge(entry)
+        if reason:
+            return web.json_response({"error": reason, "emergency": em.to_status_dict()},
+                                     status=409)
+        # Ohne await zwischen Quittieren und Neuaufbau: kein Zyklus erwischt
+        # den alten Controller.
+        self.ems = self._build_controller()
+        self._device_configs = self.ems.device_configs
+        await em.publish_sensor()
+        return web.json_response({"ok": True, "emergency": em.to_status_dict()})
+
+    async def _handle_emergency_test(self, request: web.Request) -> web.Response:
+        """Prüft eine noch ungespeicherte Bedingung live gegen Home Assistant.
+
+        Antwortet immer mit 200 (Diagnosewerkzeug wie /api/config/sensors/test):
+        eine nicht prüfbare Bedingung ist kein HTTP-Fehler.
+        """
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response(
+                {"error": "Der Anfragerumpf ist kein gültiges JSON."}, status=400)
+        if not isinstance(body, dict):
+            return web.json_response({"error": "Erwartet wird ein JSON-Objekt."}, status=400)
+        entity = str(body.get("entity") or "").strip()
+        operator = str(body.get("operator") or "").strip()
+        value = str(body.get("value") or "").strip()
+        if not entity:
+            return web.json_response({"state": CONDITION_INVALID, "current": None,
+                                      "reason": "Keine Entität eingetragen – die Notabschaltung ist aus."})
+        errors = condition_error(entity, operator, value)
+        if errors:
+            return web.json_response({"state": CONDITION_INVALID, "current": None,
+                                      "reason": " ".join(errors.values())})
+        try:
+            entry = await self.ha.fetch_state(entity)
+        except RuntimeError as exc:
+            return web.json_response({"state": CONDITION_INVALID, "current": None,
+                                      "reason": f"Home Assistant nicht erreichbar: {exc}"})
+        return web.json_response(evaluate(entity, operator, value, entry).to_dict())
+
     async def _handle_config_put(self, request: web.Request) -> web.Response:
         try:
             options, stored_revision = await self._draft(request)
@@ -764,6 +970,8 @@ class HEMSApp:
         app.router.add_post("/api/config/restart",        self._handle_config_restart)
         app.router.add_post("/api/config/save-and-restart",
                             self._handle_config_save_and_restart)
+        app.router.add_post("/api/emergency/acknowledge", self._handle_emergency_acknowledge)
+        app.router.add_post("/api/emergency/test",        self._handle_emergency_test)
 
         # Gebündelte Assets der Oberfläche. Vite legt sie unter assets/ ab; die
         # Pfade in index.html sind relativ, damit sie auch unter dem
@@ -791,15 +999,17 @@ class HEMSApp:
         self._addon_version = await self.config.addon_version()
 
         scheduler_task = asyncio.create_task(self._scheduler())
+        watcher_task = asyncio.create_task(self._emergency_watcher())
         try:
             await stop_event.wait()
         finally:
             log.info("Herunterfahren – Scheduler stoppen und Ressourcen freigeben.")
-            scheduler_task.cancel()
-            try:
-                await scheduler_task
-            except asyncio.CancelledError:
-                pass
+            for task in (scheduler_task, watcher_task):
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
             await self.ha.close()
             await self.supervisor.close()
             await runner.cleanup()

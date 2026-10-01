@@ -201,7 +201,7 @@ def test_limit_one_change_skipped_on_emergency():
     a = make_binary(1, actual_on=True, final_on=False)
     b = make_binary(2, actual_on=True, final_on=False)
     ctrl._limit_one_change([a, b], binary_immediate_off=True)
-    # Notabschaltung: beide dürfen gleichzeitig abschalten
+    # Mehrfachabschaltung erlaubt: beide dürfen gleichzeitig abschalten
     assert a.final_on is False
     assert b.final_on is False
 

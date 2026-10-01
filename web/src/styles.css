@@ -48,6 +48,8 @@
   --ok-soft: #e7f4ed;
   --warn: #9a6700;
   --warn-soft: #fbf3df;
+  --caution: #b54708;
+  --caution-soft: #fdefe3;
   --danger: #b42318;
   --danger-soft: #fbeae8;
   --on-status: #ffffff;
@@ -76,6 +78,8 @@
   --ok-soft: rgba(69, 192, 127, 0.15);
   --warn: #d4a13c;
   --warn-soft: rgba(212, 161, 60, 0.15);
+  --caution: #fd853a;
+  --caution-soft: rgba(253, 133, 58, 0.15);
   --danger: #f2695f;
   --danger-soft: rgba(242, 105, 95, 0.15);
   --on-status: #0c0d0f;
@@ -105,6 +109,8 @@
     --ok-soft: rgba(69, 192, 127, 0.15);
     --warn: #d4a13c;
     --warn-soft: rgba(212, 161, 60, 0.15);
+    --caution: #fd853a;
+    --caution-soft: rgba(253, 133, 58, 0.15);
     --danger: #f2695f;
     --danger-soft: rgba(242, 105, 95, 0.15);
     --on-status: #0c0d0f;
@@ -326,7 +332,7 @@ select {
   background: linear-gradient(to bottom, transparent, var(--bg) 18%);
 }
 .hint-box { border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); padding: 12px 14px; color: var(--text-2); background: var(--surface-2); font-size: 13px; }
-.hint-box button { color: var(--primary); font-weight: 600; }
+.hint-box button, .hint-box a { color: var(--primary); font-weight: 600; }
 .advanced-card { margin-top: 18px; }
 .advanced-card summary { cursor: pointer; padding: 16px 20px; font-weight: 650; font-size: 14px; }
 .advanced-card[open] summary { border-bottom: 1px solid var(--border); }
@@ -355,6 +361,7 @@ table.data tbody tr:hover { background: var(--surface-2); cursor: pointer; }
 .pill { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--surface-2); color: var(--text-2); white-space: nowrap; }
 .pill.ok { background: var(--ok-soft); color: var(--ok); }
 .pill.warn { background: var(--warn-soft); color: var(--warn); }
+.pill.caution { background: var(--caution-soft); color: var(--caution); }
 .pill.err { background: var(--danger-soft); color: var(--danger); }
 .pill.off, .pill.muted { background: var(--surface-2); color: var(--text-3); }
 .pill.primary { background: var(--primary-soft); color: var(--primary); }
@@ -630,8 +637,22 @@ table.data tbody tr:hover { background: var(--surface-2); cursor: pointer; }
    Variablenname wie bei den Formel-Zeilen, dafuer der Schalter. */
 .formula-var-row.pv-zeile { grid-template-columns: 1fr auto auto; }
 .formula-var-row.pv-zeile .switch { align-self: center; margin: 0; }
+/* Zielzeile der Notabschaltung (D-059): Entitaet, Zielzustand, Loeschen. */
+.formula-var-row.ziel-zeile { grid-template-columns: 2fr 1fr auto; }
 
 @media (max-width: 620px) {
   .formula-var-row { grid-template-columns: 1fr; gap: 10px; padding: 14px 0; }
   .formula-var-row .icon-btn { justify-self: end; }
+  /* Der Modifier ist spezifischer als die Regel oben und muss hier mitziehen. */
+  .formula-var-row.ziel-zeile { grid-template-columns: 1fr; }
 }
+
+/* =========================================================================
+   Notabschaltung (D-059)
+   Der Alarmblock ist ein .alert (Gefahrfarbe) mit mehreren Zeilen und dem
+   Quittier-Button. Ausschliesslich Tokens, keine Literalfarbe.
+   ========================================================================= */
+.alert.emergency { display: flex; flex-direction: column; gap: 6px; }
+.alert.emergency ul { margin: 4px 0 0; padding-left: 18px; }
+.alert.emergency .emergency-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 6px; }
+.alert.emergency .emergency-actions small { color: var(--text-2); }

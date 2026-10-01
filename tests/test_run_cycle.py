@@ -1462,7 +1462,7 @@ def test_zwang_binaer_schaltet_ohne_mindestauszeit_ein():
     assert dev["force_active"] is True and dev["final_on"] is True
 
 
-def test_zwang_binaer_ignoriert_notabschaltung():
+def test_zwang_binaer_ignoriert_mehrfachabschaltung():
     ctrl = EMSController([_luft_cfg()], residual_power_entity="sensor.s")
     states = _zwang_luft(**{"switch.luft": "on",
                             "input_boolean.ems_luft_anforderung_an": "on",

@@ -115,6 +115,7 @@ Seitenwechsel nicht neu montiert werden.
     <Route path="/sensoren/ueberschuss" element={<SensorenUeberschuss />} />
     <Route path="/sensoren/hausbilanz" element={<SensorenHausbilanz />} />
     <Route path="/flow-card" element={<FlowCard />} />
+    <Route path="/notabschaltung" element={<Notabschaltung />} />
     <Route path="/konfiguration/global" element={<KonfigurationGlobal />} />
     <Route path="/konfiguration/geraete" element={<KonfigurationGeraete />} />
     <Route path="/konfiguration/geraete/neu" element={<KonfigurationGeraet mode="create" />} />
@@ -138,10 +139,11 @@ dabei ausdrücklich nur die **Entwurfsposition** — die fachliche Identität bl
 | `/energy-pilot` | Vorausschau | Vorschläge und Planstatus des Energy Pilot |
 | `/sensoren/ueberschuss`, `/sensoren/hausbilanz` | Einrichtung | Formel-basierte Sensorwerte (D-045) |
 | `/flow-card` | Einrichtung | Anlagenwerte, Anzeigeoptionen und Navigationsziele der Power Flow Card (D-046, D-049) |
+| `/notabschaltung` | Einrichtung | Auslösebedingung mit Live-Prüfung und Zielzustände der Notabschaltung (D-059). Quittiert wird auf `/` |
 | `/konfiguration/*` | Einrichtung | Globale Optionen und Geräteliste |
 
-**Drei Bereiche teilen sich einen Entwurf.** `/konfiguration`, `/sensoren` und `/flow-card`
-schreiben alle in denselben `ConfigDraft`. Sie stehen deshalb in der Ausnahmeliste von `guard()`
+**Vier Bereiche teilen sich einen Entwurf.** `/konfiguration`, `/sensoren`, `/flow-card` und
+`/notabschaltung` schreiben alle in denselben `ConfigDraft`. Sie stehen deshalb in der Ausnahmeliste von `guard()`
 in `Layout.tsx` — ein Wechsel zwischen ihnen darf keine Rückfrage auslösen, der Entwurf bleibt ja
 erhalten — und tragen alle denselben Punkt in der Navigation, solange etwas ungespeichert ist.
 

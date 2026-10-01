@@ -29,7 +29,7 @@ export function Field({
 
 /** Zahlenfeld. Ein leeres Feld ist `null` — das ist etwas anderes als `0`. */
 export function NumberField({
-  label, value, onChange, required, hint, error, unit, min, step, wide,
+  label, value, onChange, required, hint, error, unit, min, max, step, wide,
 }: {
   label: string
   value: number | null | undefined
@@ -39,6 +39,7 @@ export function NumberField({
   error?: string
   unit?: string
   min?: number
+  max?: number
   step?: number
   wide?: boolean
 }) {
@@ -49,6 +50,7 @@ export function NumberField({
         type="number"
         value={value ?? ''}
         min={min}
+        max={max}
         step={step ?? 'any'}
         onChange={(event) => {
           const raw = event.target.value

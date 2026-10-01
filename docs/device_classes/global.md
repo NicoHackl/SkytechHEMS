@@ -64,7 +64,7 @@ Diese vier Helfer werden von jeder Geräteklasse gelesen; der fünfte nur von Ve
 | `input_boolean.ems_<prefix>_technische_freigabe` | `on`, `off` | ja | `off` | Hartes technisches Gate, das auch im EP-Modus und unter Zwang gilt |
 | `input_select.ems_<prefix>_modus` | `auto`, `manuell`, `aus` | ja | außerhalb des globalen EP-Modus wie `manuell` | `auto` übernimmt gültige EP-Vorschläge, `manuell` nutzt HA-Helferwerte, `aus` ist der gerätespezifische Kill-Switch |
 | `input_number.ems_<prefix>_prioritat` | ganze Zahl | ja | `99` | Lade- beziehungsweise Verbraucherpriorität; kleinere Zahl wird zuerst bedient |
-| `input_boolean.ems_<prefix>_force` | `on`, `off` | nein | `off` | Zwang (D-053): Gerät läuft unabhängig von Pool, Bedienfreigabe, Gerätemodus, globalen Sperren und Notabschaltung. Nur bei `controllable` und `binary`; ein Speicher liest ihn nicht |
+| `input_boolean.ems_<prefix>_force` | `on`, `off` | nein | `off` | Zwang (D-053): Gerät läuft unabhängig von Pool, Bedienfreigabe, Gerätemodus, globalen Sperren und Mehrfachabschaltung, nicht die Notabschaltung (D-059). Nur bei `controllable` und `binary`; ein Speicher liest ihn nicht |
 
 Die Bedienfreigabe und die technische Freigabe müssen beide wirksam sein. Zusätzlich müssen die
 globale Freigabe, der globale Modus und `allowed_modes` das Gerät zulassen.
@@ -149,7 +149,9 @@ der Oberfläche laufen als explizite Nutzeraktion über `/api/set`.
 |---|---|---:|---|
 | `residual_power_entity` | lesen | ja, Feld hat einen Default | Überschuss-Sensor und zentrale Messgröße des Regelzyklus |
 | `battery_residual_power_entity` | lesen | bedingt: bei `class: battery` | Signierte Hausleistungsbilanz ausschließlich für die Entladeplanung der AC-Speicher |
-| `post_cycle_script` | `script.turn_on` aufrufen | nein | Nach jedem erfolgreichen Zyklus ausgeführtes HA-Skript; ein Fehler wird geloggt und macht den Regelzyklus nicht nachträglich ungültig |
+| `post_cycle_script` | `script.turn_on` aufrufen | nein | Nach jedem erfolgreichen Zyklus ausgeführtes HA-Skript; ein Fehler wird geloggt und macht den Regelzyklus nicht nachträglich ungültig. Läuft außerdem einmal in der Abschaltfolge der Notabschaltung (D-059) |
+| `emergency_condition_entity` | lesen, jede Sekunde | nein | Bedingung der Notabschaltung (D-059); `unavailable`, `unknown` und fehlend lösen nie aus |
+| `emergency_targets[].entity` | schreiben, nur beim Auslösen | nein | Zielzeilen der Notabschaltung: setzen Geräte zurück in ihre eigene Automatik, siehe [konfiguration.md](../konfiguration.md#notabschaltung-emergency_) |
 
 #### Überschuss-Sensor
 
@@ -208,6 +210,10 @@ und zur Sichtbarkeit der aktiven Quelle stehen in
 | `residual_formula_code` | nein | leer | alle | Eingeschränkter Python-Ausdruck (D-045), der `ueberschuss` aus den Zeilen oben berechnet; leer = keine Formel |
 | `battery_residual_formula_variables` | nein | leere Liste | `battery` | Formel-Zeilen (D-045) `[{name, entity}]` für die Hausleistungsbilanz; liefert der Code unten einen gültigen Wert, ersetzt er `battery_residual_power_entity` vollständig |
 | `battery_residual_formula_code` | nein | leer | `battery` | Eingeschränkter Python-Ausdruck (D-045), der `hausbilanz` aus den Zeilen oben berechnet; leer = keine Formel |
+| `emergency_condition_entity` | nein | leer | alle | Bedingungs-Entität der Notabschaltung (D-059); leer = aus |
+| `emergency_condition_operator` | nein | `==` | alle | `==`, `!=`, `>`, `>=`, `<`, `<=` |
+| `emergency_condition_value` | bedingt: mit Entität | leer | alle | Sollwert der Bedingung |
+| `emergency_targets` | nein | leere Liste | alle | Zielzeilen `[{entity, value}]`, nach dem Abwurf in eingetragener Reihenfolge geschrieben |
 | `devices` | ja | Manifest enthält Beispielgeräte; Laufzeit ohne Feld: leere Liste | alle | Liste der Geräteinstanzen und ihrer klassenspezifischen Felder |
 
 ### Normale Modi und Sondermodi

@@ -7,14 +7,16 @@
 
 PV-Überschuss-Energiemanagementsystem als Home-Assistant-Add-on. Es verteilt den Solarüberschuss
 zyklisch und prioritätsbasiert auf regelbare Verbraucher (Heizstab, Wallbox) und binäre
-Verbraucher (Heizlüfter) — mit Zeitschutz, Hysterese, Rampenbegrenzung und Notabschaltung.
+Verbraucher (Heizlüfter) — mit Zeitschutz, Hysterese, Rampenbegrenzung, Mehrfachabschaltung bei
+Defizit und einer quittierpflichtigen Notabschaltung (D-059).
 
 **Nicht** Aufgabe dieses Projekts:
 
-- **Eigene Persistenz.** Es gibt keine Datenbank und keine Datei mit Zustand. Alles, was einen
-  Neustart überleben soll, steht als HA-Helfer-Entität in Home Assistant. Auch die
-  Konfigurationsseite legt nichts an: sie schreibt über die Supervisor-API dieselbe Optionsquelle,
-  die die native Add-on-Seite bedient.
+- **Eigene Persistenz.** Es gibt keine Datenbank. Alles, was einen Neustart überleben soll,
+  steht als HA-Helfer-Entität in Home Assistant. Auch die Konfigurationsseite legt nichts an: sie
+  schreibt über die Supervisor-API dieselbe Optionsquelle, die die native Add-on-Seite bedient.
+  **Einzige Ausnahme** ist der Merker der Notabschaltung, `/data/notabschaltung.json` (D-059).
+  Er muss auch dann gelten, wenn Home Assistant selbst neu startet oder einen Helfer verliert.
 - **Anlegen der HA-Helfer.** Das Add-on liest und schreibt sie, erzeugt sie aber nicht.
 - **Prognose und Planung.** Vorausschauende Optimierung liefert der separate **Energy Pilot**;
   HEMS übernimmt dessen Vorschläge nur, siehe [datenmodell.md](datenmodell.md).
@@ -53,6 +55,8 @@ Verbraucher (Heizlüfter) — mit Zeitschutz, Hysterese, Rampenbegrenzung und No
 | `app/supervisor_client.py` | Einzige Stelle mit Supervisor-REST-Zugriff: eigene Optionen lesen, validieren, speichern, Add-on neu starten | Fachlogik enthalten, Token oder rohe Optionen loggen |
 | `app/config_service.py` | Ablauf der Konfigurationsverwaltung: lesen, validieren, Revision prüfen, mischen, speichern, Altgeräte sicher deaktivieren, Neustart anstoßen | HTTP sprechen — die Handler übersetzen nur Ausnahmen in Statuscodes |
 | `app/configuration.py` | Add-on-Optionen normalisieren und validieren, Modus-Listen parsen und stabil serialisieren, Revisions-Hash bilden, Diff für die sichere Deaktivierung liefern | HA oder den Supervisor ansprechen, Zustand halten |
+| `app/emergency.py` | Notabschaltung (D-059): Bedingung auswerten, Merker lesen und atomar schreiben, Abschaltfolge und Wiederholung fehlgeschlagener Befehle, Quittieren, Statusobjekt und Anzeige-Sensor | Regelentscheidungen des Zyklus treffen, ohne `write_lock` schreiben |
+| `app/emergency_rules.py` | Operatoren, Domain-Zuordnung der Zielzeilen und Feldfehler — eine Quelle für Validierung, Ausführung und Oberfläche | Etwas importieren, das `configuration.py` importiert (Importzyklus) |
 | `app/formula.py` | Formel-basierte Sensorwerte (D-045): AST-Whitelist prüfen, eingeschränkten Code gegen ein fertiges Namespace-Dict auswerten | HA-Entitäten auflösen, Zustand zwischen Aufrufen halten, `exec`/`eval` auf kompiliertem Python verwenden |
 | `app/ems/controller.py` | Einen Zyklus orchestrieren: globale Eingaben, Pool, Prioritätskaskade, Statusaufbau | Selbst HTTP sprechen |
 | `app/ems/devices.py` | Verhalten je Gerätetyp: Eligibility, Pool-Verbrauch, Rampe, Zeitschutz, Write-Ops. Hierarchie: `Device` → `ControllableDevice` → `BatteryDevice`, daneben `BinaryDevice` | Auf HA zugreifen (bekommt einen `StateProxy`) |
@@ -67,6 +71,21 @@ ist das eine Design-Entscheidung → [design-entscheidungen.md](design-entscheid
 
 ## Datenfluss
 
+Vor jedem Zyklus prüft `main.py` die **Notabschaltung** (D-059) auf dem frisch geholten
+Zustandsabbild. Unabhängig davon fragt ein eigener **Wächter** die Bedingungs-Entität jede Sekunde
+einzeln ab. Trifft die Bedingung zu, läuft die Abschaltfolge:
+
+1. Alle Geräte gehen auf ihren sicheren Zustand (`safe_shutdown_ops`) — ohne Zeitschutz, Rampe,
+   Totband, Kaskade, One-Change und auch bei Zwang.
+2. Das Post-Cycle-Skript läuft.
+3. Die Zielzeilen werden geschrieben.
+
+Bei gesetztem Merker ruft `main.py` `EMSController.run_cycle()` nicht auf. Es wiederholt nur noch
+fehlgeschlagene Befehle und setzt `sensor.ems_notabschaltung_aktiv` sowie die Ladelimit-Sensoren
+(0 W). Zyklus und Notabschaltung teilen sich einen Schreib-Lock: eine laufende Regel-Charge bricht
+vor ihrem nächsten Befehl ab, die Abschaltfolge läuft danach. Nach dem Quittieren baut `main.py`
+den Controller neu auf.
+
 Ein Zyklus (`EMSController.run_cycle()`), ausgelöst alle `interval_s` Sekunden:
 
 1. **Globale Eingaben** aus HA lesen (Freigabe, Regelmodus, globaler Puffer, Einschaltreserve,
@@ -80,7 +99,7 @@ Ein Zyklus (`EMSController.run_cycle()`), ausgelöst alle `interval_s` Sekunden:
    `technische_freigabe` und der Gerätemodus müssen passen. Nach dem Gate der
    Schreibziel-Gesundheit (unten) liest jedes Gerät zusätzlich seinen **Zwang** (D-053,
    `input_boolean.ems_<prefix>_force`): er übersteuert Bedienfreigabe, Gerätemodus, globale
-   Sperren und die Notabschaltung, nie die technische Freigabe und nie ein kaputtes
+   Sperren und die Mehrfachabschaltung, nie die Notabschaltung (D-059), nie die technische Freigabe und nie ein kaputtes
    Schreibziel. `eligible` bleibt davon unberührt — ein Zwangsgerät ist kein Pool-Teilnehmer,
    sondern eine eigene Achse (`force_active`).
 3. **Netz bereinigen:** `residual_bereinigt_w = residual_w − Σ netz_support_w`. Nur Speicher
@@ -115,7 +134,10 @@ Ein Zyklus (`EMSController.run_cycle()`), ausgelöst alle `interval_s` Sekunden:
 6. **Defizit** aus `residual_bereinigt_w` ermitteln und prüfen, ob die regelbaren Geräte es
    allein abregeln können (`binary_immediate_off`). Bereinigt, nicht roh: sonst verschwindet das
    Defizit, sobald ein Speicher die Hauslast deckt, und die Verbraucher liefen faktisch aus der
-   Batterie.
+   Batterie. Können sie es nicht, ist die **Mehrfachabschaltung erlaubt** (Panel: orange Pille):
+   In Schritt 9 entfällt das One-Change-Limit, mehrere Binärgeräte dürfen im selben Zyklus
+   umschalten. Sie schaltet selbst nichts ab — ob ein Gerät aus soll, entscheiden weiterhin Pool,
+   Hysterese und Zeitschutz.
 7. **Pool nach Priorität verteilen**: regelbare Geräte reservieren ihre Schutzleistung, binäre
    Geräte ermitteln ihre hysteresebehaftete Wunschvorgabe. `protected_minimum_scope` entscheidet,
    ob der Schutz ausschließlich gegen Binärgeräte wirkt (`binary_only`) oder anschließend auch
@@ -190,6 +212,8 @@ Details zu Endpunkten: [api-referenz.md](api-referenz.md).
 │   ├── config_service.py   Ablauf der Konfigurationsverwaltung (ohne HTTP)
 │   ├── supervisor_client.py Supervisor-REST-Client für die eigenen Optionen
 │   ├── ha_client.py        HA-REST-Client
+│   ├── emergency.py        Notabschaltung: Merker, Abschaltfolge, Quittieren (D-059)
+│   ├── emergency_rules.py  Operatoren, Zielzeilen-Domains, Feldfehler (D-059)
 │   ├── flow_publisher.py   Anzeigedaten der Power Flow Card (D-046)
 │   ├── requirements.txt    Laufzeit-Abhängigkeiten des Containers
 │   ├── ems/
@@ -217,7 +241,8 @@ Zusagen, auf die sich der gesamte Code verlässt. Wer eine davon bricht, bricht 
 3. **Ein Zyklus liest einen Schnappschuss.** Innerhalb eines Zyklus ändert sich der gelesene
    Zustand nicht — sonst wären Pool und Zuteilung inkonsistent.
 4. **Im Regelpfad werden ausschließlich `input_*`-Helfer geschrieben.** Reale Geräte schaltet
-   Home Assistant. Darüber hinaus veröffentlicht das Add-on reine Anzeigedaten als eigene
+   Home Assistant. Ausnahme sind die Zielzeilen der Notabschaltung (D-059): Sie schreiben
+   ausdrücklich konfigurierte Fremd-Entitäten, um Geräte in ihre Automatik zurückzuschicken. Darüber hinaus veröffentlicht das Add-on reine Anzeigedaten als eigene
    `sensor.*`-Entitäten, die kein Gerät schalten und in keiner Regelentscheidung vorkommen
    (D-046, D-057). Der Regelpfad selbst bleibt davon unberührt.
 5. **Ein Zyklusfehler schaltet nichts.** Schlägt der Zyklus fehl, bleibt der letzte Sollwert
@@ -229,7 +254,7 @@ Zusagen, auf die sich der gesamte Code verlässt. Wer eine davon bricht, bricht 
 7. **Der sichere Zustand eines Speichers wird aktiv geschrieben.** Bei Lockout, fehlender
    Freigabe oder unbrauchbaren Messwerten schreibt das HEMS `0 W` und `standby` — es lässt den
    Sollwert nicht einfach stehen. Sonst entlädt der Speicher nach einem Add-on-Absturz bis leer.
-8. **Mindestlaufzeit und Abschaltverzögerung gelten auch bei Notabschaltung** — Geräteschutz
+8. **Mindestlaufzeit und Abschaltverzögerung gelten auch bei erlaubter Mehrfachabschaltung** — Geräteschutz
    schlägt Regelgüte (siehe [design-entscheidungen.md](design-entscheidungen.md)).
 9. **Ein defektes Gerät legt nur sich selbst still.** Ein fehlendes oder nicht beschreibbares
    Schreibziel und ein fehlgeschlagener Service-Aufruf werden dem verursachenden Gerät zugeordnet
@@ -251,7 +276,12 @@ Zusagen, auf die sich der gesamte Code verlässt. Wer eine davon bricht, bricht 
     reserviert nichts, bekommt nichts zugeteilt und wird nicht in den Pool zurückgerechnet. Seine
     Last ist Hausverbrauch. `_anforderung` folgt dem Zwangsschalter in beide Richtungen sofort:
     auch das Zwang-Ende wirkt ohne Zeitschutz und Rampe. Ein Zwang ist im Status immer als
-    `force_active` sichtbar, nie nur im Log.
+    `force_active` sichtbar, nie nur im Log. Die Notabschaltung (D-059) übersteuert er **nicht**.
+13. **Die Notabschaltung kennt keine Ausnahme und lässt sich nur von Hand lösen.** Ist sie
+    ausgelöst, regelt das HEMS nicht, bis ein Mensch im Tab Status quittiert. Quittieren geht nur
+    bei auswertbarer, nicht zutreffender Bedingung. Der Merker überdauert Neustarts von Add-on, HA
+    und Host. Ist die Merkerdatei unlesbar, gilt die Notabschaltung als aktiv. Ein nicht
+    auswertbarer Zustand der Bedingung löst dagegen nie aus.
 
 ## Start und Betrieb
 

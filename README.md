@@ -2,11 +2,12 @@
 
 PV-Überschuss-Energiemanagementsystem als Home-Assistant-Add-on. Es verteilt den Solarüberschuss
 zyklisch und prioritätsbasiert auf regelbare Verbraucher (Heizstab, Wallbox), binäre Verbraucher
-(Heizlüfter) und AC-gekoppelte Speicher — mit Zeitschutz, Hysterese, Rampenbegrenzung und
-Notabschaltung.
+(Heizlüfter) und AC-gekoppelte Speicher — mit Zeitschutz, Hysterese, Rampenbegrenzung,
+Mehrfachabschaltung bei Defizit und quittierpflichtiger Notabschaltung.
 
 Bedient wird es über ein Ingress-Panel und Home-Assistant-Helfer-Entitäten. Eine eigene Persistenz
-gibt es nicht: gelesen und geschrieben wird ausschließlich der HA-State.
+gibt es nicht: gelesen und geschrieben wird ausschließlich der HA-State. Einzige Ausnahme ist der
+Merker der Notabschaltung (D-059).
 
 ## Installation
 

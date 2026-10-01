@@ -225,6 +225,50 @@ export interface StatusResponse {
   interval_s: number
   /** Je Prozessstart neu. Erst eine ANDERE Kennung heißt „Neustart fertig". */
   instance_id: string
+  /** Notabschaltung (D-059). Neben `status`, weil bei aktiver Notabschaltung
+      kein Regelzyklus läuft und `status` der letzte Stand davor bleibt. */
+  emergency: EmergencyStatus
+}
+
+export type EmergencyConditionState = 'met' | 'not_met' | 'invalid'
+
+/** Ergebnis einer Bedingungsprüfung — im Status und von POST api/emergency/test. */
+export interface EmergencyCondition {
+  state: EmergencyConditionState
+  /** Roher State der Entität; null, wenn es sie nicht gibt oder HA nicht antwortet. */
+  current: string | null
+  reason: string
+}
+
+export interface EmergencyTrigger {
+  entity: string
+  operator: string
+  operator_label: string
+  value: string
+  measured: string | null
+}
+
+export interface EmergencyStatus {
+  configured: boolean
+  /** Leer, wenn die gespeicherte Konfiguration gültig ist. */
+  config_error: string
+  condition_entity: string
+  condition_operator: string
+  condition_operator_label: string
+  condition_value: string
+  active: boolean
+  /** Bereits als TT.MM.JJJJ hh:mm:ss in Berliner Zeit (eiserne Regel 9). */
+  since: string
+  since_iso: string
+  trigger: EmergencyTrigger | null
+  condition: EmergencyCondition | null
+  can_acknowledge: boolean
+  /** Warum gerade nicht quittiert werden kann; leer = erlaubt. */
+  ack_block_reason: string
+  /** Fehlgeschlagene Befehle, die je Zyklus wiederholt werden. */
+  pending_ops: string[]
+  file_error: string
+  sensor_entity: string
 }
 
 /** Zustand einer HA-Entität, so wie /api/controls und /api/ep sie liefern. */
@@ -343,6 +387,15 @@ export interface ConfigDevice {
   flow_navigation?: string
 }
 
+/** Eine Zielzeile der Notabschaltung (D-059). Der Wert ist immer Text:
+    „on"/„off", eine Option oder eine Zahl — je nach Domain der Entität. */
+export interface EmergencyTarget {
+  entity: string
+  value: string
+}
+
+export type EmergencyTargetKind = 'on_off' | 'option' | 'number' | 'press' | 'run'
+
 /** Eine Formel-Zeile (D-045): benannte HA-Entität für den Code darunter. */
 export interface FormulaVariable {
   name: string
@@ -366,6 +419,12 @@ export interface ConfigOptions {
   residual_formula_code: string
   battery_residual_formula_variables: FormulaVariable[]
   battery_residual_formula_code: string
+
+  /* Notabschaltung (D-059). Leere Entität = aus. */
+  emergency_condition_entity: string
+  emergency_condition_operator: string
+  emergency_condition_value: string
+  emergency_targets: EmergencyTarget[]
 
   /* Flow Card (D-046): Anlagenwerte und Anzeigeoptionen der Lovelace-Karte.
      Die Geräteliste kennt die Karte bereits aus `devices`. */
@@ -477,6 +536,10 @@ export interface ConfigSupported {
   power_signs: string[]
   protected_minimum_scopes: string[]
   global_defaults: Record<string, string | number | boolean>
+  /** Operatoren der Notabschaltung: gespeicherter Wert und Anzeige („>=" → „≥"). */
+  emergency_operators: { value: string; label: string }[]
+  /** Welche Art Wert eine Zielzeile je Domain trägt. */
+  emergency_target_kinds: Record<string, EmergencyTargetKind>
   device_defaults: Record<DeviceClass, Record<string, number | null>>
 }
 
@@ -515,12 +578,18 @@ export interface ConfigSaveResult {
   message?: string
 }
 
-/** Eintrag der Entitätssuche — bewusst ohne die vollständigen Attribute. */
+/** Eintrag der Entitätssuche — bewusst ohne die vollständigen Attribute.
+    Additiv nur, was ein Eingabefeld braucht, und nur, wenn die Entität es trägt. */
 export interface EntityOption {
   entity_id: string
   domain: string
   state: string
   friendly_name: string
+  options?: string[]
+  min?: number
+  max?: number
+  step?: number
+  unit?: string
 }
 
 /** Diagnose einer einzelnen Formel-Zeile im Testlauf (D-045). */

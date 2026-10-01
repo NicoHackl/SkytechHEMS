@@ -133,11 +133,17 @@ Immer paarweise: kräftiger Ton für Text/Icon, weicher Ton für die Fläche dah
 |---|---|---|---|---|
 | Erfolg / aktiv | `--ok` `#1f7a4d` | `--ok-soft` `#e7f4ed` | `#45c07f` | `rgba(69,192,127,.15)` |
 | Warnung / veraltet | `--warn` `#9a6700` | `--warn-soft` `#fbf3df` | `#d4a13c` | `rgba(212,161,60,.15)` |
+| Ausnahmezustand ohne Gefahr | `--caution` `#b54708` | `--caution-soft` `#fdefe3` | `#fd853a` | `rgba(253,133,58,.15)` |
 | Fehler / zerstörend | `--danger` `#b42318` | `--danger-soft` `#fbeae8` | `#f2695f` | `rgba(242,105,95,.15)` |
 
 Verwendung unverändert: Pill „Aktuell"/„Veraltet", Toasts, Status-Punkt, Feldfehler, `.alert`.
 `--on-status` (`#ffffff` hell, `#0c0d0f` dunkel) ist die Schrift auf einer vollflächigen
 Statusfarbe — betrifft nur die gefüllten Toasts.
+
+`--caution` ist Orange und liegt bewusst zwischen Warnung und Fehler: ein Regel-Ausnahmezustand,
+der auffallen soll, aber weder Gefahr noch Defekt bedeutet — derzeit die Pill „Mehrfachabschaltung
+erlaubt". Der Farbton (ca. 23°) ist klar vom Ocker der Warnung (ca. 40°) getrennt. Kontrast der
+Pill-Schrift auf ihrer Fläche: 4,8:1 hell, 5,8:1 dunkel.
 
 Grau (`--text-3` auf `--surface-2`) heißt „inaktiv/leer", nicht „Fehler".
 
@@ -207,6 +213,7 @@ erfindet keine Synonyme (`.button`, `.panel`, `.chip` gibt es nicht).
 | `.empty` | Leerzustand: Icon, Satz, Primäraktion |
 | `.center` + `.spinner` | Ladezustand |
 | `.alert` | Blockierende Fehlermeldung im Seitenkopf |
+| `.alert.emergency` + `.emergency-actions` | Mehrzeiliger Alarmblock der aktiven Notabschaltung (D-059) mit Quittier-Button und Sperrgrund daneben |
 | `.info-strip` | Einzeiliger Erklärhinweis über einer Liste |
 | `.modal-backdrop` / `.modal` / `.modal-head` / `.modal-body` / `.modal-foot` | Dialog |
 
@@ -222,7 +229,7 @@ erfindet keine Synonyme (`.button`, `.panel`, `.chip` gibt es nicht).
 | `.icon-btn` | 34×34 quadratisch, nur Icon — **braucht immer `aria-label`** |
 | `.danger-icon` | Modifier für `.icon-btn`: Hover wird rot |
 | `.row-actions` | Aktionsgruppe am rechten Rand einer Zeile |
-| `.pill` + `.ok` / `.warn` / `.err` / `.muted` / `.primary` | Statusanzeige, nie klickbar |
+| `.pill` + `.ok` / `.warn` / `.caution` / `.err` / `.muted` / `.primary` | Statusanzeige, nie klickbar |
 | `.switch` / `.track` / `.switch-label` | Schalter für boolesche Werte statt Checkbox |
 | `.device-card` + `.active` / `.idle` / `.off` / `.charge` / `.discharge` | Gerätekarte; der linke Rand trägt den Zustand. `charge` und `discharge` gibt es nur beim Speicher — er ist das einzige Gerät, das Leistung auch abgeben kann, und die Richtung ist beim Debuggen die erste Frage |
 | `.soc-bar` + `.fill` / `.mark` / `.mark.limit` | Ladezustandsbalken mit Markern für Minimum und Ladeschluss. Breite und Positionen sind dynamisch und deshalb Inline-Styles (siehe Regel 2) |
@@ -243,6 +250,7 @@ erfindet keine Synonyme (`.button`, `.panel`, `.chip` gibt es nicht).
 | `.entity-warn` | Warnzeile unter einer Entitätsauswahl: der gespeicherte Wert existiert gerade nicht |
 | `.config-state` | Zustandsanzeige links in der Aktionsleiste (Pill plus „Verwerfen") |
 | `.config-tabs` | Umschalter zwischen Konfigurationsansichten; `.btn.active` markiert den aktuellen |
+| `.formula-var-row` + `.pv-zeile` / `.ziel-zeile` | Wiederholte Formularzeile mit Löschen-Button: Formel-Variable, PV-Zeile der Flow Card, Zielzeile der Notabschaltung (Entität, Zustand). Unter 620px einspaltig |
 | `.helper-list` / `.helper-entity` | Abgeleitete HA-Helfer mit Zustand; die Entity-ID darunter in `--mono` |
 | `.restart-modal` | Modifier für `.modal`: nicht interaktiver Neustartzustand |
 

@@ -3,9 +3,10 @@ import { api } from '../api'
 import { PageHeader } from '../components/Layout'
 import { DeviceCard, KeyValue, type CardState } from '../components/DeviceCard'
 import { Icon } from '../components/Icon'
+import { useToast } from '../components/Toast'
 import { fmtDur, fmtW, modeLabel } from '../format'
 import type {
-  BatteryDevice, BinaryDevice, ControllableDevice, CycleStatus, Device,
+  BatteryDevice, BinaryDevice, ControllableDevice, CycleStatus, Device, EmergencyStatus,
   InactiveDeviceIssue, LadestufenAbbruch, StatusResponse,
 } from '../types'
 
@@ -96,10 +97,19 @@ export function Status() {
       <div className="content">
         {connectionError ? <div className="alert">Verbindungsfehler: {connectionError}</div> : null}
         {data.error ? <div className="alert">Letzter Zyklus fehlgeschlagen: {data.error}</div> : null}
+        {data.emergency?.active ? <NotabschaltungAlarm emergency={data.emergency} onChanged={load} /> : null}
 
         {cycle ? (
           <>
             <div className="pill-row">
+              {data.emergency?.active ? <span className="pill err">Notabschaltung aktiv</span> : null}
+              {data.emergency && !data.emergency.active && data.emergency.config_error
+                ? <span className="pill err">Notabschaltung falsch konfiguriert</span>
+                : null}
+              {data.emergency && !data.emergency.active && data.emergency.configured
+                && data.emergency.condition?.state === 'invalid'
+                ? <span className="pill warn">Notabschaltung: Bedingung nicht prüfbar</span>
+                : null}
               <span className={cycle.ems_enabled ? 'pill ok' : 'pill muted'}>
                 {cycle.ems_enabled ? 'EMS aktiv' : 'EMS inaktiv'}
               </span>
@@ -112,7 +122,7 @@ export function Status() {
                 </span>
               ) : null}
               {cycle.hard_lockout ? <span className="pill err">Sperre – Überschuss-Sensor ungültig</span> : null}
-              {cycle.binary_immediate_off ? <span className="pill err">Notabschaltung</span> : null}
+              {cycle.binary_immediate_off ? <span className="pill caution">Mehrfachabschaltung erlaubt</span> : null}
               {!cycle.residual_sensor_valid && !cycle.hard_lockout
                 ? <span className="pill warn">Überschuss-Sensor liefert keinen Wert</span>
                 : null}
@@ -237,6 +247,63 @@ export function Status() {
         )}
       </div>
     </>
+  )
+}
+
+/** Alarmblock der aktiven Notabschaltung (D-059) mit dem Quittier-Button.
+
+    Der Button bleibt gesperrt, solange die Bedingung zutrifft oder nicht
+    prüfbar ist; das Backend prüft beim Quittieren noch einmal frisch. */
+function NotabschaltungAlarm({ emergency, onChanged }: {
+  emergency: EmergencyStatus
+  onChanged: () => Promise<void>
+}) {
+  const [busy, setBusy] = useState(false)
+  const { toast } = useToast()
+  const trigger = emergency.trigger
+
+  const quittieren = async () => {
+    if (!window.confirm('Notabschaltung quittieren? Das HEMS regelt danach wieder normal.')) return
+    setBusy(true)
+    try {
+      await api.emergencyAcknowledge()
+      toast('Notabschaltung quittiert – das HEMS regelt wieder.', 'ok')
+    } catch (error) {
+      toast((error as Error).message, 'err')
+    } finally {
+      setBusy(false)
+      await onChanged()
+    }
+  }
+
+  return (
+    <div className="alert emergency" role="alert">
+      <b>Notabschaltung aktiv seit {emergency.since || 'unbekannt'}</b>
+      {trigger ? (
+        <span>
+          Ausgelöst durch <span className="mono">{trigger.entity} {trigger.operator_label} {trigger.value}</span>
+          {trigger.measured != null ? <> (gemessen: <span className="mono">{trigger.measured}</span>)</> : null}.
+        </span>
+      ) : null}
+      <span>
+        Alle HEMS-Lasten sind abgeworfen, das HEMS regelt nicht. Die Werte unten stammen vom
+        letzten Regelzyklus davor.
+      </span>
+      {emergency.pending_ops.length ? (
+        <span>
+          Noch nicht durchgegangen, wird je Zyklus wiederholt:
+          <ul>{emergency.pending_ops.map((op) => <li key={op} className="mono">{op}</li>)}</ul>
+        </span>
+      ) : null}
+      {emergency.file_error ? <span>{emergency.file_error}</span> : null}
+      <div className="emergency-actions">
+        <button type="button" className="btn btn-primary btn-sm"
+                disabled={busy || !emergency.can_acknowledge} onClick={() => void quittieren()}>
+          {busy ? 'Quittiere…' : 'Notabschaltung quittieren'}
+        </button>
+        {emergency.ack_block_reason ? <small>{emergency.ack_block_reason}</small> : null}
+      </div>
+    </div>
   )
 }
 
