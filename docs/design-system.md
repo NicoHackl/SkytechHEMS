@@ -213,6 +213,7 @@ erfindet keine Synonyme (`.button`, `.panel`, `.chip` gibt es nicht).
 | `.empty` | Leerzustand: Icon, Satz, Primäraktion |
 | `.center` + `.spinner` | Ladezustand |
 | `.alert` | Blockierende Fehlermeldung im Seitenkopf |
+| `.alert.emergency` + `.emergency-actions` | Mehrzeiliger Alarmblock der aktiven Notabschaltung (D-059) mit Quittier-Button und Sperrgrund daneben |
 | `.info-strip` | Einzeiliger Erklärhinweis über einer Liste |
 | `.modal-backdrop` / `.modal` / `.modal-head` / `.modal-body` / `.modal-foot` | Dialog |
 
@@ -249,6 +250,7 @@ erfindet keine Synonyme (`.button`, `.panel`, `.chip` gibt es nicht).
 | `.entity-warn` | Warnzeile unter einer Entitätsauswahl: der gespeicherte Wert existiert gerade nicht |
 | `.config-state` | Zustandsanzeige links in der Aktionsleiste (Pill plus „Verwerfen") |
 | `.config-tabs` | Umschalter zwischen Konfigurationsansichten; `.btn.active` markiert den aktuellen |
+| `.formula-var-row` + `.pv-zeile` / `.ziel-zeile` | Wiederholte Formularzeile mit Löschen-Button: Formel-Variable, PV-Zeile der Flow Card, Zielzeile der Notabschaltung (Entität, Zustand). Unter 620px einspaltig |
 | `.helper-list` / `.helper-entity` | Abgeleitete HA-Helfer mit Zustand; die Entity-ID darunter in `--mono` |
 | `.restart-modal` | Modifier für `.modal`: nicht interaktiver Neustartzustand |
 

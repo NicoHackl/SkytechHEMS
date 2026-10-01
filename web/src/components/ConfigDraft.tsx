@@ -45,8 +45,12 @@ interface ConfigDraftValue {
 
 const ConfigDraftContext = createContext<ConfigDraftValue | null>(null)
 
-/** Domains, die die Entitätsauswahl anbietet. */
-const ENTITY_DOMAINS = ['sensor', 'switch', 'script', 'input_number', 'input_boolean', 'input_select']
+/** Domains, die die Entitätsauswahl anbietet. Die hinteren kamen mit der
+    Notabschaltung (D-059): Bedingung und Zielzeilen reichen über Sensoren hinaus. */
+const ENTITY_DOMAINS = [
+  'sensor', 'switch', 'script', 'input_number', 'input_boolean', 'input_select',
+  'binary_sensor', 'select', 'number', 'light', 'fan', 'button', 'input_button',
+]
 
 const POLL_MS = 1500
 const POLL_TIMEOUT_MS = 90000

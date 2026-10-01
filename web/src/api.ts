@@ -1,7 +1,7 @@
 import type {
   ConfigOptions, ConfigResponse, ConfigSaveResult, ConfigValidation,
-  ControlGroup, EntityOption, FlowDashboards, FlowPreview, FormulaTestResult, FormulaVariable,
-  HaEntities, StatusResponse,
+  ControlGroup, EmergencyCondition, EmergencyStatus, EntityOption, FlowDashboards, FlowPreview,
+  FormulaTestResult, FormulaVariable, HaEntities, StatusResponse,
 } from './types'
 
 /* Einziger Ort im Frontend, an dem fetch aufgerufen wird. Basis-Pfad, Header und
@@ -98,4 +98,15 @@ export const api = {
   /* Dashboards und Ansichten für die Zielauswahl (D-049). Die Liste gibt es
      nur über WebSocket; das Add-on holt sie und reicht sie hier durch. */
   flowDashboards: () => request<FlowDashboards>('/flow/dashboards'),
+
+  /* Notabschaltung (D-059). Quittieren antwortet mit 409, solange die
+     Bedingung zutrifft oder nicht prüfbar ist; die Meldung nennt den Grund. */
+  emergencyAcknowledge: () =>
+    request<{ ok: boolean; emergency: EmergencyStatus }>('/emergency/acknowledge', { method: 'POST' }),
+  /* Live-Prüfung einer noch ungespeicherten Bedingung. Antwortet immer mit 200. */
+  emergencyTest: (entity: string, operator: string, value: string) =>
+    request<EmergencyCondition>('/emergency/test', {
+      method: 'POST',
+      body: JSON.stringify({ entity, operator, value }),
+    }),
 }

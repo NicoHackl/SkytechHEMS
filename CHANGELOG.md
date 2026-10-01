@@ -10,6 +10,28 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ### Hinzugefügt
 
+- **Notabschaltung (D-059).** Neuer Tab „Notabschaltung“ im Ingress-Panel.
+  - **Auslösen:** Eingetragen werden eine Entität, ein Operator (`=`, `≠`, `>`, `≥`, `<`, `≤`) und
+    ein Sollwert, z. B. `binary_sensor.netz = off`. Die Bedingung wird jede Sekunde geprüft, eine
+    Live-Prüfung zeigt schon vor dem Speichern, ob sie gerade zutrifft. Trifft sie zu, gehen
+    sofort und ohne Ausnahme alle HEMS-Geräte auf 0 W bzw. aus – auch mit Zwang, ohne
+    Mindestlaufzeit, Abschaltverzögerung oder Rampe. Danach laufen das Post-Cycle-Skript und die
+    frei konfigurierbaren Zielzeilen, z. B. die Betriebsart eines Speichers zurück auf Automatik.
+    Zielzeilen gibt es für `switch`, `input_boolean`, `light`, `fan` (an/aus), `select`,
+    `input_select` (Option), `number`, `input_number` (Zahl), `button`, `input_button` und
+    `script`.
+  - **Danach still:** Das HEMS schreibt nichts mehr, nur fehlgeschlagene Befehle werden je Zyklus
+    wiederholt. `unavailable`, `unknown` oder eine fehlende Entität lösen nicht aus.
+  - **Merker und Quittierung:** Der Zustand überdauert Neustarts von Add-on, Home Assistant und
+    Host; er liegt in `/data/notabschaltung.json`. Im Tab Status erscheint ein roter Alarmblock
+    mit dem Button „Notabschaltung quittieren“; er ist gesperrt, solange die Bedingung zutrifft
+    oder nicht prüfbar ist. `sensor.ems_notabschaltung_aktiv` (`on`/`off`) zeigt den Zustand in
+    Home Assistant an.
+  - **Hinweis:** Automationen, die HEMS-Helfer an echte Geräte weiterreichen, sollten diesen Sensor
+    als Bedingung prüfen.
+  - **Neue Optionen:** `emergency_condition_entity`, `emergency_condition_operator`,
+    `emergency_condition_value`, `emergency_targets`.
+
 - **Ladelimit-Sensor je AC-Speicher (D-057).** Nach jedem Regelzyklus schreibt das Add-on für
   jeden Speicher `sensor.ems_<prefix>_lade_limit_w` nach Home Assistant — z. B.
   `sensor.ems_e3dc_speicher_lade_limit_w`. Der Wert ist genau die maximale Ladeleistung, mit der

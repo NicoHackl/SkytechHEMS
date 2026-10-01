@@ -26,6 +26,7 @@ bei dieser Anzahl ist eine Unterordnerstruktur reine Bewegung ohne Orientierungs
 | `test_run_cycle.py` | Vollständiger Zyklus gegen einen gefälschten HA-State — die Integrationsebene |
 | `test_ep_uebernahme.py` | Übernahme der Energy-Pilot-Vorschläge je Regelmodus, Fallback auf Nutzerwerte |
 | `test_battery_device.py` | `BatteryDevice`: Pool-Semantik, SoC-Grenzen, getrennte `available_*`-Limits, Richtungsauflösung, Rampe, signierter Schreibvertrag |
+| `test_emergency.py` | Notabschaltung (D-059): Bedingung je Operator, Zielzeilen je Domain, Merkerdatei, Abschaltfolge, Wiederholung, Quittieren, Einbindung in den Zyklus von `main.py` |
 | `test_allocation_properties.py` | Property-Tests mit Hypothesis über die Pool-Verteilung und die Speicher-Invarianten P1–P7 |
 
 `tests/conftest.py` stellt die gemeinsamen Fixtures bereit (State-Schnappschüsse, Gerätekonfiguration).
@@ -81,6 +82,15 @@ Für den Zwang (D-053) zusätzlich verpflichtend:
     ersten regulären Neustart ausgesetzt; ab dem Folgezyklus gilt der Zeitschutz wieder. Für
     `force` und `force_leistung_w` gilt die volle Matrix aus Punkt 13, für Ampere-Geräte
     zusätzlich Phasenwahl und Umschaltsperre unter Zwang.
+
+Für die Notabschaltung (D-059) zusätzlich verpflichtend:
+
+15. **Ohne Ausnahme, in fester Reihenfolge** — alle Geräte (auch Zwangsgeräte) auf ihren sicheren
+    Zustand, dann Post-Cycle-Skript, dann Zielzeilen. Bei gesetztem Merker läuft
+    `EMSController.run_cycle()` nicht; nach einem Neustart läuft die Folge genau einmal erneut.
+16. **Nicht auswertbar löst nie aus, sperrt aber das Quittieren** — `unavailable`, `unknown`,
+    fehlende Entität, nicht erreichbares HA. Quittieren geht nur bei `not_met`; eine unlesbare
+    Merkerdatei gilt als aktiv.
 
 Ein Bugfix ohne Regressionstest ist nicht abgeschlossen. Der Test muss **vor** dem Fix
 nachweislich fehlschlagen.

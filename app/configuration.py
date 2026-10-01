@@ -19,6 +19,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
+from emergency_rules import condition_error, target_error
 from formula import FUNCTION_WHITELIST, RESERVED_OUTPUT_NAMES, validate_formula_source
 
 # ---------------------------------------------------------------------------
@@ -136,6 +137,12 @@ GLOBAL_DEFAULTS: Dict[str, Any] = {
     "residual_formula_code": "",
     "battery_residual_formula_variables": [],
     "battery_residual_formula_code": "",
+    # Notabschaltung (D-059). Leere Entität = aus. Die Zielzeilen setzen
+    # Geräte beim Auslösen zurück in ihre eigene Automatik.
+    "emergency_condition_entity": "",
+    "emergency_condition_operator": "==",
+    "emergency_condition_value": "",
+    "emergency_targets": [],
     # Flow Card (D-046/D-047): reine Anzeigedaten. Sie beeinflussen die Regelung
     # nicht und stehen deshalb bewusst nicht in GLOBAL_KEYS_FORCING_SHUTDOWN.
     "flow_publish": False,
@@ -183,6 +190,12 @@ FLOW_TEXT_KEYS: Tuple[str, ...] = (
     "flow_nav_pv", "flow_nav_grid", "flow_nav_house", "flow_nav_battery", "flow_nav_rest",
     "flow_freigabe_ring_farbe",
 )
+
+# Textfelder der Notabschaltung (D-059). Sie werden beim Normalisieren getrimmt.
+EMERGENCY_TEXT_KEYS: Tuple[str, ...] = (
+    "emergency_condition_entity", "emergency_condition_operator", "emergency_condition_value",
+)
+EMERGENCY_KEYS: Tuple[str, ...] = EMERGENCY_TEXT_KEYS + ("emergency_targets",)
 
 # Navigationsziele. Geprüft wird die Form, nicht die Existenz: eine gelöschte
 # Ansicht darf die Konfiguration nicht ungültig machen.
@@ -318,6 +331,9 @@ def normalize_options(raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         raw.get("battery_residual_formula_variables"))
     options["residual_formula_code"] = _as_text(options.get("residual_formula_code"))
     options["battery_residual_formula_code"] = _as_text(options.get("battery_residual_formula_code"))
+    for key in EMERGENCY_TEXT_KEYS:
+        options[key] = _as_text(options.get(key))
+    options["emergency_targets"] = _normalize_emergency_targets(raw.get("emergency_targets"))
 
     for key in FLOW_TEXT_KEYS:
         options[key] = _as_text(options.get(key))
@@ -351,6 +367,15 @@ def _normalize_formula_variables(raw: Any) -> List[Dict[str, str]]:
     """Formel-Zeilen (D-045) mit aufgelösten Feldern, ohne Prüfung."""
     return [
         {"name": _as_text(entry.get("name")), "entity": _as_text(entry.get("entity"))}
+        for entry in (raw or []) if isinstance(entry, dict)
+    ]
+
+
+def _normalize_emergency_targets(raw: Any) -> List[Dict[str, str]]:
+    """Zielzeilen der Notabschaltung (D-059), ohne Prüfung. Der Wert ist immer
+    Text: Zahl, Option oder on/off – was er bedeutet, entscheidet die Domain."""
+    return [
+        {"entity": _as_text(entry.get("entity")), "value": _as_text(entry.get("value"))}
         for entry in (raw or []) if isinstance(entry, dict)
     ]
 
@@ -514,6 +539,8 @@ def _validate_global(options: Dict[str, Any], result: ValidationResult) -> None:
     _validate_formula(options, result, output_name="hausbilanz",
                       variables_key="battery_residual_formula_variables",
                       code_key="battery_residual_formula_code")
+
+    _validate_emergency(options, result)
 
     unknown = [mode for mode in parse_modes(options["available_modes"])
                if mode not in NORMAL_MODES]
@@ -746,6 +773,32 @@ def _validate_formula(options: Dict[str, Any], result: ValidationResult, *,
         error = validate_formula_source(code, variable_names, output_name)
         if error:
             result.field_errors[code_key] = error
+
+
+def _validate_emergency(options: Dict[str, Any], result: ValidationResult) -> None:
+    """Prüft Bedingung und Zielzeilen der Notabschaltung (D-059).
+
+    Die fachlichen Regeln liegen in `emergency.py`, damit Validierung und
+    Ausführung nicht auseinanderlaufen; hier kommt nur das Entitätsformat dazu.
+    """
+    entity = options["emergency_condition_entity"]
+    if entity and not _ENTITY_RE.match(entity):
+        result.field_errors["emergency_condition_entity"] = (
+            "Vollständige Entity-ID erwartet, z. B. binary_sensor.netz."
+        )
+    for key, text in condition_error(entity, options["emergency_condition_operator"],
+                                     options["emergency_condition_value"]).items():
+        result.field_errors[f"emergency_condition_{key}"] = text
+
+    for index, row in enumerate(options["emergency_targets"]):
+        prefix = f"emergency_targets[{index}]"
+        if row["entity"] and not _ENTITY_RE.match(row["entity"]):
+            result.field_errors[f"{prefix}.entity"] = (
+                "Vollständige Entity-ID erwartet, z. B. select.e3dc_betriebsart."
+            )
+            continue
+        for key, text in target_error(row["entity"], row["value"]).items():
+            result.field_errors[f"{prefix}.{key}"] = text
 
 
 def _validate_controllable(device: Dict[str, Any], fail) -> None:

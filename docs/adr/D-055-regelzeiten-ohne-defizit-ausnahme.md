@@ -7,6 +7,10 @@
   [device_classes/controllable.md](../device_classes/controllable.md),
   [device_classes/battery.md](../device_classes/battery.md)
 
+> **Begriff:** „Notabschaltung" meint in diesem ADR die Mehrfachabschaltung binärer Geräte bei
+> Defizit (`binary_immediate_off`), die seit dem 01.10.2026 „Mehrfachabschaltung erlaubt" heißt.
+> Mit der heutigen Notabschaltung (D-059) hat sie nichts zu tun.
+
 ## Kontext
 
 Die Anlage läuft mit 2 s Zyklus, beide Speicher mit 3 s Hoch- und Runter-Regelzeit und 25 W

@@ -103,6 +103,15 @@ Dinge, die schon einmal Zeit gekostet haben:
   Domain, fehlen dem Betriebsart-Helfer Optionen oder erlaubt der Speicher-Sollwert keinen
   negativen Wert, ist **nur dieses** Gerät `runtime_active: false`. Es schreibt weiter seinen
   sicheren Zustand — der Grund steht in `inactive_reasons`, nicht nur im Log.
+- **Weiterleitungs-Automationen können die Zielzeilen der Notabschaltung überholen (D-059).** Die
+  Abschaltfolge setzt zuerst die HEMS-Helfer und danach die Zielzeilen. Eine HA-Automation, die
+  auf einen Helferwechsel reagiert und ihn an das echte Gerät weiterreicht, läuft asynchron und
+  kann **nach** den Zielzeilen schalten — z. B. einen Speicher wieder auf `standby` statt
+  Automatik. Solche Automationen brauchen die Bedingung
+  `sensor.ems_notabschaltung_aktiv` ist `off`.
+- **Während der Notabschaltung steht die Statusseite still.** Kein Regelzyklus läuft:
+  `status` und `cycle_count` zeigen den letzten Zyklus davor, die Flow Card wird nicht
+  aktualisiert. Nur die Ladelimit-Sensoren gehen auf 0 W.
 
 ## Offene Bugs
 

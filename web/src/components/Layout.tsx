@@ -16,11 +16,11 @@ export function Layout() {
 
   /* Wer den Konfigurationsbereich mit ungespeichertem Entwurf verlaesst, wird
      gefragt — innerhalb des Bereichs bleibt der Entwurf ohnehin erhalten.
-     Sensoren (D-045) und Flow Card (D-046) teilen sich denselben Entwurf und
-     zaehlen deshalb dazu. */
+     Sensoren (D-045), Flow Card (D-046) und Notabschaltung (D-059) teilen sich
+     denselben Entwurf und zaehlen deshalb dazu. */
   const guard = (event: MouseEvent<HTMLAnchorElement>, to: string) => {
     if (!dirty || to.startsWith('/konfiguration') || to.startsWith('/sensoren')
-        || to.startsWith('/flow-card')) return
+        || to.startsWith('/flow-card') || to.startsWith('/notabschaltung')) return
     if (!window.confirm('Es gibt ungespeicherte Änderungen an der Konfiguration. Trotzdem wechseln?')) {
       event.preventDefault()
     }
@@ -54,6 +54,10 @@ export function Layout() {
           </NavLink>
           <NavLink to="/flow-card" className={navClass} onClick={(event) => guard(event, '/flow-card')}>
             <Icon name="flow" /><span>Flow Card</span>
+            {dirty ? <span className="count">•</span> : null}
+          </NavLink>
+          <NavLink to="/notabschaltung" className={navClass} onClick={(event) => guard(event, '/notabschaltung')}>
+            <Icon name="warning" /><span>Notabschaltung</span>
             {dirty ? <span className="count">•</span> : null}
           </NavLink>
         </nav>

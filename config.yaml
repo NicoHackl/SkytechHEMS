@@ -3,7 +3,8 @@ description: >-
   PV-Überschuss-Energiemanagementsystem für Home Assistant. Verteilt den
   Solarüberschuss automatisch und prioritätsbasiert auf regelbare Verbraucher
   (Heizstab, Wallbox), binäre Verbraucher (Heizlüfter) und AC-gekoppelte
-  Speicher – mit Zeitschutz, Hysterese, Rampenbegrenzung und Mehrfachabschaltung bei Defizit.
+  Speicher – mit Zeitschutz, Hysterese, Rampenbegrenzung, Mehrfachabschaltung bei Defizit und
+  quittierpflichtiger Notabschaltung.
   Bedienung über ein integriertes Web-UI und HA-Helfer-Entitäten.
 
   KONFIGURATION: Diese Seite ist der YAML-Editor des Supervisors, weil das
@@ -98,6 +99,10 @@ options:
   residual_formula_code: ""
   battery_residual_formula_variables: []
   battery_residual_formula_code: ""
+  emergency_condition_entity: ""
+  emergency_condition_operator: "=="
+  emergency_condition_value: ""
+  emergency_targets: []
   flow_publish: false
   flow_title: "Leistungsfluss"
   flow_watt_threshold: 1000
@@ -210,6 +215,12 @@ schema:
     - name: str
       entity: str
   battery_residual_formula_code: str?
+  emergency_condition_entity: str?
+  emergency_condition_operator: str?
+  emergency_condition_value: str?
+  emergency_targets:
+    - entity: str
+      value: str?
   flow_publish: bool?
   flow_title: str?
   flow_watt_threshold: int(0,100000)?

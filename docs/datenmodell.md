@@ -58,7 +58,7 @@ für [globale Werte](device_classes/global.md), [regelbare Geräte](device_class
 | `input_boolean.ems_<prefix>_technische_freigabe` | `input_boolean` | Technische Freigabe. Nur wenn **beide** Freigaben `on` sind, wirkt das Gerät mit — hartes Gate in jedem Modus |
 | `input_select.ems_<prefix>_modus` | `input_select` | `auto` = EP-Vorschlag für dieses Gerät, `manuell` = normale Regeln, `aus` = Kill-Switch |
 | `input_number.ems_<prefix>_prioritat` | `input_number` | Kleinere Zahl = höhere Priorität |
-| `input_boolean.ems_<prefix>_force` | `input_boolean` | Zwang (D-053), optional. `on` = Gerät läuft unabhängig von Pool, Bedien-Freigabe, Modus, globalen Sperren und Mehrfachabschaltung; nie ohne technische Freigabe oder mit kaputtem Schreibziel. Nicht beim Speicher |
+| `input_boolean.ems_<prefix>_force` | `input_boolean` | Zwang (D-053), optional. `on` = Gerät läuft unabhängig von Pool, Bedien-Freigabe, Modus, globalen Sperren und Mehrfachabschaltung; nie ohne technische Freigabe, mit kaputtem Schreibziel oder während der Notabschaltung (D-059). Nicht beim Speicher |
 
 ### Regelbare Geräte
 
@@ -298,6 +298,38 @@ Zeitangaben für Menschen liefert das Add-on zusätzlich als `last_cycle_at` im 
 `TT.MM.JJJJ hh:mm:ss` (Berliner Zeit, eiserne Regel 9). Das unverändert gebliebene
 Maschinenformat steht in `last_cycle_at_iso` und `status.timestamp`.
 
+### Notabschaltung (`emergency`, D-059)
+
+Neben `status` liefert `/api/status` das Objekt `emergency`. Es liegt nicht in `status`, weil bei
+aktiver Notabschaltung kein Regelzyklus läuft und `status` der letzte Stand davor bleibt.
+
+| Feld | Typ | Bedeutung |
+|---|---|---|
+| `configured` | bool | Eine gültige Bedingung ist konfiguriert und wird überwacht |
+| `config_error` | string | Leer, sonst der Grund, warum die Überwachung aus ist oder Zielzeilen übersprungen werden |
+| `condition_entity`, `condition_operator`, `condition_operator_label`, `condition_value` | string | Die wirksame Bedingung; `condition_operator_label` ist die Anzeigeform (`≥` statt `>=`) |
+| `active` | bool | Der Merker ist gesetzt — das HEMS regelt nicht |
+| `since` | string | Auslösezeit als `TT.MM.JJJJ hh:mm:ss` (Berliner Zeit); `since_iso` im Maschinenformat |
+| `trigger` | object \| null | `entity`, `operator`, `operator_label`, `value`, `measured` zum Auslösezeitpunkt |
+| `condition` | object \| null | Letzte Prüfung: `state` (`met`, `not_met`, `invalid`), `current` (roher State), `reason` |
+| `can_acknowledge` | bool | Quittieren ist laut letzter Prüfung erlaubt |
+| `ack_block_reason` | string | Warum nicht quittiert werden kann; leer = erlaubt |
+| `pending_ops` | Liste | Fehlgeschlagene Befehle der Abschaltfolge, z. B. `select.select_option select.e3dc_modus` |
+| `file_error` | string | Leer, sonst ein Problem mit der Merkerdatei |
+| `sensor_entity` | string | `sensor.ems_notabschaltung_aktiv` |
+
+### Merkerdatei `/data/notabschaltung.json` (D-059)
+
+Einzige eigene Persistenz des Add-ons. Atomar geschrieben (temporäre Datei, dann Umbenennen):
+
+```json
+{"active": true, "since": "2026-10-01T14:30:05+02:00",
+ "trigger": {"entity": "binary_sensor.netz", "operator": "==", "value": "off", "measured": "off"}}
+```
+
+Fehlt die Datei, ist die Notabschaltung nicht aktiv. Ist sie unlesbar oder fehlt `active` als
+Wahrheitswert, gilt sie als **aktiv**.
+
 ## Vertrag zum Energy Pilot
 
 Der Energy Pilot ist ein eigenes Add-on. Es gibt **keinen** direkten Aufruf zwischen beiden — der
@@ -373,6 +405,19 @@ Je AC-Speicher (`class: battery`) schreibt das Add-on nach jedem Zyklus einen An
 Quelle ist ausschließlich der Status des Zyklus; der Sensor rechnet nichts selbst. Dafür trägt
 der Speicherstatus seit D-057 zusätzlich `entity_prefix`. Details:
 [device_classes/battery.md](device_classes/battery.md#ladelimit-sensor-d-057).
+
+Bei aktiver Notabschaltung (D-059) steht der State auf `0` und `blockiert_grund` auf
+„Notabschaltung aktiv“; die übrigen Attribute bleiben der letzte Stand davor.
+
+## Veröffentlichter Notabschaltungs-Sensor
+
+| Entität | State | Attribute | Schreibtakt |
+|---|---|---|---|
+| `sensor.ems_notabschaltung_aktiv` | `on` / `off` | `seit`, `ausloeser_entity`, `operator`, `sollwert`, `gemessener_wert`, `offene_befehle` | jeder Zyklus und bei jeder Zustandsänderung |
+
+Reine Anzeige, Quelle der Wahrheit ist die Merkerdatei. HA-Automationen können darauf reagieren —
+insbesondere sollten Automationen, die HEMS-Helfer an echte Geräte weiterreichen, ihn als
+Bedingung prüfen.
 
 ## Migrationen
 

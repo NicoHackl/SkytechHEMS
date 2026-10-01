@@ -208,6 +208,32 @@ configuration:
       Same as residual_formula_code, but the variable is named "hausbilanz"
       and a valid result replaces battery_residual_power_entity instead of
       residual_power_entity.
+  emergency_condition_entity:
+    name: Emergency shutdown – condition entity (D-059)
+    description: >-
+      HA entity checked every second, e.g. "binary_sensor.grid_available". If
+      the condition is met, HEMS immediately sheds all loads, applies the
+      target states and only resumes control after acknowledgement in the
+      ingress panel. Leave empty = emergency shutdown off. Easier to maintain
+      in the "Notabschaltung" tab of the ingress panel.
+  emergency_condition_operator:
+    name: Emergency shutdown – operator
+    description: >-
+      Comparison between state and target value: == (equal), != (not equal),
+      >, >=, <, <=. The four magnitude comparisons require numbers.
+  emergency_condition_value:
+    name: Emergency shutdown – target value
+    description: >-
+      Value the state is compared with, e.g. "off" or "0". Text is compared
+      case-insensitively.
+  emergency_targets:
+    name: Emergency shutdown – target states
+    description: >-
+      List of HA entities set after all HEMS loads have been shed – e.g. the
+      operating mode of a battery back to automatic. Each entry has entity and
+      value: "on" or "off" for switch, input_boolean, light and fan, the option
+      for select and input_select, a number for number and input_number;
+      button, input_button and script are triggered (value empty).
   speicher_in_residual_enthalten:
     name: Battery power included in surplus sensor
     description: >-

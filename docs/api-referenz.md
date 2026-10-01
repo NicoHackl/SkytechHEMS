@@ -104,6 +104,34 @@ tragen dafür additiv `force_requested`, `force_active`, `force_blocked_reason` 
 `force_w`; Feldbedeutung in [datenmodell.md](datenmodell.md#statusvertrag-apistatus). Ein
 Zwangsgerät hat im Kartenvertrag keine `inactive_reasons` und `zwang: true`.
 
+Additiv neben `status` steht das Objekt **`emergency`** (D-059) mit dem Zustand der
+Notabschaltung: `configured`, `active`, `since`, `trigger`, `condition`, `can_acknowledge`,
+`ack_block_reason`, `pending_ops` u. a. Felder in
+[datenmodell.md](datenmodell.md#notabschaltung-emergency-d-059). Bei `active: true` ist `status`
+der letzte Zyklus vor der Notabschaltung, `cycle_count` steht still.
+
+### `POST /api/emergency/acknowledge`
+
+Quittiert die Notabschaltung (D-059). Kein Rumpf. Die Bedingung wird dafür **frisch** über
+`GET /api/states/<entity_id>` geprüft, nicht aus dem letzten Zyklus übernommen.
+
+- `200` `{"ok": true, "emergency": { … }}` — Merker gelöscht, Controller neu aufgebaut, das HEMS
+  regelt ab dem nächsten Zyklus wieder.
+- `409` `{"error": "…", "emergency": { … }}` — keine Notabschaltung aktiv, die Bedingung trifft
+  noch zu, sie ist nicht prüfbar (z. B. `unavailable` oder HA nicht erreichbar), oder die
+  Merkerdatei lässt sich nicht löschen. `error` nennt den Grund auf Deutsch.
+
+Ist keine Bedingung mehr konfiguriert, ist Quittieren immer erlaubt.
+
+### `POST /api/emergency/test`
+
+Live-Prüfung einer noch **ungespeicherten** Bedingung für das Panel.
+**Rumpf** `{"entity": "binary_sensor.netz", "operator": "==", "value": "off"}`.
+**Antwort `200`** — immer 200, ein Diagnosewerkzeug wie `/api/config/sensors/test`:
+`{"state": "met" | "not_met" | "invalid", "current": "off", "reason": "…"}`. Eine leere Entität,
+ein ungültiger Operator oder Sollwert und ein nicht erreichbares HA ergeben `state: "invalid"`
+mit Begründung. `400` nur bei kaputtem Anfragerumpf.
+
 ### `GET /api/controls`
 
 Liefert die frischen Zustände aller EMS-Helfer, gefiltert auf die Präfixe
@@ -210,7 +238,7 @@ Alles, was die Konfigurationsseite zum Anzeigen braucht.
 | `can_save`, `can_restart` | Fähigkeiten dieser Instanz — ohne Supervisor beide `false` |
 | `supervisor_available`, `supervisor_error` | Warum gegebenenfalls nicht |
 | `instance_id` | Kennung dieses Prozessstarts |
-| `supported` | Wertebereiche und Formular-Startwerte: Modi, Klassen, Log-Level, Einheiten, Phasen, Vorzeichen, Defaults je Klasse |
+| `supported` | Wertebereiche und Formular-Startwerte: Modi, Klassen, Log-Level, Einheiten, Phasen, Vorzeichen, Defaults je Klasse, dazu `emergency_operators` (`[{value, label}]`) und `emergency_target_kinds` (Domain → `on_off`, `option`, `number`, `press`, `run`) für die Notabschaltung |
 
 Außerhalb des Add-on-Containers fällt der Endpunkt auf die lokal gelesene Konfiguration zurück.
 Speichern und Neustarten sind dann deaktiviert — es wird niemals vorgetäuscht, ein
@@ -221,7 +249,8 @@ Supervisor-Schreibvorgang sei erfolgreich gewesen.
 Reduzierte Entitätsliste aus dem letzten HA-Schnappschuss für die Suchauswahl:
 `{entity_id, domain, state, friendly_name}`. Ohne Parameter `sensor`, `switch` und `script`;
 `?domains=input_number,input_boolean` fragt andere Domains ab. Bewusst ohne die vollständigen
-Attribute.
+Attribute. Additiv (D-059) und nur, wenn die Entität sie trägt: `options` (Liste), `min`, `max`,
+`step` und `unit` — was die Zielzeilen der Notabschaltung für ihre Eingabefelder brauchen.
 
 ### `POST /api/config/validate`
 
@@ -379,10 +408,11 @@ Vom Add-on genutzte Endpunkte von Home Assistant:
 | Dienst | Endpunkt | Wofür | Verhalten bei Ausfall |
 |---|---|---|---|
 | Home Assistant | `GET /api/states` | Kompletter State-Schnappschuss je Zyklus, Timeout 10 s | Zyklus wird abgebrochen und in `/api/status.error` gemeldet; die zuletzt geschriebenen Sollwerte bleiben stehen |
+| Home Assistant | `GET /api/states/<entity_id>` | Wächter der Notabschaltung (D-059) jede Sekunde, Quittieren und Live-Prüfung, Timeout 5 s | `404` heißt „Entität fehlt“, ein Verbindungsfehler „nicht erreichbar“ — beides löst nicht aus und sperrt das Quittieren; der Wächter loggt jede neue Fehlermeldung einmal |
 | Supervisor | `GET /addons/self/info` | Gespeicherte Add-on-Optionen lesen, Timeout 10 s | `GET /api/config` fällt auf die lokal gelesene Konfiguration zurück, Speichern und Neustarten sind gesperrt |
 | Supervisor | `POST /addons/self/options/validate` | Optionen gegen das Manifest-Schema prüfen, Timeout 10 s | Fachliche Ablehnung wird als `422` mit der Supervisor-Meldung durchgereicht; fehlende Manager-Rolle als erklärendes `403` |
 | Supervisor | `POST /addons/self/options` | Optionen speichern, Timeout 10 s | Fehlende Manager-Rolle als erklärendes `403`, Verbindungsfehler als `502`; es wird nie vorgetäuscht, das Speichern sei gelungen |
 | Supervisor | `POST /addons/self/restart` | Eigenes Add-on neu starten, Timeout 30 s | Wird erst nach der ausgelieferten `202`-Antwort angestoßen |
 | Home Assistant | `POST /api/services/<domain>/<service>` | Sollwerte, Schaltanforderungen, Post-Cycle-Skript, Timeout 5 s | Eine fehlgeschlagene Write-Op wird ihrem Gerät zugeordnet, geloggt und im Status sichtbar gemacht; das Gerät fährt im nächsten Zyklus nur noch seinen sicheren Zustand, die übrigen regeln weiter. Das Post-Cycle-Skript wirft und wird als Warnung gemeldet |
-| Home Assistant | `POST /api/states/<entity_id>` | Anzeigedaten der Power Flow Card (D-046) und `sensor.ems_<prefix>_lade_limit_w` je Speicher (D-057), Timeout 5 s | Wird protokolliert und verschluckt: ein misslungener Anzeigeschrieb darf keinen Regelzyklus kosten. Die Karte zeichnet in der Lücke aus den HA-Entitäten weiter; der Ladelimit-Sensor behält seinen letzten Wert |
+| Home Assistant | `POST /api/states/<entity_id>` | Anzeigedaten der Power Flow Card (D-046), `sensor.ems_<prefix>_lade_limit_w` je Speicher (D-057) und `sensor.ems_notabschaltung_aktiv` (D-059), Timeout 5 s | Wird protokolliert und verschluckt: ein misslungener Anzeigeschrieb darf keinen Regelzyklus kosten. Die Karte zeichnet in der Lücke aus den HA-Entitäten weiter; der Ladelimit-Sensor behält seinen letzten Wert |
 | Home Assistant | `WS /api/websocket` — `lovelace/dashboards/list`, `lovelace/config` | Dashboards und Ansichten für die Zielauswahl (D-049), Timeout 10 s je Nachricht | Wird protokolliert und verschluckt; die Seite fällt auf ein Textfeld zurück. Strategie- und YAML-Dashboards erscheinen ohne Ansichten mit einer Warnung |

@@ -8,9 +8,11 @@
 
 PV-Überschuss-Energiemanagementsystem als Home-Assistant-Add-on. Verteilt den Solarüberschuss
 zyklisch und prioritätsbasiert auf regelbare Verbraucher (Heizstab, Wallbox) und binäre
-Verbraucher (Heizlüfter) — mit Zeitschutz, Hysterese, Rampenbegrenzung und Mehrfachabschaltung bei Defizit.
+Verbraucher (Heizlüfter) — mit Zeitschutz, Hysterese, Rampenbegrenzung, Mehrfachabschaltung bei
+Defizit und quittierpflichtiger Notabschaltung.
 Bedienung über ein Ingress-Panel und Home-Assistant-Helfer-Entitäten; eigene Persistenz gibt es
-nicht, gelesen und geschrieben wird ausschließlich der HA-State.
+nicht, gelesen und geschrieben wird ausschließlich der HA-State. Einzige Ausnahme ist der Merker
+der Notabschaltung in `/data/notabschaltung.json` (D-059).
 
 Tech-Stack: Python 3.11 mit aiohttp (Add-on-Dienst), React 18 + TypeScript + Vite (Oberfläche),
 Docker-Image als Home-Assistant-Add-on mit Ingress.

@@ -80,8 +80,10 @@ stillschweigend vorausgesetzt.
 |---|---|---|---|
 | Nutzerkonten, Namen, Adressen | nein | — | — |
 | Verbrauchs- und Erzeugungsdaten | ja, flüchtig im Speicher für die Dauer eines Zyklus | nirgends persistiert | entfällt |
+| Merker der Notabschaltung (D-059) | ja: aktiv ja/nein, Auslösezeit, Bedingung und gemessener Wert | `/data/notabschaltung.json` | wird beim Quittieren auf „nicht aktiv“ zurückgesetzt |
 
-Das Add-on legt keine Datei und keine Datenbank an. Historie führt allein Home Assistant.
+Das Add-on legt keine Datenbank an. Einzige eigene Datei ist der Merker der Notabschaltung; er
+enthält keine personenbezogenen Daten und keine Zugangsdaten. Historie führt allein Home Assistant.
 
 ## Externe Dienste
 

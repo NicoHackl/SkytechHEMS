@@ -223,6 +223,33 @@ configuration:
       Wie residual_formula_code, aber die Variable heißt „hausbilanz" und ein
       gültiges Ergebnis ersetzt battery_residual_power_entity statt
       residual_power_entity.
+  emergency_condition_entity:
+    name: Notabschaltung – Bedingungs-Entität (D-059)
+    description: >-
+      HA-Entität, deren Zustand jede Sekunde geprüft wird, z. B.
+      „binary_sensor.netz_vorhanden“. Trifft die Bedingung zu, wirft das HEMS
+      sofort alle Lasten ab, setzt die Zielzustände und regelt erst nach dem
+      Quittieren im Ingress-Panel wieder. Leer lassen = Notabschaltung aus.
+      Bequemer zu pflegen im Tab „Notabschaltung“ des Ingress-Panels.
+  emergency_condition_operator:
+    name: Notabschaltung – Operator
+    description: >-
+      Vergleich zwischen Zustand und Sollwert: == (gleich), != (ungleich),
+      >, >=, <, <=. Die vier Größenvergleiche verlangen Zahlen.
+  emergency_condition_value:
+    name: Notabschaltung – Sollwert
+    description: >-
+      Wert, mit dem der Zustand verglichen wird, z. B. „off“ oder „0“. Text
+      wird ohne Groß-/Kleinschreibung verglichen.
+  emergency_targets:
+    name: Notabschaltung – Zielzustände
+    description: >-
+      Liste von HA-Entitäten, die beim Auslösen nach dem Abwurf aller HEMS-Lasten
+      gesetzt werden – z. B. die Betriebsart eines Speichers zurück auf
+      Automatik. Je Eintrag entity und value: bei switch, input_boolean, light
+      und fan „on“ oder „off“, bei select und input_select die Option, bei
+      number und input_number eine Zahl; button, input_button und script
+      werden ausgelöst (value leer).
   speicher_in_residual_enthalten:
     name: Speicherleistung im Überschuss-Sensor enthalten
     description: >-
