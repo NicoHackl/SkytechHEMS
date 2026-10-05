@@ -27,6 +27,12 @@ input_boolean:
     icon: mdi:home-battery
     initial: on
 
+  # Optional (D-060): Überschussverbraucher mit ems_<prefix>_aus_speicher_decken
+  # bei einem PV-Einbruch überbrücken. Fehlt der Helfer, deckt der Speicher nur das Haus.
+  ems_acspeicher1_uberschussverbraucher_versorgen:
+    name: "EMS Speicher 1 Überschussverbraucher versorgen"
+    icon: mdi:battery-arrow-down
+
   # Optionale Ladestufen (D-056) — bewusst auskommentiert, siehe input_number.yaml.
   #
   # ems_acspeicher1_ladestufe_1_aktiv:

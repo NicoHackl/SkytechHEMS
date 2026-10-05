@@ -417,6 +417,10 @@ class EMSController:
         # zurückaddiert und darf vom Speicher gedeckt werden.
         hems_last_w          = sum(d.current_w        for d in self._devices)
         hems_last_gemessen_w = sum(d.gemessene_last_w for d in self._devices)
+        # D-060: HEMS-Last, die ein freigegebener Speicher überbrücken darf. Sie
+        # bleibt in entlade_basis_w zurückaddiert – das Hausdefizit ändert sich
+        # nicht –, und wird unten als eigener Verbraucheranteil ausgewiesen.
+        speicher_deckbar_w   = sum(d.speicher_deckbare_last_w for d in self._devices)
 
         pool_roh_w = residual_bereinigt_w + hems_last_w
 
@@ -442,12 +446,21 @@ class EMSController:
         # Bewusst nicht max(x, 0.0): das liefert bei x == -0.0 ein negatives Null
         # zurueck, und die Oberflaeche zeigte dann "-0 W".
         if not ems_enabled or effective_mode == "aus" or hard_lockout:
-            pool_w = hausdefizit_w = 0.0
+            pool_w = hausdefizit_w = verbraucherdefizit_w = 0.0
         else:
             pool_w        = pool_roh_w if pool_roh_w > 0 else 0.0
             hausdefizit_w = (
                 -entlade_basis_w
                 if (not batteries or battery_residual_sensor_valid) and entlade_basis_w < 0
+                else 0.0
+            )
+            # Der Teil des Fehlbetrags, der erst entsteht, wenn die freigegebenen
+            # Überschussverbraucher NICHT zurückaddiert werden. Nur mit Speicher:
+            # ohne bleibt der Statusvertrag bit-identisch (P7).
+            gesamt_basis_w = entlade_basis_w - speicher_deckbar_w
+            verbraucherdefizit_w = (
+                -gesamt_basis_w - hausdefizit_w
+                if batteries and battery_residual_sensor_valid and gesamt_basis_w < 0
                 else 0.0
             )
 
@@ -464,7 +477,9 @@ class EMSController:
         # Ein Speicher, der entlädt, während nennenswerter Überschuss verteilt
         # wird, ist physikalisch fast immer ein Konfigurationsfehler. Bewusst
         # ohne debug_output-Bedingung – das ist keine Debug-Information.
-        if netz_support_w > 200 and pool_w > 200:
+        # Eine Überbrückung nach D-060 ist genau dieser Fall, aber gewollt: der
+        # Pool regelt herunter, während der Speicher die Lücke schließt.
+        if netz_support_w - verbraucherdefizit_w > 200 and pool_w > 200:
             log.warning("EMS Speicher: Entladung %.0fW UND Pool %.0fW gleichzeitig – "
                         "Speicher entlädt in den PV-Überschuss hinein. Prüfen: "
                         "speicher_in_residual_enthalten, Summensensor doppelt gezählt, "
@@ -532,7 +547,8 @@ class EMSController:
         # MUSS nach der Verbraucher-Allokation und vor calculate_ramp laufen:
         # der Speicher löst dort seine Richtung auf (D-B07).
         entlade_abschlag_w = safe_float(st.get(HA_AC_SPEICHER_ENTLADE_ABSCHLAG_W))
-        self._allocate_discharge(batteries, hausdefizit_w, entlade_abschlag_w)
+        self._allocate_discharge(batteries, hausdefizit_w, entlade_abschlag_w,
+                                 verbraucherdefizit_w)
 
         # ── 11. Rampenbegrenzung ─────────────────────────────────────────
         # Ohne Defizit-Ausnahme (D-055): auch bei Netzbezug gelten Runter-
@@ -575,6 +591,8 @@ class EMSController:
             "pool_w":                pool_w,
             "entlade_basis_w":       entlade_basis_w,
             "hausdefizit_w":         hausdefizit_w,
+            "speicher_deckbar_w":    speicher_deckbar_w,
+            "verbraucherdefizit_w":  verbraucherdefizit_w,
             "current_deficit_w":     current_deficit_w,
             "binary_immediate_off":  binary_immediate_off,
             "binary_total_w":        binary_total_w,
@@ -596,8 +614,9 @@ class EMSController:
     # ------------------------------------------------------------------
 
     def _allocate_discharge(self, batteries: List[BatteryDevice],
-                            hausdefizit_w: float, entlade_abschlag_w: float) -> None:
-        """Verteilt den Hausverbrauchs-Fehlbetrag auf die entladebereiten Speicher.
+                            hausdefizit_w: float, entlade_abschlag_w: float,
+                            verbraucherdefizit_w: float = 0.0) -> None:
+        """Verteilt den Fehlbetrag auf die entladebereiten Speicher.
 
         Rechnet jeder Speicher unabhängig "ich decke das Defizit", entladen bei
         drei Speichern und 2 kW Defizit alle drei mit 2 kW und 4 kW gehen ins
@@ -605,40 +624,62 @@ class EMSController:
 
         hausdefizit_w enthält per Konstruktion KEINE HEMS-Gerätelast, auch keine
         fremdgesteuerte – die Abgrenzung "nicht für Überschussverbraucher" ist
-        damit bereits erledigt und braucht hier keine Sonderbehandlung. Eine
-        Zwangslast (D-053) zählt dagegen als Hausverbrauch und steckt im Defizit.
+        damit bereits erledigt. Eine Zwangslast (D-053) zählt dagegen als
+        Hausverbrauch und steckt im Defizit. verbraucherdefizit_w ist der Teil,
+        den freigegebene Überschussverbraucher verursachen (D-060): er geht erst
+        nach dem Hausdefizit und nur an Speicher mit
+        uberschussverbraucher_versorgen.
         """
         for battery in batteries:
             battery.set_discharge_target(0.0)
 
-        if hausdefizit_w <= 0:
+        if hausdefizit_w <= 0 and verbraucherdefizit_w <= 0:
             return
 
-        kandidaten = [b for b in batteries if b.entlade_kapazitaet_w() > 0]
+        kapazitaet = {id(b): b.entlade_kapazitaet_w() for b in batteries}
+        kandidaten = [b for b in batteries if kapazitaet[id(b)] > 0]
         if not kandidaten:
-            if hausdefizit_w > 100:
-                log.info("EMS Speicher: %.0fW Hausdefizit, kein Speicher entladebereit",
-                         hausdefizit_w)
+            if hausdefizit_w + verbraucherdefizit_w > 100:
+                log.info("EMS Speicher: %.0fW Hausdefizit, %.0fW Überbrückung, "
+                         "kein Speicher entladebereit", hausdefizit_w, verbraucherdefizit_w)
             return
 
         # Der Abschlag ist eine Systemgrösse und wird EINMAL abgezogen, nicht je
         # Speicher. Er sorgt dafür, dass im eingeschwungenen Zustand ein kleiner
-        # Restbezug bleibt statt eines Exports (H-5).
-        ziel_w = max(hausdefizit_w - max(entlade_abschlag_w, 0.0), 0.0)
-        if ziel_w <= 0:
+        # Restbezug bleibt statt eines Exports (H-5). Zuerst vom Hausdefizit,
+        # ein Rest davon vom Verbraucheranteil.
+        abschlag_w = max(entlade_abschlag_w, 0.0)
+        haus_ziel_w = max(hausdefizit_w - abschlag_w, 0.0)
+        verbraucher_ziel_w = max(
+            verbraucherdefizit_w - max(abschlag_w - hausdefizit_w, 0.0), 0.0)
+        if haus_ziel_w <= 0 and verbraucher_ziel_w <= 0:
             return
 
-        rest_w = ziel_w
-        for battery in self._discharge_order(kandidaten):
-            anteil_w = min(rest_w, battery.entlade_kapazitaet_w())
-            battery.set_discharge_target(anteil_w)
+        reihenfolge = self._discharge_order(kandidaten)
+        haus_anteil: Dict[int, float] = {}
+        rest_w = haus_ziel_w
+        for battery in reihenfolge:
+            anteil_w = min(rest_w, kapazitaet[id(battery)])
+            haus_anteil[id(battery)] = anteil_w
             rest_w -= anteil_w
-            if rest_w <= 0:
-                break
 
         if rest_w > 100:
             log.info("EMS Speicher: %.0fW Hausdefizit ungedeckt (alle Speicher am Limit)",
                      rest_w)
+
+        verbraucher_anteil: Dict[int, float] = {}
+        rest_verbraucher_w = verbraucher_ziel_w
+        for battery in reihenfolge:
+            if not battery.uberschussverbraucher_versorgen:
+                continue
+            frei_w = kapazitaet[id(battery)] - haus_anteil.get(id(battery), 0.0)
+            anteil_w = min(rest_verbraucher_w, max(frei_w, 0.0))
+            verbraucher_anteil[id(battery)] = anteil_w
+            rest_verbraucher_w -= anteil_w
+
+        for battery in reihenfolge:
+            battery.set_discharge_target(haus_anteil.get(id(battery), 0.0),
+                                         verbraucher_anteil.get(id(battery), 0.0))
 
     @staticmethod
     def _discharge_order(kandidaten: List[BatteryDevice]) -> List[BatteryDevice]:

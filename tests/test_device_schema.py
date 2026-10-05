@@ -98,6 +98,18 @@ def test_schema_kennt_zwang_helfer():
     assert "force" in fan_keys and "force_leistung_w" not in fan_keys
 
 
+def test_schema_kennt_speicherdeckung_je_verbraucher():
+    """D-060: Opt-in am Verbraucher, für regelbare und binäre Geräte gleich."""
+    heater, fan = _schema()[1:]
+    for group, prefix in ((heater, "heizstab"), (fan, "heizlufter_1")):
+        by_key = {item["key"]: item for item in group["items"]}
+        assert by_key["aus_speicher_decken"] == {
+            "entity": f"input_boolean.ems_{prefix}_aus_speicher_decken",
+            "label": "Aus Speicher decken", "key": "aus_speicher_decken",
+            "kind": "bool", "role": "user_preference", "planning_relevant": True,
+        }
+
+
 def test_zwangsleistung_bleibt_im_ampere_modus_watt():
     wallbox = _build_device_controls_schema(
         _valid([{
@@ -127,6 +139,11 @@ def test_speicher_hat_keinen_zwang_helfer():
         battery_residual_power_entity="sensor.hausleistungsbilanz",
     )[1]
     assert not any(item["key"].startswith("force") for item in battery["items"])
+    by_key = {item["key"]: item for item in battery["items"]}
+    assert "aus_speicher_decken" not in by_key
+    assert by_key["uberschussverbraucher_versorgen"]["entity"] == \
+        "input_boolean.ems_acspeicher1_uberschussverbraucher_versorgen"
+    assert by_key["uberschussverbraucher_versorgen"]["kind"] == "bool"
 
 
 def test_unbekannte_klasse_erreicht_das_schema_nicht():

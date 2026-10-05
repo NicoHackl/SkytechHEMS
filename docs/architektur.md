@@ -122,7 +122,17 @@ Ein Zyklus (`EMSController.run_cycle()`), ausgelöst alle `interval_s` Sekunden:
    nur die **aus dem Pool angeforderte** Leistung — fremdgesteuerte Last steckt bereits im
    Überschuss-Sensor und wird nicht doppelt gutgeschrieben. Eine **Zwangslast** (D-053) fällt
    aus beiden Summen heraus: sie ist kein Pool-Teilnehmer *und* gilt als Hausverbrauch, den ein
-   Speicher deckt — die einzige Ausnahme von „HEMS-Last wird nie vom Speicher gedeckt" (D-B14).
+   Speicher deckt — eine Ausnahme von „HEMS-Last wird nie vom Speicher gedeckt" (D-B14).
+   Die zweite ist die **Überbrückung** (D-060): Verbraucher mit `aus_speicher_decken` liefern ihr
+   `current_w` als `speicher_deckbar_w`. Daraus entsteht neben dem Hausdefizit ein eigener
+   Fehlbetrag, den nur Speicher mit `uberschussverbraucher_versorgen` decken:
+
+   ```text
+   verbraucherdefizit_w = max(−(entlade_basis_w − speicher_deckbar_w), 0) − hausdefizit_w
+   ```
+
+   Der Pool bleibt davon unberührt — der Verbraucher regelt weiter ab, der Speicher schließt nur
+   die Lücke, bis er unten ist.
    Weil Pool und Entladung
    unterschiedliche Sensorverträge haben, können `pool_w` und `hausdefizit_w` diagnostisch
    gleichzeitig positiv sein; die Richtungsauflösung eines Speichers schreibt trotzdem immer nur
@@ -161,7 +171,9 @@ Ein Zyklus (`EMSController.run_cycle()`), ausgelöst alle `interval_s` Sekunden:
     globalen Puffer —, danach Zusatzleistung. Bei sinkendem Pool verschwinden dadurch erst
     Anteile oberhalb der Sockel, dann die Sockel des niedrigsten Teilnehmers.
 11. **Entladeplanung:** `hausdefizit_w` wird **einmal** über alle entladebereiten Speicher
-    aufgeteilt, strikt nach `entlade_prioritat`. Rechnete jeder Speicher für sich, entladen bei
+    aufgeteilt, strikt nach `entlade_prioritat`. Danach geht `verbraucherdefizit_w` in derselben
+    Reihenfolge an die Restkapazität der Speicher mit `uberschussverbraucher_versorgen` (D-060);
+    der Abschlag wirkt einmal, zuerst auf das Hausdefizit. Rechnete jeder Speicher für sich, entladen bei
     drei Speichern und 2 kW Defizit alle drei mit 2 kW. Muss nach Schritt 10 und vor Schritt 12
     laufen — der Speicher löst dort seine Richtung auf.
 12. **Rampenbegrenzung** der Sollwerte: Hoch- und Runter-Regelzeit sowie Schrittbegrenzung gelten

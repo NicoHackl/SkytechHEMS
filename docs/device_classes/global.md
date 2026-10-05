@@ -56,7 +56,7 @@ abzuschalten.
 
 ## Gemeinsame HA-Helfer
 
-Diese vier Helfer werden von jeder Geräteklasse gelesen; der fünfte nur von Verbrauchern:
+Diese vier Helfer werden von jeder Geräteklasse gelesen; die letzten beiden nur von Verbrauchern:
 
 | Entität | Werte | Pflicht | Verhalten bei fehlendem State | Funktion |
 |---|---|---:|---|---|
@@ -65,6 +65,7 @@ Diese vier Helfer werden von jeder Geräteklasse gelesen; der fünfte nur von Ve
 | `input_select.ems_<prefix>_modus` | `auto`, `manuell`, `aus` | ja | außerhalb des globalen EP-Modus wie `manuell` | `auto` übernimmt gültige EP-Vorschläge, `manuell` nutzt HA-Helferwerte, `aus` ist der gerätespezifische Kill-Switch |
 | `input_number.ems_<prefix>_prioritat` | ganze Zahl | ja | `99` | Lade- beziehungsweise Verbraucherpriorität; kleinere Zahl wird zuerst bedient |
 | `input_boolean.ems_<prefix>_force` | `on`, `off` | nein | `off` | Zwang (D-053): Gerät läuft unabhängig von Pool, Bedienfreigabe, Gerätemodus, globalen Sperren und Mehrfachabschaltung, nicht die Notabschaltung (D-059). Nur bei `controllable` und `binary`; ein Speicher liest ihn nicht |
+| `input_boolean.ems_<prefix>_aus_speicher_decken` | `on`, `off` | nein | `off` | Überbrückung (D-060): ein Speicher mit `uberschussverbraucher_versorgen` darf die vom HEMS angeforderte Last decken, bis das Gerät abgeregelt hat. Nur bei `controllable` und `binary` |
 
 Die Bedienfreigabe und die technische Freigabe müssen beide wirksam sein. Zusätzlich müssen die
 globale Freigabe, der globale Modus und `allowed_modes` das Gerät zulassen.
@@ -75,7 +76,12 @@ schreibt seinen Sollwert direkt. Zwang übersteuert nie die technische Freigabe 
 kaputtes Schreibziel; ein angeforderter, aber unwirksamer Zwang steht mit seinem Grund im Status
 (`force_blocked_reason`). Regelbare Geräte brauchen zusätzlich eine gültige Zwangsleistung, siehe
 [controllable.md](controllable.md#über-namenskonvention-gelesene-ha-helfer). Die Zwangslast gilt
-als Hausverbrauch und wird von einem AC-Speicher gedeckt — die einzige Ausnahme von D-B14.
+als Hausverbrauch und wird von einem AC-Speicher gedeckt — eine Ausnahme von D-B14.
+
+**Überbrückung** (D-060) ist die zweite: mit `aus_speicher_decken: on` darf ein dafür
+freigegebener Speicher die Lücke schließen, die das Gerät bei einem PV-Einbruch reißt. Der Pool
+ändert sich dadurch nicht — das Gerät regelt mit Rampe und Zeitschutz normal ab, der Speicher
+deckt nur die Zeit bis dahin. Gedeckt wird nur die vom HEMS angeforderte Last, nie Fremdsteuerung.
 
 ## Schreibziele und inaktive Geräte
 

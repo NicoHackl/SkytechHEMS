@@ -94,6 +94,10 @@ class Device(ABC):
         # Merker für das Transitions-Log – bewusst nicht je Zyklus geleert.
         # Startwert „kein Zwang", damit der erste Zyklus kein Ende meldet.
         self._force_log_state: Tuple[bool, Optional[str]] = (False, None)
+        # Speicherdeckung (D-060): darf die vom HEMS angeforderte Last dieses
+        # Verbrauchers von einem dafür freigegebenen Speicher überbrückt werden?
+        # Je Zyklus aus HA gelesen; fehlt der Helfer, bleibt es aus (D-B14).
+        self.aus_speicher_decken: bool = False
 
     # Vom Nutzer wählbare Gerätemodi. `auto` = Energy Pilot, `manuell` = normale
     # Regeln, `aus` = gerätespezifischer Kill-Switch.
@@ -113,6 +117,7 @@ class Device(ABC):
         self._force_active = False
         self._force_blocked_reason = None
         self._force_released = False
+        self.aus_speicher_decken = False
 
     # ------------------------------------------------------------------
     # Laufzeitgesundheit: Schreibziele und Schreibfehler
@@ -474,8 +479,28 @@ class Device(ABC):
         – sobald eine Last den Netzpunkt verfälscht, zählt sie hier, unabhängig
         davon wer sie eingeschaltet hat. Einzige Ausnahme ist der Zwang (D-053):
         eine Zwangslast ist Hausverbrauch und wird vom Speicher gedeckt.
+        Die Überbrückung nach D-060 läuft bewusst nicht hierüber, sondern über
+        speicher_deckbare_last_w – sie darf nur freigegebene Speicher belasten.
         """
         return 0.0
+
+    @property
+    def speicher_deckbare_last_w(self) -> float:
+        """Last, die ein dafür freigegebener Speicher überbrücken darf (D-060).
+
+        Nur die vom HEMS selbst angeforderte Leistung (current_w): Fremdsteuerung
+        bleibt nach D-B14 ungedeckt, eine Zwangslast steckt bereits im
+        Hausdefizit. Der Pool bleibt davon unberührt – der Verbraucher regelt
+        weiter normal ab, der Speicher deckt nur die Lücke, bis er unten ist.
+        """
+        return self.current_w if self.aus_speicher_decken else 0.0
+
+    def _read_speicher_deckung(self, st: StateProxy) -> None:
+        """Liest den Helfer `aus_speicher_decken` – fehlt oder kaputt heißt aus."""
+        self.aus_speicher_decken = self._flag(
+            st, f"input_boolean.ems_{self._entity_prefix}_aus_speicher_decken",
+            "aus_speicher_decken",
+        )
 
     @abstractmethod
     def update_from_ha(self, st: StateProxy, now_ts: float,
@@ -779,6 +804,7 @@ class ControllableDevice(Device):
         self._anforderung_age_s = now_ts - parse_ts(
             st.get(self.entity_anforderung_w + ".last_changed")
         )
+        self._read_speicher_deckung(st)
 
     def _read_voltage(self, st: StateProxy, entity: Optional[str], role: str) -> float:
         """Phasenspannung mit Plausibilitätsprüfung 180 < U < 260 V, sonst 230 V.
@@ -1096,6 +1122,7 @@ class ControllableDevice(Device):
             **self.force_status(),
             # Effektive, geklemmte Zwangsleistung; None, solange kein Zwang wirkt.
             "force_w":               self._force_w if self._force_active else None,
+            "aus_speicher_decken":   self.aus_speicher_decken,
             "source":                self.source,
             "ep_proposal_status":    self._ep_proposal_status,
             "entity_diagnostics":    self._entity_diagnostics,
@@ -1297,6 +1324,8 @@ class BinaryDevice(Device):
         else:
             self.power_actual_w = None
 
+        self._read_speicher_deckung(st)
+
     def consume_from_pool(self, remaining_w: float,
                           global_einschaltreserve_w: float) -> float:
         """Bestimmt den Wunschzustand per Hysterese; verbraucht power_w wenn gewünscht an.
@@ -1429,6 +1458,7 @@ class BinaryDevice(Device):
             "eligible":             self.eligible,
             **self.freigabe_status(),
             **self.force_status(),
+            "aus_speicher_decken":  self.aus_speicher_decken,
             "source":               self.source,
             "ep_proposal_status":   self._ep_proposal_status,
             "entity_diagnostics":   self._entity_diagnostics,
@@ -1535,6 +1565,9 @@ class BatteryDevice(ControllableDevice):
         self.umschalt_totzone_w        = 100.0
         self.laden_erlaubt             = True
         self.entladen_erlaubt          = True
+        # D-060: darf dieser Speicher freigegebene Überschussverbraucher
+        # überbrücken? Fehlt der Helfer, nein – Bestandsverhalten (D-B14).
+        self.uberschussverbraucher_versorgen = False
         self.betriebsart               = "standby"
         # v2 (Netzladen). In v1 hält die Klemme in calculate_ramp den Pfad zu;
         # die Felder existieren, damit später keine Config-Migration nötig ist.
@@ -1570,7 +1603,11 @@ class BatteryDevice(ControllableDevice):
         self._ladestufen_abbruch: Optional[Dict] = None
 
         # ---- Ergebnisse pro Zyklus ----
+        # _entlade_ziel_w ist die Summe; die beiden Anteile sind nur Aufschlüsselung
+        # für Status und Diagnose (D-060).
         self._entlade_ziel_w        = 0.0
+        self._entlade_ziel_haus_w   = 0.0
+        self._entlade_ziel_verbraucher_w = 0.0
         self._new_lade_w            = 0.0
         self._new_entlade_w         = 0.0
         self._new_betriebsart       = "standby"
@@ -1590,6 +1627,11 @@ class BatteryDevice(ControllableDevice):
     def entlade_ziel_w(self) -> float:
         """Vom Controller zugeteilter Entladeanteil – Zuteilungsebene, nicht Sollwert."""
         return self._entlade_ziel_w
+
+    @property
+    def entlade_ziel_verbraucher_w(self) -> float:
+        """Davon zur Überbrückung von Überschussverbrauchern (D-060)."""
+        return self._entlade_ziel_verbraucher_w
 
     @property
     def lade_anforderung_w(self) -> float:
@@ -1640,6 +1682,8 @@ class BatteryDevice(ControllableDevice):
         super().begin_cycle(now_ts)
         self._lade_block = self._entlade_block = self._blockiert_grund = None
         self._entlade_ziel_w = 0.0
+        self._entlade_ziel_haus_w = 0.0
+        self._entlade_ziel_verbraucher_w = 0.0
 
     # ------------------------------------------------------------------
     # Pool-Semantik
@@ -1665,6 +1709,14 @@ class BatteryDevice(ControllableDevice):
         Speicher wie Hausverbrauch aussieht (Kreisstrom über zwei Geräte).
         """
         return self._lade_ist_w
+
+    @property
+    def speicher_deckbare_last_w(self) -> float:
+        """Speicherladen wird nie aus einem anderen Speicher überbrückt (D-060)."""
+        return 0.0
+
+    def _read_speicher_deckung(self, st: StateProxy) -> None:
+        return  # Verbraucher-Helfer; der Speicher hat stattdessen uberschussverbraucher_versorgen
 
     @property
     def netz_support_w(self) -> float:
@@ -1740,6 +1792,11 @@ class BatteryDevice(ControllableDevice):
         self.entladen_erlaubt = self._flag(
             st, f"input_boolean.ems_{pfx}_entladen_erlaubt", "entladen_erlaubt",
             fallback=False, missing_fallback=True)
+        # Anders als die Richtungsfreigaben eine Opt-in-Erweiterung (D-060):
+        # fehlt der Helfer oder ist er kaputt, deckt der Speicher nur das Haus.
+        self.uberschussverbraucher_versorgen = self._flag(
+            st, f"input_boolean.ems_{pfx}_uberschussverbraucher_versorgen",
+            "uberschussverbraucher_versorgen")
         self.netzladen_aktiv = self._flag(
             st, f"input_boolean.ems_{pfx}_netzladen_aktiv", "netzladen_aktiv")
         self.netzlade_leistung_w = self._num(
@@ -1982,9 +2039,18 @@ class BatteryDevice(ControllableDevice):
         self._entlade_block = None
         return self._entlade_limit_w()
 
-    def set_discharge_target(self, w: float) -> None:
-        """Wird von EMSController._allocate_discharge aufgerufen."""
-        self._entlade_ziel_w = max(0.0, min(w, self.entlade_kapazitaet_w()))
+    def set_discharge_target(self, w: float, verbraucher_w: float = 0.0) -> None:
+        """Wird von EMSController._allocate_discharge aufgerufen.
+
+        `w` ist der Anteil am Hausdefizit, `verbraucher_w` der Anteil an der
+        Überbrückung von Überschussverbrauchern (D-060). Die Summe wird auf die
+        Entladekapazität gedeckelt, der Hausanteil hat dabei Vorrang.
+        """
+        kapazitaet_w = self.entlade_kapazitaet_w()
+        self._entlade_ziel_haus_w = max(0.0, min(w, kapazitaet_w))
+        self._entlade_ziel_verbraucher_w = max(
+            0.0, min(verbraucher_w, kapazitaet_w - self._entlade_ziel_haus_w))
+        self._entlade_ziel_w = self._entlade_ziel_haus_w + self._entlade_ziel_verbraucher_w
 
     # ------------------------------------------------------------------
     # Richtungsauflösung und Rampen
@@ -2261,11 +2327,13 @@ class BatteryDevice(ControllableDevice):
             "ladestufe_aktiv":       wirksam["n"] if wirksam else None,
             "ladestufe_max_w":       wirksam["max_w"] if wirksam else None,
             "ladestufen_abbruch":    self._ladestufen_abbruch,
-            "hausdefizit_anteil_w":  self._entlade_ziel_w,
+            "hausdefizit_anteil_w":  self._entlade_ziel_haus_w,
+            "verbraucher_anteil_w":  self._entlade_ziel_verbraucher_w,
             "schutz_w":              self._schutz_w,
             "geschuetzte_mindestleistung_w": self.geschuetzte_mindestleistung_w,
             "laden_erlaubt":         self.laden_erlaubt,
             "entladen_erlaubt":      self.entladen_erlaubt,
+            "uberschussverbraucher_versorgen": self.uberschussverbraucher_versorgen,
             "netzladen_aktiv":       self.netzladen_aktiv,
             "soc_min_prozent":       self.soc_min_prozent,
             "soc_max_prozent":       self.soc_max_prozent,

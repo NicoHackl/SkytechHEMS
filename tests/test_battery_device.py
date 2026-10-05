@@ -940,3 +940,42 @@ def test_ladestufen_helfer_erscheinen_in_der_diagnose():
     diag = b.entity_diagnostics
     assert diag[f"input_number.ems_{PREFIX}_ladestufe_1_max_ladeleistung_w"]["state"] == "valid"
     assert f"input_number.ems_{PREFIX}_ladestufe_2_soc_prozent" not in diag
+
+
+# ---------------------------------------------------------------------------
+# D-060: Überbrückung von Überschussverbrauchern
+# ---------------------------------------------------------------------------
+
+def test_ueberschussverbraucher_versorgen_ist_opt_in():
+    """Fehlt der Helfer oder ist er kaputt, deckt der Speicher nur das Haus."""
+    helfer = f"input_boolean.ems_{PREFIX}_uberschussverbraucher_versorgen"
+    assert prepare(make_battery()).uberschussverbraucher_versorgen is False
+    assert prepare(make_battery(), **{helfer: "unavailable"}) \
+        .uberschussverbraucher_versorgen is False
+    assert prepare(make_battery(), **{helfer: "on"}).uberschussverbraucher_versorgen is True
+
+
+def test_speicher_liest_den_verbraucher_helfer_nicht():
+    """Speicherladen wird nie aus einem anderen Speicher überbrückt."""
+    b = prepare(make_battery(), lade_ist=1000,
+                **{f"input_boolean.ems_{PREFIX}_aus_speicher_decken": "on"})
+    assert b.aus_speicher_decken is False
+    assert b.speicher_deckbare_last_w == 0.0
+    assert f"input_boolean.ems_{PREFIX}_aus_speicher_decken" not in b.entity_diagnostics
+
+
+def test_entladeziel_hausanteil_hat_vorrang_vor_ueberbrueckung():
+    b = prepare(make_battery(available_discharge_power_w=2000))
+    b.set_discharge_target(1500.0, 1000.0)
+    status = b.to_status_dict()
+    assert b.entlade_ziel_w == pytest.approx(2000)
+    assert status["hausdefizit_anteil_w"] == pytest.approx(1500)
+    assert status["verbraucher_anteil_w"] == pytest.approx(500)
+
+
+def test_entladeziel_ohne_ueberbrueckung_bleibt_wie_bisher():
+    b = prepare(make_battery())
+    b.set_discharge_target(1500.0)
+    b.calculate_ramp()
+    assert b.new_entlade_w == 1500.0
+    assert b.to_status_dict()["verbraucher_anteil_w"] == 0.0

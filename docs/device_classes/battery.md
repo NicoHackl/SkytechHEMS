@@ -64,9 +64,11 @@ Alle Helfer sind optional. Ein **gültiger** HA-State hat Vorrang; sonst gilt de
 | `input_select.ems_<prefix>_betriebsart` | `auto`, `nur_laden`, `nur_entladen`, `standby` | `standby` | `standby` | Legt fest, welche Richtung das HEMS grundsätzlich verwenden darf |
 | `input_boolean.ems_<prefix>_laden_erlaubt` | `on`, `off` | **erlaubt** | **gesperrt** | Zusätzliche Freigabe des Ladepfads |
 | `input_boolean.ems_<prefix>_entladen_erlaubt` | `on`, `off` | **erlaubt** | **gesperrt** | Zusätzliche Freigabe des Entladepfads |
+| `input_boolean.ems_<prefix>_uberschussverbraucher_versorgen` | `on`, `off` | aus | aus | Überbrückung (D-060): deckt nach dem Hausdefizit auch die Last von Verbrauchern mit `aus_speicher_decken`, bis zu `soc_min_prozent` |
 
-Die Freigaben sind der einzige Fall, in dem „Entität gar nicht angelegt" und „Entität ausgefallen"
-verschieden behandelt werden: wer den Schalter nie angelegt hat, will keine zusätzliche Sperre —
+`uberschussverbraucher_versorgen` ist ein Opt-in und kein Sperrschalter, deshalb heißt dort beides
+„aus". Die Richtungsfreigaben sind der einzige Fall, in dem „Entität gar nicht angelegt" und
+„Entität ausgefallen" verschieden behandelt werden: wer den Schalter nie angelegt hat, will keine zusätzliche Sperre —
 ein *ausgefallener* Schalter ist dagegen kein Grund, weiterzuregeln.
 
 ### Prioritäten und Leistungsgrenzen
