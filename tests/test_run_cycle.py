@@ -1849,3 +1849,208 @@ def test_ladestufe_gibt_ueberschuss_an_nachrangige_verbraucher_frei():
     assert _op_for(res["write_ops"],
                    "input_number.ems_heizstab_anforderung_leistung_w")[2]["value"] \
         == pytest.approx(2500)
+
+
+# ---------------------------------------------------------------------------
+# D-060: Speicher überbrückt freigegebene Überschussverbraucher
+# ---------------------------------------------------------------------------
+#
+# Zwei Opt-in-Helfer: am Verbraucher `aus_speicher_decken`, am Speicher
+# `uberschussverbraucher_versorgen`. Nur wenn beide an sind, deckt der Speicher
+# die Lücke, die ein vom HEMS angeforderter Verbraucher bei Netzbezug reißt. Der
+# Pool bleibt dabei unverändert: der Verbraucher regelt weiter normal ab.
+
+def _heizstab_cfg():
+    return {"name": "heizstab", "class": "controllable",
+            "actual_power_entity": "sensor.heizstab_ist", "allowed_modes": "auto",
+            **CTRL_FALLBACKS}
+
+
+def _deckung_states(*, residual, heizstab_ist, heizstab_soll, verbraucher="on",
+                    speicher="on", abschlag=0, **battery_kw):
+    # Ladepriorität hinter dem Heizstab: der Restpool soll den Heizstab treffen,
+    # nicht den Speicher laden.
+    battery_kw.setdefault("prio", 90)
+    states = {
+        **_global(),
+        **_battery("speicher", **battery_kw),
+        **_controllable_w("heizstab", min_w=500, max_w=3000, setpoint=heizstab_soll),
+        "sensor.s": residual,
+        "sensor.heizstab_ist": heizstab_ist,
+        "input_number.ems_ac_speicher_entlade_abschlag_w": abschlag,
+    }
+    if verbraucher is not None:
+        states["input_boolean.ems_heizstab_aus_speicher_decken"] = verbraucher
+    if speicher is not None:
+        states["input_boolean.ems_speicher_uberschussverbraucher_versorgen"] = speicher
+    return states
+
+
+def _speicher_soll(res, name="speicher"):
+    op = _op_for(res["write_ops"], f"input_number.ems_{name}_anforderung_leistung_w")
+    return None if op is None else op[2]["value"]
+
+
+def test_speicher_ueberbrueckt_freigegebenen_heizstab():
+    """PV-Einbruch: 3 kW Heizstab, 2 kW Netzbezug. Der Speicher deckt die 2 kW,
+    der Heizstab regelt trotzdem auf den echten Überschuss (1 kW) herunter."""
+    ctrl = EMSController([_battery_cfg("speicher"), _heizstab_cfg()],
+                         residual_power_entity="sensor.s")
+    res = ctrl.run_cycle(make_states(_deckung_states(
+        residual=-2000, heizstab_ist=3000, heizstab_soll=3000)))
+    status = res["status"]
+    assert status["hausdefizit_w"] == 0
+    assert status["speicher_deckbar_w"] == pytest.approx(3000)
+    assert status["verbraucherdefizit_w"] == pytest.approx(2000)
+    assert status["pool_roh_w"] == pytest.approx(1000)   # Pool unverändert
+    assert _speicher_soll(res) == pytest.approx(-2000)
+    assert _op_for(res["write_ops"],
+                   "input_number.ems_heizstab_anforderung_leistung_w")[2]["value"] \
+        == pytest.approx(1000)
+    speicher = next(d for d in status["devices"] if d["id"] == "speicher")
+    heizstab = next(d for d in status["devices"] if d["id"] == "heizstab")
+    assert speicher["uberschussverbraucher_versorgen"] is True
+    assert speicher["verbraucher_anteil_w"] == pytest.approx(2000)
+    assert speicher["hausdefizit_anteil_w"] == 0
+    assert heizstab["aus_speicher_decken"] is True
+
+
+@pytest.mark.parametrize(
+    ("verbraucher", "speicher", "verbraucherdefizit"),
+    [
+        (None, None, 0),       # Bestand: kein Helfer angelegt
+        ("off", "on", 0),      # Speicher dürfte, Verbraucher nicht
+        ("on", "off", 2000),   # Verbraucher dürfte, Speicher nicht
+        ("on", None, 2000),    # fehlender Speicher-Helfer heißt aus
+        ("unavailable", "on", 0),  # kaputter Helfer heißt aus
+    ],
+)
+def test_ueberbrueckung_braucht_beide_helfer(verbraucher, speicher, verbraucherdefizit):
+    ctrl = EMSController([_battery_cfg("speicher"), _heizstab_cfg()],
+                         residual_power_entity="sensor.s")
+    res = ctrl.run_cycle(make_states(_deckung_states(
+        residual=-2000, heizstab_ist=3000, heizstab_soll=3000,
+        verbraucher=verbraucher, speicher=speicher)))
+    assert res["status"]["verbraucherdefizit_w"] == pytest.approx(verbraucherdefizit)
+    assert _speicher_soll(res) is None   # bleibt bei 0, kein Schreibvorgang
+
+
+@pytest.mark.parametrize(
+    ("abschlag", "soll"),
+    [
+        (0, -2500),     # 500 W Haus + 2000 W Heizstab
+        (300, -2200),   # Abschlag nur einmal, zuerst vom Hausdefizit
+        (800, -1700),   # Rest des Abschlags geht vom Verbraucheranteil ab
+    ],
+)
+def test_hausdefizit_und_ueberbrueckung_addieren_sich(abschlag, soll):
+    ctrl = EMSController([_battery_cfg("speicher"), _heizstab_cfg()],
+                         residual_power_entity="sensor.s")
+    res = ctrl.run_cycle(make_states(_deckung_states(
+        residual=-2500, heizstab_ist=2000, heizstab_soll=2000, abschlag=abschlag)))
+    assert res["status"]["hausdefizit_w"] == pytest.approx(500)
+    assert res["status"]["verbraucherdefizit_w"] == pytest.approx(2000)
+    assert _speicher_soll(res) == pytest.approx(soll)
+
+
+@pytest.mark.parametrize(
+    ("sp1_flag", "sp1_soll", "sp2_soll"),
+    [
+        # sp1 deckt als erster das Hausdefizit, die Überbrückung bleibt sp2.
+        ("off", -500, -2000),
+        # sp1 darf auch überbrücken: Restkapazität nach dem Hausanteil, dann sp2.
+        ("on", -1000, -1500),
+    ],
+)
+def test_ueberbrueckung_nur_durch_freigegebene_speicher(sp1_flag, sp1_soll, sp2_soll):
+    cfg = [_battery_cfg("sp1", entlade_limit=1000), _battery_cfg("sp2"), _heizstab_cfg()]
+    ctrl = EMSController(cfg, residual_power_entity="sensor.s")
+    states = {
+        **_global(),
+        **_battery("sp1", prio=90, entlade_prio=10),
+        **_battery("sp2", prio=90, entlade_prio=20),
+        **_controllable_w("heizstab", min_w=500, max_w=3000, setpoint=2000),
+        "sensor.s": -2500,
+        "sensor.heizstab_ist": 2000,
+        "input_number.ems_ac_speicher_entlade_abschlag_w": 0,
+        "input_boolean.ems_heizstab_aus_speicher_decken": "on",
+        "input_boolean.ems_sp1_uberschussverbraucher_versorgen": sp1_flag,
+        "input_boolean.ems_sp2_uberschussverbraucher_versorgen": "on",
+    }
+    res = ctrl.run_cycle(make_states(states))
+    assert _speicher_soll(res, "sp1") == pytest.approx(sp1_soll)
+    assert _speicher_soll(res, "sp2") == pytest.approx(sp2_soll)
+
+
+def test_fremdgesteuerter_heizstab_wird_auch_mit_helfer_nicht_ueberbrueckt():
+    """Gedeckt wird nur, was das HEMS selbst angefordert hat (D-B14 bleibt)."""
+    ctrl = EMSController([_battery_cfg("speicher"), _heizstab_cfg()],
+                         residual_power_entity="sensor.s")
+    res = ctrl.run_cycle(make_states(_deckung_states(
+        residual=-2000, heizstab_ist=3000, heizstab_soll=0)))
+    assert res["status"]["speicher_deckbar_w"] == 0
+    assert res["status"]["verbraucherdefizit_w"] == 0
+    assert _speicher_soll(res) is None
+
+
+def test_ueberbrueckung_endet_an_soc_min():
+    ctrl = EMSController([_battery_cfg("speicher"), _heizstab_cfg()],
+                         residual_power_entity="sensor.s")
+    res = ctrl.run_cycle(make_states(_deckung_states(
+        residual=-2000, heizstab_ist=3000, heizstab_soll=3000, soc=10, soc_min=10)))
+    assert res["status"]["verbraucherdefizit_w"] == pytest.approx(2000)
+    assert _speicher_soll(res) is None
+
+
+def test_binaerer_verbraucher_wird_ueberbrueckt():
+    """Der Heizlüfter ist noch an, der Überschuss reicht nicht mehr: bis der
+    Schalter wirklich aus ist, deckt der Speicher seine Leistung."""
+    cfg = [_battery_cfg("speicher"),
+           {"name": "luft", "class": "binary",
+            "switch_entity": "switch.luft", "allowed_modes": "auto", **BIN_FALLBACKS}]
+    ctrl = EMSController(cfg, residual_power_entity="sensor.s")
+    states = {
+        **_global(),
+        **_battery("speicher"),
+        **_binary("luft", power=2000, switch="on"),
+        "switch.luft": "on",
+        "sensor.s": -1500,
+        "input_number.ems_ac_speicher_entlade_abschlag_w": 0,
+        "input_boolean.ems_luft_aus_speicher_decken": "on",
+        "input_boolean.ems_speicher_uberschussverbraucher_versorgen": "on",
+    }
+    res = ctrl.run_cycle(make_states(states))
+    assert res["status"]["hausdefizit_w"] == 0
+    assert res["status"]["verbraucherdefizit_w"] == pytest.approx(1500)
+    assert _speicher_soll(res) == pytest.approx(-1500)
+
+
+def test_ueberbrueckung_im_eingeschwungenen_zustand_ohne_warnung(caplog):
+    """Zweiter Zyklus: der Speicher liefert bereits 2 kW, das Netz steht bei 0.
+    Das Ziel bleibt stehen, und die Plausibilitätswarnung schlägt nicht an."""
+    ctrl = EMSController([_battery_cfg("speicher"), _heizstab_cfg()],
+                         residual_power_entity="sensor.s")
+    with caplog.at_level("WARNING"):
+        res = ctrl.run_cycle(make_states(_deckung_states(
+            residual=0, heizstab_ist=3000, heizstab_soll=3000,
+            entlade_ist=2000, sollwert=-2000)))
+    assert res["status"]["pool_roh_w"] == pytest.approx(1000)
+    assert res["status"]["verbraucherdefizit_w"] == pytest.approx(2000)
+    speicher = next(d for d in res["status"]["devices"] if d["id"] == "speicher")
+    assert speicher["new_entlade_w"] == pytest.approx(2000)
+    assert not any("entlädt in den PV-Überschuss" in r.message for r in caplog.records)
+
+
+def test_ohne_speicher_kein_verbraucherdefizit():
+    """P7: ohne Speicher bleibt der Statusvertrag unverändert."""
+    ctrl = EMSController([_heizstab_cfg()], residual_power_entity="sensor.s")
+    states = {
+        **_global(),
+        **_controllable_w("heizstab", min_w=500, max_w=3000, setpoint=3000),
+        "sensor.s": -2000,
+        "sensor.heizstab_ist": 3000,
+        "input_boolean.ems_heizstab_aus_speicher_decken": "on",
+    }
+    status = ctrl.run_cycle(make_states(states))["status"]
+    assert status["speicher_deckbar_w"] == pytest.approx(3000)
+    assert status["verbraucherdefizit_w"] == 0

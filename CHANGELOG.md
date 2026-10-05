@@ -10,6 +10,24 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ### Hinzugefügt
 
+- **Speicher überbrückt Überschussverbraucher (D-060).** Bricht die PV-Leistung plötzlich ein,
+  regeln Heizstab, Wallbox oder Heizlüfter wegen Rampe, Mindestlaufzeit und Abschaltverzögerung
+  nur langsam ab. Bisher kam diese Lücke aus dem Netz. Jetzt kann ein Speicher sie decken, bis
+  das Gerät abgeregelt hat.
+  - **Freischalten:** zwei neue, optionale HA-Helfer. Am Verbraucher
+    `input_boolean.ems_<prefix>_aus_speicher_decken` („Aus Speicher decken") und am Speicher
+    `input_boolean.ems_<prefix>_uberschussverbraucher_versorgen` („Überschussverbraucher
+    versorgen"). Beide erscheinen im Tab Steuerung. Wirksam ist die Überbrückung nur, wenn beide
+    auf `on` stehen; ein fehlender Helfer gilt als `off`, bestehende Anlagen verhalten sich
+    unverändert.
+  - **Verhalten:** Der Verbraucher regelt weiter normal ab, der Speicher läuft nicht dauerhaft in
+    ihn hinein. Gedeckt wird nur die vom HEMS angeforderte Last, nie ein von Hand eingeschaltetes
+    Gerät. Das Hausdefizit hat Vorrang, Grenze ist `soc_min_prozent`.
+  - **Anzeige:** Die Kachel „Hausdefizit" nennt die Überbrückung, die Speicherkarte zeigt
+    „Überbrückung Überschussverbraucher". Neue Statusfelder: `speicher_deckbar_w`,
+    `verbraucherdefizit_w`, `aus_speicher_decken`, `uberschussverbraucher_versorgen`,
+    `verbraucher_anteil_w`. `hausdefizit_anteil_w` enthält jetzt nur noch den Hausanteil.
+
 - **Notabschaltung (D-059).** Neuer Tab „Notabschaltung“ im Ingress-Panel.
   - **Auslösen:** Eingetragen werden eine Entität, ein Operator (`=`, `≠`, `>`, `≥`, `<`, `≤`) und
     ein Sollwert, z. B. `binary_sensor.netz = off`. Die Bedingung wird jede Sekunde geprüft, eine

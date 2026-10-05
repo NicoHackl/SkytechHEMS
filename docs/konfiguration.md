@@ -113,6 +113,12 @@ Danach zieht es `input_number.ems_ac_speicher_entlade_abschlag_w` **einmal syste
 gesamten Entladeziel ab und verteilt den Rest nach `entlade_prioritat`. Der Abschlag ist kein Wert
 pro Speicher.
 
+Optional überbrückt ein Speicher bei einem PV-Einbruch die Last eines Überschussverbrauchers, bis
+dieser abgeregelt hat (D-060). Dazu müssen am Verbraucher
+`input_boolean.ems_<prefix>_aus_speicher_decken` und am Speicher
+`input_boolean.ems_<prefix>_uberschussverbraucher_versorgen` auf `on` stehen. Dieser Anteil kommt
+nach dem Hausdefizit, und den Abschlag bekommt zuerst das Hausdefizit.
+
 Der E3DC ist absichtlich kein HEMS-Gerät. Erkennt das HEMS bei einer E3DC-Entladung einen
 negativen Bilanzwert, fordert es den AC-Speicher an; der E3DC regelt anschließend selbst zurück.
 Die Betriebsannahme dieser Anlage ist eine E3DC-Reaktion in unter zwei Sekunden bei einem

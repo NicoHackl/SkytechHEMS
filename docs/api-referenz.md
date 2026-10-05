@@ -52,6 +52,8 @@ Scheduler.
     "pool_w": 3240.0,
     "entlade_basis_w": 3240.0,
     "hausdefizit_w": 0.0,
+    "speicher_deckbar_w": 0.0,
+    "verbraucherdefizit_w": 0.0,
     "current_deficit_w": 0.0,
     "binary_immediate_off": false,
     "binary_total_w": 2000.0,
@@ -81,7 +83,9 @@ nicht auf `residual_w`. Die AC-Entladeplanung verwendet dagegen ausschließlich 
 `battery_residual_w` beziehungsweise `battery_residual_bereinigt_w`. `hausdefizit_w` ist bewusst
 kleiner als `current_deficit_w`, sobald HEMS-Geräte laufen — die Differenz ist deren gemessene
 Last, die ein Speicher ausdrücklich **nicht** decken soll. Ausnahme ist eine Zwangslast (D-053):
-sie zählt als Hausverbrauch und bleibt in `hausdefizit_w`. Ist die Hausleistungsbilanz ungültig,
+sie zählt als Hausverbrauch und bleibt in `hausdefizit_w`. Die Überbrückung freigegebener
+Überschussverbraucher (D-060) steht getrennt davon in `verbraucherdefizit_w`; ohne Speicher ist
+sie immer `0`. Ist die Hausleistungsbilanz ungültig,
 ist `battery_residual_sensor_valid: false`, `hausdefizit_w: 0` und jeder AC-Speicher fährt auf
 `standby`; andere Verbraucher regeln weiter.
 

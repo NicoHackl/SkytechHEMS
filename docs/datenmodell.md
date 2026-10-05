@@ -58,6 +58,7 @@ für [globale Werte](device_classes/global.md), [regelbare Geräte](device_class
 | `input_boolean.ems_<prefix>_technische_freigabe` | `input_boolean` | Technische Freigabe. Nur wenn **beide** Freigaben `on` sind, wirkt das Gerät mit — hartes Gate in jedem Modus |
 | `input_select.ems_<prefix>_modus` | `input_select` | `auto` = EP-Vorschlag für dieses Gerät, `manuell` = normale Regeln, `aus` = Kill-Switch |
 | `input_number.ems_<prefix>_prioritat` | `input_number` | Kleinere Zahl = höhere Priorität |
+| `input_boolean.ems_<prefix>_aus_speicher_decken` | `input_boolean` | Überbrückung (D-060), optional, nur Verbraucher. `on` = ein freigegebener Speicher darf die vom HEMS angeforderte Last decken, bis das Gerät abgeregelt hat. Fehlt oder ausgefallen = `off` |
 | `input_boolean.ems_<prefix>_force` | `input_boolean` | Zwang (D-053), optional. `on` = Gerät läuft unabhängig von Pool, Bedien-Freigabe, Modus, globalen Sperren und Mehrfachabschaltung; nie ohne technische Freigabe, mit kaputtem Schreibziel oder während der Notabschaltung (D-059). Nicht beim Speicher |
 
 ### Regelbare Geräte
@@ -133,6 +134,7 @@ Dazu drei Schalter und eine Auswahlliste:
 |---|---|---|
 | `input_boolean.ems_<prefix>_laden_erlaubt` | `on`/`off` | Ladepfad freigeben |
 | `input_boolean.ems_<prefix>_entladen_erlaubt` | `on`/`off` | Entladepfad freigeben |
+| `input_boolean.ems_<prefix>_uberschussverbraucher_versorgen` | `on`/`off` | Überbrückung von Überschussverbrauchern mit `aus_speicher_decken` (D-060). Fehlt oder ausgefallen = `off` |
 | `input_boolean.ems_<prefix>_netzladen_aktiv` | `on`/`off` | Reserviert; bis zur Behebung von [B-4](bekannte-luecken.md#offene-bugs) zwingend `off` |
 | `input_select.ems_<prefix>_betriebsart` | `auto`, `nur_laden`, `nur_entladen`, `standby` | Was das HEMS überhaupt darf |
 
@@ -202,6 +204,8 @@ Global:
 | `pool_roh_w` | float | Ungeklemmter Pool aus dem Überschuss-Sensor. Positiv = verteilter Überschuss, negativ = kein verteilter Überschuss |
 | `entlade_basis_w` | float | Basis der Entladeplanung aus der separaten Hausleistungsbilanz; enthält die gemessenen HEMS-Lasten zurückgerechnet |
 | `hausdefizit_w` | float | Hausverbrauchs-Fehlbetrag, den die Speicher decken sollen. **Enthält keine HEMS-Gerätelast**, auch keine fremdgesteuerte — wohl aber eine Zwangslast (D-053); bei ungültiger Hausleistungsbilanz `0` |
+| `speicher_deckbar_w` | float | Σ `current_w` der Verbraucher mit `aus_speicher_decken` (D-060) |
+| `verbraucherdefizit_w` | float | Fehlbetrag, den diese Verbraucher zusätzlich zum Hausdefizit verursachen; decken nur Speicher mit `uberschussverbraucher_versorgen`. Ohne Speicher oder bei ungültiger Hausleistungsbilanz `0` |
 | `binary_immediate_off` | bool | Mehrfachabschaltung erlaubt: das Defizit übersteigt, was regelbare Geräte und Speicher sofort abregeln können; das One-Change-Limit für Binärgeräte entfällt in diesem Zyklus. Schaltet selbst nichts ab; ein Zwangsgerät bleibt davon unberührt |
 | `binary_total_w` | float | Σ `power_w` der final eingeschalteten Binärgeräte **ohne** Zwangsgeräte — deren Last steckt bereits im Residual |
 | `timestamp` | string | **Maschinenformat** `JJJJ-MM-TT hh:mm:ss`, nicht zur Anzeige gedacht |
@@ -226,6 +230,7 @@ Regelbare und binäre Geräte tragen außerdem die Zwangsfelder (D-053):
 | `force_active` | bool | Wirksame Entscheidung: angefordert und kein Sperrgrund. `true` bei `eligible: false` ist kein Widerspruch — Zwang ist eine eigene Achse |
 | `force_blocked_reason` | string oder `null` | `technische_freigabe`, `runtime` oder `keine_leistung` (nur regelbar); `null`, wenn der Zwang wirkt oder nicht angefordert ist |
 | `force_w` | float oder `null` | Nur regelbar: effektive, geklemmte Zwangsleistung in Watt; `null`, solange kein Zwang wirkt |
+| `aus_speicher_decken` | bool | Wirksamer Zustand des Helfers `ems_<prefix>_aus_speicher_decken` (D-060) |
 
 `state` ist `valid`, `missing`, `unavailable` oder `invalid`; bei Schreibzielen zusätzlich
 `write_failed`. `source` ist `ha`, `addon` oder `internal`.
@@ -247,8 +252,10 @@ Speicher (`type: "battery"`): `id`, `entity_prefix` (D-057), `label`, `priority`
 `source`, `ep_proposal_status`, `sensoren_gueltig`, `battery_residual_sensor_valid`, `soc_prozent`, `capacity_kwh`, `betriebsart`,
 `betriebsart_effektiv`, `lade_ist_w`, `entlade_ist_w`, `lade_anforderung_w`,
 `entlade_anforderung_w`, `new_lade_w`, `new_entlade_w`, `netto_w`, `max_ladeleistung_w`,
-`max_entladeleistung_w`, `lade_limit_w`, `entlade_limit_w`, `hausdefizit_anteil_w`, `schutz_w`,
-`geschuetzte_mindestleistung_w`, `laden_erlaubt`, `entladen_erlaubt`, `netzladen_aktiv`,
+`max_entladeleistung_w`, `lade_limit_w`, `entlade_limit_w`, `hausdefizit_anteil_w` (seit D-060
+nur der Hausanteil), `verbraucher_anteil_w` (Überbrückung, D-060), `schutz_w`,
+`geschuetzte_mindestleistung_w`, `laden_erlaubt`, `entladen_erlaubt`,
+`uberschussverbraucher_versorgen`, `netzladen_aktiv`,
 `soc_min_prozent`, `soc_max_prozent`, `soc_max_hysteresis_percent`, `direction_switch_delay_s`,
 `lade_limit_gueltig`, `entlade_limit_gueltig`, `umschaltsperre_rest_s`, `lade_blockiert_grund`,
 `entlade_blockiert_grund`, `blockiert_grund`, `ladestufen` (Liste `{n, aktiv, soc_prozent, max_w,

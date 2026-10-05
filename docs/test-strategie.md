@@ -92,6 +92,14 @@ Für die Notabschaltung (D-059) zusätzlich verpflichtend:
     fehlende Entität, nicht erreichbares HA. Quittieren geht nur bei `not_met`; eine unlesbare
     Merkerdatei gilt als aktiv.
 
+Für die Überbrückung durch Speicher (D-060) zusätzlich verpflichtend:
+
+17. **Nur mit beiden Helfern** — `aus_speicher_decken` am Verbraucher und
+    `uberschussverbraucher_versorgen` am Speicher; fehlend oder ausgefallen heißt aus. Gedeckt wird
+    nur `current_w`, nie Fremdsteuerung. Der Pool bleibt unverändert, der Verbraucher regelt
+    weiter ab. Hausdefizit vor Verbraucheranteil, Verbraucheranteil nur auf freigegebene Speicher,
+    Abschlag einmal, `soc_min_prozent` als Grenze, ohne Speicher `verbraucherdefizit_w = 0`.
+
 Ein Bugfix ohne Regressionstest ist nicht abgeschlossen. Der Test muss **vor** dem Fix
 nachweislich fehlschlagen.
 

@@ -95,7 +95,10 @@ der Restbezug erscheint am Netz statt aus dem Speicher. **Das ist gewollt** — 
 eingeschalteter Heizstab bleibt ein Überschussverbraucher. Im Energiedashboard sieht es trotzdem
 wie ein Regelfehler aus; die Statuskachel „Hausdefizit" benennt den Betrag deshalb ausdrücklich.
 Anders die **Zwangslast** (Helfer `ems_<prefix>_force`, D-053): wer ein Gerät bewusst erzwingt,
-will es laufen sehen — sie zählt als Hausverbrauch und wird vom Speicher gedeckt.
+will es laufen sehen — sie zählt als Hausverbrauch und wird vom Speicher gedeckt. Optional darf
+ein Speicher außerdem einen Überschussverbraucher bei einem PV-Einbruch **überbrücken**, bis dieser
+abgeregelt hat (D-060): dafür am Verbraucher `ems_<prefix>_aus_speicher_decken` und am Speicher
+`ems_<prefix>_uberschussverbraucher_versorgen` auf `on` setzen.
 
 Ein Speicher, der sich **selbst** regelt und nicht vom HEMS gesteuert wird, gehört **nicht** in die
 Geräteliste. Seine Leistung steckt bereits im Überschuss-Sensor; als `battery` eingetragen würde

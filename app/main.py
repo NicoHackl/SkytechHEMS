@@ -158,6 +158,11 @@ def _ctrl_items_controllable(p: str, output_unit: str = 'watt') -> list:
             f"input_number.ems_{p}_force_leistung_w", "Zwangsleistung", "force_leistung_w",
             "user_control", unit="W",
         ),
+        # D-060: optional, fehlt er, deckt kein Speicher diesen Verbraucher.
+        _control_item(
+            f"input_boolean.ems_{p}_aus_speicher_decken", "Aus Speicher decken",
+            "aus_speicher_decken", "user_preference",
+        ),
         _control_item(
             f"input_number.ems_{p}_prioritat", "Priorität", "prioritat", "user_preference"
         ),
@@ -215,6 +220,10 @@ def _ctrl_items_binary(p: str) -> list:
         _control_item(f"input_select.ems_{p}_modus", "Modus", "modus", "user_control"),
         _control_item(f"input_boolean.ems_{p}_force", "Zwang", "force", "user_control"),
         _control_item(
+            f"input_boolean.ems_{p}_aus_speicher_decken", "Aus Speicher decken",
+            "aus_speicher_decken", "user_preference",
+        ),
+        _control_item(
             f"input_number.ems_{p}_prioritat", "Priorität", "prioritat", "user_preference"
         ),
         _control_item(
@@ -269,6 +278,12 @@ def _ctrl_items_battery(p: str) -> list:
         _control_item(
             f"input_boolean.ems_{p}_entladen_erlaubt", "Entladen erlaubt", "entladen_erlaubt",
             "user_control",
+        ),
+        # D-060: optional, fehlt er, deckt der Speicher nur den Hausverbrauch.
+        _control_item(
+            f"input_boolean.ems_{p}_uberschussverbraucher_versorgen",
+            "Überschussverbraucher versorgen", "uberschussverbraucher_versorgen",
+            "user_preference",
         ),
         _control_item(
             f"input_number.ems_{p}_prioritat", "Priorität Laden", "prioritat", "user_preference"

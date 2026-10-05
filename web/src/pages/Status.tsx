@@ -195,9 +195,11 @@ export function Status() {
                     <h3>Hausdefizit</h3>
                     <div className={cycle.hausdefizit_w > 0 ? 'num warn' : 'num'}>{fmtW(cycle.hausdefizit_w)}</div>
                     <p>
-                      {fremdlastW > 50
-                        ? `Ohne ${fmtW(fremdlastW)} fremdgesteuerte HEMS-Last`
-                        : 'Hausverbrauch, den der Speicher deckt'}
+                      {cycle.verbraucherdefizit_w > 50
+                        ? `Plus ${fmtW(cycle.verbraucherdefizit_w)} Überbrückung von Überschussverbrauchern`
+                        : fremdlastW > 50
+                          ? `Ohne ${fmtW(fremdlastW)} fremdgesteuerte HEMS-Last`
+                          : 'Hausverbrauch, den der Speicher deckt'}
                     </p>
                   </div>
                 </>
@@ -600,6 +602,9 @@ function BatteryCard({ device, elapsed }: { device: BatteryDevice; elapsed: numb
       />
       {device.hausdefizit_anteil_w > 0 ? (
         <KeyValue label="Anteil am Hausdefizit" value={fmtW(device.hausdefizit_anteil_w)} />
+      ) : null}
+      {device.verbraucher_anteil_w > 0 ? (
+        <KeyValue label="Überbrückung Überschussverbraucher" value={fmtW(device.verbraucher_anteil_w)} />
       ) : null}
       <KeyValue
         label="Limits"

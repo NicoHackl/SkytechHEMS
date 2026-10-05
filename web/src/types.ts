@@ -30,6 +30,9 @@ interface ForceStatus {
   force_active: boolean
   /** Warum ein angeforderter Zwang nicht wirkt; null, wenn er wirkt oder nicht angefordert ist. */
   force_blocked_reason: 'technische_freigabe' | 'runtime' | 'keine_leistung' | null
+  /** D-060: Helfer `ems_<prefix>_aus_speicher_decken` — ein freigegebener
+      Speicher darf die vom HEMS angeforderte Last überbrücken. */
+  aus_speicher_decken: boolean
 }
 
 /** Ursache und Quelle eines gelesenen HA-States. */
@@ -133,10 +136,14 @@ export interface BatteryDevice extends DeviceBase {
   ladestufen_abbruch: LadestufenAbbruch | null
   /** Vom Controller zugeteilter Anteil am Hausdefizit. */
   hausdefizit_anteil_w: number
+  /** Davon zur Überbrückung von Überschussverbrauchern (D-060). */
+  verbraucher_anteil_w: number
   schutz_w: number
   geschuetzte_mindestleistung_w: number
   laden_erlaubt: boolean
   entladen_erlaubt: boolean
+  /** D-060: darf freigegebene Überschussverbraucher überbrücken. */
+  uberschussverbraucher_versorgen: boolean
   netzladen_aktiv: boolean
   soc_min_prozent: number
   soc_max_prozent: number
@@ -201,6 +208,10 @@ export interface CycleStatus {
   entlade_basis_w: number
   /** Hausverbrauchs-Fehlbetrag, den die Speicher decken sollen. */
   hausdefizit_w: number
+  /** Σ speicher_deckbare_last_w — HEMS-Last mit `aus_speicher_decken` (D-060). */
+  speicher_deckbar_w: number
+  /** Fehlbetrag der freigegebenen Überschussverbraucher; nur mit Speicher, sonst 0. */
+  verbraucherdefizit_w: number
   current_deficit_w: number
   binary_immediate_off: boolean
   binary_total_w: number
