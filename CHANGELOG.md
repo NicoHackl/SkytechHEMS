@@ -8,6 +8,12 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Dokumentation — 06.10.2026
+
+- Gemeinsame Contract-Ablage mit einem Ordner je Projektpaar und aktualisierten Verweisen.
+- Aktueller Austausch mit Energy-Pilot und Battery-Provider einschließlich bestehender Kompatibilitäts- und Betriebsgrenzen dokumentiert.
+
+
 ### Hinzugefügt
 
 - **Steuerwerte ohne HA-Helfer (D-061).** Fehlt ein Helfer der Namenskonvention, ist er nicht

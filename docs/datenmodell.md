@@ -368,8 +368,9 @@ Info“ als verwaist.
 
 ## Vertrag zum Energy Pilot
 
-Der Energy Pilot ist ein eigenes Add-on. Es gibt **keinen** direkten Aufruf zwischen beiden — der
-Austausch läuft ausschließlich über HA-Entitäten:
+Der gemeinsame [HEMS–Energy-Pilot-Vertrag](../contract/contract_hems_energy_pilot/contract_hems_energy_pilot.md)
+beschreibt den aktuellen Austausch und seine Kompatibilitätsgrenzen. EP liest Geräte-Schema und
+Regelstatus direkt über die HEMS-HTTP-API. Die Vorschläge laufen dagegen über HA-Entitäten:
 
 | Entität | Richtung | Inhalt |
 |---|---|---|
@@ -396,7 +397,7 @@ Vergangenheit) werden ausgeblendet, und bei doppeltem Feld je Gerät bleibt nur 
 Für die **Skytech Power Flow Card** schreibt das Add-on zwei eigene Anzeige-Entitäten über
 `POST /api/states` (D-046). Sie sind ein Datenvertrag zu einem zweiten Repository; autoritativ
 für jedes Feld ist
-[`vertrag_powerflow_card_hems/kontrakt.md`](../vertrag_powerflow_card_hems/kontrakt.md).
+[`contract/contract_powerflow_card_hems/kontrakt.md`](../contract/contract_powerflow_card_hems/kontrakt.md).
 
 | Entität | State | Inhalt | Schreibtakt |
 |---|---|---|---|

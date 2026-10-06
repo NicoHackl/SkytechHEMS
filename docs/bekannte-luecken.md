@@ -1,5 +1,10 @@
 # Bekannte Lücken und Stolpersteine
 
+## Gemeinsamer Contract-Stand — 06.10.2026
+
+EP unterstützt `battery` nicht ausdrücklich in der Discovery. Der Ampere-Schutzvorschlag wird nicht durchgängig übernommen; EP liest die HEMS-interne Ersatzwertkette nicht vollständig.
+Details und geprüfte Codebasis: [gemeinsamer Vertrag](../contract/contract_hems_energy_pilot/contract_hems_energy_pilot.md).
+
 **Vor jeder Annahme lesen.** Diese Datei existiert, weil Doku und Code auseinanderlaufen. Steht
 etwas in [architektur.md](architektur.md), heißt das nicht, dass es implementiert ist — hier steht,
 wo nicht.

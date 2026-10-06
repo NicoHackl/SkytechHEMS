@@ -1,5 +1,7 @@
 # AC-Speicher (`class: battery`)
 
+Gemeinsamer Schnittstellenstand: [Battery-Provider-Vertrag](../../contract/contract_hems_battery_provider/contract_hems_battery_provider.md).
+
 Ein AC-Speicher kann als einziges HEMS-Gerät Leistung aufnehmen und abgeben. Laden konkurriert in
 der normalen Prioritätsreihenfolge um PV-Überschuss. Entladen deckt ausschließlich normalen
 Hausverbrauch und wird getrennt über `entlade_prioritat` verteilt.

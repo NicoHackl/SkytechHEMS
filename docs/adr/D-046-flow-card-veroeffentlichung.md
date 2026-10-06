@@ -5,7 +5,7 @@
 - **Betrifft:** `app/flow_publisher.py`, `app/ha_client.py`, `app/main.py`,
   `app/configuration.py`, `config.yaml`, Invariante 4 in
   [../architektur.md](../architektur.md), Datenvertrag
-  [`vertrag_powerflow_card_hems/kontrakt.md`](../../vertrag_powerflow_card_hems/kontrakt.md)
+  [`contract/contract_powerflow_card_hems/kontrakt.md`](../../contract/contract_powerflow_card_hems/kontrakt.md)
 
 ## Kontext
 

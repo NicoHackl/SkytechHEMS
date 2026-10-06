@@ -194,7 +194,7 @@ Ein Zyklus (`EMSController.run_cycle()`), ausgelöst alle `interval_s` Sekunden:
     jeden Fehler. Die Konfigurationsentität wird nur geschrieben, wenn sich ihr Revisionshash
     geändert hat oder sie im Zustandsabbild fehlt — Letzteres deckt den HA-Neustart ab, nach dem
     per `POST /api/states` erzeugte Entitäten verschwinden. Datenvertrag:
-    [`vertrag_powerflow_card_hems/kontrakt.md`](../vertrag_powerflow_card_hems/kontrakt.md).
+    [`contract/contract_powerflow_card_hems/kontrakt.md`](../contract/contract_powerflow_card_hems/kontrakt.md).
 15. **Ladelimit der Speicher veröffentlichen** (`app/battery_publisher.py`, immer): je Speicher
     `sensor.ems_<prefix>_lade_limit_w` aus dem Statusfeld `lade_limit_w` (D-057). Gleiche
     Grenzen wie Schritt 14: nach dem Zyklus, ohne eigene HA-Abfrage, ohne Regelentscheidung,
@@ -243,7 +243,7 @@ Details zu Endpunkten: [api-referenz.md](api-referenz.md).
 ├── web/                    Quellen der Oberfläche (React + TypeScript + Vite)
 ├── tests/                  pytest, inklusive Hypothesis-Property-Tests
 ├── erweiterungen/          Entwürfe für geplante Ausbaustufen
-├── vertrag_powerflow_card_hems/  Datenvertrag und Umsetzungsplan der Power Flow Card
+├── contract/                    Projektübergreifende Verträge, je Projektpaar ein Ordner
 └── docs/                   diese Doku
 ```
 

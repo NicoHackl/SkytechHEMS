@@ -85,7 +85,7 @@ und Anlagenwerte selbst aus dem HEMS — im Dashboard genügt
 
 | Punkt | Status | Verweis |
 |---|---|---|
-| Datenvertrag zwischen HEMS und Karte | fertig | [kontrakt.md](../vertrag_powerflow_card_hems/kontrakt.md), D-047 |
+| Datenvertrag zwischen HEMS und Karte | fertig | [kontrakt.md](../contract/contract_powerflow_card_hems/kontrakt.md), D-047 |
 | `flow_*`-Optionen und Prüfregeln | fertig | [konfiguration.md](konfiguration.md#flow-card-flow_) |
 | Publisher: zwei Anzeige-Sensoren je Zyklus | fertig | D-046, [architektur.md](architektur.md#datenfluss) |
 | Diagnoseendpunkt `GET api/flow/preview` | fertig | [api-referenz.md](api-referenz.md) |

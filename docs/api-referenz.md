@@ -1,7 +1,10 @@
 # API-Referenz
 
-> Die HTTP-Schnittstelle des Add-ons. Sie bedient die eigene Oberfläche und ist nicht als
-> öffentliche API gedacht — erreichbar ist sie nur über den HA-Ingress.
+Gemeinsamer Schnittstellenstand: [Energy-Pilot-Vertrag](../contract/contract_hems_energy_pilot/contract_hems_energy_pilot.md), [Battery-Provider-Vertrag](../contract/contract_hems_battery_provider/contract_hems_battery_provider.md).
+
+> Die HTTP-Schnittstelle des Add-ons bedient die eigene Oberfläche und die lesende
+> Energy-Pilot-Anbindung. Die Oberfläche verwendet HA-Ingress; EP verwendet die konfigurierte,
+> intern erreichbare HEMS-Basisadresse. Sie ist keine öffentlich freizugebende API.
 
 ## Grundsätzliches
 
@@ -370,7 +373,7 @@ unvollständige Flow-Konfiguration ist kein HTTP-Fehler:
 `zuletzt_geschrieben` ist leer, solange noch nie veröffentlicht wurde. `value` bleibt bei einem
 unbrauchbaren Zustand `null` und wird nie zu `0` — eine fehlende Messung sieht sonst aus wie ein
 ausgeschaltetes Gerät. Aufbau beider Nutzlasten:
-[`vertrag_powerflow_card_hems/kontrakt.md`](../vertrag_powerflow_card_hems/kontrakt.md).
+[`contract/contract_powerflow_card_hems/kontrakt.md`](../contract/contract_powerflow_card_hems/kontrakt.md).
 
 ### `GET api/flow/dashboards`
 
