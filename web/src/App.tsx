@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { Status } from './pages/Status'
 import { Steuerung } from './pages/Steuerung'
+import { SteuerungInfo } from './pages/SteuerungInfo'
 import { EnergyPilot } from './pages/EnergyPilot'
 import { KonfigurationGlobal } from './pages/KonfigurationGlobal'
 import { KonfigurationGeraete } from './pages/KonfigurationGeraete'
@@ -22,6 +23,7 @@ export function App() {
       <Route element={<Layout />}>
         <Route path="/" element={<Status />} />
         <Route path="/steuerung" element={<Steuerung />} />
+        <Route path="/steuerung-info" element={<SteuerungInfo />} />
         <Route path="/energy-pilot" element={<EnergyPilot />} />
         <Route path="/sensoren/ueberschuss" element={<SensorenUeberschuss />} />
         <Route path="/sensoren/hausbilanz" element={<SensorenHausbilanz />} />

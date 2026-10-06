@@ -15,8 +15,10 @@ Defizit und einer quittierpflichtigen Notabschaltung (D-059).
 - **Eigene Persistenz.** Es gibt keine Datenbank. Alles, was einen Neustart überleben soll,
   steht als HA-Helfer-Entität in Home Assistant. Auch die Konfigurationsseite legt nichts an: sie
   schreibt über die Supervisor-API dieselbe Optionsquelle, die die native Add-on-Seite bedient.
-  **Einzige Ausnahme** ist der Merker der Notabschaltung, `/data/notabschaltung.json` (D-059).
-  Er muss auch dann gelten, wenn Home Assistant selbst neu startet oder einen Helfer verliert.
+  **Ausnahmen** sind genau zwei Dateien unter `/data`: der Merker der Notabschaltung,
+  `/data/notabschaltung.json` (D-059) — er muss auch dann gelten, wenn Home Assistant selbst neu
+  startet oder einen Helfer verliert — und die HEMS-internen Ersatzwerte für fehlende HA-Helfer,
+  `/data/interne_werte.json` (D-061), die im Steuerung-Tab eingegeben werden.
 - **Anlegen der HA-Helfer.** Das Add-on liest und schreibt sie, erzeugt sie aber nicht.
 - **Prognose und Planung.** Vorausschauende Optimierung liefert der separate **Energy Pilot**;
   HEMS übernimmt dessen Vorschläge nur, siehe [datenmodell.md](datenmodell.md).
@@ -56,11 +58,13 @@ Defizit und einer quittierpflichtigen Notabschaltung (D-059).
 | `app/config_service.py` | Ablauf der Konfigurationsverwaltung: lesen, validieren, Revision prüfen, mischen, speichern, Altgeräte sicher deaktivieren, Neustart anstoßen | HTTP sprechen — die Handler übersetzen nur Ausnahmen in Statuscodes |
 | `app/configuration.py` | Add-on-Optionen normalisieren und validieren, Modus-Listen parsen und stabil serialisieren, Revisions-Hash bilden, Diff für die sichere Deaktivierung liefern | HA oder den Supervisor ansprechen, Zustand halten |
 | `app/emergency.py` | Notabschaltung (D-059): Bedingung auswerten, Merker lesen und atomar schreiben, Abschaltfolge und Wiederholung fehlgeschlagener Befehle, Quittieren, Statusobjekt und Anzeige-Sensor | Regelentscheidungen des Zyklus treffen, ohne `write_lock` schreiben |
+| `app/internal_values.py` | HEMS-interne Ersatzwerte (D-061): Datei lesen und atomar schreiben, Eingaben gegen das Steuerschema prüfen | Freigaben oder Zwang annehmen, eine unlesbare Datei überschreiben |
+| `app/json_file.py` | Atomares Schreiben kleiner JSON-Dateien unter `/data` (D-059, D-061) | Fachlogik enthalten |
 | `app/emergency_rules.py` | Operatoren, Domain-Zuordnung der Zielzeilen und Feldfehler — eine Quelle für Validierung, Ausführung und Oberfläche | Etwas importieren, das `configuration.py` importiert (Importzyklus) |
 | `app/formula.py` | Formel-basierte Sensorwerte (D-045): AST-Whitelist prüfen, eingeschränkten Code gegen ein fertiges Namespace-Dict auswerten | HA-Entitäten auflösen, Zustand zwischen Aufrufen halten, `exec`/`eval` auf kompiliertem Python verwenden |
 | `app/ems/controller.py` | Einen Zyklus orchestrieren: globale Eingaben, Pool, Prioritätskaskade, Statusaufbau | Selbst HTTP sprechen |
 | `app/ems/devices.py` | Verhalten je Gerätetyp: Eligibility, Pool-Verbrauch, Rampe, Zeitschutz, Write-Ops. Hierarchie: `Device` → `ControllableDevice` → `BatteryDevice`, daneben `BinaryDevice` | Auf HA zugreifen (bekommt einen `StateProxy`) |
-| `app/ems/state.py` | Lesezugriff auf den State-Schnappschuss, Resolve-Vertrag (`has`, `availability`, `resolve_number/bool/select`), `safe_float`, `parse_ts` | Zustand halten, der einen Zyklus überdauert; klassenspezifische Defaultwerte kennen |
+| `app/ems/state.py` | Lesezugriff auf den State-Schnappschuss, Resolve-Vertrag (`has`, `availability`, `resolve_number/bool/select/raw`; Reihenfolge HA → HEMS-intern → Add-on → Default, D-061), `safe_float`, `parse_ts` | Zustand halten, der einen Zyklus überdauert; klassenspezifische Defaultwerte kennen |
 | `app/ha_client.py` | Einzige Stelle mit HA-Zugriff: REST für Zustände und Dienste, dazu **eine** WebSocket-Abfrage für die Dashboardliste (D-049), Session-Verwaltung, Timeouts; meldet je Schreiboperation Erfolg oder bereinigten Fehler zurück | Fachlogik enthalten, einen Fehlschlag im Regelpfad verschlucken |
 | `app/ems/ops.py` | `WriteOp` (Operation samt verursachendem Gerät), `WriteResult`, `WriteTarget` | Selbst schreiben |
 | `app/flow_publisher.py` | Anzeigedaten der Power Flow Card (D-046) aus Optionen, Steuerschema und Zyklusstatus bauen und als zwei `sensor.*`-Entitäten veröffentlichen | Ein Gerät schalten, eine Ausnahme nach außen lassen, Home Assistant zusätzlich abfragen |
@@ -226,6 +230,8 @@ Details zu Endpunkten: [api-referenz.md](api-referenz.md).
 │   ├── ha_client.py        HA-REST-Client
 │   ├── emergency.py        Notabschaltung: Merker, Abschaltfolge, Quittieren (D-059)
 │   ├── emergency_rules.py  Operatoren, Zielzeilen-Domains, Feldfehler (D-059)
+│   ├── internal_values.py  HEMS-interne Ersatzwerte für fehlende Helfer (D-061)
+│   ├── json_file.py        Atomares Schreiben kleiner JSON-Dateien unter /data
 │   ├── flow_publisher.py   Anzeigedaten der Power Flow Card (D-046)
 │   ├── requirements.txt    Laufzeit-Abhängigkeiten des Containers
 │   ├── ems/

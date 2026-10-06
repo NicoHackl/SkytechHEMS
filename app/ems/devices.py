@@ -209,6 +209,9 @@ class Device(ABC):
             "role":   role,
             "state":  resolved.state,
             "source": resolved.source,
+            # Der wirksame Wert (D-061): beantwortet im Tab „Steuerung Info“,
+            # welcher Wert gerade gilt, wenn er nicht aus HA stammt.
+            "value":  resolved.value,
         }
         return resolved
 

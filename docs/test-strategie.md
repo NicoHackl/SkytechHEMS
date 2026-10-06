@@ -100,6 +100,14 @@ Für die Überbrückung durch Speicher (D-060) zusätzlich verpflichtend:
     weiter ab. Hausdefizit vor Verbraucheranteil, Verbraucheranteil nur auf freigegebene Speicher,
     Abschlag einmal, `soc_min_prozent` als Grenze, ohne Speicher `verbraucherdefizit_w = 0`.
 
+Für die HEMS-internen Ersatzwerte (D-061) zusätzlich verpflichtend:
+
+18. **Helfer vor intern vor Add-on-Feld** — ein gültiger HA-State (auch `0`) schlägt den internen
+    Wert; bei `missing`, `unavailable` und `invalid` greift der interne Wert mit erhaltener
+    Ursache und `source: hems`, ohne ihn die bisherige Kette. Freigaben und Zwang ignorieren
+    interne Werte in Steuerschema, Speicher, Datei und `StateProxy`. Eine unlesbare Datei wirkt
+    nicht und wird nicht überschrieben.
+
 Ein Bugfix ohne Regressionstest ist nicht abgeschlossen. Der Test muss **vor** dem Fix
 nachweislich fehlschlagen.
 

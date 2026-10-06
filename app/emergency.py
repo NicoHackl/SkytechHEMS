@@ -5,8 +5,9 @@ geprüft. Trifft sie zu, wirft das HEMS sofort und ohne Ausnahme alle Lasten ab,
 schickt die Geräte über eine frei konfigurierbare Zielliste zurück in ihre
 eigene Automatik und hält danach still, bis ein Mensch quittiert.
 
-Der Merker „Notabschaltung aktiv“ ist die einzige eigene Persistenz des
-Add-ons: eine kleine JSON-Datei unter /data. Ein HA-Helfer reicht nicht, weil
+Der Merker „Notabschaltung aktiv“ ist eine kleine JSON-Datei unter /data – neben
+den internen Ersatzwerten (D-061) die einzige eigene Persistenz des Add-ons. Ein
+HA-Helfer reicht nicht, weil
 der Merker auch dann gelten muss, wenn HA selbst neu startet oder den Helfer
 verliert. `sensor.ems_notabschaltung_aktiv` spiegelt ihn nur zur Anzeige.
 
@@ -26,7 +27,6 @@ import asyncio
 import datetime
 import json
 import logging
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -46,6 +46,7 @@ from emergency_rules import (
     target_error,
 )
 from ems.ops import WriteOp, safe_shutdown_ops
+from json_file import write_json_atomic
 
 log = logging.getLogger(__name__)
 
@@ -221,14 +222,8 @@ class LatchStore:
 
     def save(self, latch: Latch) -> None:
         """Schreibt atomar. Wirft OSError, wenn das Dateisystem nicht mitspielt."""
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = self.path.with_suffix(".tmp")
-        payload = {"active": latch.active, "since": latch.since_iso, "trigger": latch.trigger}
-        with open(tmp, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, ensure_ascii=False, indent=2)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(tmp, self.path)
+        write_json_atomic(self.path, {"active": latch.active, "since": latch.since_iso,
+                                      "trigger": latch.trigger})
 
 
 def display_time(iso: str) -> str:

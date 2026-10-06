@@ -1,7 +1,8 @@
 """StateProxy, Resolve-Vertrag und gemeinsam genutzte Hilfsfunktionen.
 
 Der Resolve-Vertrag ist die einzige Stelle, an der entschieden wird, wie ein
-fehlender, nicht verfügbarer oder unbrauchbarer HA-State ersetzt wird. Keine
+fehlender, nicht verfügbarer oder unbrauchbarer HA-State ersetzt wird. Reihenfolge
+(D-061): gültiger HA-State → HEMS-interner Wert → Add-on-Feld → interner Default. Keine
 Geräteklasse baut sich dafür eine eigene Kette – sonst laufen die Ersatzwerte
 auseinander und niemand kann später sagen, welcher Wert gerade wirkt.
 """
@@ -26,6 +27,10 @@ STATE_WRITE_FAILED = "write_failed"
 SOURCE_HA       = "ha"
 SOURCE_ADDON    = "addon"
 SOURCE_INTERNAL = "internal"
+# Wert wurde im HEMS selbst eingegeben (Steuerung-Tab, D-061), weil der HA-Helfer
+# fehlt, ausgefallen oder ungültig ist. Nicht verwechseln mit `internal`: das
+# ist der Sicherheitsdefault im Code, ohne dass jemand etwas eingegeben hat.
+SOURCE_HEMS     = "hems"
 # Wert kommt aus einer nutzerdefinierten Formel (D-045), nicht direkt aus einer
 # konfigurierten HA-Entität. Nur für residual_w/battery_residual_w relevant –
 # siehe EMSController.run_cycle().
@@ -37,6 +42,20 @@ _UNAVAILABLE_STATES = ("unavailable", "unknown", "none", "")
 
 _TRUE_STATES = ("on", "true", "1", "yes")
 _FALSE_STATES = ("off", "false", "0", "no")
+
+
+# Freigaben und Zwang gibt es nur als echten HA-Helfer (D-061): ein im HEMS
+# gespeicherter Wert darf ein Gerät nie freigeben oder erzwingen, auch nicht über
+# eine von Hand bearbeitete Datei. Fehlt der Helfer, gilt das bisherige Verhalten.
+_GATE_ENTITIES = ("input_boolean.ems_pv_regelung_aktiv",)
+_GATE_SUFFIXES = ("_freigabe", "_force", "_force_leistung_w")
+
+
+def is_gate_entity(entity_id: str) -> bool:
+    """Darf für diese Entität KEIN HEMS-interner Ersatzwert wirken?"""
+    name = entity_id.split(".", 1)[-1]
+    return (entity_id in _GATE_ENTITIES
+            or (name.startswith("ems_") and name.endswith(_GATE_SUFFIXES)))
 
 
 @dataclass(frozen=True)
@@ -59,8 +78,13 @@ class Resolved:
 class StateProxy:
     """Kapselt einen HA-State-Snapshot; bildet pyscripts state.get() / state.getattr() nach."""
 
-    def __init__(self, states: Dict[str, Dict]):
+    def __init__(self, states: Dict[str, Dict],
+                 internal: Optional[Dict[str, Any]] = None):
         self._states = states
+        # HEMS-interne Ersatzwerte (D-061), Schlüssel = entity_id. Sie greifen
+        # nur, wenn der HA-State nicht gültig ist – der Helfer hat immer Vorrang.
+        self._internal = {key: value for key, value in (internal or {}).items()
+                          if not is_gate_entity(key)}
 
     # ------------------------------------------------------------------
     # Roher Zugriff
@@ -96,6 +120,10 @@ class StateProxy:
             return STATE_UNAVAILABLE
         return STATE_VALID
 
+    def internal_value(self, entity_id: str) -> Any:
+        """Der HEMS-interne Ersatzwert dieser Entität oder `None`."""
+        return self._internal.get(entity_id)
+
     # ------------------------------------------------------------------
     # Resolve-Vertrag
     # ------------------------------------------------------------------
@@ -113,18 +141,18 @@ class StateProxy:
         """
         availability = self.availability(entity_id)
         if availability != STATE_VALID:
-            return self._number_fallback(availability, addon, internal)
+            return self._number_fallback(entity_id, availability, addon, internal)
 
         try:
             value = float(self.get(entity_id))
         except (TypeError, ValueError):
-            return self._number_fallback(STATE_INVALID, addon, internal)
+            return self._number_fallback(entity_id, STATE_INVALID, addon, internal)
         if not math.isfinite(value):
-            return self._number_fallback(STATE_INVALID, addon, internal)
+            return self._number_fallback(entity_id, STATE_INVALID, addon, internal)
         if minimum is not None and value < minimum:
-            return self._number_fallback(STATE_INVALID, addon, internal)
+            return self._number_fallback(entity_id, STATE_INVALID, addon, internal)
         if maximum is not None and value > maximum:
-            return self._number_fallback(STATE_INVALID, addon, internal)
+            return self._number_fallback(entity_id, STATE_INVALID, addon, internal)
         return Resolved(value, STATE_VALID, SOURCE_HA)
 
     def resolve_bool(self, entity_id: str, *,
@@ -139,6 +167,10 @@ class StateProxy:
         if missing_fallback is None:
             missing_fallback = fallback
         availability = self.availability(entity_id)
+        if availability != STATE_VALID:
+            stored = self._internal.get(entity_id)
+            if isinstance(stored, bool):
+                return Resolved(stored, availability, SOURCE_HEMS)
         if availability == STATE_MISSING:
             return Resolved(missing_fallback, STATE_MISSING, SOURCE_INTERNAL)
         if availability == STATE_UNAVAILABLE:
@@ -149,6 +181,9 @@ class StateProxy:
             return Resolved(True, STATE_VALID, SOURCE_HA)
         if raw in _FALSE_STATES:
             return Resolved(False, STATE_VALID, SOURCE_HA)
+        stored = self._internal.get(entity_id)
+        if isinstance(stored, bool):
+            return Resolved(stored, STATE_INVALID, SOURCE_HEMS)
         return Resolved(fallback, STATE_INVALID, SOURCE_INTERNAL)
 
     def resolve_select(self, entity_id: str, options: Iterable[str], *,
@@ -158,11 +193,25 @@ class StateProxy:
         allowed = tuple(options)
         availability = self.availability(entity_id)
         if availability != STATE_VALID:
-            return self._select_fallback(availability, addon, fallback)
+            return self._select_fallback(entity_id, availability, allowed, addon, fallback)
         raw = str(self.get(entity_id)).strip()
         if raw not in allowed:
-            return self._select_fallback(STATE_INVALID, addon, fallback)
+            return self._select_fallback(entity_id, STATE_INVALID, allowed, addon, fallback)
         return Resolved(raw, STATE_VALID, SOURCE_HA)
+
+    def resolve_raw(self, entity_id: str, *, fallback: Any = None) -> Resolved:
+        """Roher State ohne Typprüfung, sonst HEMS-intern, sonst Ersatzwert.
+
+        Für Werte, deren Prüfung der Aufrufer selbst übernimmt – etwa der
+        globale Regelmodus, dessen unbekannter Wert im Status sichtbar bleiben muss.
+        """
+        availability = self.availability(entity_id)
+        if availability == STATE_VALID:
+            return Resolved(self.get(entity_id), STATE_VALID, SOURCE_HA)
+        stored = self._internal.get(entity_id)
+        if stored is not None:
+            return Resolved(stored, availability, SOURCE_HEMS)
+        return Resolved(fallback, availability, SOURCE_INTERNAL)
 
     def resolve_formula_namespace(self, variables: Iterable[Dict[str, str]]
                                   ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
@@ -200,17 +249,23 @@ class StateProxy:
     # Interne Fallback-Auswahl
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _number_fallback(state: str, addon: Optional[float],
+    def _number_fallback(self, entity_id: str, state: str, addon: Optional[float],
                          internal: Optional[float]) -> Resolved:
+        stored = self._internal.get(entity_id)
+        if isinstance(stored, (int, float)) and not isinstance(stored, bool) \
+                and math.isfinite(stored):
+            return Resolved(float(stored), state, SOURCE_HEMS)
         if addon is not None:
             return Resolved(float(addon), state, SOURCE_ADDON)
         if internal is not None:
             return Resolved(float(internal), state, SOURCE_INTERNAL)
         return Resolved(None, state, SOURCE_INTERNAL)
 
-    @staticmethod
-    def _select_fallback(state: str, addon: Optional[str], internal: str) -> Resolved:
+    def _select_fallback(self, entity_id: str, state: str, allowed: Tuple[str, ...],
+                         addon: Optional[str], internal: str) -> Resolved:
+        stored = self._internal.get(entity_id)
+        if isinstance(stored, str) and stored in allowed:
+            return Resolved(stored, state, SOURCE_HEMS)
         if addon is not None:
             return Resolved(addon, state, SOURCE_ADDON)
         return Resolved(internal, state, SOURCE_INTERNAL)

@@ -209,6 +209,7 @@ erfindet keine Synonyme (`.button`, `.panel`, `.chip` gibt es nicht).
 | `.card` / `.card-head` / `.card-body` | Standardcontainer. `.card-head` enthält `h2` plus optional `.sub` |
 | `.tiles` / `.tile` / `.tile-icon` / `.num` | Kachelraster (`auto-fill, minmax(210px, 1fr)`), meist als `<Link>` |
 | `.table-wrap` + `table.data` | Datentabelle; `.table-wrap` liefert horizontales Scrollen |
+| `table.data.readonly` | Reine Anzeigetabelle ohne klickbare Zeilen: Hover färbt, zeigt aber keinen Zeiger (Steuerung Info, D-061) |
 | `.cell-title` / `.cell-sub` | Erste Spalte: Titel fett, Nebenzeile grau |
 | `.empty` | Leerzustand: Icon, Satz, Primäraktion |
 | `.center` + `.spinner` | Ladezustand |

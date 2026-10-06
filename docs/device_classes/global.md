@@ -127,18 +127,43 @@ Ursache und die Quelle:
 | Quelle | Bedeutung |
 |---|---|
 | `ha` | Der Wert stammt aus einer gültigen HA-Entität |
+| `hems` | Der Wert wurde im Steuerung-Tab direkt im HEMS eingegeben (D-061) |
 | `addon` | Der Wert stammt aus einem Feld der Add-on-Konfiguration |
 | `internal` | Der Wert ist ein interner Sicherheitsdefault ohne Konfigurationsfeld |
 
-Die Reihenfolge ist immer: **gültiger HA-State → Add-on-Feld → interner Default.** `missing`,
-`unavailable` und `invalid` verwenden denselben Ersatzwert; unterschiedlich ist nur die Diagnose.
-Sie steht je Gerät unter `entity_diagnostics` in `/api/status`, als
-`{entity_id: {role, state, source}}`.
+Die Reihenfolge ist immer: **gültiger HA-State → HEMS-interner Wert → Add-on-Feld → interner
+Default.** `missing`, `unavailable` und `invalid` verwenden denselben Ersatzwert; unterschiedlich
+ist nur die Diagnose. Sie steht je Gerät unter `entity_diagnostics` in `/api/status`, als
+`{entity_id: {role, state, source, value}}`, für die globalen Helfer unter
+`global_entity_diagnostics`.
+
+### HEMS-interne Werte (D-061)
+
+Fehlt ein Helfer der Namenskonvention, ist er ausgefallen oder ungültig, schreibt der Steuerung-Tab
+eine Änderung nicht nach Home Assistant, sondern speichert sie im HEMS
+(`/data/interne_werte.json`). Sie wirkt ab dem nächsten Zyklus und übersteht einen Neustart. Ein
+gültiger Helfer hat immer Vorrang; ein vorhandener Helfer wird nicht gespiegelt. Wird ein Helfer
+später angelegt, gilt sofort sein Wert, der interne bleibt als Ersatz für einen Ausfall stehen und
+lässt sich über „Zurücksetzen“ löschen.
+
+**Nie intern einstellbar** — fehlt der Helfer, gilt das Verhalten der Tabellen oben:
+
+| Entität | Grund |
+|---|---|
+| `input_boolean.ems_pv_regelung_aktiv` | Hauptschalter der Regelung |
+| `input_boolean.ems_<prefix>_freigabe`, `input_boolean.ems_<prefix>_technische_freigabe` | Freigaben |
+| `input_boolean.ems_<prefix>_force`, `input_number.ems_<prefix>_force_leistung_w` | Zwang (D-053) |
+
+Ebenfalls nicht im Umfang sind die Ladestufen (D-056), `netzladen_aktiv`, `netzlade_leistung_w`
+und alle Ausgabe-Helfer. Welche Werte gerade aus HA kommen und welche nur im HEMS existieren, zeigt
+der Tab „Steuerung Info“.
 
 ## Globale HA-Helfer
 
-Der Regelzyklus liest diese Entitäten. Er schreibt keine globale HA-Entität selbst; Änderungen in
-der Oberfläche laufen als explizite Nutzeraktion über `/api/set`.
+Der Regelzyklus liest diese Entitäten über den Resolve-Vertrag; außer dem Hauptschalter lassen sie
+sich bei fehlendem Helfer intern einstellen (D-061). Er schreibt keine globale HA-Entität selbst;
+Änderungen in der Oberfläche laufen als explizite Nutzeraktion über `/api/set` bzw.
+`/api/internal_values`.
 
 | Entität | Werte/Einheit | Pflicht | Verhalten bei fehlendem State | Funktion |
 |---|---|---:|---|---|

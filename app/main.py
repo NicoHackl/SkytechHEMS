@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 from aiohttp import web
 
 from config_service import ConfigProblem, ConfigService
-from configuration import DEVICE_CLASSES, GLOBAL_DEFAULTS, parse_modes, validate_options
+from configuration import DEVICE_CLASSES, GLOBAL_DEFAULTS, NORMAL_MODES, parse_modes, validate_options
 from emergency import (
     CONDITION_INVALID,
     CONDITION_MET,
@@ -29,6 +29,14 @@ from emergency import (
 from emergency_rules import condition_error
 from ha_client import HAClient
 from ems import EMSController, StateProxy
+from ems.devices import BatteryDevice, Device
+from ems.state import is_gate_entity
+from internal_values import (
+    INTERNAL_VALUES_FILENAME,
+    InternalValueError,
+    InternalValueStore,
+    validate_value,
+)
 import battery_publisher
 import flow_publisher
 from flow_publisher import FlowPublisher
@@ -62,8 +70,8 @@ log = logging.getLogger(__name__)
 # werden Add-on-Optionen ausschließlich über die Supervisor-API. Der Pfad ist für
 # die lokale Entwicklung außerhalb des Containers überschreibbar.
 OPTIONS_PATH = Path(os.environ.get("HEMS_OPTIONS_PATH", "/data/options.json"))
-# Persistentes Add-on-Verzeichnis. Einziger eigener Inhalt: der Merker der
-# Notabschaltung (D-059). Für die lokale Entwicklung überschreibbar.
+# Persistentes Add-on-Verzeichnis. Eigener Inhalt: der Merker der Notabschaltung
+# (D-059) und die internen Ersatzwerte (D-061). Für die lokale Entwicklung überschreibbar.
 DATA_DIR = Path(os.environ.get("HEMS_DATA_DIR", "/data"))
 
 # Der Wächter der Notabschaltung fragt die Bedingungs-Entität in diesem Takt
@@ -86,6 +94,10 @@ def _load_raw_options() -> dict:
 # Steuerung-Tab: Kontroll-Schema aus Geräte-Konfiguration erzeugen
 # ---------------------------------------------------------------------------
 
+# Ganzzahlige Helfer – Prioritäten sind Ränge, keine Messwerte.
+_INTEGER_KEYS = ("prioritat", "entlade_prioritat")
+
+
 def _control_item(
     entity: str,
     label: str,
@@ -94,8 +106,15 @@ def _control_item(
     *,
     unit: str = "",
     planning_relevant: bool = True,
+    options: tuple = (),
 ) -> dict:
-    """Beschreibt einen HEMS-Helfer stabil und ohne Suffix-Raten für API-Konsumenten."""
+    """Beschreibt einen HEMS-Helfer stabil und ohne Suffix-Raten für API-Konsumenten.
+
+    Additiv seit D-061: `internal_editable` sagt, ob der Wert ohne HA-Helfer im
+    HEMS selbst eingegeben werden darf; Freigaben und Zwang nie. Weil ohne Helfer
+    dessen Attribute fehlen, trägt der Eintrag die Eingabegrenzen selbst: `min`,
+    `max`, `step` und `integer` für Zahlen, `options` für Auswahllisten.
+    """
     domain = entity.split(".", 1)[0]
     kind = {
         "input_boolean": "bool",
@@ -109,19 +128,39 @@ def _control_item(
         "kind": kind,
         "role": role,
         "planning_relevant": planning_relevant,
+        "internal_editable": kind in ("bool", "number", "select") and not is_gate_entity(entity),
     }
     if unit:
         item["unit"] = unit
+    if kind == "number":
+        item["min"] = 0
+        if unit == "%":
+            item["max"] = 100
+        item["integer"] = key in _INTEGER_KEYS
+        item["step"] = 0.1 if unit == "A" else 1
+    if kind == "select":
+        item["options"] = list(options)
     return item
 
 
-_GLOBAL_CTRL_ITEMS = [
-    _control_item(
-        "input_boolean.ems_pv_regelung_aktiv", "EMS aktiv", "pv_regelung_aktiv", "user_control"
-    ),
-    _control_item(
-        "input_select.ems_regelmodus", "Regelmodus", "regelmodus", "user_control"
-    ),
+def _global_ctrl_items(available_modes: list) -> list:
+    """Globale Helfer. Die Regelmodi hängen von `available_modes` ab: ein
+    normaler Modus, der global nicht aktiviert ist, wäre intern nicht wählbar."""
+    modes = ["auto", *[mode for mode in NORMAL_MODES if mode in available_modes], "aus"]
+    return [
+        _control_item(
+            "input_boolean.ems_pv_regelung_aktiv", "EMS aktiv", "pv_regelung_aktiv",
+            "user_control",
+        ),
+        _control_item(
+            "input_select.ems_regelmodus", "Regelmodus", "regelmodus", "user_control",
+            options=tuple(modes),
+        ),
+        *_GLOBAL_CTRL_ITEMS_REST,
+    ]
+
+
+_GLOBAL_CTRL_ITEMS_REST = [
     _control_item(
         "input_number.ems_globaler_puffer_w", "Globaler Puffer", "globaler_puffer_w",
         "user_preference", unit="W",
@@ -150,7 +189,8 @@ def _ctrl_items_controllable(p: str, output_unit: str = 'watt') -> list:
             f"input_boolean.ems_{p}_technische_freigabe", "Technische Freigabe",
             "technische_freigabe", "technical_gate",
         ),
-        _control_item(f"input_select.ems_{p}_modus", "Modus", "modus", "user_control"),
+        _control_item(f"input_select.ems_{p}_modus", "Modus", "modus", "user_control",
+                      options=Device.DEVICE_MODES),
         # Zwang (D-053): Leistung bewusst immer in Watt, auch im Ampere-Modus
         # – wie reserve_w. Beide Helfer sind optional.
         _control_item(f"input_boolean.ems_{p}_force", "Zwang", "force", "user_control"),
@@ -217,7 +257,8 @@ def _ctrl_items_binary(p: str) -> list:
             f"input_boolean.ems_{p}_technische_freigabe", "Technische Freigabe",
             "technische_freigabe", "technical_gate",
         ),
-        _control_item(f"input_select.ems_{p}_modus", "Modus", "modus", "user_control"),
+        _control_item(f"input_select.ems_{p}_modus", "Modus", "modus", "user_control",
+                      options=Device.DEVICE_MODES),
         _control_item(f"input_boolean.ems_{p}_force", "Zwang", "force", "user_control"),
         _control_item(
             f"input_boolean.ems_{p}_aus_speicher_decken", "Aus Speicher decken",
@@ -267,9 +308,11 @@ def _ctrl_items_battery(p: str) -> list:
             f"input_boolean.ems_{p}_technische_freigabe", "Technische Freigabe",
             "technische_freigabe", "technical_gate",
         ),
-        _control_item(f"input_select.ems_{p}_modus", "Modus", "modus", "user_control"),
+        _control_item(f"input_select.ems_{p}_modus", "Modus", "modus", "user_control",
+                      options=Device.DEVICE_MODES),
         _control_item(
-            f"input_select.ems_{p}_betriebsart", "Betriebsart", "betriebsart", "user_control"
+            f"input_select.ems_{p}_betriebsart", "Betriebsart", "betriebsart", "user_control",
+            options=BatteryDevice.BETRIEBSARTEN,
         ),
         _control_item(
             f"input_boolean.ems_{p}_laden_erlaubt", "Laden erlaubt", "laden_erlaubt",
@@ -346,6 +389,7 @@ def _build_device_controls_schema(
     residual_power_entity: str,
     interval_s: int,
     battery_residual_power_entity: str = "",
+    available_modes: list | None = None,
 ) -> list[dict]:
     """Baut den abwärtskompatiblen HEMS-Vertrag für UI und Energy Pilot."""
     schema: list[dict] = [{
@@ -356,7 +400,8 @@ def _build_device_controls_schema(
         "residual_power_entity": residual_power_entity,
         "battery_residual_power_entity": battery_residual_power_entity,
         "interval_s": interval_s,
-        "items": _GLOBAL_CTRL_ITEMS,
+        "items": _global_ctrl_items(list(NORMAL_MODES) if available_modes is None
+                                    else available_modes),
     }]
     for cfg in device_configs:
         name = cfg["name"]
@@ -463,6 +508,10 @@ class HEMSApp:
             config_error=self._emergency_config_error(),
         )
         self.emergency.load()
+
+        # HEMS-interne Ersatzwerte für fehlende HA-Helfer (D-061).
+        self.internal_values = InternalValueStore(DATA_DIR / INTERNAL_VALUES_FILENAME)
+        self.internal_values.load()
 
         self.config = ConfigService(
             supervisor=self.supervisor,
@@ -583,7 +632,7 @@ class HEMSApp:
             self._last_states = states
             if await self._emergency_cycle(states):
                 return
-            st     = StateProxy(states)
+            st     = StateProxy(states, internal=self.internal_values.snapshot())
             result = self.ems.run_cycle(st)
             # Der Schreib-Lock gehört auch der Notabschaltung: löst sie während
             # dieser Charge aus, bricht `abort` die restlichen Befehle ab, und
@@ -701,6 +750,7 @@ class HEMSApp:
             residual_power_entity=self.ems.residual_power_entity,
             interval_s=self.interval_s,
             battery_residual_power_entity=self.ems.battery_residual_power_entity,
+            available_modes=parse_modes(self._options["available_modes"]),
         )
 
     async def _handle_device_controls_schema(self, request: web.Request) -> web.Response:
@@ -765,6 +815,59 @@ class HEMSApp:
         except Exception as exc:
             log.error("Set entity failed: %s", exc)
             return web.json_response({"error": str(exc)}, status=500)
+
+    # ------------------------------------------------------------------
+    # HEMS-interne Ersatzwerte (D-061)
+    # ------------------------------------------------------------------
+
+    def _control_item_for(self, entity_id: str) -> dict | None:
+        """Der Steuerschema-Eintrag zu einer Entität – nur was dort steht, ist einstellbar."""
+        for group in self._controls_schema():
+            for item in group["items"]:
+                if item["entity"] == entity_id:
+                    return item
+        return None
+
+    async def _handle_internal_values(self, request: web.Request) -> web.Response:
+        return web.json_response({
+            "values":     self.internal_values.snapshot(),
+            "file_error": self.internal_values.file_error,
+        })
+
+    @staticmethod
+    async def _entity_from_body(request: web.Request) -> tuple:
+        try:
+            body = await request.json()
+            return str(body["entity_id"]), body
+        except Exception:
+            raise InternalValueError("Anfrage unlesbar: entity_id fehlt.") from None
+
+    async def _handle_internal_value_set(self, request: web.Request) -> web.Response:
+        """Speichert einen internen Ersatzwert. Wirkt ab dem nächsten Regelzyklus –
+        aber nur, solange der HA-Helfer fehlt, ausgefallen oder ungültig ist."""
+        try:
+            entity_id, body = await self._entity_from_body(request)
+            item = self._control_item_for(entity_id)
+            if item is None:
+                return web.json_response(
+                    {"error": f"{entity_id} ist kein Helfer dieses HEMS."}, status=404)
+            value = validate_value(item, body.get("value"))
+            self.internal_values.set(entity_id, value)
+        except InternalValueError as exc:
+            return web.json_response({"error": str(exc)}, status=400)
+        log.info("Interner Wert gesetzt: %s = %s", entity_id, value)
+        return web.json_response({"ok": True, "value": value})
+
+    async def _handle_internal_value_reset(self, request: web.Request) -> web.Response:
+        """Löscht einen internen Wert – danach greifen wieder Add-on-Feld bzw. Default.
+        Auch für verwaiste Einträge eines nicht mehr konfigurierten Geräts."""
+        try:
+            entity_id, _ = await self._entity_from_body(request)
+            self.internal_values.reset(entity_id)
+        except InternalValueError as exc:
+            return web.json_response({"error": str(exc)}, status=400)
+        log.info("Interner Wert zurückgesetzt: %s", entity_id)
+        return web.json_response({"ok": True})
 
     # ------------------------------------------------------------------
     # Konfigurations-Handler – dünn: die Fachlogik liegt in ConfigService
@@ -975,6 +1078,9 @@ class HEMSApp:
         app.router.add_get("/api/ep",                      self._handle_ep)
         app.router.add_get("/api/device_controls_schema", self._handle_device_controls_schema)
         app.router.add_post("/api/set",                   self._handle_set)
+        app.router.add_get("/api/internal_values",        self._handle_internal_values)
+        app.router.add_post("/api/internal_values",       self._handle_internal_value_set)
+        app.router.add_post("/api/internal_values/reset", self._handle_internal_value_reset)
         app.router.add_get("/api/config",                 self._handle_config_get)
         app.router.add_get("/api/config/entities",        self._handle_config_entities)
         app.router.add_post("/api/config/validate",       self._handle_config_validate)

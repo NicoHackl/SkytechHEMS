@@ -28,8 +28,9 @@ fachlich unbrauchbar, und genau dieser Fall lief bisher unbemerkt mit.
 ## Über Namenskonvention gelesene HA-Helfer
 
 Alle Helfer sind optional. Ein **gültiger** HA-State hat immer Vorrang; fehlt er, ist er
-`unknown`/`unavailable` oder unbrauchbar, greift das gleichnamige Add-on-Feld. Die Ursache steht je
-Entität in `entity_diagnostics`, siehe
+`unknown`/`unavailable` oder unbrauchbar, greift zuerst ein im Steuerung-Tab eingegebener
+HEMS-interner Wert (D-061), sonst das gleichnamige Add-on-Feld. `force` ist davon ausgenommen. Die
+Ursache steht je Entität in `entity_diagnostics`, siehe
 [Doppelte Auflösung](global.md#doppelte-auflösung-von-ha-entitäten).
 
 | Entität | Einheit/Werte | Ersatzwert bei fehlendem/ungültigem State | Funktion |

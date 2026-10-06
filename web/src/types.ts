@@ -35,11 +35,15 @@ interface ForceStatus {
   aus_speicher_decken: boolean
 }
 
-/** Ursache und Quelle eines gelesenen HA-States. */
+/** Ursache und Quelle eines gelesenen HA-States.
+    `hems` (D-061): der Wert wurde im HEMS selbst eingegeben, weil der Helfer
+    fehlt, ausgefallen oder ungültig ist. `internal` ist der Sicherheitsdefault. */
 export interface EntityDiagnostic {
   role: string
   state: 'valid' | 'missing' | 'unavailable' | 'invalid' | 'write_failed'
-  source: 'ha' | 'addon' | 'internal'
+  source: 'ha' | 'hems' | 'addon' | 'internal'
+  /** Wirksamer Wert (D-061); fehlt bei Schreibzielen. */
+  value?: boolean | number | string | null
 }
 
 export interface ControllableDevice extends DeviceBase, ForceStatus {
@@ -225,6 +229,8 @@ export interface CycleStatus {
   inactive_devices: InactiveDeviceIssue[]
   /** Geräte-IDs, die diesen Zyklus technisch nicht regelbar waren. */
   devices_inactive_runtime: string[]
+  /** D-061: Ursache, Quelle und wirksamer Wert der globalen Helfer. */
+  global_entity_diagnostics?: Record<string, EntityDiagnostic>
 }
 
 export interface StatusResponse {
@@ -316,6 +322,21 @@ export interface ControlItem {
   role?: string
   unit?: string
   planning_relevant?: boolean
+  /** D-061: ohne HA-Helfer im HEMS einstellbar. Freigaben und Zwang nie. */
+  internal_editable?: boolean
+  /** Eingabegrenzen für den internen Wert — ohne Helfer fehlen dessen Attribute. */
+  min?: number
+  max?: number
+  step?: number
+  integer?: boolean
+  options?: string[]
+}
+
+/** GET /api/internal_values (D-061). Schlüssel ist die entity_id. */
+export interface InternalValues {
+  values: Record<string, boolean | number | string>
+  /** Leer, sonst warum die Datei unlesbar ist — dann wirken keine internen Werte. */
+  file_error: string
 }
 
 export interface ControlGroup {

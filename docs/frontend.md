@@ -111,6 +111,7 @@ Seitenwechsel nicht neu montiert werden.
   <Route element={<Layout />}>
     <Route path="/" element={<Status />} />
     <Route path="/steuerung" element={<Steuerung />} />
+    <Route path="/steuerung-info" element={<SteuerungInfo />} />
     <Route path="/energy-pilot" element={<EnergyPilot />} />
     <Route path="/sensoren/ueberschuss" element={<SensorenUeberschuss />} />
     <Route path="/sensoren/hausbilanz" element={<SensorenHausbilanz />} />
@@ -135,7 +136,8 @@ dabei ausdrücklich nur die **Entwurfsposition** — die fachliche Identität bl
 | Route | Bereich der Sidebar | Inhalt |
 |---|---|---|
 | `/` | – | Statusseite: laufender Zyklus, Geräte, Kennzahlen |
-| `/steuerung` | – | HA-Helfer je Gerät, direkt bedienbar |
+| `/steuerung` | – | HA-Helfer je Gerät, direkt bedienbar; fehlt ein Helfer, wird der Wert im HEMS gespeichert (D-061) |
+| `/steuerung-info` | – | Je Helferwert: HA-Helfer vorhanden?, wirksame Quelle und Wert, wohin die Steuerung schreibt; verwaiste interne Werte löschen (D-061) |
 | `/energy-pilot` | Vorausschau | Vorschläge und Planstatus des Energy Pilot |
 | `/sensoren/ueberschuss`, `/sensoren/hausbilanz` | Einrichtung | Formel-basierte Sensorwerte (D-045) |
 | `/flow-card` | Einrichtung | Anlagenwerte, Anzeigeoptionen und Navigationsziele der Power Flow Card (D-046, D-049) |
@@ -185,6 +187,10 @@ Zwei Muster, die dabei nicht verhandelbar sind:
   eine noch nicht angelegte Entität eintragbar ist; Tastatur und Screenreader funktionieren ohne
   Zutun. Ein gespeicherter Wert, den es aktuell nicht gibt, wird **mit Warnung angezeigt** und
   niemals stillschweigend gelöscht.
+- **Schreibziel der Steuerung an einer Stelle.** `components/ControlSource.ts` entscheidet für
+  „Steuerung“ und „Steuerung Info“ gemeinsam, ob eine Änderung zum HA-Helfer oder als interner
+  Wert ins HEMS geht (D-061) — die Info-Seite kann so nie etwas anderes behaupten, als die
+  Steuerung tut.
 - **Abgeleitete Entity-IDs kommen vom Server.** `HelferStatus` liest sie aus
   `/api/device_controls_schema`, nicht aus einer im Frontend nachgebauten Namenskonvention — zwei
   Quellen dafür liefen auseinander.

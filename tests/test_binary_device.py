@@ -252,9 +252,9 @@ def test_gueltige_ha_werte_schlagen_die_addon_fallbacks():
         "min_runtime_s": 600.0, "min_offtime_s": 300.0, "off_delay_s": 120.0,
     }
     for entity, role in BIN_HELFER.items():
-        assert d.entity_diagnostics[entity] == {
-            "role": role, "state": "valid", "source": "ha",
-        }
+        diagnose = dict(d.entity_diagnostics[entity])
+        assert diagnose.pop("value") is not None
+        assert diagnose == {"role": role, "state": "valid", "source": "ha"}
 
 
 def test_fehlende_helfer_verwenden_die_addon_fallbacks():

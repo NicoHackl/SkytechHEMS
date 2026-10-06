@@ -10,6 +10,23 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ### Hinzugefügt
 
+- **Steuerwerte ohne HA-Helfer (D-061).** Fehlt ein Helfer der Namenskonvention, ist er nicht
+  verfügbar oder ungültig, lässt sich sein Wert jetzt direkt im Tab „Steuerung“ eingeben. Bisher
+  stand dort nur „Helfer nicht gefunden“.
+  - **Vorrang:** Ein gültiger HA-Helfer gilt immer. Erst danach greift der im HEMS eingegebene
+    Wert, dann wie bisher das Add-on-Feld und der Default. Vorhandene Helfer werden weiter in
+    Home Assistant geschrieben und nicht gespiegelt.
+  - **Ausgenommen:** „EMS aktiv“, Freigabe, technische Freigabe, Zwang und Zwangsleistung gibt es
+    nur als echten HA-Helfer — ein im HEMS gespeicherter Wert gibt nie ein Gerät frei.
+  - **Speicherung:** in `/data/interne_werte.json`, sofort wirksam und über Neustarts hinweg.
+    „Zurücksetzen“ löscht einen internen Wert wieder.
+  - **Neuer Tab „Steuerung Info“:** zeigt je Wert, ob der HA-Helfer vorhanden ist, woher der
+    wirksame Wert gerade kommt (HA-Helfer, HEMS-intern, Add-on-Wert, Default), welcher Wert gilt
+    und wohin die Steuerung schreibt. Verwaiste interne Werte lassen sich dort löschen.
+  - **Schnittstellen:** neue Endpunkte `GET/POST /api/internal_values` und
+    `POST /api/internal_values/reset`; additiv im Status `global_entity_diagnostics`, `value` je
+    Diagnose und Quelle `hems`, im Steuerschema `internal_editable` samt Eingabegrenzen.
+
 - **Speicher überbrückt Überschussverbraucher (D-060).** Bricht die PV-Leistung plötzlich ein,
   regeln Heizstab, Wallbox oder Heizlüfter wegen Rampe, Mindestlaufzeit und Abschaltverzögerung
   nur langsam ab. Bisher kam diese Lücke aus dem Netz. Jetzt kann ein Speicher sie decken, bis

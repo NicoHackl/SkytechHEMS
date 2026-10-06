@@ -154,6 +154,10 @@ Die bisherige Form bleibt additiv kompatibel. Geräte ergänzen `class`, `entity
 `output_unit`, `allowed_modes`, `control_policy`, `request_entity` sowie je nach Klasse
 `actual_power_entity` oder `switch_entity`. Jedes Item trägt weiterhin `entity` und `label` und
 zusätzlich `key`, `kind`, `unit` (falls vorhanden), `role` und `planning_relevant`.
+Seit D-061 additiv: `internal_editable` (ohne HA-Helfer im HEMS einstellbar; `false` genau für
+`pv_regelung_aktiv`, `freigabe`, `technische_freigabe`, `force`, `force_leistung_w`), für Zahlen
+`min`, `max` (nur Prozent), `step` und `integer`, für Auswahllisten `options`. Die Optionen des
+globalen Regelmodus sind `auto`, die aktivierten `available_modes` und `aus`.
 
 Die globale Gruppe enthält außerdem `residual_power_entity` und
 `battery_residual_power_entity`. Letztere Entity wird nur für die Entladeplanung von
@@ -215,6 +219,35 @@ Schreibt einen Wert in eine HA-`input_*`-Entität.
 |---|---|---|
 | `400` | Domain wird nicht unterstützt | `{"error": "Unsupported domain: <domain>"}` |
 | `500` | Schreiben fehlgeschlagen | `{"error": "<Meldung>"}` |
+
+### `GET /api/internal_values`
+
+HEMS-interne Ersatzwerte (D-061), Schlüssel ist die `entity_id`.
+
+**Antwort `200`** `{"values": {"input_number.ems_luft_leistung_w": 2200.0}, "file_error": ""}` —
+`file_error` ist leer oder nennt, warum `/data/interne_werte.json` unlesbar ist; dann wirken keine
+internen Werte.
+
+### `POST /api/internal_values`
+
+Speichert einen internen Wert. Wirkt ab dem nächsten Zyklus, aber nur, solange der HA-Helfer
+fehlt, ausgefallen oder ungültig ist.
+
+**Rumpf** `{"entity_id": "input_number.ems_luft_leistung_w", "value": 2200}` — Zahl, Wahrheitswert
+(`true`/`false`, `"on"`/`"off"`) oder Auswahl-Text, je nach `kind` im Steuerschema.
+
+**Antwort `200`** `{"ok": true, "value": 2200.0}`
+
+| Code | Wann | Rumpf |
+|---|---|---|
+| `400` | Nicht intern einstellbar (Freigabe, Zwang), falscher Typ, außerhalb `min`/`max`, keine ganze Zahl, unbekannte Option, Datei unlesbar oder nicht schreibbar | `{"error": "<deutsche Meldung>"}` |
+| `404` | Die Entität steht nicht im Steuerschema | `{"error": "<entity_id> ist kein Helfer dieses HEMS."}` |
+
+### `POST /api/internal_values/reset`
+
+Löscht einen internen Wert — danach greifen wieder Add-on-Feld bzw. Default. Funktioniert auch für
+verwaiste Einträge eines nicht mehr konfigurierten Geräts. **Rumpf** `{"entity_id": "…"}`.
+**Antwort `200`** `{"ok": true}`, auch wenn kein Wert gespeichert war; `400` bei unlesbarer Datei.
 
 ## Konfigurations-Endpunkte
 
