@@ -81,9 +81,12 @@ stillschweigend vorausgesetzt.
 | Nutzerkonten, Namen, Adressen | nein | — | — |
 | Verbrauchs- und Erzeugungsdaten | ja, flüchtig im Speicher für die Dauer eines Zyklus | nirgends persistiert | entfällt |
 | Merker der Notabschaltung (D-059) | ja: aktiv ja/nein, Auslösezeit, Bedingung und gemessener Wert | `/data/notabschaltung.json` | wird beim Quittieren auf „nicht aktiv“ zurückgesetzt |
+| HEMS-interne Ersatzwerte (D-061) | ja: Regelparameter je Helfer-Entity-ID (Zahlen, An/Aus, Auswahl) | `/data/interne_werte.json` | bis „Zurücksetzen“ im Panel |
 
-Das Add-on legt keine Datenbank an. Einzige eigene Datei ist der Merker der Notabschaltung; er
-enthält keine personenbezogenen Daten und keine Zugangsdaten. Historie führt allein Home Assistant.
+Das Add-on legt keine Datenbank an. Eigene Dateien sind nur der Merker der Notabschaltung und die
+internen Ersatzwerte; beide enthalten keine personenbezogenen Daten und keine Zugangsdaten.
+Freigaben und Zwang lassen sich nicht intern speichern — auch eine von Hand bearbeitete Datei
+gibt kein Gerät frei. Historie führt allein Home Assistant.
 
 ## Externe Dienste
 

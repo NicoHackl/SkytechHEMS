@@ -39,6 +39,7 @@ export function Layout() {
         <nav className="nav" onClick={closeMobile}>
           <NavLink to="/" end className={navClass} onClick={(event) => guard(event, '/')}><Icon name="dashboard" /><span>Status</span></NavLink>
           <NavLink to="/steuerung" className={navClass} onClick={(event) => guard(event, '/steuerung')}><Icon name="sliders" /><span>Steuerung</span></NavLink>
+          <NavLink to="/steuerung-info" className={navClass} onClick={(event) => guard(event, '/steuerung-info')}><Icon name="info" /><span>Steuerung Info</span></NavLink>
 
           <div className="nav-label">Vorausschau</div>
           <NavLink to="/energy-pilot" className={navClass} onClick={(event) => guard(event, '/energy-pilot')}><Icon name="spark" /><span>Energy Pilot</span></NavLink>

@@ -11,8 +11,9 @@ zyklisch und prioritätsbasiert auf regelbare Verbraucher (Heizstab, Wallbox) un
 Verbraucher (Heizlüfter) — mit Zeitschutz, Hysterese, Rampenbegrenzung, Mehrfachabschaltung bei
 Defizit und quittierpflichtiger Notabschaltung.
 Bedienung über ein Ingress-Panel und Home-Assistant-Helfer-Entitäten; eigene Persistenz gibt es
-nicht, gelesen und geschrieben wird ausschließlich der HA-State. Einzige Ausnahme ist der Merker
-der Notabschaltung in `/data/notabschaltung.json` (D-059).
+nicht, gelesen und geschrieben wird ausschließlich der HA-State. Ausnahmen sind der Merker der
+Notabschaltung in `/data/notabschaltung.json` (D-059) und die HEMS-internen Ersatzwerte für
+fehlende HA-Helfer in `/data/interne_werte.json` (D-061).
 
 Tech-Stack: Python 3.11 mit aiohttp (Add-on-Dienst), React 18 + TypeScript + Vite (Oberfläche),
 Docker-Image als Home-Assistant-Add-on mit Ingress.

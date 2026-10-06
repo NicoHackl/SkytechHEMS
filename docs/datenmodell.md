@@ -1,7 +1,9 @@
 # Datenmodell
 
-Das Add-on hat **keine eigene Persistenz**. Zustand lebt an zwei Orten: in den HA-Helfer-Entitäten
-(überlebt Neustarts) und im Speicher der Geräteobjekte (Timer, überlebt keinen Neustart). Dieses
+Das Add-on hat **keine eigene Persistenz** bis auf zwei Dateien unter `/data`: den Merker der
+Notabschaltung (D-059) und die HEMS-internen Ersatzwerte (D-061). Zustand lebt sonst an zwei Orten:
+in den HA-Helfer-Entitäten (überlebt Neustarts) und im Speicher der Geräteobjekte (Timer, überlebt
+keinen Neustart). Dieses
 Dokument beschreibt Identität und Statusverträge. Die vollständigen Pflichtfelder, Leserichtungen,
 Schreibrichtungen und Fallbacks der HA-Entitäten stehen in [device_classes/](device_classes/global.md).
 
@@ -31,9 +33,18 @@ nicht an.
 
 Für die **Eingangswerte** von `controllable` und `binary` gibt es je ein verpflichtendes Feld in
 der Add-on-Konfiguration, das bei fehlender, nicht verfügbarer oder unbrauchbarer Entität greift —
-siehe [Add-on-Fallbacks](device_classes/global.md#add-on-fallbacks-für-ha-entitäten). Die
-**Ausgabe**-Helfer (`anforderung_*`, `anzahl_phase`) haben keinen Fallback: ein Sollwert lässt sich
-nicht erfinden.
+siehe [Add-on-Fallbacks](device_classes/global.md#add-on-fallbacks-für-ha-entitäten). Davor steht
+seit D-061 der **HEMS-interne Wert**, der im Steuerung-Tab eingegeben wird, sobald der Helfer
+fehlt, ausgefallen oder ungültig ist:
+
+```text
+gültiger HA-Helfer → HEMS-interner Wert → Add-on-Feld → interner Default
+```
+
+Nie intern einstellbar sind `ems_pv_regelung_aktiv`, `freigabe`, `technische_freigabe`, `force`
+und `force_leistung_w` — siehe [Doppelte Auflösung](device_classes/global.md#doppelte-auflösung-von-ha-entitäten).
+Die **Ausgabe**-Helfer (`anforderung_*`, `anzahl_phase`) haben keinen Fallback: ein Sollwert lässt
+sich nicht erfinden.
 
 Die Tabellen in diesem Abschnitt sind eine Übersicht. Kanonische Detailreferenz sind die Seiten
 für [globale Werte](device_classes/global.md), [regelbare Geräte](device_classes/controllable.md),
@@ -211,13 +222,14 @@ Global:
 | `timestamp` | string | **Maschinenformat** `JJJJ-MM-TT hh:mm:ss`, nicht zur Anzeige gedacht |
 | `devices` | Liste | siehe unten |
 | `devices_inactive_runtime` | Liste | Geräte-IDs, die diesen Zyklus technisch nicht regelbar waren (Schreibziel fehlt oder Schreiben schlug fehl) |
+| `global_entity_diagnostics` | Objekt | D-061: `{entity_id: {role, state, source, value}}` der globalen Helfer — Gegenstück zu `entity_diagnostics` je Gerät |
 | `inactive_devices` | Liste | Beim Start übersprungene Geräteeinträge: `index`, `name`, `device_class`, `label`, `errors` (Feldname → deutsche Meldung). Ausdrücklich **ohne** erfundene Ist-, SoC- oder Schaltwerte |
 
 Jedes Gerät trägt zusätzlich:
 
 | Feld | Typ | Bedeutung |
 |---|---|---|
-| `entity_diagnostics` | Objekt | `{entity_id: {role, state, source}}` |
+| `entity_diagnostics` | Objekt | `{entity_id: {role, state, source, value}}`; `value` (D-061) ist der wirksame Wert und fehlt bei Schreibzielen |
 | `runtime_active` | bool | `false`, wenn ein Schreibziel fehlt, unbrauchbar ist oder der letzte Schreibversuch fehlschlug |
 | `inactive_reasons` | Liste | `schreibziel_fehlt`, `schreibziel_nicht_verfuegbar`, `schreibziel_ungueltig`, `schreiben_fehlgeschlagen` |
 | `write_error` | string oder `null` | Bereinigte Fehlermeldung des letzten Schreibversuchs |
@@ -233,7 +245,8 @@ Regelbare und binäre Geräte tragen außerdem die Zwangsfelder (D-053):
 | `aus_speicher_decken` | bool | Wirksamer Zustand des Helfers `ems_<prefix>_aus_speicher_decken` (D-060) |
 
 `state` ist `valid`, `missing`, `unavailable` oder `invalid`; bei Schreibzielen zusätzlich
-`write_failed`. `source` ist `ha`, `addon` oder `internal`.
+`write_failed`. `source` ist `ha`, `hems` (im HEMS eingegeben, D-061), `addon` oder `internal`
+(Sicherheitsdefault). Bei `hems` behält `state` die Ursache, warum der Helfer nicht wirkt.
 Damit ist beantwortbar, welcher Wert gerade wirkt und warum nicht der aus Home Assistant — siehe
 [Doppelte Auflösung](device_classes/global.md#doppelte-auflösung-von-ha-entitäten).
 
@@ -327,7 +340,8 @@ aktiver Notabschaltung kein Regelzyklus läuft und `status` der letzte Stand dav
 
 ### Merkerdatei `/data/notabschaltung.json` (D-059)
 
-Einzige eigene Persistenz des Add-ons. Atomar geschrieben (temporäre Datei, dann Umbenennen):
+Eigene Persistenz des Add-ons, neben den internen Ersatzwerten unten. Atomar geschrieben
+(temporäre Datei, dann Umbenennen):
 
 ```json
 {"active": true, "since": "2026-10-01T14:30:05+02:00",
@@ -336,6 +350,21 @@ Einzige eigene Persistenz des Add-ons. Atomar geschrieben (temporäre Datei, dan
 
 Fehlt die Datei, ist die Notabschaltung nicht aktiv. Ist sie unlesbar oder fehlt `active` als
 Wahrheitswert, gilt sie als **aktiv**.
+
+### Interne Ersatzwerte `/data/interne_werte.json` (D-061)
+
+Im Steuerung-Tab eingegebene Werte für Helfer, die fehlen, ausgefallen oder ungültig sind.
+Schlüssel ist die `entity_id`, Werte sind Zahl, Wahrheitswert oder Auswahl-Text:
+
+```json
+{"values": {"input_number.ems_luft_leistung_w": 2200.0, "input_select.ems_luft_modus": "manuell"}}
+```
+
+Fehlt die Datei, gibt es keine internen Werte. Ist sie unlesbar, wirken keine internen Werte, der
+Grund steht als `file_error` in `GET /api/internal_values`, und Schreiben ist gesperrt, bis die
+Datei repariert oder gelöscht ist. Einträge für Freigaben und Zwang werden beim Laden verworfen.
+Einträge eines nicht mehr konfigurierten Geräts wirken nicht und erscheinen im Tab „Steuerung
+Info“ als verwaist.
 
 ## Vertrag zum Energy Pilot
 

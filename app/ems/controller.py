@@ -27,7 +27,8 @@ from configuration import (
 from formula import run_formula
 
 from .ops import WriteOp, WriteResult
-from .state import SOURCE_FORMULA, SOURCE_HA, SOURCE_INTERNAL, STATE_VALID, StateProxy, safe_float
+from .state import (SOURCE_FORMULA, SOURCE_HA, SOURCE_INTERNAL, STATE_VALID, Resolved, StateProxy,
+                    safe_float)
 from .devices import Device, ControllableDevice, BinaryDevice, BatteryDevice
 
 log = logging.getLogger(__name__)
@@ -286,10 +287,24 @@ class EMSController:
         now_dt = datetime.datetime.fromtimestamp(now_ts).strftime("%Y-%m-%d %H:%M:%S")
 
         # ── 1. Globale Eingänge ─────────────────────────────────────────
-        debug_output            = st.get(HA_DEBUG_OUTPUT) == "on"
-        ems_enabled             = st.get(HA_EMS_ENABLED) == "on"
-        global_mode             = st.get(HA_GLOBAL_MODE) or "aus"
-        global_puffer           = safe_float(st.get(HA_GLOBAL_PUFFER_W))
+        # Alle globalen Helfer laufen über den Resolve-Vertrag, damit ein im HEMS
+        # gesetzter Ersatzwert (D-061) greift und sichtbar ist, woher jeder Wert
+        # stammt. Bei gültigem HA-State bleibt das Ergebnis das bisherige.
+        global_diagnostics: Dict[str, Dict] = {}
+        note = self._note_global(global_diagnostics)
+        debug_output  = bool(note(HA_DEBUG_OUTPUT, "debug_output",
+                                  st.resolve_bool(HA_DEBUG_OUTPUT)).value)
+        # Hauptschalter: nie ein HEMS-interner Ersatzwert (Gate, D-061).
+        ems_enabled   = bool(note(HA_EMS_ENABLED, "pv_regelung_aktiv",
+                                  st.resolve_bool(HA_EMS_ENABLED)).value)
+        # Roh statt gegen eine Optionsliste: ein unbekannter Modus muss als
+        # global_mode im Status sichtbar bleiben (global_mode_configured).
+        mode_resolved = st.resolve_raw(HA_GLOBAL_MODE)
+        global_mode   = (str(mode_resolved.value) if mode_resolved.value is not None
+                         else (st.get(HA_GLOBAL_MODE) or "aus"))
+        note(HA_GLOBAL_MODE, "regelmodus", mode_resolved, value=global_mode)
+        global_puffer = float(note(HA_GLOBAL_PUFFER_W, "globaler_puffer_w",
+                                   st.resolve_number(HA_GLOBAL_PUFFER_W, internal=0.0)).value)
 
         # Hinter einem normalen Modus, der global nicht aktiviert ist, steht keine
         # Regellogik – dieser Zyklus ist deshalb sicher inaktiv. Der rohe HA-State
@@ -303,7 +318,9 @@ class EMSController:
                         global_mode, ", ".join(self._available_modes) or "keiner")
         self._last_unconfigured_mode = None if global_mode_configured else global_mode
         effective_mode = global_mode if global_mode_configured else "aus"
-        global_einschaltreserve = safe_float(st.get(HA_GLOBAL_EINSCHALTRESERVE_W))
+        global_einschaltreserve = float(note(
+            HA_GLOBAL_EINSCHALTRESERVE_W, "einschaltreserve_global_w",
+            st.resolve_number(HA_GLOBAL_EINSCHALTRESERVE_W, internal=0.0)).value)
 
         # Formel wird VOR der konfigurierten Einzel-Entität ausgewertet (D-045):
         # liefert sie einen gültigen Wert, ersetzt sie die Entität vollständig;
@@ -546,7 +563,9 @@ class EMSController:
         # ── 10. Entladeplanung ──────────────────────────────────────────
         # MUSS nach der Verbraucher-Allokation und vor calculate_ramp laufen:
         # der Speicher löst dort seine Richtung auf (D-B07).
-        entlade_abschlag_w = safe_float(st.get(HA_AC_SPEICHER_ENTLADE_ABSCHLAG_W))
+        entlade_abschlag_w = float(note(
+            HA_AC_SPEICHER_ENTLADE_ABSCHLAG_W, "ac_speicher_entlade_abschlag_w",
+            st.resolve_number(HA_AC_SPEICHER_ENTLADE_ABSCHLAG_W, internal=0.0)).value)
         self._allocate_discharge(batteries, hausdefizit_w, entlade_abschlag_w,
                                  verbraucherdefizit_w)
 
@@ -604,10 +623,26 @@ class EMSController:
             # nicht rot – die übrigen regeln weiter.
             "devices_inactive_runtime": [d.id for d in self._devices
                                          if not d.runtime_active],
+            # Woher jeder globale Helferwert stammt (D-061) – Gegenstück zu
+            # entity_diagnostics je Gerät.
+            "global_entity_diagnostics": global_diagnostics,
             "timestamp":             now_dt,
         }
 
         return {"status": status, "write_ops": write_ops}
+
+    @staticmethod
+    def _note_global(diagnostics: Dict[str, Dict]):
+        """Merkt sich Ursache, Quelle und wirksamen Wert eines globalen Helfers."""
+        def note(entity_id: str, role: str, resolved: Resolved, *, value=None) -> Resolved:
+            diagnostics[entity_id] = {
+                "role":   role,
+                "state":  resolved.state,
+                "source": resolved.source,
+                "value":  resolved.value if value is None else value,
+            }
+            return resolved
+        return note
 
     # ------------------------------------------------------------------
     # Entlade-Koordination (D-B15)

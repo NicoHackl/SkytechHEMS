@@ -1,7 +1,7 @@
 import type {
   ConfigOptions, ConfigResponse, ConfigSaveResult, ConfigValidation,
   ControlGroup, EmergencyCondition, EmergencyStatus, EntityOption, FlowDashboards, FlowPreview,
-  FormulaTestResult, FormulaVariable, HaEntities, StatusResponse,
+  FormulaTestResult, FormulaVariable, HaEntities, InternalValues, StatusResponse,
 } from './types'
 
 /* Einziger Ort im Frontend, an dem fetch aufgerufen wird. Basis-Pfad, Header und
@@ -56,6 +56,20 @@ export const api = {
     request<{ ok: boolean }>('/set', {
       method: 'POST',
       body: JSON.stringify({ entity_id: entityId, value }),
+    }),
+
+  /* HEMS-interne Ersatzwerte (D-061): wirken nur, solange der HA-Helfer fehlt,
+     ausgefallen oder ungültig ist. Der Helfer hat immer Vorrang. */
+  internalValues: () => request<InternalValues>('/internal_values'),
+  setInternalValue: (entityId: string, value: boolean | number | string) =>
+    request<{ ok: boolean }>('/internal_values', {
+      method: 'POST',
+      body: JSON.stringify({ entity_id: entityId, value }),
+    }),
+  resetInternalValue: (entityId: string) =>
+    request<{ ok: boolean }>('/internal_values/reset', {
+      method: 'POST',
+      body: JSON.stringify({ entity_id: entityId }),
     }),
 
   /* Konfiguration der Add-on-Optionen. Geschrieben wird serverseitig über die

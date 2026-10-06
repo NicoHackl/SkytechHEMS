@@ -55,7 +55,10 @@ Werte nicht mehr.
 
 ## Über Namenskonvention gelesene HA-Helfer
 
-Alle Helfer sind optional. Ein **gültiger** HA-State hat Vorrang; sonst gilt der Ersatzwert.
+Alle Helfer sind optional. Ein **gültiger** HA-State hat Vorrang; sonst gilt ein im Steuerung-Tab
+eingegebener HEMS-interner Wert (D-061) und erst danach der Ersatzwert. Ladestufen,
+`netzladen_aktiv` und `netzlade_leistung_w` sind nicht intern einstellbar, siehe
+[Doppelte Auflösung](global.md#doppelte-auflösung-von-ha-entitäten).
 
 ### Freigaben und Richtung
 

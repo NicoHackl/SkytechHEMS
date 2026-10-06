@@ -452,7 +452,9 @@ def test_gueltiger_ha_wert_schlaegt_den_addon_fallback():
         "maximum_step_change": 800.0, "minimum_step_change": 5.0,
     }
     for entity in FALLBACK_HELFER:
-        assert d.entity_diagnostics[entity] == {
+        diagnose = dict(d.entity_diagnostics[entity])
+        assert diagnose.pop("value") is not None
+        assert diagnose == {
             "role": FALLBACK_HELFER[entity], "state": "valid", "source": "ha",
         }
 

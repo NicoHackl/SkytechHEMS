@@ -40,8 +40,9 @@ anders als beim globalen Überschuss-Sensor entsteht dadurch kein Hard-Lockout.
 ## Über Namenskonvention gelesene HA-Helfer
 
 Alle Helfer sind optional. Ein **gültiger** HA-State hat immer Vorrang; fehlt er, ist er
-`unknown`/`unavailable` oder unbrauchbar, greift der in der Tabelle genannte Ersatzwert. Die
-Ursache steht je Entität in `entity_diagnostics`, siehe
+`unknown`/`unavailable` oder unbrauchbar, greift zuerst ein im Steuerung-Tab eingegebener
+HEMS-interner Wert (D-061), sonst der in der Tabelle genannte Ersatzwert. `force` und
+`force_leistung_w` sind davon ausgenommen. Die Ursache steht je Entität in `entity_diagnostics`, siehe
 [Doppelte Auflösung](global.md#doppelte-auflösung-von-ha-entitäten).
 
 | Entität | Einheit | Ersatzwert bei fehlendem/ungültigem State | Funktion |

@@ -77,6 +77,11 @@ def test_schema_items_have_stable_semantics_without_suffix_inference():
         "role": "technical_constraint",
         "planning_relevant": True,
         "unit": "W",
+        # Additiv seit D-061: Eingabegrenzen für den HEMS-internen Ersatzwert.
+        "internal_editable": True,
+        "min": 0,
+        "integer": False,
+        "step": 1,
     }
     assert by_key["hoch_regelzeit_s"]["planning_relevant"] is False
 
@@ -88,11 +93,13 @@ def test_schema_kennt_zwang_helfer():
     assert heater_keys["force"] == {
         "entity": "input_boolean.ems_heizstab_force", "label": "Zwang", "key": "force",
         "kind": "bool", "role": "user_control", "planning_relevant": True,
+        "internal_editable": False,
     }
     assert heater_keys["force_leistung_w"] == {
         "entity": "input_number.ems_heizstab_force_leistung_w", "label": "Zwangsleistung",
         "key": "force_leistung_w", "kind": "number", "role": "user_control",
         "planning_relevant": True, "unit": "W",
+        "internal_editable": False, "min": 0, "integer": False, "step": 1,
     }
     fan_keys = {item["key"] for item in fan["items"]}
     assert "force" in fan_keys and "force_leistung_w" not in fan_keys
@@ -107,6 +114,7 @@ def test_schema_kennt_speicherdeckung_je_verbraucher():
             "entity": f"input_boolean.ems_{prefix}_aus_speicher_decken",
             "label": "Aus Speicher decken", "key": "aus_speicher_decken",
             "kind": "bool", "role": "user_preference", "planning_relevant": True,
+            "internal_editable": True,
         }
 
 
@@ -213,3 +221,45 @@ def test_globales_schema_kennt_entlade_abschlag():
     assert by_key["ac_speicher_entlade_abschlag_w"]["entity"] == (
         "input_number.ems_ac_speicher_entlade_abschlag_w"
     )
+
+
+# ---------------------------------------------------------------------------
+# D-061: HEMS-interne Ersatzwerte
+# ---------------------------------------------------------------------------
+
+GATE_KEYS = {"pv_regelung_aktiv", "freigabe", "technische_freigabe", "force", "force_leistung_w"}
+
+
+def _battery_schema():
+    return _build_device_controls_schema(
+        _valid([{
+            "name": "acspeicher1", "class": "battery", "soc_entity": "sensor.soc",
+            "power_entity": "sensor.leistung", "power_sign": "positiv_laden",
+            "available_charge_power_w": 3000, "available_discharge_power_w": 3000,
+            "soc_max_hysteresis_percent": 2, "direction_switch_delay_s": 5,
+        }]),
+        residual_power_entity="sensor.ueberschuss",
+        interval_s=3,
+        battery_residual_power_entity="sensor.hausleistungsbilanz",
+        available_modes=["manuell", "nur_laden"],
+    )
+
+
+def test_nur_freigaben_und_zwang_sind_nicht_intern_einstellbar():
+    for group in [*_schema(), *_battery_schema()]:
+        for item in group["items"]:
+            assert item["internal_editable"] is (item["key"] not in GATE_KEYS), item["entity"]
+
+
+def test_interne_eingabe_kennt_grenzen_und_optionen():
+    global_group, battery = _battery_schema()
+    regelmodus = next(item for item in global_group["items"] if item["key"] == "regelmodus")
+    # Nur global aktivierte normale Modi plus die beiden Sondermodi.
+    assert regelmodus["options"] == ["auto", "manuell", "nur_laden", "aus"]
+    by_key = {item["key"]: item for item in battery["items"]}
+    assert by_key["modus"]["options"] == ["auto", "manuell", "aus"]
+    assert by_key["betriebsart"]["options"] == ["auto", "nur_laden", "nur_entladen", "standby"]
+    assert by_key["soc_min_prozent"]["min"] == 0 and by_key["soc_min_prozent"]["max"] == 100
+    assert by_key["prioritat"]["integer"] is True
+    assert by_key["entlade_prioritat"]["integer"] is True
+    assert by_key["reserve_w"]["integer"] is False and "max" not in by_key["reserve_w"]
