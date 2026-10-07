@@ -2,11 +2,11 @@
 
 **Version:** 1.1
 
-**Status:** Dokumentierter Implementierungsstand mit bekannten Betriebsgrenzen; HEMS-Lebenszeichen im HEMS implementiert, im Provider **Entwurf**
+**Status:** Dokumentierter Implementierungsstand mit bekannten Betriebsgrenzen; HEMS-Lebenszeichen in beiden Projekten **implementiert**
 
 **Stand:** 07.10.2026
 
-**Geprüfte Codebasis:** SkytechHEMS `e5c0156`, Skytech-HEMS-Battery-Provider `12ae0f3`.
+**Geprüfte Codebasis:** SkytechHEMS `e5c0156`, Skytech-HEMS-Battery-Provider `12ae0f3`; Lebenszeichen: SkytechHEMS `f2037f4` (D-062), Battery-Provider D-016.
 
 Dieser Vertrag beschreibt den vorhandenen Austausch über Home Assistant. Er führt keine neue
 Steuerungslogik ein. Bekannte Einschränkungen sind ausdrücklich dokumentiert und dürfen nicht
@@ -171,9 +171,8 @@ Schreibaufruf.
 
 ## HEMS-Lebenszeichen
 
-Status: HEMS-Seite **implementiert** (SkytechHEMS, D-062); Auswertung im Provider **Entwurf**.
-Bis zur Umsetzung im Provider gilt die
-bekannte Grenze "HEMS steht, HA und Provider laufen weiter" der Tabelle unten unverändert.
+Status: **Implementiert** — HEMS-Seite SkytechHEMS D-062, Auswertung im Provider D-016
+(`custom_components/battery_bridge/heartbeat.py`, `hems_bridge.py`).
 Entität, Attribute und Frisch-Regel sind im Vertrag HEMS ↔ Wallbox-Provider identisch; nur die
 Reaktion bei nicht frischem Lebenszeichen ist gerätespezifisch.
 
@@ -216,8 +215,9 @@ Fehlen bedeutet "kein frischer Zyklus".
   die Bridge führt dann keinen Sync aus. Die HEMS-Notabschaltung übersteuert die Pause nicht
   (**Bekannte Grenze**, bewusst so entschieden).
 
-`binary_sensor.<provider_prefix>_hems_lebenszeichen` bildet diesen Zustand ab (an = frisch);
-er gehört zum Entwurf.
+`binary_sensor.<provider_prefix>_hems_lebenszeichen` bildet diesen Zustand ab (an = frisch).
+Der Provider prüft die Frist alle 5 s, unabhängig vom Keep-Alive-Takt; die HEMS-Sollsensoren
+zeigen im Stoppzustand `0`, weil genau das gesendet wurde.
 
 ## Keep-Alive, Pause und Neustart
 
@@ -229,7 +229,7 @@ er gehört zum Entwurf.
 | Poll-Ausfall | Coordinator verwendet vorübergehend 30 s; erfolgreicher Poll stellt den normalen Takt wieder her. |
 | Bridge-Schalter aus | Unterbindet neue automatische Syncs einschließlich Keep-Alive; sendet selbst keinen Stopp. |
 | Bridge-Schalter ein | Sofortige Synchronisierung einschließlich erneuter Richtungsinitialisierung. |
-| Neustart/Neuladen | Bridge wieder aktiv; pausierter Zustand und letzter Befehl werden nicht wiederhergestellt. |
+| Neustart/Neuladen | Bridge wieder aktiv; pausierter Zustand und letzter Befehl werden nicht wiederhergestellt. Bis zum ersten frisch gesehenen HEMS-Zyklus beide Richtungen 0 W. |
 | Unload | Entfernt Helfer-Listener und Keep-Alive; kein ausdrücklicher Abschaltbefehl der Bridge. |
 
 Eine Pause bricht einen bereits laufenden Sync nicht ausdrücklich ab. Manuelle Number-Befehle
@@ -246,7 +246,7 @@ mit garantiertem physischem Stillstand.
 | Betriebsart-State ist `unknown`, `unavailable` oder anderweitig unerwartet | Beide Richtungen werden wie bei Standby auf null gesetzt. |
 | `NaN` oder Unendlich als Leistungsstate | Keine ausdrückliche Endlichkeitsprüfung in der Bridge; Verhalten fällt in Adapterpfade. Ein einheitlicher sicherer Fehlerpfad ist dafür nicht zugesagt. |
 | Vorzeichen widerspricht Betriebsart | Betrag wird in die durch Betriebsart gewählte Richtung geschrieben; keine Fehlererkennung für das Paar. |
-| HEMS steht, HA und Provider laufen weiter | Keep-Alive erneuert den alten Helferwert weiter. Ein HEMS-Lebenszeichen-Gate ist als **Entwurf** definiert, aber nicht implementiert. |
+| HEMS steht, HA und Provider laufen weiter | Nach Ablauf der Lebenszeichen-Frist gehen beide Richtungen auf 0 W, auch im Keep-Alive; mit dem nächsten HEMS-Zyklus übernimmt die Bridge wieder. Steht das HEMS-Add-on, aber nicht HA, bleibt der Speicher dauerhaft auf 0 W. |
 | Geräteverbindung ausgefallen | Messsensoren werden nicht verfügbar; Schreibfehler werden separat sichtbar. Physischer Stopp ist ohne erreichbaren Transport nicht garantiert. |
 | HEMS-Notabschaltung bei pausierter Bridge | HEMS setzt Helfer auf null/Standby; die Bridge beobachtet den Notabschaltungsstatus nicht gesondert und führt während der Pause keinen neuen Sync aus. |
 | Unterschiedliche Herstellerlimits | Bridge führt keine generische Prüfung gegen HEMS-`available_*_w` aus; richtige Konfiguration und Adapter-/Gerätegrenzen bleiben erforderlich. |
@@ -291,12 +291,12 @@ Prüfung beider Projekte und eine entsprechende Vertragsversion. Dokumentversion
 keine zur Laufzeit übertragene Protokollversion.
 
 Die bekannten Grenzen werden erst nach tatsächlich implementierter und geprüfter Änderung
-entfernt. Insbesondere dürfen das als Entwurf beschriebene Lebenszeichen, strikte Paarvalidierung oder serialisierte
+entfernt. Insbesondere dürfen strikte Paarvalidierung oder serialisierte
 Gesamtbefehle nicht allein durch eine neue Formulierung als vorhanden gelten.
 
 Implementierungsreferenzen:
 
 | Repository | Dateien |
 |---|---|
-| SkytechHEMS | `app/ems/devices.py` (`BatteryDevice`), `app/ems/ops.py`, `app/emergency.py`, `docs/device_classes/battery.md` |
-| Skytech-HEMS-Battery-Provider | `custom_components/battery_bridge/hems_bridge.py`, `sensor.py`, `number.py`, `switch.py`, `coordinator.py`, `const.py`, `adapters/marstek_udp.py`, `adapters/e3dc_rscp.py` (unter `custom_components/battery_bridge/`) |
+| SkytechHEMS | `app/status_publisher.py`, `app/ems/devices.py` (`BatteryDevice`), `app/ems/ops.py`, `app/emergency.py`, `docs/device_classes/battery.md` |
+| Skytech-HEMS-Battery-Provider | `custom_components/battery_bridge/hems_bridge.py`, `heartbeat.py`, `binary_sensor.py`, `sensor.py`, `number.py`, `switch.py`, `coordinator.py`, `const.py`, `adapters/marstek_udp.py`, `adapters/e3dc_rscp.py` (unter `custom_components/battery_bridge/`) |
