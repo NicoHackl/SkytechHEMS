@@ -14,7 +14,7 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
   HEMS-Lebenszeichen `sensor.skytech_hems_status` (Entwurf, im HEMS noch nicht umgesetzt),
   Phasenbetrieb, Befehlsfolge und Statuskennzeichnung je Abschnitt.
 - Vertrag zum Battery-Provider auf Version 1.1: HEMS-Lebenszeichen als Entwurf ergänzt.
-- Umsetzungsreihenfolge: [umsetzungsplan.md](../Skytech-HEMS-Wallbox-Provider/umsetzungsplan.md).
+- Umsetzungsreihenfolge: `umsetzungsplan.md` im Repo Skytech-HEMS-Wallbox-Provider.
 
 ### Behoben — 07.10.2026
 
