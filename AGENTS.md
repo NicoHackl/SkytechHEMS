@@ -80,6 +80,16 @@ Wenn `docs/` dieser Datei widerspricht, ist `docs/` falsch und wird korrigiert �
     invertierter Notbehelf. Die Wahl bleibt über Neuladen hinweg erhalten, die Voreinstellung
     kommt vom Betriebssystem.
 
+12. **Projektübergreifende Verträge:** Schnittstellen zu anderen Skytech-Projekten stehen in
+   [`contract/`](contract/README.md) — dort gilt die Struktur `contract/contract_<projektpaar>/`.
+   Wer eine solche Schnittstelle ändert (Felder, Entitäten, Topics, Services, Semantik), liest
+   zuerst `contract/README.md` und den betreffenden Vertrag und zieht **beide Kopien** (dieses
+   Repo und die Gegenstelle, gleicher relativer Pfad, wortgleich) im **selben Arbeitspaket**
+   nach, samt Changelog-Eintrag in beiden Repos. Lokale Doku verlinkt den Vertrag, statt die
+   gemeinsamen Felder abweichend zu beschreiben. Ein Plan oder eine Doku-Änderung allein
+   implementiert keine Schnittstelle — der Status im Vertrag (implementiert / Grenze / Entwurf)
+   wird gepflegt. Ist die Gegenstelle nicht ausgecheckt oder unklar: fragen, nicht raten.
+
 ## Befehle
 
 | Zweck | Befehl |
@@ -100,6 +110,7 @@ passende Datei lesen, statt zu raten:
 | Datei | Inhalt |
 |---|---|
 | [docs/README.md](docs/README.md) | Einstieg und Index der gesamten Doku |
+| [contract/README.md](contract/README.md) | Projektübergreifende Verträge: Struktur, Regeln, Index der Gegenstellen |
 | [docs/architektur.md](docs/architektur.md) | Komponenten, Datenfluss, Grenzen, Tech-Stack |
 | [docs/entwicklerrichtlinien.md](docs/entwicklerrichtlinien.md) | Naming, Struktur, Fehlerbehandlung, Kommentarstil |
 | [docs/frontend.md](docs/frontend.md) | Frontend-Stack, Ordnerstruktur, Routing, API-Client, Seiten- und Formularmuster |
@@ -122,6 +133,7 @@ passende Datei lesen, statt zu raten:
    Doku beschriebene Funktion sei tatsächlich implementiert.
 3. Implementieren, Tests und Linting laufen lassen.
 4. Changelog- und Doku-Einträge im selben Arbeitspaket nachziehen.
+   Betrifft die Änderung eine Gegenstelle: Vertrag unter `contract/` in beiden Repos nachziehen (Regel 12).
 5. Committen und pushen auf `claude/main`.
 6. Neue Grundsatzentscheidung? → Eintrag in
    [docs/design-entscheidungen.md](docs/design-entscheidungen.md), ausführlich als ADR unter

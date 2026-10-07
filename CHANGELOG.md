@@ -12,6 +12,7 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 - Gemeinsame Contract-Ablage mit einem Ordner je Projektpaar und aktualisierten Verweisen.
 - Aktueller Austausch mit Energy-Pilot und Battery-Provider einschließlich bestehender Kompatibilitäts- und Betriebsgrenzen dokumentiert.
+- Regel zur Pflege projektübergreifender Verträge in `AGENTS.md` verankert, damit KI-Assistenten sie automatisch beachten.
 
 
 ### Hinzugefügt
