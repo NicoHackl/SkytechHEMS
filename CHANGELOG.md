@@ -13,7 +13,8 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 - **HEMS-Lebenszeichen (D-062).** Nach jedem Zyklus veröffentlicht das HEMS `sensor.skytech_hems_status`
   mit Zykluszähler und Zykluslänge. Wallbox- und Battery-Provider erkennen daran einen HEMS-Ausfall und
   stoppen ihr Gerät. Auch während der Notabschaltung wird es weiter veröffentlicht. Der Battery-Provider
-  wertet es aus (Vertrag `contract_hems_battery_provider` Version 1.1: implementiert).
+  wertet es aus (Vertrag `contract_hems_battery_provider` Version 1.1: implementiert), ebenso der neue
+  Wallbox-Provider (Vertrag `contract_hems_wallbox_provider`: implementiert, Hardware-Abnahme offen).
 - **Wallbox ohne Istleistung fährt auf 0 A.** Ein Ampere-Gerät mit fehlender oder ungültiger Istleistung
   wird mit dem Grund „Istleistung ungültig“ aus der Regelung genommen und auf `0` gesetzt — wie ein
   Speicher mit ungültigem Sensor. Heizstäbe und andere Watt-Geräte bleiben unverändert.

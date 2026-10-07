@@ -2,7 +2,7 @@
 
 **Version:** 1.1
 
-**Status:** Entwurf für V1; einzelne Punkte sind je Abschnitt gekennzeichnet
+**Status:** V1 in beiden Projekten implementiert; Hardware-Abnahme des Providers offen; einzelne Punkte sind je Abschnitt gekennzeichnet
 
 **Stand:** 07.10.2026
 
@@ -14,11 +14,13 @@
 |---|---|
 | **Entwurf** | Vereinbart, aber noch nicht implementiert. Ein Plan oder eine Doku-Änderung implementiert keine Schnittstelle. |
 | **Implementiert** | In der genannten Gegenstelle umgesetzt und getestet. |
+| **Implementiert, Hardware offen** | Software umgesetzt und automatisiert getestet; die Prüfung an echter Wallbox (`docs/hardware-abnahme.md` im Provider) steht aus. Nicht für produktiven Betrieb freigegeben. |
 | **Bekannte Grenze** | Bewusst nicht gelöst; wird nicht als Zusage gelesen. |
 
 Im HEMS **implementiert** sind die Schreibreihenfolge für Phase und Strom (SkytechHEMS `23856d8`),
 das Lebenszeichen und "ungültige Istleistung ⇒ `0 A`" (SkytechHEMS, D-062). Der Provider ist
-**Entwurf**, solange dieser Vertrag es so kennzeichnet.
+**implementiert, Hardware offen** (Wallbox-Provider D-001 bis D-005); Freigabe erst nach der
+Hardware-Abnahme.
 Die Registerebene des go-e-Geräts gehört nicht in diesen Vertrag; sie steht im Plan des Providers.
 
 Dieser Vertrag beschreibt ausschließlich den Austausch zwischen SkytechHEMS und einer
@@ -117,7 +119,7 @@ wiederholt (siehe [Befehlsausführung](#befehlsausführung-im-provider)) und beg
 ### Phasenbetrieb
 
 Der Provider kennt die Phasenbetriebsart über seine eigene Konfiguration `phasenbetrieb`, nie
-durch Rückschluss aus einem fehlenden Helfer. Status: **Entwurf**.
+durch Rückschluss aus einem fehlenden Helfer. Status: **Implementiert, Hardware offen**.
 
 | Wert | HEMS-Seite | Verhalten des Providers |
 |---|---|---|
@@ -126,7 +128,7 @@ durch Rückschluss aus einem fehlenden Helfer. Status: **Entwurf**.
 
 ### Validierung und sicherer Fall
 
-Status: **Entwurf**.
+Status: **Implementiert, Hardware offen**.
 
 - `unknown`, `unavailable`, fehlende, nicht-endliche oder nicht-ganzzahlige Werte sind ungültig.
 - `1..5 A`, negative Werte sowie Werte oberhalb der vom Adapter gemeldeten Obergrenze sind
@@ -145,7 +147,8 @@ Status: **Entwurf**.
 
 ## HEMS-Lebenszeichen
 
-Status: HEMS-Seite **implementiert** (SkytechHEMS, D-062); Auswertung im Provider **Entwurf**.
+Status: HEMS-Seite **implementiert** (SkytechHEMS, D-062); Auswertung im Provider
+**implementiert, Hardware offen** (Wallbox-Provider D-004).
 Entität, Attribute und Frisch-Regel
 sind im Vertrag HEMS ↔ Battery-Provider identisch; nur die Reaktion bei nicht frischem
 Lebenszeichen ist gerätespezifisch.
@@ -210,15 +213,16 @@ erste Zeile zwingend und die drei Spannungen, wenn sie in `devices[]` eingetrage
 | `sensor.<provider_prefix>_ladestrom_l1`, `_l2`, `_l3` | A | ja | Diagnose | Gemessener Strom je Phase. |
 | `sensor.<provider_prefix>_ladeenergie_sitzung` | Wh | ja | Anzeige | Energie des laufenden beziehungsweise letzten Ladevorgangs. |
 | `sensor.<provider_prefix>_ladeenergie_gesamt` | Wh | ja | Anzeige | Lebensdauerzähler der Wallbox. |
-| `binary_sensor.<provider_prefix>_hems_lebenszeichen` | – | nur mit HEMS-Anbindung | Diagnose | An = frisches HEMS-Lebenszeichen (siehe [HEMS-Lebenszeichen](#hems-lebenszeichen)). **Entwurf.** |
+| `binary_sensor.<provider_prefix>_hems_lebenszeichen` | – | nur mit HEMS-Anbindung | Diagnose | An = frisches HEMS-Lebenszeichen (siehe [HEMS-Lebenszeichen](#hems-lebenszeichen)). |
 | `switch.<provider_prefix>_hems_steuerung_aktiv` | – | nur mit HEMS-Anbindung | Steuerung | Betriebsart `HEMS` (an) oder `manuell` (aus). Siehe [Betriebsart](#betriebsart-hems-und-manuell). Standard nach Neustart: an. |
 
-Die Tabelle beschreibt den Soll-Umfang des Providers (**Entwurf**). Für alle Messwerte gilt: Ein fehlender Messwert ist nicht `0`. Bei Kommunikationsfehlern wird
+Status der Tabelle: **Implementiert, Hardware offen**. Zusätzlich (additiv) gibt es
+`sensor.<provider_prefix>_steuerung` als Diagnose der Steuerung. Für alle Messwerte gilt: Ein fehlender Messwert ist nicht `0`. Bei Kommunikationsfehlern wird
 die Provider-Entity nicht verfügbar; sie darf keine geschätzte Leistung veröffentlichen.
 
 ## Betriebsart HEMS und manuell
 
-Status: **Entwurf**.
+Status: **Implementiert, Hardware offen** (Wallbox-Provider D-005).
 
 `switch.<provider_prefix>_hems_steuerung_aktiv` (Anzeigename "HEMS Steuerung") wählt, woher der
 Provider seinen Sollwert nimmt:
@@ -246,7 +250,8 @@ Manuelle Entities (Standardwerte beim Anlegen: Strom `0`, Phasen `1`):
 
 ## Befehlsausführung im Provider
 
-Status: **Entwurf**.
+Status: **Implementiert, Hardware offen** (Wallbox-Provider D-003). Die Zuordnung des go-e-Phasenmodus
+(`psm` 1 = einphasig, 2 = dreiphasig) ist an der Hardware zu bestätigen.
 
 Der Provider serialisiert jeden einzelnen Transportzugriff (Lesen oder Schreiben) über eine Sperre.
 Es gibt keine Bestätigungswartezeit unter dieser Sperre, ein Stopp wartet deshalb höchstens auf den
@@ -302,7 +307,7 @@ die erkannte RFID-Karte als HA-Ereignis veröffentlichen; Änderungen daran sind
 | Freigabe an der realen Wallbox | indirekt durch Sollwert | übersetzt und bestätigt |
 | RFID, Nutzerverwaltung, Scheduler, Tarif- und PV-Funktion der Hersteller-App | konfiguriert nicht | verändert in V1 nicht |
 | Notabschaltung | schreibt den HEMS-Sollwert auf `0 A` | setzt `0 A` bei Betriebsart `HEMS` sicher um; bei `manuell` nicht (Bekannte Grenze) |
-| HEMS-Lebenszeichen | veröffentlicht `sensor.skytech_hems_status` je Zyklus (implementiert) | wertet es aus und stoppt bei Ausbleiben (Entwurf) |
+| HEMS-Lebenszeichen | veröffentlicht `sensor.skytech_hems_status` je Zyklus (implementiert) | wertet es aus und stoppt bei Ausbleiben (implementiert, Hardware offen) |
 | Ungültige Istleistung des Providers | setzt den Sollwert auf `0 A` (implementiert, siehe unten) | veröffentlicht `unavailable` |
 
 V1 setzt voraus, dass keine konkurrierende herstellereigene Überschuss-, Zeitplan-, OCPP- oder
@@ -339,3 +344,10 @@ Der Vertrag wächst additiv: neue optionale Diagnose-Entities oder optionale Pro
 brechen V1 nicht. Das Entfernen, Umbenennen oder die Bedeutungsänderung einer verpflichtenden
 Entity, ihrer Einheit oder ihrer Sicherheitssemantik ist eine inkompatible Vertragsänderung und
 erfordert eine neue Vertragsversion sowie die gemeinsame Anpassung beider Kopien.
+
+Implementierungsreferenzen:
+
+| Repository | Dateien |
+|---|---|
+| SkytechHEMS | `app/status_publisher.py`, `app/ems/devices.py` (`ControllableDevice`: Phasenwechsel, `istleistung_ungueltig`), `docs/device_classes/controllable.md` |
+| Skytech-HEMS-Wallbox-Provider | `custom_components/wallbox_provider/hems_bridge.py`, `heartbeat.py`, `adapters/goe_modbus.py`, `adapters/modbus_tcp.py`, `sensor.py`, `binary_sensor.py`, `switch.py`, `number.py`, `select.py`; `docs/hardware-abnahme.md` |
