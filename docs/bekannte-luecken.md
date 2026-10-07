@@ -5,14 +5,11 @@
 EP unterstützt `battery` nicht ausdrücklich in der Discovery. Der Ampere-Schutzvorschlag wird nicht durchgängig übernommen; EP liest die HEMS-interne Ersatzwertkette nicht vollständig.
 Details und geprüfte Codebasis: [gemeinsamer Vertrag](../contract/contract_hems_energy_pilot/contract_hems_energy_pilot.md).
 
-## Geplant, noch nicht implementiert — 07.10.2026
+## Provider-Schnittstellen — 07.10.2026
 
-- **Kein HEMS-Lebenszeichen.** Das HEMS veröffentlicht noch keinen Status-Helfer `sensor.skytech_hems_status`.
-  Wallbox- und Battery-Provider können einen HEMS-Ausfall deshalb nicht erkennen (Entwurf im
-  [Wallbox-Vertrag](../contract/contract_hems_wallbox_provider/contract_hems_wallbox_provider.md) und
-  [Battery-Vertrag](../contract/contract_hems_battery_provider/contract_hems_battery_provider.md)).
-- **Ungültige Istleistung sperrt ein Ampere-Gerät nicht.** Das HEMS rechnet intern mit `0 W`; ein
-  Schreiben von `0 A` ist als Änderung der Geräteklasse `controllable` (nur `output_unit: ampere`) geplant.
+HEMS-Lebenszeichen (D-062) und "ungültige Istleistung ⇒ 0 A" für Ampere-Geräte sind im HEMS
+implementiert. Ob ein Provider sie auswertet, steht im jeweiligen Vertrag unter `contract/`.
+Physische Ausführung bestätigt das HEMS weiterhin nicht.
 
 **Vor jeder Annahme lesen.** Diese Datei existiert, weil Doku und Code auseinanderlaufen. Steht
 etwas in [architektur.md](architektur.md), heißt das nicht, dass es implementiert ist — hier steht,

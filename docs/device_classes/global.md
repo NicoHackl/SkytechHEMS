@@ -104,7 +104,8 @@ Add-on-Neustart wieder eingefangen wird. Die übrigen Geräte regeln unveränder
 Zyklus gilt nicht als fehlgeschlagen.
 
 Die Ursache steht in `inactive_reasons` (`schreibziel_fehlt`, `schreibziel_nicht_verfuegbar`,
-`schreibziel_ungueltig`, `schreiben_fehlgeschlagen`), die betroffene Entität in
+`schreibziel_ungueltig`, `schreiben_fehlgeschlagen`, bei Ampere-Geräten zusätzlich
+`istleistung_ungueltig`), die betroffene Entität in
 `entity_diagnostics`, die bereinigte Fehlermeldung in `write_error`.
 
 Ein fehlendes Schreibziel kann **nicht** durch einen Direktzugriff auf das reale Gerät ersetzt

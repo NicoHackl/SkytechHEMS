@@ -2,7 +2,7 @@
 
 **Version:** 1.1
 
-**Status:** Dokumentierter Implementierungsstand mit bekannten Betriebsgrenzen; das HEMS-Lebenszeichen ist **Entwurf**
+**Status:** Dokumentierter Implementierungsstand mit bekannten Betriebsgrenzen; HEMS-Lebenszeichen im HEMS implementiert, im Provider **Entwurf**
 
 **Stand:** 07.10.2026
 
@@ -171,7 +171,8 @@ Schreibaufruf.
 
 ## HEMS-Lebenszeichen
 
-Status: **Entwurf** — weder im HEMS noch im Provider implementiert. Bis zur Umsetzung gilt die
+Status: HEMS-Seite **implementiert** (SkytechHEMS, D-062); Auswertung im Provider **Entwurf**.
+Bis zur Umsetzung im Provider gilt die
 bekannte Grenze "HEMS steht, HA und Provider laufen weiter" der Tabelle unten unverändert.
 Entität, Attribute und Frisch-Regel sind im Vertrag HEMS ↔ Wallbox-Provider identisch; nur die
 Reaktion bei nicht frischem Lebenszeichen ist gerätespezifisch.

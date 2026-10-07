@@ -794,8 +794,15 @@ class ControllableDevice(Device):
         # Nach Watt umrechnen mit aktueller Phasenanzahl (kann später von select_phases angepasst werden)
         self._apply_raw_to_watt()
 
-        self._actual_w = max(
-            self._num(st, self.entity_actual_w, "actual_power", internal=0.0), 0.0)
+        actual = self._note(self.entity_actual_w, "actual_power",
+                            st.resolve_number(self.entity_actual_w, internal=0.0))
+        self._actual_w = max(0.0 if actual.value is None else float(actual.value), 0.0)
+        # Ampere-Geräte (Wallbox) ohne gültige Istleistung fahren auf 0 A, wie ein
+        # Speicher bei ungültigem Sensor: Ohne Messwert ist nicht bekannt, was das
+        # Gerät zieht, und der Provider meldet einen Kommunikationsfehler über
+        # `unavailable`. Watt-Geräte bleiben bewusst beim bisherigen Verhalten.
+        if self.output_unit == 'ampere' and actual.state != STATE_VALID:
+            self.mark_inactive("istleistung_ungueltig")
 
         # Sollwert lesen; aus nativer Einheit nach Watt mit HA-Phasenanzahl umrechnen (für Genauigkeit)
         raw_anf = self._num(st, self.entity_anforderung_w, "request", internal=0.0)

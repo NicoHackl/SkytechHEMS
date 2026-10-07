@@ -70,6 +70,12 @@ Zwang, springt der Sollwert im selben Zyklus ohne Rampe und Totband auf die Pool
 Überschuss also sofort auf `0`. Ab dem Folgezyklus gilt die Rampe wieder. Einzelheiten:
 [global.md](global.md#gemeinsame-ha-helfer).
 
+**Ungültige Istleistung (Ampere-Modus):** Ist `actual_power_entity` nicht vorhanden, `unavailable`,
+`unknown` oder nicht numerisch, nimmt das HEMS ein Ampere-Gerät mit dem Grund
+`istleistung_ungueltig` aus der Regelung und schreibt bedingungslos `0` (wie bei einem
+Schreibziel-Fehler; auch Zwang greift dann nicht). Watt-Geräte rechnen wie bisher mit `0 W` weiter.
+Hintergrund: [Wallbox-Provider-Vertrag](../../contract/contract_hems_wallbox_provider/contract_hems_wallbox_provider.md).
+
 **Phasenwechsel (Ampere-Modus):** Ändert sich die Phasenanzahl, schreibt das HEMS den Stromhelfer im
 selben Zyklus immer mit — nach der Phase, ohne Rücksicht auf das Totband. Das Totband gilt in Watt der
 neuen Phasenzahl, der bisherige Sollwert aber in Watt der alten; ohne diese Regel bliebe der Strom

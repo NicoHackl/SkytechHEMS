@@ -231,7 +231,7 @@ Jedes Gerät trägt zusätzlich:
 |---|---|---|
 | `entity_diagnostics` | Objekt | `{entity_id: {role, state, source, value}}`; `value` (D-061) ist der wirksame Wert und fehlt bei Schreibzielen |
 | `runtime_active` | bool | `false`, wenn ein Schreibziel fehlt, unbrauchbar ist oder der letzte Schreibversuch fehlschlug |
-| `inactive_reasons` | Liste | `schreibziel_fehlt`, `schreibziel_nicht_verfuegbar`, `schreibziel_ungueltig`, `schreiben_fehlgeschlagen` |
+| `inactive_reasons` | Liste | `schreibziel_fehlt`, `schreibziel_nicht_verfuegbar`, `schreibziel_ungueltig`, `schreiben_fehlgeschlagen`, `istleistung_ungueltig` (nur Ampere-Geräte) |
 | `write_error` | string oder `null` | Bereinigte Fehlermeldung des letzten Schreibversuchs |
 
 Regelbare und binäre Geräte tragen außerdem die Zwangsfelder (D-053):

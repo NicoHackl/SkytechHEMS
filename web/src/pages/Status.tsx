@@ -352,6 +352,7 @@ const RUNTIME_LABELS: Record<string, string> = {
   schreibziel_nicht_verfuegbar: 'Schreibziel ist nicht verfügbar',
   schreibziel_ungueltig: 'Schreibziel ist falsch angelegt',
   schreiben_fehlgeschlagen: 'Letzter Schreibversuch fehlgeschlagen',
+  istleistung_ungueltig: 'Istleistung ungültig – Sollwert 0 A',
 }
 
 /** Zeile mit dem Laufzeitgrund, sofern das Gerät gerade nicht regelbar ist. */

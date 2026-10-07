@@ -63,6 +63,7 @@ INACTIVE_REASON_TEXTS: Dict[str, str] = {
     "schreibziel_nicht_verfuegbar": "Schreibziel nicht verfügbar",
     "schreibziel_ungueltig": "Schreibziel ungültig",
     "schreiben_fehlgeschlagen": "Schreiben fehlgeschlagen",
+    "istleistung_ungueltig": "Istleistung ungültig",
 }
 
 

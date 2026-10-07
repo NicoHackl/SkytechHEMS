@@ -2097,3 +2097,39 @@ def test_phasenwechsel_runter_schreibt_strom_mit():
     amp = _op_for(res["write_ops"], "input_number.ems_wallbox_anforderung_leistung_a")
     assert phase is not None and phase[2]["value"] == 1.0
     assert amp is not None and 6 <= amp[2]["value"] <= 16
+
+
+# ---- Ampere-Gerät ohne gültige Istleistung fährt auf 0 A (Vertrag Wallbox-Provider) ----
+
+@pytest.mark.parametrize("ist", ["unavailable", "unknown", "abc", None])
+def test_ampere_ohne_gueltige_istleistung_schreibt_null(ist):
+    ctrl = EMSController([_wallbox_cfg()], residual_power_entity="sensor.s")
+    states = _wallbox_states(**{
+        "input_number.ems_wallbox_anforderung_leistung_a": 10,
+        "sensor.s": 5000,
+    })
+    if ist is None:
+        del states["sensor.wb"]
+    else:
+        states["sensor.wb"] = ist
+    res = ctrl.run_cycle(make_states(states))
+    amp = _op_for(res["write_ops"], "input_number.ems_wallbox_anforderung_leistung_a")
+    assert amp is not None and amp[2]["value"] == 0
+    dev = _dev(res, "wallbox_1")
+    assert "istleistung_ungueltig" in dev["inactive_reasons"]
+    assert dev["runtime_active"] is False
+
+
+def test_ampere_mit_gueltiger_istleistung_bleibt_aktiv():
+    ctrl = EMSController([_wallbox_cfg()], residual_power_entity="sensor.s")
+    res = ctrl.run_cycle(make_states(_wallbox_states(**{"sensor.s": 5000})))
+    assert "istleistung_ungueltig" not in _dev(res, "wallbox_1")["inactive_reasons"]
+
+
+def test_watt_geraet_ohne_istleistung_bleibt_unveraendert():
+    # Bewusst nur Ampere-Geräte: ein Heizstab ohne Istleistung regelt wie bisher.
+    ctrl = EMSController([_heizstab_cfg()], residual_power_entity="sensor.s")
+    states = _heizstab_states()
+    states["sensor.heizstab_ist"] = "unavailable"
+    res = ctrl.run_cycle(make_states(states))
+    assert "istleistung_ungueltig" not in _dev(res)["inactive_reasons"]

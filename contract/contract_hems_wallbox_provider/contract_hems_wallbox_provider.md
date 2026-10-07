@@ -16,8 +16,9 @@
 | **Implementiert** | In der genannten Gegenstelle umgesetzt und getestet. |
 | **Bekannte Grenze** | Bewusst nicht gelöst; wird nicht als Zusage gelesen. |
 
-Zum Stand dieser Fassung ist ausschließlich die HEMS-Schreibreihenfolge für Phase und Strom
-**implementiert** (SkytechHEMS `23856d8`). Der Provider und das HEMS-Lebenszeichen sind **Entwurf**.
+Im HEMS **implementiert** sind die Schreibreihenfolge für Phase und Strom (SkytechHEMS `23856d8`),
+das Lebenszeichen und "ungültige Istleistung ⇒ `0 A`" (SkytechHEMS, D-062). Der Provider ist
+**Entwurf**, solange dieser Vertrag es so kennzeichnet.
 Die Registerebene des go-e-Geräts gehört nicht in diesen Vertrag; sie steht im Plan des Providers.
 
 Dieser Vertrag beschreibt ausschließlich den Austausch zwischen SkytechHEMS und einer
@@ -144,7 +145,8 @@ Status: **Entwurf**.
 
 ## HEMS-Lebenszeichen
 
-Status: **Entwurf** — weder im HEMS noch im Provider implementiert. Entität, Attribute und Frisch-Regel
+Status: HEMS-Seite **implementiert** (SkytechHEMS, D-062); Auswertung im Provider **Entwurf**.
+Entität, Attribute und Frisch-Regel
 sind im Vertrag HEMS ↔ Battery-Provider identisch; nur die Reaktion bei nicht frischem
 Lebenszeichen ist gerätespezifisch.
 
@@ -300,21 +302,23 @@ die erkannte RFID-Karte als HA-Ereignis veröffentlichen; Änderungen daran sind
 | Freigabe an der realen Wallbox | indirekt durch Sollwert | übersetzt und bestätigt |
 | RFID, Nutzerverwaltung, Scheduler, Tarif- und PV-Funktion der Hersteller-App | konfiguriert nicht | verändert in V1 nicht |
 | Notabschaltung | schreibt den HEMS-Sollwert auf `0 A` | setzt `0 A` bei Betriebsart `HEMS` sicher um; bei `manuell` nicht (Bekannte Grenze) |
-| HEMS-Lebenszeichen | veröffentlicht `sensor.skytech_hems_status` je Zyklus | wertet es aus und stoppt bei Ausbleiben (Entwurf) |
-| Ungültige Istleistung des Providers | setzt den Sollwert auf `0 A` (Entwurf, siehe unten) | veröffentlicht `unavailable` |
+| HEMS-Lebenszeichen | veröffentlicht `sensor.skytech_hems_status` je Zyklus (implementiert) | wertet es aus und stoppt bei Ausbleiben (Entwurf) |
+| Ungültige Istleistung des Providers | setzt den Sollwert auf `0 A` (implementiert, siehe unten) | veröffentlicht `unavailable` |
 
 V1 setzt voraus, dass keine konkurrierende herstellereigene Überschuss-, Zeitplan-, OCPP- oder
 Fremdsteuerung die vom Provider gesteuerten Ladefreigaben überschreibt; es steuert ausschließlich
 das HEMS. RFID und sonstige Zugangskontrolle werden in V1 nicht genutzt und vom Provider nicht
 verändert.
 
-### Ungültige Istleistung (Entwurf)
+### Ungültige Istleistung
 
-Wie beim Battery-Provider gilt: Ist `sensor.<provider_prefix>_istleistung` ungültig oder nicht
-verfügbar, setzt das HEMS den Sollwert des Gerätes auf `0 A`, soweit es seine Ausgabehelfer
-schreiben kann. Das ist eine **Änderung der HEMS-Geräteklasse `controllable` im Ampere-Modus** und
-im HEMS noch nicht umgesetzt. Bis dahin rechnet das HEMS bei ungültiger Istleistung intern mit
-`0 W` und sperrt das Gerät nicht (**Bekannte Grenze**).
+Status: **Implementiert** (SkytechHEMS, D-062).
+
+Wie beim Battery-Provider gilt: Ist `sensor.<provider_prefix>_istleistung` nicht vorhanden,
+`unknown`, `unavailable` oder nicht numerisch, nimmt das HEMS das Gerät mit dem Grund
+`istleistung_ungueltig` aus der Regelung und schreibt bedingungslos `0 A`, soweit es seine
+Ausgabehelfer schreiben kann. Das gilt für die Geräteklasse `controllable` mit
+`output_unit: ampere`; Watt-Geräte sind nicht betroffen. Auch Zwang greift dann nicht.
 
 ### Weitere bekannte Grenzen
 

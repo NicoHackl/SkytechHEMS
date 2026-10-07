@@ -40,6 +40,7 @@ from internal_values import (
 import battery_publisher
 import flow_publisher
 from flow_publisher import FlowPublisher
+from status_publisher import StatusPublisher
 from supervisor_client import SupervisorClient
 
 # Alle für Menschen lesbaren Zeitangaben laufen über diese Zone und dieses
@@ -533,6 +534,8 @@ class HEMSApp:
         # Kartendaten der Flow Card (D-046). Reine Anzeige: der Publisher
         # schaltet nichts und läuft nach dem Zyklus, nicht darin.
         self._flow = FlowPublisher(self.ha)
+        # HEMS-Lebenszeichen für Wallbox- und Battery-Provider (D-062).
+        self._heartbeat = StatusPublisher()
         self._flow_options: dict = options
         self._addon_version: str = ""
 
@@ -631,6 +634,9 @@ class HEMSApp:
             # braucht denselben Schnappschuss, nicht einen eigenen HA-Abruf.
             self._last_states = states
             if await self._emergency_cycle(states):
+                # Auch während der Notabschaltung lebt das HEMS: die Provider
+                # setzen dann die vom HEMS genullten Helfer um.
+                await self._publish_heartbeat()
                 return
             st     = StateProxy(states, internal=self.internal_values.snapshot())
             result = self.ems.run_cycle(st)
@@ -671,10 +677,18 @@ class HEMSApp:
             # Wirksames Ladelimit je Speicher als Anzeige-Sensor (D-057).
             await battery_publisher.publish_battery_limits(self.ha, result["status"])
             self._last_cycle_at_iso = now.replace(microsecond=0).isoformat()
+            await self._publish_heartbeat()
             log.debug("Cycle %d completed.", self._cycle_count)
         except Exception as exc:
             self._last_error = str(exc)
             log.error("EMS cycle error: %s", exc, exc_info=True)
+
+    async def _publish_heartbeat(self) -> None:
+        """Lebenszeichen nur nach einem durchlaufenen Zyklus (D-062). Ein Zyklus,
+        der mit einer Ausnahme endet, veröffentlicht keins – die Provider stoppen
+        dann nach ihrer Frist."""
+        await self._heartbeat.publish(
+            self.ha, self.interval_s, datetime.datetime.now(BERLIN).strftime(DISPLAY_TIME_FORMAT))
 
     async def _scheduler(self) -> None:
         log.info("EMS scheduler started (interval=%ds).", self.interval_s)
