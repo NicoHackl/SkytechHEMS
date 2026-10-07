@@ -23,5 +23,5 @@ Beschreibung der gemeinsamen Felder zu führen.
 |---|---|---|
 | Powerflow-Card | [kontrakt.md](contract_powerflow_card_hems/kontrakt.md) | Implementierter Kartenvertrag mit zugehörigen Plänen. |
 | Energy-Pilot | [contract_hems_energy_pilot.md](contract_hems_energy_pilot/contract_hems_energy_pilot.md) | Aktueller Austausch einschließlich dokumentierter Kompatibilitätsgrenzen. |
-| Battery-Provider | [contract_hems_battery_provider.md](contract_hems_battery_provider/contract_hems_battery_provider.md) | Aktueller Austausch einschließlich dokumentierter Betriebsgrenzen. |
-| Wallbox-Provider | [contract_hems_wallbox_provider.md](contract_hems_wallbox_provider/contract_hems_wallbox_provider.md) | Entwurf für V1; keine bereits implementierte Anbindung. |
+| Battery-Provider | [contract_hems_battery_provider.md](contract_hems_battery_provider/contract_hems_battery_provider.md) | Aktueller Austausch einschließlich dokumentierter Betriebsgrenzen; HEMS-Lebenszeichen als Entwurf (Version 1.1). |
+| Wallbox-Provider | [contract_hems_wallbox_provider.md](contract_hems_wallbox_provider/contract_hems_wallbox_provider.md) | Entwurf, Version 1.1 (07.10.2026); nur die HEMS-Schreibreihenfolge für Phase und Strom ist implementiert. Umsetzung: [umsetzungsplan.md](../../Skytech-HEMS-Wallbox-Provider/umsetzungsplan.md). |

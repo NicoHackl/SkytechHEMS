@@ -1,10 +1,10 @@
 # Vertrag: SkytechHEMS ↔ Skytech HEMS Battery Provider
 
-**Version:** 1.0
+**Version:** 1.1
 
-**Status:** Dokumentierter Implementierungsstand mit bekannten Betriebsgrenzen
+**Status:** Dokumentierter Implementierungsstand mit bekannten Betriebsgrenzen; das HEMS-Lebenszeichen ist **Entwurf**
 
-**Stand:** 06.10.2026
+**Stand:** 07.10.2026
 
 **Geprüfte Codebasis:** SkytechHEMS `e5c0156`, Skytech-HEMS-Battery-Provider `12ae0f3`.
 
@@ -169,6 +169,55 @@ bestehende Bridge-Synchronisierung ist nicht durch eine eigene gemeinsame Sperre
 Es besteht keine zugesagte Transaktionsisolation gegenüber einem weiteren Sync oder manuellen
 Schreibaufruf.
 
+## HEMS-Lebenszeichen
+
+Status: **Entwurf** — weder im HEMS noch im Provider implementiert. Bis zur Umsetzung gilt die
+bekannte Grenze "HEMS steht, HA und Provider laufen weiter" der Tabelle unten unverändert.
+Entität, Attribute und Frisch-Regel sind im Vertrag HEMS ↔ Wallbox-Provider identisch; nur die
+Reaktion bei nicht frischem Lebenszeichen ist gerätespezifisch.
+
+Ein unverändert bleibender Sollwert ist normaler Betrieb. Ein HEMS-Ausfall ist deshalb nicht am
+Alter eines Sollwerthelfers erkennbar. Das HEMS veröffentlicht stattdessen in jedem Zyklus eine
+eigene Statusentität:
+
+```
+POST {HA_URL}/api/states/sensor.skytech_hems_status
+```
+
+| Feld | Typ | Bedeutung |
+|---|---|---|
+| `state` | Zahl als Text | Zyklus-Zähler; wird in jedem Zyklus verändert (Überlauf erlaubt). |
+| `attributes.zyklus_zaehler` | Ganzzahl | Gleicher Wert wie `state`. |
+| `attributes.zyklus_intervall_s` | Zahl > 0 | Aktuell konfigurierte Zykluslänge des HEMS in Sekunden. |
+| `attributes.erzeugt_am` | Text | `TT.MM.JJJJ hh:mm:ss`, Berliner Zeit; nur Anzeige, nicht zur Auswertung. |
+| `attributes.vertrag_version` | Ganzzahl | `1`. Unbekannte zusätzliche Attribute ignoriert der Provider. |
+
+Das HEMS aktualisiert die Entität in jedem Zyklus, auch bei deaktivierter PV-Regelung. Wie bei der
+Flow-Card-Entität überlebt ein per `POST /api/states` angelegter Sensor keinen HA-Neustart; sein
+Fehlen bedeutet "kein frischer Zyklus".
+
+**Auswertung im Provider** (nur bei `hems_steuerung_aktiv` = an):
+
+- Der Provider misst mit seiner **eigenen** Uhr, wann er zuletzt eine Änderung von
+  `zyklus_zaehler` gesehen hat. Er wertet weder `erzeugt_am` noch die Uhr des HEMS aus.
+- Das Lebenszeichen gilt als **frisch**, solange die letzte gesehene Änderung höchstens
+  `hems_timeout_faktor × zyklus_intervall_s` zurückliegt. `hems_timeout_faktor` ist eine
+  Provider-Option (Standard `3`, zulässig `2..10`). Fehlt `zyklus_intervall_s` oder ist ungültig,
+  gilt ein fester Wert von `90 s`.
+- Ist die Entität nicht vorhanden, `unknown` oder `unavailable`, ist das Lebenszeichen nicht frisch.
+- **Nicht frisch:** Der Provider wendet **keine** Ladung oder Entladung an und setzt den Speicher
+  auf `0 W` (Standby-Verhalten, wie bei `standby` in der Tabelle "Befehlsausführung"). Sobald ein
+  frisches Lebenszeichen vorliegt, wird der aktuelle Schnappschuss automatisch angewendet.
+- **Nach Start des Providers** (Neustart, Neuladen, Entry-Setup) gilt das Lebenszeichen erst als
+  frisch, nachdem der Provider **nach seinem Start** eine Änderung von `zyklus_zaehler` gesehen hat.
+  Ein wiederhergestellter oder alter Wert löst keine Ladung oder Entladung aus.
+- Bei pausierter Bridge (`hems_steuerung_aktiv` aus) wird das Lebenszeichen nicht ausgewertet;
+  die Bridge führt dann keinen Sync aus. Die HEMS-Notabschaltung übersteuert die Pause nicht
+  (**Bekannte Grenze**, bewusst so entschieden).
+
+`binary_sensor.<provider_prefix>_hems_lebenszeichen` bildet diesen Zustand ab (an = frisch);
+er gehört zum Entwurf.
+
 ## Keep-Alive, Pause und Neustart
 
 | Verhalten | Aktueller Stand |
@@ -196,7 +245,7 @@ mit garantiertem physischem Stillstand.
 | Betriebsart-State ist `unknown`, `unavailable` oder anderweitig unerwartet | Beide Richtungen werden wie bei Standby auf null gesetzt. |
 | `NaN` oder Unendlich als Leistungsstate | Keine ausdrückliche Endlichkeitsprüfung in der Bridge; Verhalten fällt in Adapterpfade. Ein einheitlicher sicherer Fehlerpfad ist dafür nicht zugesagt. |
 | Vorzeichen widerspricht Betriebsart | Betrag wird in die durch Betriebsart gewählte Richtung geschrieben; keine Fehlererkennung für das Paar. |
-| HEMS steht, HA und Provider laufen weiter | Keep-Alive erneuert den alten Helferwert weiter. Es gibt kein HEMS-Lebenszeichen-Gate. |
+| HEMS steht, HA und Provider laufen weiter | Keep-Alive erneuert den alten Helferwert weiter. Ein HEMS-Lebenszeichen-Gate ist als **Entwurf** definiert, aber nicht implementiert. |
 | Geräteverbindung ausgefallen | Messsensoren werden nicht verfügbar; Schreibfehler werden separat sichtbar. Physischer Stopp ist ohne erreichbaren Transport nicht garantiert. |
 | HEMS-Notabschaltung bei pausierter Bridge | HEMS setzt Helfer auf null/Standby; die Bridge beobachtet den Notabschaltungsstatus nicht gesondert und führt während der Pause keinen neuen Sync aus. |
 | Unterschiedliche Herstellerlimits | Bridge führt keine generische Prüfung gegen HEMS-`available_*_w` aus; richtige Konfiguration und Adapter-/Gerätegrenzen bleiben erforderlich. |
@@ -241,7 +290,7 @@ Prüfung beider Projekte und eine entsprechende Vertragsversion. Dokumentversion
 keine zur Laufzeit übertragene Protokollversion.
 
 Die bekannten Grenzen werden erst nach tatsächlich implementierter und geprüfter Änderung
-entfernt. Insbesondere dürfen ein Lebenszeichen, strikte Paarvalidierung oder serialisierte
+entfernt. Insbesondere dürfen das als Entwurf beschriebene Lebenszeichen, strikte Paarvalidierung oder serialisierte
 Gesamtbefehle nicht allein durch eine neue Formulierung als vorhanden gelten.
 
 Implementierungsreferenzen:
