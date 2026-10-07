@@ -2054,3 +2054,46 @@ def test_ohne_speicher_kein_verbraucherdefizit():
     status = ctrl.run_cycle(make_states(states))["status"]
     assert status["speicher_deckbar_w"] == pytest.approx(3000)
     assert status["verbraucherdefizit_w"] == 0
+
+
+# ---- T-01: Phasenwechsel muss den passenden Strom mitschreiben ----
+
+def test_phasenwechsel_schreibt_strom_trotz_totband_und_rampe():
+    # Vorher 1 Phase, 16 A (3680 W), Wallbox zieht 3680 W, Überschuss +1320 W → Pool 5000 W.
+    # Intern 4140 W (6 A dreiphasig): Änderung 460 W < Totband 690 W (dreiphasig). Früher
+    # entfiel der Stromwert, der Helfer blieb auf 16 A – dreiphasig 11 kW freigegeben.
+    ctrl = EMSController([_wallbox_cfg()], residual_power_entity="sensor.s")
+    res = ctrl.run_cycle(make_states(_wallbox_states(**{
+        "input_number.ems_wallbox_anforderung_leistung_a": 16,
+        "input_number.ems_wallbox_anzahl_phase": 1,
+        "input_number.ems_wallbox_hoch_regelzeit_s": 60,
+        "input_number.ems_wallbox_runter_regelzeit_s": 60,
+        "input_number.ems_wallbox_max_anderung_pro_schritt_a": 2,
+        "input_number.ems_wallbox_min_anderung_pro_schritt_a": 1,
+        "sensor.wb": 3680,
+        "sensor.s": 1320,
+    })))
+    phase = _op_for(res["write_ops"], "input_number.ems_wallbox_anzahl_phase")
+    amp = _op_for(res["write_ops"], "input_number.ems_wallbox_anforderung_leistung_a")
+    assert phase is not None and phase[2]["value"] == 3.0
+    assert amp is not None and amp[2]["value"] == 6   # floor(4140 / 690) = 6 A
+
+
+def test_phasenwechsel_runter_schreibt_strom_mit():
+    # Dreiphasig 6 A (4140 W), Pool 3640 W trägt dreiphasig das Minimum nicht mehr →
+    # einphasig. Der Stromhelfer muss mit der neuen Phasenzahl mitgeschrieben werden.
+    ctrl = EMSController([_wallbox_cfg()], residual_power_entity="sensor.s")
+    res = ctrl.run_cycle(make_states(_wallbox_states(**{
+        "input_number.ems_wallbox_anforderung_leistung_a": 6,
+        "input_number.ems_wallbox_anzahl_phase": 3,
+        "input_number.ems_wallbox_hoch_regelzeit_s": 60,
+        "input_number.ems_wallbox_runter_regelzeit_s": 60,
+        "input_number.ems_wallbox_max_anderung_pro_schritt_a": 2,
+        "input_number.ems_wallbox_min_anderung_pro_schritt_a": 1,
+        "sensor.wb": 4140,
+        "sensor.s": -500,
+    })))
+    phase = _op_for(res["write_ops"], "input_number.ems_wallbox_anzahl_phase")
+    amp = _op_for(res["write_ops"], "input_number.ems_wallbox_anforderung_leistung_a")
+    assert phase is not None and phase[2]["value"] == 1.0
+    assert amp is not None and 6 <= amp[2]["value"] <= 16

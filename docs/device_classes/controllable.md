@@ -70,6 +70,13 @@ Zwang, springt der Sollwert im selben Zyklus ohne Rampe und Totband auf die Pool
 Überschuss also sofort auf `0`. Ab dem Folgezyklus gilt die Rampe wieder. Einzelheiten:
 [global.md](global.md#gemeinsame-ha-helfer).
 
+**Phasenwechsel (Ampere-Modus):** Ändert sich die Phasenanzahl, schreibt das HEMS den Stromhelfer im
+selben Zyklus immer mit — nach der Phase, ohne Rücksicht auf das Totband. Das Totband gilt in Watt der
+neuen Phasenzahl, der bisherige Sollwert aber in Watt der alten; ohne diese Regel bliebe der Strom
+unverändert (16 A einphasig → 16 A dreiphasig). Beide Schreibvorgänge sind keine gemeinsame
+Transaktion; die Gegenstelle behandelt Zwischenzustände (siehe
+[Wallbox-Provider-Vertrag](../../contract/contract_hems_wallbox_provider/contract_hems_wallbox_provider.md)).
+
 Ob die geschützte Mindestleistung ausschließlich gegenüber Binärverbrauchern oder zusätzlich
 innerhalb der regelbaren Prioritätskaskade wirkt, legt die globale Add-on-Option
 [`protected_minimum_scope`](global.md#geltungsbereich-der-geschützten-mindestleistung) fest.

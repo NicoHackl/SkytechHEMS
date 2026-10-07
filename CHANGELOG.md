@@ -8,6 +8,15 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Behoben — 07.10.2026
+
+- **Phasenwechsel schreibt den Strom mit.** Bei einem Wechsel der Phasenanzahl (Ampere-Modus) blieb der
+  Stromhelfer unverändert, wenn die Änderung kleiner als das Totband der neuen Phasenzahl war. Beispiel:
+  1 Phase mit 16 A → 3 Phasen schrieb nur `anzahl_phase = 3`, der Strom blieb auf 16 A (11 kW statt 6 A).
+  Der Strom wird jetzt bei jedem Phasenwechsel zusammen mit der Phase geschrieben. Regressionstests für
+  beide Richtungen in `tests/test_run_cycle.py`. Gegenstelle: Wallbox-Provider
+  (`contract/contract_hems_wallbox_provider/`).
+
 ### Dokumentation — 06.10.2026
 
 - Gemeinsame Contract-Ablage mit einem Ordner je Projektpaar und aktualisierten Verweisen.

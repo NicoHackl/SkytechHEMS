@@ -1088,7 +1088,13 @@ class ControllableDevice(Device):
         # Annahme, und das Rampen-Timing spielt ohnehin keine Rolle mehr.
         # Unter Zwang und an seinem Ende zählt das Totband nicht – aber auch
         # dann nur bei echter Änderung, sonst altert last_changed nie.
-        write = (not self._runtime_active) or is_stop or start_ok or (
+        # Phasenwechsel: Der Strom wird immer mitgeschrieben. Das Totband gilt in
+        # Watt der neuen Phasenzahl, der alte Sollwert aber in Watt der alten –
+        # sonst bliebe der Stromhelfer unverändert (z. B. 16 A einphasig → 16 A
+        # dreiphasig = 11 kW statt 6 A). Die Phase wird vor dem Strom geschrieben.
+        phase_changed = (self.output_unit == 'ampere'
+                         and self._current_phases != self._ha_phases)
+        write = (not self._runtime_active) or is_stop or start_ok or phase_changed or (
             (self._force_active or self._force_released) and delta > 0) or (
             not is_start and delta > 0
             and (self.deadband_w <= 0 or delta >= self.deadband_w))
