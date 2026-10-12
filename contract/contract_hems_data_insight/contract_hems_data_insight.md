@@ -1,8 +1,8 @@
 # Vertrag: SkytechHEMS ↔ Skytech Data Insight
 
-**Version:** 0.1
+**Version:** 0.2
 
-**Status:** Entwurf — in keinem der beiden Projekte implementiert
+**Status:** In Skytech Data Insight implementiert; in SkytechHEMS Entwurf (Client noch nicht gebaut)
 
 **Stand:** 12.10.2026
 
@@ -19,9 +19,15 @@ eigenen Repository.
 | **Implementiert** | In der genannten Gegenstelle umgesetzt und getestet. |
 | **Bekannte Grenze** | Bewusst nicht gelöst; wird nicht als Zusage gelesen. |
 
-Alle Abschnitte dieser Version sind **Entwurf**. Die Umsetzung erfolgt in Skytech Data Insight
-(Schema, Rolle, Sperre, Oberfläche) und danach in SkytechHEMS (Client, Prognosen). Mit jeder
-Umsetzung wird der Status je Abschnitt hier nachgetragen.
+Jeder Abschnitt nennt seinen Status je Seite. Data Insight erfüllt diese Version mit der
+System-Migration `0003_hems_anbindung.sql`; SkytechHEMS setzt seine Seite mit dem
+Data-Insight-Client um und trägt den Status dann hier nach.
+
+**Änderung gegenüber 0.1:** Das HEMS schreibt nicht mehr direkt in Tabellen, sondern nur über
+Datenbankfunktionen. Grund: Das HEMS schreibt den Mittelwert eines Slots erst nach dessen Ende,
+datiert auf den Slot-Beginn. Die Minutenwerte sind zu diesem Zeitpunkt schon gerechnet. Die
+Funktion meldet neue Werte deshalb Data Insight, das sie nachrechnet. Außerdem ist das zugelassene
+Netz auf den Add-on-Bereich `172.30.33.0/24` begrenzt.
 
 Die Datei liegt wortgleich in beiden Repositories unter
 `contract/contract_hems_data_insight/contract_hems_data_insight.md`. Bei einer Änderung müssen
@@ -40,10 +46,10 @@ nötigen Home-Assistant-Sensoren auf und stellt alles in Grafana, per SQL und pe
   unverändert weiter. Es fehlen dann die Verbrauchsprognose und die Speicherung.
 
 ```text
-SkytechHEMS ── Sensoren anlegen/übernehmen, Zuordnungen ──► Data Insight
-SkytechHEMS ── eigene Messreihen (hems.*), Prognoseläufe ─► Data Insight
-SkytechHEMS ◄── Verlauf der zugeordneten Sensoren (15 min) ─ Data Insight
-Home Assistant ── Zustände der angelegten Sensoren ───────► Data Insight (Collector)
+SkytechHEMS ── hems_sensor_sichern / _stilllegen / hems_zuordnen ──► Data Insight
+SkytechHEMS ── hems_messwerte_schreiben, hems_lauf_schreiben ──────► Data Insight
+SkytechHEMS ◄── Sichten (Verlauf je Rolle, Prognosen, Vertrag) ───── Data Insight
+Home Assistant ── Zustände der Sensoren mit Quelle ha ─────────────► Data Insight (Collector)
 ```
 
 ## Bezeichner
@@ -59,7 +65,7 @@ Home Assistant ── Zustände der angelegten Sensoren ───────►
 
 ## Verbindung und Anmeldung
 
-**Status: Entwurf**
+**Status:** Data Insight implementiert · SkytechHEMS Entwurf
 
 | Punkt | Festlegung |
 |---|---|
@@ -69,100 +75,99 @@ Home Assistant ── Zustände der angelegten Sensoren ───────►
 | Port im HEMS | Option `insight_port`, Voreinstellung `5432` |
 | Rolle | `skytech_hems`, Anmeldung mit Passwort (`scram-sha-256`) |
 | Secret | Data Insight erzeugt es auf der Seite „Zugänge“ (Schlüssel `hems`) und speichert es in der Option `hems_password`. Im HEMS wird es als Option `insight_password` eingetragen. Ohne gesetztes Passwort ist die Anmeldung gesperrt |
-| Zugelassene Adressen | Nur das interne Add-on-Netz (Supervisor-Standard `172.30.32.0/23`; vor der Umsetzung am System zu bestätigen) |
+| Zugelassene Adressen | Nur der Add-on-Bereich des Supervisor-Netzes, `172.30.33.0/24` (an der Referenzanlage am 12.10.2026 geprüft: HEMS `172.30.33.7`, Data Insight `172.30.33.8`). Bewusst nicht `172.30.32.0/23`: Verbindungen über den freigegebenen LAN-Port kommen mit der Absenderadresse des Docker-Gateways `172.30.32.1` an (im Containertest am 12.10.2026 geprüft) und wären sonst zugelassen |
 | Geheimhaltung | Das Secret erscheint auf keiner Seite in Log, Status oder API |
 
 **Bekannte Grenze:** Die Verbindung im internen Add-on-Netz ist nicht mit TLS verschlüsselt.
 
 ## Vertragsversion
 
-**Status: Entwurf**
+**Status:** Data Insight implementiert · SkytechHEMS Entwurf
 
 Data Insight stellt die Sicht `skytech.v_hems_vertrag` mit genau einer Zeile und der Spalte
-`version` (`text`) bereit; für diese Vertragsversion `0.1`. Das HEMS prüft sie bei jedem
+`version` (`text`) bereit; für diese Vertragsversion `0.2`. Das HEMS prüft sie bei jedem
 Verbindungsaufbau. Weicht sie von der Version ab, die das HEMS kennt, liest und schreibt es nichts
 und meldet die Abweichung in seinem Status.
 
 ## Rechte der Rolle `skytech_hems`
 
-**Status: Entwurf**
+**Status:** Data Insight implementiert · SkytechHEMS Entwurf
 
-Die Liste ist abschließend.
+Die Rolle schreibt ausschließlich über die Funktionen unten (`SECURITY DEFINER`, für alle anderen
+Rollen gesperrt). Direkte `INSERT`, `UPDATE` oder `DELETE` auf Tabellen sind ihr nicht erlaubt.
 
-| Objekt | Recht | Einschränkung |
-|---|---|---|
-| `skytech.sensor` | `SELECT` | — |
-| `skytech.sensor` | `INSERT` | nur Zeilen mit `verwaltet_von = 'hems'` |
-| `skytech.sensor` | `UPDATE` | nur die Spalten `aktiv`, `name`, `einheit` an Zeilen mit `verwaltet_von = 'hems'`; dazu einmalig `verwaltet_von` von `NULL` auf `'hems'` (Übernahme) |
-| `skytech.kategorie`, `skytech.groesse` | `SELECT` | — |
-| `skytech.v_messwert_15min`, `skytech.v_messwert_1h` | `SELECT` | — |
-| `skytech.messwert` | `INSERT` | nur für Sensoren mit `quelle = 'hems'` (Row-Level-Security) |
-| `skytech.hems_zuordnung` | `SELECT`, `INSERT` | — |
-| `skytech.v_hems_zuordnung`, `skytech.v_hems_rolle_15min` | `SELECT` | — |
-| `skytech.prognose_lauf`, `skytech.prognose_wert` | `SELECT`, `INSERT` | — |
-| Prognose-Sichten, `skytech.v_hems_vertrag` | `SELECT` | — |
+| Objekt | Recht |
+|---|---|
+| `skytech.hems_sensor_sichern`, `skytech.hems_sensor_stilllegen`, `skytech.hems_zuordnen`, `skytech.hems_messwerte_schreiben`, `skytech.hems_lauf_schreiben` | `EXECUTE` |
+| `skytech.sensor`, `skytech.kategorie`, `skytech.groesse` | `SELECT` |
+| `skytech.v_messwert_15min`, `skytech.v_messwert_1h` | `SELECT` |
+| `skytech.hems_zuordnung`, `skytech.v_hems_zuordnung`, `skytech.v_hems_rolle_15min` | `SELECT` |
+| `skytech.prognose_lauf`, `skytech.prognose_wert` und die Prognose-Sichten | `SELECT` |
+| `skytech.v_hems_vertrag` | `SELECT` |
 
-Kein `DELETE`, keine Schemaänderung, kein Zugriff auf `skytech_config`.
+Kein Zugriff auf `skytech_config`, keine Schemaänderung. Die Funktionen melden Eingabefehler mit
+SQLSTATE `22023` und einer deutschen Meldung.
 
 ## Verwaltete Sensoren
 
-**Status: Entwurf**
+**Status:** Data Insight implementiert · SkytechHEMS Entwurf
 
-`skytech.sensor` erhält die Spalte `verwaltet_von` (`text`, `NULL` oder `'hems'`).
+`skytech.sensor` hat die Spalte `verwaltet_von` (`text`, `NULL` oder `'hems'`).
 
-**HEMS-Seite:**
+```text
+skytech.hems_sensor_sichern(entity_id text, attribut text, name text, kategorie text,
+                            groesse text, einheit text, quelle text) → integer (Sensor-ID)
+skytech.hems_sensor_stilllegen(sensor_id integer) → void
+```
 
-- Das HEMS legt jeden Sensor, den es für eine Rolle braucht, selbst an (`verwaltet_von = 'hems'`).
-- Gibt es die Entität (gleiche `entity_id` und gleiches `attribut`) bereits, **übernimmt** das HEMS
-  die Zeile: Es setzt `verwaltet_von = 'hems'`, die vorhandenen Messwerte bleiben erhalten.
-- Es setzt `name`, `kategorie` und `groesse` aus den Katalogen, `einheit`, `quelle` und `aktiv`.
-  Andere Spalten setzt es nicht.
-- Braucht das HEMS einen Sensor nicht mehr, setzt es ihn auf `aktiv = false`. Er bleibt verwaltet,
-  seine Messwerte bleiben erhalten.
-- Nicht verwaltete Sensoren ändert das HEMS nie, außer durch die Übernahme oben.
+- `hems_sensor_sichern` legt den Sensor an (`verwaltet_von = 'hems'`). Gibt es die Entität mit
+  gleichem `attribut` schon, **übernimmt** es die Zeile: `verwaltet_von = 'hems'`, die vorhandenen
+  Messwerte bleiben. Es setzt `name`, `kategorie`, `groesse`, `einheit` und `aktiv = true`; andere
+  Spalten (z. B. `anlage`) bleiben unverändert. Wiederholte Aufrufe mit gleichen Werten ändern
+  nichts. `quelle` ist `ha` oder `hems`; Reihen mit Quelle `hems` heißen `hems.<name>`,
+  HA-Sensoren nie. Hat eine vorhandene Zeile eine andere Quelle, wird abgelehnt.
+- `hems_sensor_stilllegen` setzt einen verwalteten Sensor auf `aktiv = false`. Er bleibt
+  verwaltet, seine Messwerte bleiben erhalten.
+- Nicht verwaltete Sensoren ändert das HEMS nie, außer durch die Übernahme.
 
 **Data-Insight-Seite:**
 
-- Ein Trigger auf `skytech.sensor` lehnt `UPDATE` und `DELETE` an Zeilen mit
-  `verwaltet_von IS NOT NULL` für jede andere Rolle als `skytech_hems` ab. Damit gilt die Sperre
-  für Oberfläche, MCP und direktes SQL gleichermaßen.
-- Oberfläche: eigener Abschnitt „Über Vertrag verwaltet — Skytech HEMS“, Kennzeichnung je Sensor,
-  Bearbeiten und Löschen gesperrt, Hinweis auf den HEMS-Tab „Dynamischer Strompreis“.
+- Ein Trigger auf `skytech.sensor` lehnt `UPDATE` und `DELETE` an verwalteten Zeilen ab
+  (SQLSTATE `SKY01`). Nur die Funktionen oben heben die Sperre innerhalb ihres Aufrufs auf. Damit
+  gilt die Sperre für Oberfläche, MCP und direktes SQL gleichermaßen.
+- Oberfläche: eigener Abschnitt „Über Vertrag verwaltet — Skytech HEMS“ auf der Seite „Sensoren“
+  mit Rolle und Zustand; die Detailseite zeigt den Sensor nur an.
 - API: `PUT` und `DELETE api/sensors/{id}` antworten bei verwalteten Sensoren mit `409` und dem
-  Grund; `GET api/sensors` liefert `verwaltet_von` und die aktuelle Rolle.
+  Grund; `GET api/sensors` liefert `verwaltet_von` und `hems_rollen` (aktuelle Rollen).
 - MCP: Änderungen an verwalteten Sensoren werden mit derselben Begründung abgelehnt.
-- Änderungsprotokoll: Anlegen, Übernehmen, Stilllegen und Zuordnungswechsel durch das HEMS
+- Änderungsprotokoll: Anlegen, Übernehmen, Aktualisieren, Stilllegen und Zuordnungswechsel
   erscheinen mit `quelle = 'hems'`.
 - Der Collector zeichnet verwaltete Sensoren mit `quelle = 'ha'` wie jeden anderen HA-Sensor auf.
 
 ## Rollen und Austausch
 
-**Status: Entwurf**
+**Status:** Data Insight implementiert · SkytechHEMS Entwurf
 
 Das HEMS spricht Sensoren nur über Rollen an. So kann es die Entität hinter einer Rolle tauschen
 (neues Home Assistant, umbenannte Entität, anderer Sensor im HEMS-Tab), ohne dass die Historie
 abreißt.
 
-```sql
-CREATE TABLE skytech.hems_zuordnung (
-  rolle      text        NOT NULL CHECK (rolle ~ '^[a-z_]+(:[a-z0-9_]+)?$'),
-  sensor_id  integer     NOT NULL REFERENCES skytech.sensor(id),
-  gueltig_ab timestamptz NOT NULL,
-  PRIMARY KEY (rolle, gueltig_ab)
-);
+```text
+skytech.hems_zuordnen(rolle text, sensor_id integer) → void
 ```
 
-- Die Tabelle wird nur ergänzt, nie geändert. Eine Zuordnung gilt bis zum nächsten Eintrag
-  derselben Rolle.
-- Sicht `skytech.v_hems_zuordnung`: `rolle`, `sensor_id`, `entity_id`, `gueltig_ab`, `gueltig_bis`
-  (`NULL` = aktuell).
-- Sicht `skytech.v_hems_rolle_15min`: Spalten wie `v_messwert_15min`, aber je `rolle` statt je
-  Sensor, über Sensorwechsel hinweg zusammengesetzt.
-- Tausch: neuen Sensor anlegen oder übernehmen → Zuordnung mit `gueltig_ab = jetzt` einfügen →
-  alten Sensor auf `aktiv = false`. Das HEMS gleicht beim Start und nach jeder
-  Konfigurationsänderung ab.
+- `skytech.hems_zuordnung(rolle, sensor_id, gueltig_ab)` wird nur ergänzt, nie geändert. Eine
+  Zuordnung gilt bis zum nächsten Eintrag derselben Rolle. Die erste Zuordnung einer Rolle gilt ab
+  `-infinity`, damit auch die Historie eines übernommenen Sensors zählt.
+- Nur verwaltete Sensoren lassen sich zuordnen; eine unveränderte Zuordnung ändert nichts.
+- Sicht `skytech.v_hems_zuordnung`: `rolle`, `sensor_id`, `entity_id`, `attribut`, `name`,
+  `gueltig_ab`, `gueltig_bis` (`NULL` = aktuell).
+- Sicht `skytech.v_hems_rolle_15min`: `rolle`, `zeit`, `sensor_id`, `einheit` und die Spalten von
+  `messwert_15min`, über Sensorwechsel hinweg zusammengesetzt.
+- Tausch: neuen Sensor sichern → `hems_zuordnen` → alten Sensor stilllegen. Das HEMS gleicht beim
+  Start und nach jeder Konfigurationsänderung ab.
 
-**Rollenkatalog 0.1:**
+**Rollenkatalog 0.2** (Syntax `^[a-z_]+(:[a-z0-9_]+)?$`):
 
 | Rolle | Quelle | Kategorie / Größe | Bedeutung |
 |---|---|---|---|
@@ -185,84 +190,88 @@ Neue Rollen kommen mit einer neuen Vertragsversion dazu.
 
 ## HEMS-eigene Messreihen
 
-**Status: Entwurf**
+**Status:** Data Insight implementiert · SkytechHEMS Entwurf
 
-- Sensoren mit `quelle = 'hems'` und `entity_id = 'hems.<name>'`, angelegt und verwaltet vom HEMS.
-- Das HEMS schreibt je 15-min-Slot genau einen Rohwert in `skytech.messwert`, mit
-  `zeit` = Slot-Beginn und dem Mittelwert des Slots. Zustände (`netzladen_zulaessig`) als `1`/`0`.
-- Data Insight holt für `quelle = 'hems'` nichts aus Home Assistant und berechnet Minutenwerte und
-  Verdichtungen wie für jeden anderen Sensor.
+```text
+skytech.hems_messwerte_schreiben(sensor_id integer, zeiten timestamptz[],
+                                 werte double precision[]) → integer (neu geschriebene Werte)
+```
+
+- Nur für aktive, verwaltete Sensoren mit `quelle = 'hems'` (`hems.<name>`).
+- Das HEMS schreibt je 15-min-Slot genau einen Wert mit `zeit` = Slot-Beginn und dem Mittelwert
+  des Slots. Zustände (`netzladen_zulaessig`) als `1`/`0`.
+- Zeitpunkte dürfen nicht in der Zukunft liegen; Werte müssen endlich sein; höchstens 10 000 Werte
+  je Aufruf. Bereits vorhandene Zeitpunkte bleiben unverändert (kein Überschreiben).
+- Neue Werte meldet die Funktion per `NOTIFY skytech_hems_werte`. Data Insight rechnet die
+  Minutenwerte ab dem frühesten neuen Zeitpunkt nach, höchstens 10 Tage zurück. Aus Home Assistant
+  holt Data Insight für diese Sensoren nichts.
 - Nach einem Ausfall füllt das HEMS Lücken von `hems.grundlast_w` aus den aufgezeichneten
   Einzelsensoren nach; die übrigen `hems.*`-Reihen bleiben lückenhaft.
 
 ## Prognose- und Auswertungsläufe
 
-**Status: Entwurf**
+**Status:** Data Insight implementiert · SkytechHEMS Entwurf
 
-```sql
-CREATE TABLE skytech.prognose_lauf (
-  id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  art         text        NOT NULL CHECK (art IN ('preis','pv','verbrauch','auswertung')),
-  quelle      text        NOT NULL,
-  erstellt    timestamptz NOT NULL,
-  raster_min  smallint    NOT NULL CHECK (raster_min IN (15,60)),
-  gueltig_ab  timestamptz NOT NULL,
-  gueltig_bis timestamptz NOT NULL,
-  einheit     text        NOT NULL,
-  methode     text,
-  details     jsonb       NOT NULL DEFAULT '{}'
-);
-
-CREATE TABLE skytech.prognose_wert (       -- Hypertable auf zeit
-  lauf_id bigint           NOT NULL REFERENCES skytech.prognose_lauf(id),
-  zeit    timestamptz      NOT NULL,       -- Slot-Beginn
-  wert    double precision NOT NULL,
-  p10     double precision,
-  p90     double precision,
-  PRIMARY KEY (lauf_id, zeit)
-);
+```text
+skytech.hems_lauf_schreiben(art text, quelle text, erstellt timestamptz, raster_min integer,
+                            gueltig_ab timestamptz, gueltig_bis timestamptz, einheit text,
+                            methode text, details jsonb, zeiten timestamptz[],
+                            werte double precision[], p10 double precision[] DEFAULT NULL,
+                            p90 double precision[] DEFAULT NULL) → bigint (Lauf-ID)
 ```
 
-| `art` | `quelle` | Werte | Pflichtschlüssel in `details` |
-|---|---|---|---|
-| `preis` | Entity-ID des Preissensors | Endpreis in €/kWh je Slot | `entity` |
-| `pv` | Entity-ID der Prognosekurve | mittlere Leistung in W je Slot, mit `p10`/`p90` | `entity`, `ist_rolle`, `heute_kwh`, `morgen_kwh`, `rest_heute_kwh` |
-| `verbrauch` | `hems:<methode>` | mittlere Leistung in W je Slot, mit `p10`/`p90` | `ist_rolle`, `historie_tage`, `parameter` |
-| `auswertung` | `hems:kennzahlen` | keine Wertezeilen | Kennzahlen (Reichweite, PV im Reichweitenfenster, Preisfenster …) |
+Gespeichert wird in `skytech.prognose_lauf` (`id`, `art`, `quelle`, `erstellt`, `raster_min`,
+`gueltig_ab`, `gueltig_bis`, `einheit`, `methode`, `details`) und `skytech.prognose_wert`
+(`lauf_id`, `zeit` = Slot-Beginn, `wert`, `p10`, `p90`; Hypertable).
 
-- Ein Lauf wird in **einer** Transaktion geschrieben und danach nie geändert oder gelöscht (außer
-  durch die Aufbewahrung).
-- Ein Preislauf entsteht nur, wenn sich die Preiskurve geändert hat.
-- Sichten in Data Insight: `v_prognose_aktuell` (jüngster Lauf je Art und Slot), `v_prognose_vortag`
-  (jüngster Lauf, der mindestens 24 h vor dem Slot erstellt wurde), `v_preis`, `v_prognose_vs_ist`
-  (Prognose neben dem Ist der `ist_rolle` aus `v_hems_rolle_15min`), `v_prognose_guete_tag`
-  (je Berliner Tag und Art: mittlerer absoluter Fehler, Energiefehler, Anteil im p10–p90-Band).
+| `art` | `quelle` | Raster | Werte | Pflichtschlüssel in `details` |
+|---|---|---|---|---|
+| `preis` | Entity-ID des Preissensors | 15 oder 60 | Endpreis in €/kWh je Slot | `entity` |
+| `pv` | Entity-ID der Prognosekurve | 15 | mittlere Leistung in W je Slot, mit `p10`/`p90` | `entity`, `ist_rolle`, `heute_kwh`, `morgen_kwh`, `rest_heute_kwh` |
+| `verbrauch` | `hems:<methode>` | 15 | mittlere Leistung in W je Slot, mit `p10`/`p90` | `ist_rolle`, `historie_tage`, `parameter` |
+| `auswertung` | `hems:kennzahlen` | 15 | keine Werte | Kennzahlen (Reichweite, PV im Reichweitenfenster, Preisfenster …) |
+
+- Ein Lauf entsteht in **einem** Aufruf und wird danach nie geändert; gelöscht wird er nur durch
+  die Aufbewahrung.
+- Die Funktion prüft: `details` ist ein Objekt mit den Pflichtschlüsseln, `gueltig_bis` liegt
+  nach `gueltig_ab`, alle Zeitpunkte liegen in diesem Zeitraum, Werte sind endlich, Werte, `p10`
+  und `p90` sind gleich lang, ein Auswertungslauf hat keine Werte.
+- Ein Preislauf entsteht nur, wenn sich die Preiskurve geändert hat (Pflicht des HEMS).
+- Sichten: `v_prognose_aktuell` (jüngster Lauf je Art und Slot, mit `bis` und `ist_rolle`),
+  `v_prognose_vortag` (jüngster Lauf, der mindestens 24 h vor dem Slot erstellt wurde), `v_preis`
+  (`zeit`, `bis`, `preis_eur_kwh`), `v_prognose_vs_ist` (PV und Verbrauch: aktuell, Vortag mit
+  Band, Ist aus `v_hems_rolle_15min`), `v_prognose_guete_tag` (je Berliner Tag und Art: Slots,
+  mittlerer Fehler in W, Prognose-, Ist- und Fehlerenergie in kWh, Anteil im p10–p90-Band, jeweils
+  für die Vortagsprognose).
 
 ## Aufbewahrung
 
-**Status: Entwurf**
+**Status:** Data Insight implementiert
 
-Neuer Schlüssel `aufbewahrung_prognose_tage` in `skytech_config.einstellung`, Voreinstellung `365`.
-Er gilt für `pv`, `verbrauch` und `auswertung`; Preisläufe bleiben ohne Ablauf. `hems.*`-Messreihen
-folgen der normalen Aufbewahrung von Data Insight.
+Schlüssel `aufbewahrung_prognose_tage` in `skytech_config.einstellung`, Voreinstellung `365`,
+`null` = nie. Eine tägliche Aufgabe löscht `pv`-, `verbrauch`- und `auswertung`-Läufe, die älter
+sind; Preisläufe bleiben ohne Ablauf. `hems.*`-Messreihen folgen der normalen Aufbewahrung von
+Data Insight.
+
+**Bekannte Grenze:** Den Schlüssel ändert man per SQL; die Seite „Speicher“ zeigt ihn noch nicht.
 
 ## Fehlerverhalten
 
-**Status: Entwurf**
+**Status:** Data Insight implementiert · SkytechHEMS Entwurf
 
 - Data Insight nicht erreichbar, Anmeldung abgelehnt oder Vertragsversion abweichend: Das HEMS
   meldet das in seinem Status und versucht es im nächsten Takt erneut. Läufe werden nicht
   gepuffert, sie entstehen beim nächsten Takt neu.
 - Ein Fehler im Datenaustausch beeinflusst den Regelzyklus des HEMS nie.
-- Lehnt Data Insight eine Zeile ab (Rechte, Prüfregel), verwirft das HEMS den betroffenen Lauf
-  vollständig und meldet den Grund.
+- Lehnt eine Funktion einen Aufruf ab (SQLSTATE `22023`), ist nichts davon gespeichert. Das HEMS
+  verwirft den betroffenen Lauf bzw. die betroffenen Werte und meldet den Grund.
 
 ## Zuständigkeiten und Nicht-Ziele
 
 | Thema | Zuständig |
 |---|---|
 | Prognosen, Kennzahlen, Rollenwahl, Austausch von Sensoren | SkytechHEMS |
-| Schema, Rechte, Sperre verwalteter Sensoren, Aufzeichnung der HA-Sensoren, Sichten, Aufbewahrung | Skytech Data Insight |
+| Schema, Funktionen, Rechte, Sperre verwalteter Sensoren, Aufzeichnung der HA-Sensoren, Nachrechnen der Minutenwerte, Sichten, Aufbewahrung | Skytech Data Insight |
 | Grafana-Dashboards | nicht Vertragsteil; sie lesen die Sichten oben |
 
 Nicht Teil dieses Vertrags: Steuerentscheidungen (Netzladen, Entladesperre), der Energy Pilot und
@@ -275,4 +284,10 @@ jede Schreibverbindung von Data Insight zum HEMS.
 - Vertragsversion und `skytech.v_hems_vertrag` werden gemeinsam erhöht.
 - Solange die Version mit `0.` beginnt, sind inkompatible Änderungen zulässig; das HEMS arbeitet
   nur mit genau der Version, die es kennt.
-- Mit der Umsetzung werden je Abschnitt Status und die betroffenen Codestellen eingetragen.
+
+## Implementierungsstellen
+
+| Seite | Stellen |
+|---|---|
+| Skytech Data Insight | `app/sql/0003_hems_anbindung.sql` (Schema, Funktionen, Sichten, Rechte, Aufbewahrung), `rootfs/usr/share/skytech/bootstrap.sql` und `bootstrap_skytech.sql` (Rolle), `templates/pg_hba.conf` (Netz), `app/access_service.py` (Zugang `hems`), `app/sensor_service.py`, `app/main.py`, `app/mcp_tools.py` (Sperre, `409`), `app/collector.py` (keine HA-Werte für `hems.*`, Nachrechnen), Seiten „Sensoren“, „Sensor“, „Zugänge“, „Protokoll“; Tests in `tests/test_db_integration.py` |
+| SkytechHEMS | noch nicht umgesetzt |

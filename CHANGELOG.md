@@ -8,6 +8,14 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Dokumentation — 12.10.2026 (Vertrag mit Data-Insight 0.2)
+
+- Vertrag `contract_hems_data_insight` auf Version 0.2, wortgleich mit Skytech-Data-Insight: Das HEMS
+  schreibt dort nur über geprüfte Datenbankfunktionen (`hems_sensor_sichern`, `hems_zuordnen`,
+  `hems_messwerte_schreiben`, `hems_lauf_schreiben` …) statt direkt in Tabellen; Grund ist das
+  Nachrechnen der Minutenwerte für Slot-Mittelwerte, die erst nach Slot-Ende vorliegen. Zugelassenes
+  Netz `172.30.33.0/24`. Die Data-Insight-Seite ist implementiert, der HEMS-Client folgt (M6, P4).
+
 ### Dokumentation — 12.10.2026 (Vertrag mit Data-Insight)
 
 - **Vertrag `contract_hems_data_insight` 0.1 (Entwurf)** wortgleich mit Skytech-Data-Insight:

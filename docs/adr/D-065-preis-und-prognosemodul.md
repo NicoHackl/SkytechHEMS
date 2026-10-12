@@ -5,7 +5,7 @@
 - **Betrifft:** künftig `app/tariff/`, `app/insight_client.py`, `app/tariff_publisher.py`,
   Add-on-Optionen, neuer Tab „Dynamischer Strompreis“, Vertrag
   [`contract_hems_data_insight`](../../contract/contract_hems_data_insight/contract_hems_data_insight.md)
-  (Entwurf 0.1); löst den Entwurf
+  (Version 0.2); löst den Entwurf
   `erweiterungen/erweiterung_ac_speicher_1.md` §11.1 und die Abgrenzung „Prognose und Planung“ in
   [architektur.md](../architektur.md) ab
 

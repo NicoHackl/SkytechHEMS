@@ -25,4 +25,4 @@ Beschreibung der gemeinsamen Felder zu führen.
 | Energy-Pilot | [contract_hems_energy_pilot.md](contract_hems_energy_pilot/contract_hems_energy_pilot.md) | Aktueller Austausch einschließlich dokumentierter Kompatibilitätsgrenzen. |
 | Battery-Provider | [contract_hems_battery_provider.md](contract_hems_battery_provider/contract_hems_battery_provider.md) | Aktueller Austausch einschließlich dokumentierter Betriebsgrenzen; HEMS-Lebenszeichen implementiert (Version 1.1). |
 | Wallbox-Provider | [contract_hems_wallbox_provider.md](contract_hems_wallbox_provider/contract_hems_wallbox_provider.md) | Version 1.1; in beiden Projekten implementiert, Hardware-Abnahme des Providers offen. |
-| Data-Insight | [contract_hems_data_insight.md](contract_hems_data_insight/contract_hems_data_insight.md) | Version 0.1, Entwurf: Datenhaltung für den dynamischen Strompreis (D-065). Noch nicht implementiert. |
+| Data-Insight | [contract_hems_data_insight.md](contract_hems_data_insight/contract_hems_data_insight.md) | Version 0.2: Datenhaltung für den dynamischen Strompreis (D-065). In Data-Insight implementiert, HEMS-Seite offen. |
