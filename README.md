@@ -62,15 +62,17 @@ Register, Reihenfolge am Gerät und Übernahmezeit sind damit kein HEMS-Thema.
    Entladung zwingen, den Sensor beobachten. Steigt er um 1 kW, gehört
    `speicher_in_residual_enthalten` auf `true` (Default). Ein Fehler hier lässt das HEMS die
    eigene Entladung als Überschuss lesen — der Speicher ist dann in einem Zyklus leer.
-2. **Hausleistungsbilanz einrichten.** `battery_residual_power_entity` ist bei AC-Speichern
-   Pflicht und enthält Netzleistung plus E3DC-Batterieleistung: negativ = Unterdeckung, positiv =
-   Einspeisung. Sie steuert ausschließlich das Entladen; das Laden bleibt am Überschuss-Sensor.
-   Die drei Kontrollfälle mit `700 W` und die HA-Template-Vorlage stehen in
+2. **Hausleistungsbilanz einrichten.** `battery_residual_power_entity` ist bei Speichern
+   Pflicht und enthält die Netzleistung plus die Leistung von Speichern, die das HEMS **nicht**
+   regelt: negativ = Unterdeckung, positiv = Einspeisung. Vom HEMS geregelte Speicher gehören
+   nicht hinein (D-063). Sie steuert ausschließlich das Entladen; das Laden bleibt am
+   Überschuss-Sensor. Die drei Kontrollfälle mit `700 W` und die HA-Template-Vorlage stehen in
    [konfiguration.md](docs/konfiguration.md#hausleistungsbilanz-für-ac-speicher).
-3. **E3DC-Übergabe messen.** Bei einer E3DC-Entladung fordert das HEMS den AC-Speicher an; der
-   E3DC muss anschließend selbst zurückregeln. In dieser Anlage reagiert er in unter zwei
-   Sekunden bei einem HEMS-Zyklus von drei Sekunden. Liegt die Reaktionszeit darüber oder
-   oszilliert sie, `hoch_regelzeit_s` und Schrittbegrenzung erhöhen.
+3. **Übergabe an einen selbstregelnden Speicher messen** (nur falls vorhanden). Entlädt ein
+   Speicher, den das HEMS nicht regelt, fordert das HEMS den eigenen Speicher an; der fremde
+   Speicher muss anschließend selbst zurückregeln. Liegt seine Reaktionszeit über einem
+   HEMS-Zyklus oder oszilliert die Übergabe, `hoch_regelzeit_s` und Schrittbegrenzung erhöhen. In
+   der Referenzanlage entfällt dieser Punkt seit D-063: Der E3DC ist dort selbst HEMS-Speicher.
 4. **Eigene Nulleinspeisung des Geräts abschalten.** Zwei Regler auf einer Messgröße haben kein
    Gleichgewicht; das Ergebnis ist ein Grenzzyklus.
 

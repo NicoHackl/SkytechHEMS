@@ -63,7 +63,9 @@ Dinge, die schon einmal Zeit gekostet haben:
   Doppelzählung und Aufschwingen — siehe [konfiguration.md](konfiguration.md).
 - **Hausleistungsbilanz ist ein zweiter Vertrag.** `battery_residual_power_entity` ersetzt den
   Überschuss-Sensor nicht: negativ bedeutet Unterdeckung, positiv Einspeisung und die Bilanz
-  enthält Netz- plus E3DC-Batterieleistung. Sie steuert nur die AC-Entladung. Fehlt ihr Wert,
+  enthält die Netzleistung plus die Leistung von Speichern, die das HEMS **nicht** regelt. Ein
+  vom HEMS geregelter Speicher gehört nicht hinein, sonst zählt seine Entladung doppelt (D-063).
+  Sie steuert nur die Speicher-Entladung. Fehlt ihr Wert,
   gehen die AC-Speicher auf `standby`; Verbraucher laufen über `residual_power_entity` weiter.
   Formel und die drei `700-W`-Kontrollfälle stehen in
   [konfiguration.md](konfiguration.md#hausleistungsbilanz-für-ac-speicher).
@@ -74,12 +76,17 @@ Dinge, die schon einmal Zeit gekostet haben:
   Speicher. Nach einem Add-on-Neustart beginnt der Zeitschutz von vorn.
 - **Ampere-Modus rechnet intern in Watt.** Nur beim Schreiben wird abgerundet. Wer Ampere-Werte
   vergleicht, muss `new_a` bzw. `schutz_a` nehmen, nicht die Watt-Felder durch die Spannung teilen.
-- **Der Namensraum `ems_speicher_*` gehört nicht dem HEMS.** In dieser Anlage regelt eine eigene
-  HA-Automation den vorhandenen E3DC über `input_number.ems_speicher_mindesladeleistung_1/2`,
-  `ems_speicher_soc_mindestwert_1/2` und `input_boolean.ems_speicher_regelung_stufe_1_aktiv`. Der
-  AC-Speicher des HEMS benutzt deshalb `acspeicher1` als Präfix, sein globaler Helfer heißt
-  `input_number.ems_ac_speicher_entlade_abschlag_w`. Der E3DC ist **kein** HEMS-Gerät: er regelt
-  sich selbst, ist aber bewusst in der Hausleistungsbilanz für die AC-Entladung enthalten.
+- **Der Namensraum `ems_speicher_*` gehört nicht dem HEMS.** In dieser Anlage hat früher eine
+  eigene HA-Automation den E3DC über `input_number.ems_speicher_mindesladeleistung_1/2`,
+  `ems_speicher_soc_mindestwert_1/2` und `input_boolean.ems_speicher_regelung_stufe_1_aktiv`
+  geregelt; die Helfer existieren noch. Die HEMS-Speicher benutzen deshalb eigene Präfixe
+  (`acspeicher1`, `e3dc_speicher`), der globale Helfer heißt
+  `input_number.ems_ac_speicher_entlade_abschlag_w`. Seit D-063 ist der E3DC selbst HEMS-Gerät
+  `e3dc_speicher` (über den Battery-Provider) und **nicht** mehr Teil der Hausleistungsbilanz.
+- **Parallelbetrieb E3DC-Automation (Stand 12.10.2026).** `automation.e3dc_manuelle_leistung`
+  ist in dieser Anlage noch eingeschaltet. Schreibt sie weiter auf den E3DC, steuern zwei Stellen
+  dasselbe Gerät. Prüfung und Abschaltung gehören zur Inbetriebnahme des E3DC-Adapters, siehe
+  `docs/bekannte-luecken.md` im Battery-Provider (D-015).
 - **`acspeicher1` bekommt künftig eine zusätzliche Datenquelle für seine Lese-Entitäten.** Für
   Marstek-Speicher entsteht das eigenständige Repo
   [Skytech-HEMS-Battery-Provider](https://github.com/NicoHackl/Skytech-HEMS-Battery-Provider)

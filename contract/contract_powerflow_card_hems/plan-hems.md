@@ -365,7 +365,7 @@ ist dieselbe.
 | **Erzeugung** | PV-Sensoren als Zeilenliste mit Hinzufügen/Entfernen, `flow_pv_label`. |
 | **Netz** | `flow_grid_power_entity` + `flow_grid_power_sign`, alternativ `flow_grid_import_entity`/`flow_grid_export_entity`, `flow_grid_label`. Hinweistext, dass genau ein Weg belegt sein darf. |
 | **Haus** | `flow_house_power_entity` (optional), `flow_house_label`. Hinweis: leer heißt, die Karte rechnet die Bilanz aus den übrigen Werten. |
-| **Batterie** | `flow_battery_label`, `flow_battery_soc_entity`, `flow_battery_capacity_kwh`, Leistungsvariante A oder B. Hinweis, dass der E3DC bewusst kein HEMS-Gerät ist und hier trotzdem hingehört. |
+| **Batterie** | `flow_battery_label`, `flow_battery_soc_entity`, `flow_battery_capacity_kwh`, Leistungsvariante A oder B. Hinweis, dass hier ein Speicher hingehört, den das HEMS nicht regelt (z. B. ein selbstregelnder Hybridspeicher); vom HEMS geregelte Speicher erscheinen als Geräte. |
 | **Geräte** | Tabelle aller konfigurierten HEMS-Geräte: Name, Klasse, dazu je Zeile `flow_show` als Schalter, `flow_icon` und `flow_color` als Textfeld. Leerzustand mit Verweis auf die Gerätekonfiguration. |
 | **Anzeige** | `flow_title`, `flow_watt_threshold`, `flow_animation`, `flow_house_node`. |
 | **Vorschau** | Ergebnis von `api.flowPreview()`: Revision, Zeitpunkt der letzten Veröffentlichung, Tabelle der aufgelösten Verweise mit `.pill ok`/`.pill err`, Warnungen als `.hint-box`. Aktualisierungsknopf, kein Dauerpolling. |

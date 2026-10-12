@@ -65,6 +65,7 @@ Deckung des Hausverbrauchs. Entwurf v5:
 | Phase 5 — Energy-Pilot-Vorschlagsfelder für Speicher | offen | Entwurf, Abschnitt 13 |
 | Phase 6 — Netzladen mit dynamischen Tarifen | zurückgestellt | Entwurf, Abschnitt 11; B-4 |
 | Inbetriebnahme am realen Gerät | in Arbeit | F-14 |
+| Zweiter Speicher: E3DC als HEMS-Gerät über den Battery-Provider | in Arbeit | D-063 |
 
 Seit 03.09.2026 ist ein echter AC-Speicher angeschlossen: ein Marstek Venus E 3.0, Präfix
 `acspeicher1`, aktuell über die bestehende Modbus-Automation angebunden. F-13 damit beantwortet —
@@ -74,8 +75,10 @@ bestätigenden Regelverhalten-Details (Vorzeichen, Sensor-Skew) stehen weiterhin
 [bekannte-luecken.md](bekannte-luecken.md) — „in Arbeit" heißt hier: angeschlossen und aktiv
 gesteuert, nicht: jeder Punkt der Inbetriebnahme abgeschlossen.
 
-Der vorhandene E3DC ist bewusst **kein** HEMS-Gerät: Er regelt sich selbst; seine Leistung fließt
-aber bewusst in die separate Hausleistungsbilanz für die AC-Entladung ein (D-044).
+Seit Ende September 2026 ist auch der E3DC ein HEMS-Speicher (`e3dc_speicher`, D-063),
+angebunden über den E3DC-RSCP-Adapter des Battery-Providers. Er ist damit nicht mehr Teil der
+Hausleistungsbilanz; beide Speicher werden gemeinsam nach Priorität verteilt. Die
+Inbetriebnahme-Punkte des Adapters führt der Battery-Provider in seiner Roadmap.
 
 ### M5 — Power Flow Card
 

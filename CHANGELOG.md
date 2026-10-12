@@ -8,6 +8,19 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Dokumentation — 12.10.2026
+
+- **E3DC als HEMS-Speicher (D-063).** Die Doku beschreibt jetzt den tatsächlichen Anlagenstand:
+  Der E3DC ist HEMS-Gerät `e3dc_speicher` (`class: battery`), angebunden über den E3DC-RSCP-Adapter
+  des Battery-Providers, und nicht mehr Teil der Hausleistungsbilanz. Allgemein gilt: Die Bilanz
+  enthält die Netzleistung plus Speicher, die das HEMS **nicht** regelt; ein geregelter Speicher
+  darin zählte doppelt. Angepasst: README, `konfiguration.md`, `bekannte-luecken.md`,
+  `datenmodell.md`, `roadmap.md`, `device_classes/battery.md` und `global.md`,
+  `test-strategie.md`, Hinweise in D-040, D-044 und im Entwurf `erweiterung_ac_speicher_1.md`,
+  Kommentar in der HA-Vorlage unter `erweiterungen/`, Feldbeschreibungen (de, en) und der
+  Hinweistext zur Hausleistungsbilanz im Bereich „Konfiguration“. Kein Regelverhalten geändert.
+  Zugehörige Doku-Commits: Battery-Provider, Energy-Pilot, Powerflow-Card (Kartenvertrag).
+
 ### Hinzugefügt — 07.10.2026
 
 - **HEMS-Lebenszeichen (D-062).** Nach jedem Zyklus veröffentlicht das HEMS `sensor.skytech_hems_status`

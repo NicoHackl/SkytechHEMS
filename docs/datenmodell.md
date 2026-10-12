@@ -167,9 +167,9 @@ Add-on-Konfiguration; Notstromreserve, Drosselband und Sofort-Schwelle entfallen
 Fehlt einer der Messwerte (`unavailable`), fällt genau dieser Speicher aus der Regelung und geht
 auf `standby`; die übrigen laufen weiter. Ohne Ist-Leistung wäre die Pool-Bereinigung blind.
 
-> **Namensraum:** In dieser Anlage ist `ems_speicher_*` bereits von einer eigenen
-> HA-Automation für den vorhandenen E3DC belegt. Der HEMS-Speicher benutzt deshalb `acspeicher1`
-> als Präfix. Der E3DC selbst ist **kein** HEMS-Gerät (D-040).
+> **Namensraum:** In dieser Anlage ist `ems_speicher_*` bereits von der früheren
+> HA-Automation für den E3DC belegt. Die HEMS-Speicher benutzen deshalb die Präfixe
+> `acspeicher1` (Marstek) und `e3dc_speicher` (E3DC, seit D-063 HEMS-Gerät).
 
 ### Externe, nur gelesene Entitäten
 

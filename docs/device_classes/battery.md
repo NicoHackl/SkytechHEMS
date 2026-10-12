@@ -286,8 +286,9 @@ Zusätzlich ist die Add-on-Option `battery_residual_power_entity` für jede Inst
 negativ = Netzbezug/Unterdeckung, positiv = Einspeisung. Das HEMS nutzt sie nur für die
 Entladeplanung; PV-Laden und Verbraucher-Verteilung bleiben am Überschuss-Sensor. Fehlt der
 Sensor oder liefert er keinen brauchbaren Zahlenwert, gehen alle AC-Speicher aktiv auf `0 W` und
-`standby`, ohne die übrigen Verbraucher stillzulegen. Details, Formeln und die E3DC-Vorlage stehen
-in [konfiguration.md](../konfiguration.md#hausleistungsbilanz-für-ac-speicher).
+`standby`, ohne die übrigen Verbraucher stillzulegen. Ein vom HEMS geregelter Speicher gehört
+nicht in diese Bilanz, nur Speicher, die das HEMS nicht regelt (D-063). Details, Formeln und die
+Vorlage stehen in [konfiguration.md](../konfiguration.md#hausleistungsbilanz-für-ac-speicher).
 
 Die Option `speicher_in_residual_enthalten` betrifft weiterhin nur die Pool-Berechnung aus dem
 Überschuss-Sensor; sie verändert die Hausleistungsbilanz nicht.
@@ -305,8 +306,9 @@ Die Option `speicher_in_residual_enthalten` betrifft weiterhin nur die Pool-Bere
   `0 W` und `standby` setzt
 
 Für diese Anlage darf das Präfix nicht `speicher` sein, weil `ems_speicher_*` bereits zur
-vorhandenen E3DC-Regelung gehört. Der geplante Präfix lautet `acspeicher1`; der E3DC selbst wird
-nicht als `battery` eingetragen.
+früheren E3DC-Regelung gehört. Eingetragen sind `acspeicher1` (Marstek Venus E 3.0) und
+`e3dc_speicher` (E3DC, seit D-063). `class: battery` ist nicht auf AC-gekoppelte Speicher
+beschränkt: Entscheidend ist, dass Lade- und Entladeleistung am Netzübergabepunkt wirken.
 
 ## Beispiel
 
