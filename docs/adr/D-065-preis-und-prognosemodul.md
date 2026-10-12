@@ -3,8 +3,9 @@
 - **Datum:** 12.10.2026
 - **Status:** Geplant (Datenerhebung beschlossen, Steuerung offen)
 - **Betrifft:** künftig `app/tariff/`, `app/insight_client.py`, `app/tariff_publisher.py`,
-  Add-on-Optionen, neuer Tab „Dynamischer Strompreis“, neuer Vertrag
-  `contract/contract_hems_data_insight/` (folgt); löst den Entwurf
+  Add-on-Optionen, neuer Tab „Dynamischer Strompreis“, Vertrag
+  [`contract_hems_data_insight`](../../contract/contract_hems_data_insight/contract_hems_data_insight.md)
+  (Entwurf 0.1); löst den Entwurf
   `erweiterungen/erweiterung_ac_speicher_1.md` §11.1 und die Abgrenzung „Prognose und Planung“ in
   [architektur.md](../architektur.md) ab
 
@@ -53,7 +54,9 @@ Option A. Festgelegt mit dem User am 12.10.2026:
    Data-Insight-Umsetzungsplans), intern über den Add-on-Hostnamen. Das HEMS legt die benötigten
    Sensoren dort an, übernimmt bereits vorhandene und kennzeichnet sie als verwaltet; Data-Insight
    sperrt sie gegen Änderungen. Das HEMS kann die Entitäten über eine Rollen-Zuordnung austauschen,
-   ohne dass die Historie abreißt. Data-Insight bleibt optional.
+   ohne dass die Historie abreißt. Data-Insight bleibt optional. Maßgeblich für Verbindung,
+   Rechte, Rollen und Tabellen ist der
+   [Vertrag](../../contract/contract_hems_data_insight/contract_hems_data_insight.md).
 6. **DB-Treiber:** `psycopg` 3 (reine Python-Variante, async) mit `libpq5` aus Debian, weil das Image
    auch für `armhf`, `armv7` und `i386` gebaut wird.
 7. **Schalter:** `input_boolean.ems_netzladen_freigabe` (UND), `input_boolean.ems_netzladen_manuell`

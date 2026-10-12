@@ -109,7 +109,7 @@ Grundsatzentscheidung: [D-065](adr/D-065-preis-und-prognosemodul.md).
 | Punkt | Status | Verweis |
 |---|---|---|
 | P0 — Alte Netzlade-Helfer entfernt (B-4 behoben), Grundsatzentscheidung festgehalten | fertig | D-064, D-065 |
-| P1 — Vertrag HEMS ↔ Data-Insight (Entwurf) in beiden Repos | offen | D-065 |
+| P1 — Vertrag HEMS ↔ Data-Insight (Entwurf) in beiden Repos | fertig (Entwurf 0.1) | [Vertrag](../contract/contract_hems_data_insight/contract_hems_data_insight.md) |
 | P2 — Data-Insight: Tabellen, Sichten, Rolle `skytech_hems`, verwaltete Sensoren | offen | Repo Skytech-Data-Insight |
 | P3 — Preis- und PV-Quelle, eigener Takt, Anzeige-Sensoren, Tab „Dynamischer Strompreis“ | offen | D-065 |
 | P4 — Data-Insight-Client: Sensoren anlegen und austauschen, Prognosen schreiben | offen | D-065 |

@@ -8,6 +8,15 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Dokumentation — 12.10.2026 (Vertrag mit Data-Insight)
+
+- **Vertrag `contract_hems_data_insight` 0.1 (Entwurf)** wortgleich mit Skytech-Data-Insight:
+  Verbindung über das interne Add-on-Netz (Host automatisch über den Supervisor), Rolle
+  `skytech_hems` mit abschließend aufgezählten Rechten, vom HEMS verwaltete und in Data Insight
+  gesperrte Sensoren, Rollen-Zuordnung für den Sensortausch, eigene `hems.*`-Messreihen sowie
+  Prognose- und Preisläufe. Noch nicht implementiert. Verlinkt aus D-065, `architektur.md`,
+  `roadmap.md` (M6, P1) und `contract/README.md`.
+
 ### Entfernt — 12.10.2026
 
 - **Alte Netzlade-Helfer wirken nicht mehr (D-064, B-4 behoben).** `input_boolean.ems_<prefix>_netzladen_aktiv`

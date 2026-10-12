@@ -25,6 +25,8 @@ Defizit und einer quittierpflichtigen Notabschaltung (D-059).
   Ausnahme:** Für den dynamischen Strompreis wertet das HEMS Preis-, PV- und Verbrauchsprognose
   künftig selbst aus, in einem eigenen Modul außerhalb des Regelzyklus
   ([D-065](adr/D-065-preis-und-prognosemodul.md), [roadmap.md](roadmap.md) M6). Noch nicht gebaut.
+  Datenhaltung in Skytech Data Insight laut
+  [Vertrag](../contract/contract_hems_data_insight/contract_hems_data_insight.md) (Entwurf).
 - **Direktes Schalten der Endgeräte.** Geschrieben werden ausschließlich `input_*`-Helfer;
   die Übersetzung in reale Schaltvorgänge erledigen HA-Automationen.
 
