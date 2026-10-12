@@ -1872,6 +1872,12 @@ davon weiß.
 
 ## 11. Netzladen mit dynamischen Tarifen (Vorbereitung)
 
+> **Überholt (12.10.2026):** Die Schnittstelle aus 11.2 entfällt ersatzlos
+> ([D-064](../docs/adr/D-064-netzlade-helfer-entfallen.md)), die Aufgabenteilung aus 11.1 ist
+> abgelöst: Das HEMS wertet Preise und Prognosen selbst aus
+> ([D-065](../docs/adr/D-065-preis-und-prognosemodul.md)). Die Regeln aus 11.3 bleiben
+> Anforderung an die künftige Steuerung.
+
 Nicht in v1 implementiert, aber die Schnittstellen werden jetzt festgelegt,
 damit v2 keine Migration braucht.
 

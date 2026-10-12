@@ -148,7 +148,6 @@ export interface BatteryDevice extends DeviceBase {
   entladen_erlaubt: boolean
   /** D-060: darf freigegebene Überschussverbraucher überbrücken. */
   uberschussverbraucher_versorgen: boolean
-  netzladen_aktiv: boolean
   soc_min_prozent: number
   soc_max_prozent: number
   /** Ersetzen die entfallenen HA-Helfer; stehen in der Add-on-Konfiguration. */

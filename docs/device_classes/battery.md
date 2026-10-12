@@ -58,8 +58,8 @@ Werte nicht mehr.
 ## Über Namenskonvention gelesene HA-Helfer
 
 Alle Helfer sind optional. Ein **gültiger** HA-State hat Vorrang; sonst gilt ein im Steuerung-Tab
-eingegebener HEMS-interner Wert (D-061) und erst danach der Ersatzwert. Ladestufen,
-`netzladen_aktiv` und `netzlade_leistung_w` sind nicht intern einstellbar, siehe
+eingegebener HEMS-interner Wert (D-061) und erst danach der Ersatzwert. Ladestufen sind nicht
+intern einstellbar, siehe
 [Doppelte Auflösung](global.md#doppelte-auflösung-von-ha-entitäten).
 
 ### Freigaben und Richtung
@@ -236,20 +236,14 @@ Totband geschrieben werden nur das Stoppen auf `0 W` und ein direkter Richtungsw
 aus `0 W` wird erst geschrieben, wenn der neue Betrag das Totband erreicht. Bis dahin bleiben
 Sollwert und Betriebsart (`standby`) unverändert.
 
-## Reservierte Netzlade-Helfer: nicht aktivieren
+## Netzladen
 
-Der aktuelle Code liest außerdem:
-
-```text
-input_boolean.ems_<prefix>_netzladen_aktiv
-input_number.ems_<prefix>_netzlade_leistung_w
-```
-
-Diese Schnittstelle ist noch nicht freigegeben und nicht hart auf AUS geklemmt:
-`netzladen_aktiv: on` kann den Leistungspfad aktivieren, obwohl SoC-Ziel, Preislogik und
-vollständige Sicherheitsbegrenzung fehlen. Beide Helfer müssen bis zur Behebung von
-[B-4](../bekannte-luecken.md#offene-bugs) auf `off` beziehungsweise `0 W` bleiben oder dürfen ganz
-fehlen.
+Ein Speicher lädt ausschließlich aus PV-Überschuss; bei Hausdefizit wird nie geladen (D-B10). Die
+früher reservierten Helfer `input_boolean.ems_<prefix>_netzladen_aktiv` und
+`input_number.ems_<prefix>_netzlade_leistung_w` entfallen seit
+[D-064](../adr/D-064-netzlade-helfer-entfallen.md) ersatzlos; stehen sie noch in HA, bleiben sie
+wirkungslos. Netzladen mit dynamischem Strompreis ist als eigenes Modul geplant
+([D-065](../adr/D-065-preis-und-prognosemodul.md), [roadmap.md](../roadmap.md) M6).
 
 ## Energy-Pilot-Vorschläge
 

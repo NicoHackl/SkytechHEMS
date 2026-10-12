@@ -124,7 +124,6 @@ regelbaren Geräte (`hoch_regelzeit_s`, `runter_regelzeit_s`, `max_anderung_pro_
 | `soc_max_prozent` | % | 100 | Ladeschluss |
 | `umschalt_totzone_w` | W | 100 | Totzone um 0; ein Netto-Wunsch darunter führt aus `standby` oder bei Gegenrichtung zu `standby`, ein laufender Speicher darf in derselben Richtung darunter absenken (D-058) |
 | `ladestufe_<n>_aktiv` (`input_boolean`), `ladestufe_<n>_soc_prozent`, `ladestufe_<n>_max_ladeleistung_w` | –, %, W | keiner | **Optionale Ladestufen (D-056).** Begrenzen die Ladeleistung ab einer SoC-Schwelle; gelesen ab `n = 1` bis zur ersten Lücke. Details: [device_classes/battery.md](device_classes/battery.md#ladestufen-optional-d-056) |
-| `netzlade_leistung_w` | W | 0 | Reservierte, noch nicht sicher freigegebene Netzlade-Schnittstelle; muss wegen [B-4](bekannte-luecken.md#offene-bugs) auf `0` bleiben |
 | `anforderung_leistung_w` **(Ausgabe)** | W | – | **Ein signierter Sollwert: + laden / − entladen.** Der Helfer braucht ein **negatives Minimum** |
 | `anforderung_betriebsart` **(Ausgabe, `input_select`)** | – | – | `laden` / `entladen` / `standby`; genau diese drei Optionen sind erforderlich |
 
@@ -146,7 +145,6 @@ Dazu drei Schalter und eine Auswahlliste:
 | `input_boolean.ems_<prefix>_laden_erlaubt` | `on`/`off` | Ladepfad freigeben |
 | `input_boolean.ems_<prefix>_entladen_erlaubt` | `on`/`off` | Entladepfad freigeben |
 | `input_boolean.ems_<prefix>_uberschussverbraucher_versorgen` | `on`/`off` | Überbrückung von Überschussverbrauchern mit `aus_speicher_decken` (D-060). Fehlt oder ausgefallen = `off` |
-| `input_boolean.ems_<prefix>_netzladen_aktiv` | `on`/`off` | Reserviert; bis zur Behebung von [B-4](bekannte-luecken.md#offene-bugs) zwingend `off` |
 | `input_select.ems_<prefix>_betriebsart` | `auto`, `nur_laden`, `nur_entladen`, `standby` | Was das HEMS überhaupt darf |
 
 Externe Sensoren je Speicher: `soc_entity` (Pflicht) und genau eine Ist-Leistungsvariante —
@@ -268,7 +266,7 @@ Speicher (`type: "battery"`): `id`, `entity_prefix` (D-057), `label`, `priority`
 `max_entladeleistung_w`, `lade_limit_w`, `entlade_limit_w`, `hausdefizit_anteil_w` (seit D-060
 nur der Hausanteil), `verbraucher_anteil_w` (Überbrückung, D-060), `schutz_w`,
 `geschuetzte_mindestleistung_w`, `laden_erlaubt`, `entladen_erlaubt`,
-`uberschussverbraucher_versorgen`, `netzladen_aktiv`,
+`uberschussverbraucher_versorgen`,
 `soc_min_prozent`, `soc_max_prozent`, `soc_max_hysteresis_percent`, `direction_switch_delay_s`,
 `lade_limit_gueltig`, `entlade_limit_gueltig`, `umschaltsperre_rest_s`, `lade_blockiert_grund`,
 `entlade_blockiert_grund`, `blockiert_grund`, `ladestufen` (Liste `{n, aktiv, soc_prozent, max_w,

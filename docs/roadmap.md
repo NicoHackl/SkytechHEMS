@@ -63,7 +63,7 @@ Deckung des Hausverbrauchs. Entwurf v5:
 | Phase 3 — Entladepfad, Rampe, sicherer Zustand | fertig | D-040, D-041 |
 | Phase 4 — Mehrspeicher, getrennte Lade-/Entladepriorität | fertig | D-040 |
 | Phase 5 — Energy-Pilot-Vorschlagsfelder für Speicher | offen | Entwurf, Abschnitt 13 |
-| Phase 6 — Netzladen mit dynamischen Tarifen | zurückgestellt | Entwurf, Abschnitt 11; B-4 |
+| Phase 6 — Netzladen mit dynamischen Tarifen | ersetzt durch M6 | D-064, D-065 |
 | Inbetriebnahme am realen Gerät | in Arbeit | F-14 |
 | Zweiter Speicher: E3DC als HEMS-Gerät über den Battery-Provider | in Arbeit | D-063 |
 
@@ -99,11 +99,30 @@ und Anlagenwerte selbst aus dem HEMS — im Dashboard genügt
 Die Karte entsteht in einem **eigenen** Repository. Gekoppelt sind beide allein über den
 Datenvertrag, nicht über die Versionsnummer (D-047).
 
+### M6 — Dynamischer Strompreis
+
+**Ziel:** Speicher laden bei wenig PV in günstigen Zeitfenstern aus dem Netz und liefern die
+Energie in teuren Zeitfenstern ans Haus. Zuerst werden Preis, PV- und Verbrauchsprognose erhoben,
+in Data-Insight gespeichert und auf ihre Güte geprüft; erst danach entsteht die Steuerung.
+Grundsatzentscheidung: [D-065](adr/D-065-preis-und-prognosemodul.md).
+
+| Punkt | Status | Verweis |
+|---|---|---|
+| P0 — Alte Netzlade-Helfer entfernt (B-4 behoben), Grundsatzentscheidung festgehalten | fertig | D-064, D-065 |
+| P1 — Vertrag HEMS ↔ Data-Insight (Entwurf) in beiden Repos | offen | D-065 |
+| P2 — Data-Insight: Tabellen, Sichten, Rolle `skytech_hems`, verwaltete Sensoren | offen | Repo Skytech-Data-Insight |
+| P3 — Preis- und PV-Quelle, eigener Takt, Anzeige-Sensoren, Tab „Dynamischer Strompreis“ | offen | D-065 |
+| P4 — Data-Insight-Client: Sensoren anlegen und austauschen, Prognosen schreiben | offen | D-065 |
+| P5 — Verbrauchsprognose, Reichweite, Kennzahlen, Schalter (nur Anzeige) | offen | D-065 |
+| P6 — Grafana-Dashboard „Dynamischer Strompreis“ | offen | Repo Skytech-Data-Insight |
+| P7 — Beobachtung ≥ 14 Tage, Abnahme der Prognosegüte | offen | D-065 |
+| Steuerung (Netzladen, Entladesperre) | offen | eigener Plan, Logik noch zu besprechen |
+
 ## Zurückgestellt
 
 | Thema | Warum zurückgestellt | Bedingung für Wiederaufnahme |
 |---|---|---|
-| Netzladen mit dynamischen Tarifen | Erst sinnvoll, wenn ein Speicher real läuft. Die reservierten Helfer werden teilweise ausgeführt, aber SoC-Ziel, Preislogik und vollständige Sicherheitsbegrenzung fehlen; bis zur Behebung von B-4 müssen sie `off` beziehungsweise `0 W` bleiben | M4 am Gerät in Betrieb und B-4 behoben |
+| Feiertage im Verbrauchsprofil (M6) | In v1 nicht erforderlich; Tagtyp nur Werktag/Samstag/Sonntag | Prognosegüte an Feiertagen reicht nachweislich nicht |
 
 ---
 

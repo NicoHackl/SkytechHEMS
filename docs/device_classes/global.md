@@ -155,8 +155,7 @@ lässt sich über „Zurücksetzen“ löschen.
 | `input_boolean.ems_<prefix>_freigabe`, `input_boolean.ems_<prefix>_technische_freigabe` | Freigaben |
 | `input_boolean.ems_<prefix>_force`, `input_number.ems_<prefix>_force_leistung_w` | Zwang (D-053) |
 
-Ebenfalls nicht im Umfang sind die Ladestufen (D-056), `netzladen_aktiv`, `netzlade_leistung_w`
-und alle Ausgabe-Helfer. Welche Werte gerade aus HA kommen und welche nur im HEMS existieren, zeigt
+Ebenfalls nicht im Umfang sind die Ladestufen (D-056) und alle Ausgabe-Helfer. Welche Werte gerade aus HA kommen und welche nur im HEMS existieren, zeigt
 der Tab „Steuerung Info“.
 
 ## Globale HA-Helfer

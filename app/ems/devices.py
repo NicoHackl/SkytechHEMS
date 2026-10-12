@@ -1585,10 +1585,6 @@ class BatteryDevice(ControllableDevice):
         # überbrücken? Fehlt der Helfer, nein – Bestandsverhalten (D-B14).
         self.uberschussverbraucher_versorgen = False
         self.betriebsart               = "standby"
-        # v2 (Netzladen). In v1 hält die Klemme in calculate_ramp den Pfad zu;
-        # die Felder existieren, damit später keine Config-Migration nötig ist.
-        self.netzladen_aktiv           = False
-        self.netzlade_leistung_w       = 0.0
 
         # ---- Laufzeitzustand aus HA ----
         self._soc            = 0.0
@@ -1707,22 +1703,17 @@ class BatteryDevice(ControllableDevice):
 
     @property
     def current_w(self) -> float:
-        """Nur vom HEMS angeforderte LADEleistung aus PV-Überschuss.
-
-        Bei Netzladen (v2) bewusst 0: diese Leistung stammt nicht aus dem
-        PV-Überschuss und darf nicht in den Pool zurückgerechnet werden – sonst
-        würden die Überschussverbraucher aus dem Netz mitgespeist.
-        """
-        if not self.eligible or self.netzladen_aktiv:
+        """Nur vom HEMS angeforderte LADEleistung aus PV-Überschuss."""
+        if not self.eligible:
             return 0.0
         return min(self._lade_ist_w, self._lade_anf_w)
 
     @property
     def gemessene_last_w(self) -> float:
-        """Gemessene LADEleistung – auch bei Netzladen, anders als current_w.
+        """Gemessene LADEleistung – auch ohne HEMS-Anforderung, anders als current_w.
 
-        Verhindert, dass ein Speicher, der aus dem Netz lädt, für einen ANDEREN
-        Speicher wie Hausverbrauch aussieht (Kreisstrom über zwei Geräte).
+        Verhindert, dass ein ladender Speicher für einen ANDEREN Speicher wie
+        Hausverbrauch aussieht (Kreisstrom über zwei Geräte, D-B14).
         """
         return self._lade_ist_w
 
@@ -1752,7 +1743,7 @@ class BatteryDevice(ControllableDevice):
         return  # Speicher werden immer in Watt geregelt
 
     def resolve_force(self, st: StateProxy) -> None:
-        return  # Speicher kennen keinen Zwang (D-053); netzladen_aktiv bleibt ihr Weg
+        return  # Speicher kennen keinen Zwang (D-053)
 
     # ------------------------------------------------------------------
     # HA-Zustand lesen
@@ -1813,11 +1804,6 @@ class BatteryDevice(ControllableDevice):
         self.uberschussverbraucher_versorgen = self._flag(
             st, f"input_boolean.ems_{pfx}_uberschussverbraucher_versorgen",
             "uberschussverbraucher_versorgen")
-        self.netzladen_aktiv = self._flag(
-            st, f"input_boolean.ems_{pfx}_netzladen_aktiv", "netzladen_aktiv")
-        self.netzlade_leistung_w = self._num(
-            st, helper("netzlade_leistung_w"), "netzlade_leistung_w",
-            internal=0.0, minimum=0.0)
 
         self.betriebsart = self._choice(
             st, f"input_select.ems_{pfx}_betriebsart", "betriebsart",
@@ -2044,7 +2030,6 @@ class BatteryDevice(ControllableDevice):
              "hausleistungsbilanz_sensor_ungueltig"),
             (self.betriebsart not in ("auto", "nur_entladen"),   "betriebsart"),
             (not self.entladen_erlaubt,                          "entladen_gesperrt"),
-            (self.netzladen_aktiv,                               "netzladen"),
             (self._soc <= self.soc_min_prozent,                  "soc_min"),
             (self._wr_entlade_limit_w <= 0,                      "wr_derating"),
         )
@@ -2147,14 +2132,11 @@ class BatteryDevice(ControllableDevice):
 
         # D-B10: aus der PV-Logik heraus wird bei Hausdefizit nie geladen.
         # Die Klemme ist die Absicherung gegen Rechenfehler an anderer Stelle.
-        if entlade_wunsch > 0 and not self.netzladen_aktiv:
+        # Seit D-064 gilt sie ohne Ausnahme: es gibt keinen Netzlade-Pfad mehr.
+        if entlade_wunsch > 0:
             if lade_wunsch > 0:
                 self._lade_block = "hausdefizit"
             lade_wunsch = 0.0
-        # D-B16: Netzladen schlägt Entladen, sonst Kreisstrom mit Round-Trip-Verlust
-        if self.netzladen_aktiv:
-            entlade_wunsch = 0.0
-            lade_wunsch    = self.netzlade_leistung_w
 
         netto = lade_wunsch - entlade_wunsch                  # + laden / - entladen
 
@@ -2350,7 +2332,6 @@ class BatteryDevice(ControllableDevice):
             "laden_erlaubt":         self.laden_erlaubt,
             "entladen_erlaubt":      self.entladen_erlaubt,
             "uberschussverbraucher_versorgen": self.uberschussverbraucher_versorgen,
-            "netzladen_aktiv":       self.netzladen_aktiv,
             "soc_min_prozent":       self.soc_min_prozent,
             "soc_max_prozent":       self.soc_max_prozent,
             "soc_max_hysteresis_percent": self.soc_max_hysteresis_percent,

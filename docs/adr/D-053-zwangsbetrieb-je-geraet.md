@@ -71,7 +71,8 @@ Randbedingungen:
    `force_active: true` bei `eligible: false` ist der Normalfall eines Zwangsgeräts mit
    gesperrter Freigabe. Die Auflösung liegt in `Device.resolve_force()`, das der Controller nach
    der Schreibziel-Prüfung aufruft; ein Speicher überschreibt sie mit einem No-Op —
-   `netzladen_aktiv` bleibt sein Weg.
+   `netzladen_aktiv` bleibt sein Weg. *(Nachtrag 12.10.2026: `netzladen_aktiv` entfällt mit
+   [D-064](D-064-netzlade-helfer-entfallen.md); ein Speicher hat derzeit keinen Zwangsweg.)*
 3. **Ein Zwangsgerät ist kein Pool-Teilnehmer.** `current_w` und `max_relief_w` liefern `0`,
    `consume_from_pool` reserviert nichts, die Zuteilung setzt statt einer Pool-Menge die
    Zwangsleistung, geklemmt auf `[min_technisch_w, max_technisch_w]`. Binärgeräte werden in
@@ -138,4 +139,5 @@ ist entsprechend geändert.
   Einschalten eines Zwangs). Dann muss `binary_total_w` bzw. die Pool-Rechnung die Zwangslast im
   ersten Zyklus vorwegnehmen — Punkt 3 wird um eine Vorhalte-Regel ergänzt.
 - Ein Speicher soll doch einen Zwang kennen. Dann ist `netzladen_aktiv` zu vereinheitlichen,
-  nicht ein zweiter Zwangspfad zu bauen.
+  nicht ein zweiter Zwangspfad zu bauen. *(Nachtrag 12.10.2026: `netzladen_aktiv` entfällt mit
+  D-064; die künftige Netzladesteuerung entsteht unter D-065.)*

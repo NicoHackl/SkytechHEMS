@@ -511,7 +511,6 @@ def _battery(name, *, prefix=None, soc=50, lade_ist=0, entlade_ist=0, sollwert=0
         f"input_select.ems_{p}_betriebsart":                  betriebsart,
         f"input_boolean.ems_{p}_laden_erlaubt":               "on",
         f"input_boolean.ems_{p}_entladen_erlaubt":            "on",
-        f"input_boolean.ems_{p}_netzladen_aktiv":             "off",
         f"input_number.ems_{p}_prioritat":                    prio,
         f"input_number.ems_{p}_entlade_prioritat":            entlade_prio,
         f"input_number.ems_{p}_min_ladeleistung_w":           min_lade,
@@ -525,7 +524,6 @@ def _battery(name, *, prefix=None, soc=50, lade_ist=0, entlade_ist=0, sollwert=0
         f"input_number.ems_{p}_min_anderung_pro_schritt_w":   0,
         f"input_number.ems_{p}_geschutzte_mindestleistung_w": 0,
         f"input_number.ems_{p}_reserve_w":                    0,
-        f"input_number.ems_{p}_netzlade_leistung_w":          0,
     }
 
 
@@ -905,21 +903,31 @@ def test_zu_kleine_zuteilung_rastet_auf_null_im_zyklus():
     assert _op_for(res["write_ops"], "input_number.ems_sp2_anforderung_leistung_w") is None
 
 
-def test_netzladender_speicher_ist_keine_hauslast():
-    """11.3 Regel 1: sonst deckt Speicher B das Netzladen von Speicher A."""
-    cfg = [_battery_cfg("sp1"), _battery_cfg("sp2")]
-    ctrl = EMSController(cfg, residual_power_entity="sensor.s")
+def test_alte_netzlade_helfer_laden_nicht_aus_dem_netz():
+    """D-064: stehen die früheren Netzlade-Helfer noch in HA, bleiben sie wirkungslos.
+
+    Bei Hausdefizit entlädt der Speicher wie gewohnt; ein Netzlade-Sollwert
+    entsteht nicht, und der Status kennt das Feld nicht mehr.
+    """
+    ctrl = EMSController(
+        [_battery_cfg("speicher")],
+        residual_power_entity="sensor.ueberschuss",
+        battery_residual_power_entity="sensor.hausleistungsbilanz",
+    )
     states = {
         **_global(),
-        **_battery("sp1", lade_ist=3000, sollwert=3000),
-        **_battery("sp2"),
-        "input_boolean.ems_sp1_netzladen_aktiv": "on",
-        "sensor.s": -3000,
+        **_battery("speicher"),
+        "input_boolean.ems_speicher_netzladen_aktiv": "on",
+        "input_number.ems_speicher_netzlade_leistung_w": 2000,
+        "sensor.ueberschuss": -700,
+        "sensor.hausleistungsbilanz": -700,
+        "input_number.ems_ac_speicher_entlade_abschlag_w": 0,
     }
-    status = ctrl.run_cycle(make_states(states))["status"]
-    assert status["hems_last_w"] == 0             # nicht in den Pool zurückrechnen
-    assert status["hems_last_gemessen_w"] == 3000  # aber als Last sichtbar
-    assert status["hausdefizit_w"] == 0            # sp2 deckt es nicht
+    res = ctrl.run_cycle(make_states(states))
+    speicher = _dev(res, "speicher")
+    assert speicher["netto_w"] == pytest.approx(-700)
+    assert speicher["entlade_blockiert_grund"] is None
+    assert "netzladen_aktiv" not in speicher
 
 
 def test_speicher_prio_1_verdraengt_heizstab():

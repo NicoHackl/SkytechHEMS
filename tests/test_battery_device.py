@@ -45,7 +45,7 @@ def battery_states(*, soc=50, lade_ist=0, entlade_ist=0, sollwert=0,
                    min_lade=0, min_entlade=0, soc_min=10, soc_max=100,
                    prio=1, entlade_prio=50, totzone=0,
                    hoch=0, runter=0, schritt=100000, deadband=0,
-                   laden="on", entladen="on", netzladen="off",
+                   laden="on", entladen="on",
                    geschuetzt=0, reserve=0, **extra):
     """Vollständiger HA-Schnappschuss eines Speichers.
 
@@ -61,7 +61,6 @@ def battery_states(*, soc=50, lade_ist=0, entlade_ist=0, sollwert=0,
         f"input_select.ems_{PREFIX}_betriebsart":              betriebsart,
         f"input_boolean.ems_{PREFIX}_laden_erlaubt":           laden,
         f"input_boolean.ems_{PREFIX}_entladen_erlaubt":        entladen,
-        f"input_boolean.ems_{PREFIX}_netzladen_aktiv":         netzladen,
         f"input_number.ems_{PREFIX}_prioritat":                prio,
         f"input_number.ems_{PREFIX}_entlade_prioritat":        entlade_prio,
         f"input_number.ems_{PREFIX}_min_ladeleistung_w":       min_lade,
@@ -75,7 +74,6 @@ def battery_states(*, soc=50, lade_ist=0, entlade_ist=0, sollwert=0,
         f"input_number.ems_{PREFIX}_min_anderung_pro_schritt_w": deadband,
         f"input_number.ems_{PREFIX}_geschutzte_mindestleistung_w": geschuetzt,
         f"input_number.ems_{PREFIX}_reserve_w":                reserve,
-        f"input_number.ems_{PREFIX}_netzlade_leistung_w":      0,
     }
     states.update(extra)
     return make_states(states)
@@ -104,17 +102,19 @@ def test_current_w_nur_hems_ladeleistung():
     assert b.current_w == 800.0
 
 
-def test_current_w_null_bei_netzladen():
-    """Netzgeladene Leistung ist kein PV-Überschuss und darf nicht in den Pool."""
-    b = prepare(make_battery(), lade_ist=3000, sollwert=3000, netzladen="on")
-    assert b.current_w == 0.0
+def test_alte_netzlade_helfer_ohne_wirkung():
+    """D-064: die früher reservierten Netzlade-Helfer werden nicht mehr gelesen.
 
-
-def test_gemessene_last_w_auch_bei_netzladen():
-    """Gegenstück zum Test darüber: sonst sieht Speicher B das Netzladen von A
-    als Hauslast und deckt es (Kreisstrom über zwei Geräte)."""
-    b = prepare(make_battery(), lade_ist=3000, sollwert=3000, netzladen="on")
-    assert b.gemessene_last_w == 3000.0
+    Auch wenn sie in HA noch stehen, ändern sie weder Pool-Anteil noch
+    Entladebereitschaft, und der Status kennt das Feld nicht mehr.
+    """
+    b = prepare(make_battery(), lade_ist=3000, sollwert=3000, **{
+        f"input_boolean.ems_{PREFIX}_netzladen_aktiv": "on",
+        f"input_number.ems_{PREFIX}_netzlade_leistung_w": 2000,
+    })
+    assert b.current_w == 3000.0
+    assert b.entlade_kapazitaet_w() > 0
+    assert "netzladen_aktiv" not in b.to_status_dict()
 
 
 def test_gemessene_last_w_ignoriert_eligible():
@@ -558,7 +558,6 @@ def test_unbekannte_betriebsart_faellt_auf_standby():
     ({"betriebsart": "nur_laden"},         "_entlade_block", "betriebsart"),
     ({"entladen": "off"},                  "_entlade_block", "entladen_gesperrt"),
     ({"soc": 5, "soc_min": 10},            "_entlade_block", "soc_min"),
-    ({"netzladen": "on"},                  "_entlade_block", "netzladen"),
     ({"soc": "unavailable"},               "_lade_block",    "sensor_ungueltig"),
 ])
 def test_blockiert_grund_je_sperrfall(kwargs, feld, grund):

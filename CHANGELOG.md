@@ -8,6 +8,23 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Entfernt — 12.10.2026
+
+- **Alte Netzlade-Helfer wirken nicht mehr (D-064, B-4 behoben).** `input_boolean.ems_<prefix>_netzladen_aktiv`
+  und `input_number.ems_<prefix>_netzlade_leistung_w` werden nicht mehr gelesen. Bisher konnte
+  `netzladen_aktiv: on` einen Speicher ohne SoC-Ziel und Zeitlimit aus dem Netz laden. Ein Speicher
+  lädt jetzt ausschließlich aus PV-Überschuss, bei Hausdefizit nie. Stehen die Helfer noch in Home
+  Assistant, bleiben sie wirkungslos und können gelöscht werden. Im Status entfallen das Feld
+  `netzladen_aktiv` und der Sperrgrund „Netzladen aktiv“.
+
+### Dokumentation — 12.10.2026 (dynamischer Strompreis)
+
+- **Grundsatzentscheidung D-065:** Für den dynamischen Strompreis wertet das HEMS künftig Preis-,
+  PV- und Verbrauchsprognose selbst aus, in einem eigenen Modul außerhalb des Regelzyklus, mit
+  Datenhaltung in Skytech Data Insight. Noch nicht gebaut; Phasen in `roadmap.md` (neuer
+  Meilenstein M6). Abgrenzung in `architektur.md`, Abschnitt 11 des AC-Speicher-Entwurfs und
+  Speicher-Doku angepasst. Zugehörige Doku-Commits: Skytech-Energy-Pilot und Skytech-Data-Insight.
+
 ### Dokumentation — 12.10.2026
 
 - **E3DC als HEMS-Speicher (D-063).** Die Doku beschreibt jetzt den tatsächlichen Anlagenstand:

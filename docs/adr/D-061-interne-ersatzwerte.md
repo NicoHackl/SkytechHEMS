@@ -66,7 +66,7 @@ gültiger HA-Helfer → HEMS-interner Wert → Add-on-Feld → interner Default
   (`internal_editable: false`), beim Speichern und im `StateProxy` selbst, damit auch eine von Hand
   bearbeitete Datei nichts freigibt.
 - **Umfang:** alle übrigen Lese-Helfer im Steuerung-Tab, global und je Gerät. Nicht im Umfang:
-  Ladestufen (D-056), `netzladen_aktiv`, `netzlade_leistung_w` und alle Ausgabe-Helfer — für die
+  Ladestufen (D-056), `netzladen_aktiv`, `netzlade_leistung_w` (beide seit D-064 entfallen) und alle Ausgabe-Helfer — für die
   gibt es weiterhin keinen Ersatz (ein Sollwert lässt sich nicht erfinden).
 - Die globalen Helfer laufen jetzt ebenfalls über den Resolve-Vertrag und erscheinen als
   `global_entity_diagnostics` im Status. Bei gültigem HA-State bleibt jedes Ergebnis wie bisher;

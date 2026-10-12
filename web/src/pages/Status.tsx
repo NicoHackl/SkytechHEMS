@@ -512,7 +512,6 @@ const BLOCK_LABELS: Record<string, string> = {
   soc_max: 'SoC-Maximum erreicht',
   wr_derating: 'Verfügbare Leistung ist auf 0 W gesetzt',
   ladestufe: 'Ladestufe begrenzt auf 0 W',
-  netzladen: 'Netzladen aktiv',
   hausdefizit: 'Hausdefizit – Laden gesperrt',
   umschaltsperre: 'Umschaltsperre',
   totzone: 'Totzone um Null',

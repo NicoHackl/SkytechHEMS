@@ -21,7 +21,10 @@ Defizit und einer quittierpflichtigen Notabschaltung (D-059).
   `/data/interne_werte.json` (D-061), die im Steuerung-Tab eingegeben werden.
 - **Anlegen der HA-Helfer.** Das Add-on liest und schreibt sie, erzeugt sie aber nicht.
 - **Prognose und Planung.** Vorausschauende Optimierung liefert der separate **Energy Pilot**;
-  HEMS übernimmt dessen Vorschläge nur, siehe [datenmodell.md](datenmodell.md).
+  HEMS übernimmt dessen Vorschläge nur, siehe [datenmodell.md](datenmodell.md). **Geplante
+  Ausnahme:** Für den dynamischen Strompreis wertet das HEMS Preis-, PV- und Verbrauchsprognose
+  künftig selbst aus, in einem eigenen Modul außerhalb des Regelzyklus
+  ([D-065](adr/D-065-preis-und-prognosemodul.md), [roadmap.md](roadmap.md) M6). Noch nicht gebaut.
 - **Direktes Schalten der Endgeräte.** Geschrieben werden ausschließlich `input_*`-Helfer;
   die Übersetzung in reale Schaltvorgänge erledigen HA-Automationen.
 
