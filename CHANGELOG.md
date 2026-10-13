@@ -8,6 +8,19 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Behoben — 13.10.2026 (Grundlast stabil bei Neustarts von Data Insight)
+
+- Während einer Aufzeichnungslücke von Data Insight rechnete das HEMS die Grundlast aus nur
+  fortgeführten Werten (an der Referenzanlage 5635 W statt rund 2800 W). Jetzt entfällt eine
+  Minute, in der der Hausverbrauch-Sensor keinen Rohwert geliefert hat.
+- Selbstheilung: Alle 15 min prüft das HEMS die letzten 24 h und rechnet Grundlast-Minuten nach,
+  deren Quellen inzwischen vollständig sind (z. B. nachdem Data Insight eine Lücke nachgeladen hat).
+- Verbindung zu Data Insight nur über IPv4: Der Versuch über IPv6 wurde abgelehnt und erzeugte bei
+  jeder Verbindung einen Fehlereintrag im Log von Data Insight.
+- Vertrag `contract_hems_data_insight` 0.3 präzisiert; Skytech Data Insight im selben Arbeitspaket
+  nachgezogen (Nachladen mit Wiederholung, Abgleich ohne Meldung, Aufzeichnung trotz gescheiterter
+  Migration).
+
 ### Behoben — 13.10.2026 (Grundlast wurde nicht fortgeschrieben)
 
 - Das HEMS schrieb nach dem ersten Wert keine Grundlast mehr: Data Insight führte den Wert als
