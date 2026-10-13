@@ -21,6 +21,7 @@ Zusätzlich zu den hier beschriebenen Feldern und Entitäten gelten die
 | `power_entity` | Variante B | – | Ein signierter Ist-Leistungssensor für beide Richtungen |
 | `power_sign` | nur mit `power_entity` | `positiv_laden` | `positiv_laden` oder `positiv_entladen` |
 | `capacity_kwh` | nein | `0` | Nutzbare Kapazität, ausschließlich Anzeige |
+| `tariff_efficiency_charge`, `tariff_efficiency_discharge` | nein | `0.92` | Lade- und Entladewirkungsgrad 0,5–1,0 für die Reichweite des dynamischen Strompreises (D-065, P5). Keine Regelgröße |
 | `tariff_in_house_load` | nein | `false` | Steckt die Leistung dieses Speichers im Hausverbrauch-Sensor? Nur für die Grundlast des dynamischen Strompreises (D-065), ändert die Regelung nicht |
 | `soc_max_hysteresis_percent` | ja, mit Default | `2` | Abstand unter `soc_max`, bevor Laden wieder freigegeben wird |
 | `direction_switch_delay_s` | ja, mit Default | `5` | Sperrzeit in Sekunden nach einem Richtungswechsel |

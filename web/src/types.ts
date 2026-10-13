@@ -411,6 +411,9 @@ export interface ConfigDevice {
   direction_switch_delay_s?: number | null
   /** Steckt die Leistung im Hausverbrauch-Sensor? Nur für die Grundlast (D-065). */
   tariff_in_house_load?: boolean
+  /** Wirkungsgrade 0,5–1,0 für die Reichweite (D-065, P5), Standard 0,92. */
+  tariff_efficiency_charge?: number | null
+  tariff_efficiency_discharge?: number | null
 
   /* Flow Card (D-046): reine Anzeige, ohne Wirkung auf die Regelung. */
   flow_show?: boolean
@@ -724,6 +727,81 @@ export interface TariffStatus {
   pv: { heute: TariffEnergy; morgen: TariffEnergy; rest_heute: TariffEnergy; kurve: TariffPvCurve } | null
   /** Abgleich mit Skytech Data Insight (P4); fehlt, solange keine Auswertung lief. */
   insight?: TariffInsight
+  /** Phase P5 – reine Anzeige; fehlen, solange keine Auswertung lief. */
+  verbrauch?: TariffLoad
+  speicher?: TariffStorage
+  kennzahlen?: TariffFigures
+  netzladen?: TariffGridCharging
+}
+
+export interface TariffLoad {
+  gueltig: boolean
+  grund: string | null
+  methode?: string
+  historie_tage?: number
+  erstellt?: string | null
+  bis_ende_morgen_kwh?: number
+  naechste_24h_kwh?: number
+  naechste_24h_p10_kwh?: number
+  naechste_24h_p90_kwh?: number
+  aktuell_w?: number | null
+}
+
+export interface TariffReach {
+  bis: string | null
+  bis_iso: string | null
+  ueber_horizont: boolean
+  horizont_bis: string | null
+}
+
+export interface TariffStorage {
+  grund: string | null
+  nutzbar_kwh: number
+  nutzbar_max_kwh: number
+  je_speicher: {
+    name: string
+    label: string
+    gueltig: boolean
+    grund: string | null
+    soc_prozent: number | null
+    nutzbar_kwh: number | null
+    ladeleistung_kw: number | null
+  }[]
+  median?: TariffReach | null
+  vorsichtig?: TariffReach | null
+  zuversichtlich?: TariffReach | null
+}
+
+export interface TariffWindow {
+  von: string
+  bis: string
+  slots: number
+  preis_mittel: number
+}
+
+export interface TariffFigures {
+  reichweite_h?: number | null
+  pv_im_fenster_kwh?: number
+  defizit_bis_pv_kwh?: number
+  naechster_ueberschuss_ab?: string | null
+  ladeblock_slots?: number
+  guenstigstes_fenster_reichweite?: TariffWindow | null
+  guenstigstes_fenster_gesamt?: TariffWindow | null
+  horizont_reicht?: boolean
+  preis_rang_jetzt_prozent?: number
+}
+
+export interface TariffGridCharging {
+  zulaessig: boolean
+  grund: string
+  freigabe: boolean
+  freigabe_vorhanden: boolean
+  freigabe_entity: string
+  manuell: boolean
+  manuell_vorhanden: boolean
+  manuell_entity: string
+  pv_zu_wenig: boolean | null
+  je_speicher: { name: string; label: string; entity: string; erlaubt: boolean; vorhanden: boolean; zulaessig: boolean }[]
 }
 
 export interface TariffInsight {
@@ -736,6 +814,8 @@ export interface TariffInsight {
   hinweise: string[]
   letzter_preislauf: string | null
   letzter_pv_lauf: string | null
+  letzter_verbrauchslauf?: string | null
+  letzte_auswertung?: string | null
   grundlast_bis: string | null
   grundlast_grund: string | null
 }

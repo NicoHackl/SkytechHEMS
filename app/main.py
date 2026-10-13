@@ -43,6 +43,7 @@ import flow_publisher
 from flow_publisher import FlowPublisher
 from status_publisher import StatusPublisher
 from supervisor_client import SupervisorClient
+from tariff.analysis import analyse
 from tariff.insight_sync import InsightSync
 from tariff.service import TARIFF_INTERVAL_S, TariffConfig, TariffService
 from tariff_publisher import TariffPublisher
@@ -556,6 +557,7 @@ class HEMSApp:
             {key: option(key) for key in TariffConfig.option_keys()}))
         self._tariff_publisher = TariffPublisher()
         # Speicherung in Skytech Data Insight (D-065, P4). Ohne Passwort aus.
+        self._tariff_devices: list = validated.devices
         self.insight = InsightSync(
             {key: option(key) for key in INSIGHT_OPTION_KEYS},
             validated.devices,
@@ -728,11 +730,17 @@ class HEMSApp:
             now = datetime.datetime.now(BERLIN)
             age = None if self._last_states_at is None else time.monotonic() - self._last_states_at
             status = self.tariff.evaluate(self._last_states, age, now)
-            await self._tariff_publisher.publish(self.ha, status, self._last_states)
             pv_details = {key: (value.value_kwh if value is not None and value.valid else None)
                           for key, value in self.tariff.pv_values.items()}
             status["insight"] = await self.insight.tick(
                 now, self._last_states, self.tariff.price, self.tariff.pv_curve, pv_details)
+            # Phase P5: Verbrauchsprognose, Reichweite, Kennzahlen, Netzlade-Freigabe – nur Anzeige.
+            status.update(analyse(
+                now, cycle_status=self._last_status, devices=self._tariff_devices, states=self._last_states,
+                price=self.tariff.price, pv=self.tariff.pv_curve, load=self.insight.load_forecast,
+                load_reason=self.insight.load_reason))
+            status["insight"] = await self.insight.record(now, status)
+            await self._tariff_publisher.publish(self.ha, status, self._last_states)
         except Exception as exc:
             log.error("Dynamischer Strompreis: Auswertung fehlgeschlagen: %s", exc, exc_info=True)
 

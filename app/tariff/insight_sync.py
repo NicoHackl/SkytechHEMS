@@ -30,6 +30,9 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from insight_client import InsightClient, InsightError, InsightSettings
+from tariff import load_forecast
+from tariff.analysis import FREIGABE_ENTITY, MANUELL_ENTITY, battery_switch_entity
+from tariff.load_forecast import LoadForecast
 from tariff.price_source import PriceCurve, format_berlin
 from tariff.pv_source import PvCurve
 
@@ -46,6 +49,8 @@ PV_RUN_MIN_GAP_S = 15 * 60
 PV_HORIZON = timedelta(hours=48)
 GRUNDLAST_ROLE = "grundlast"
 GRUNDLAST_ENTITY = "hems.grundlast_w"
+LOAD_RUN_INTERVAL_S = 60 * 60
+ANALYSIS_RUN_INTERVAL_S = 60 * 60
 _ROLE_SUFFIX_RE = re.compile(r"^[a-z0-9_]+$")
 
 
@@ -81,6 +86,8 @@ class SyncStatus:
     hinweise: List[str] = field(default_factory=list)
     letzter_preislauf: Optional[str] = None
     letzter_pv_lauf: Optional[str] = None
+    letzter_verbrauchslauf: Optional[str] = None
+    letzte_auswertung: Optional[str] = None
     grundlast_bis: Optional[str] = None
     grundlast_grund: Optional[str] = None
 
@@ -158,12 +165,52 @@ def build_roles(options: Dict[str, Any], devices: List[Dict[str, Any]], states: 
                     sign = -1.0 if (device.get("power_sign") or "positiv_laden") == "positiv_laden" else 1.0
                     terms.append(GrundlastTerm(f"speicher_leistung:{name}", sign))
 
+    # Schalter des Netzladens (Phase P5): nur, wenn es die Helfer in HA gibt.
+    for role, entity, name in (("schalter_netzladen_freigabe", FREIGABE_ENTITY, "HEMS Netzladen Freigabe"),
+                               ("schalter_netzladen_manuell", MANUELL_ENTITY, "HEMS Netzladen manuell")):
+        if entity in states:
+            specs.append(RoleSpec(role, entity, name, "sonstiges", "zustand", None))
+    batteries = [device for device in devices if device.get("class") == "battery"
+                 and _ROLE_SUFFIX_RE.match(device.get("name") or "")]
+    for device in batteries:
+        entity = battery_switch_entity(device.get("entity_prefix") or device["name"])
+        if entity in states:
+            specs.append(RoleSpec(f"schalter_netzladen_erlaubt:{device['name']}", entity,
+                                  f"HEMS {device.get('label') or device['name']} Netzladen erlaubt",
+                                  "sonstiges", "zustand", None))
+
+    # Eigene Reihen des HEMS (Vertrag „HEMS-eigene Messreihen“).
     if grundlast_ok:
         specs.append(RoleSpec(GRUNDLAST_ROLE, GRUNDLAST_ENTITY, "HEMS Grundlast", "verbraucher", "leistung",
                               "W", source="hems"))
     else:
         terms = []
+    specs.append(RoleSpec("nutzbar", "hems.nutzbar_kwh", "HEMS Speicher nutzbar", "speicher", "energie",
+                          "kWh", source="hems"))
+    specs.append(RoleSpec("reichweite", "hems.reichweite_h", "HEMS Speicher Reichweite", "speicher", "sonstiges",
+                          "h", source="hems"))
+    specs.append(RoleSpec("netzladen_zulaessig", "hems.netzladen_zulaessig", "HEMS Netzladen zulässig",
+                          "sonstiges", "zustand", None, source="hems"))
+    for device in batteries:
+        specs.append(RoleSpec(f"netzladen_zulaessig:{device['name']}", f"hems.netzladen_zulaessig_{device['name']}",
+                              f"HEMS {device.get('label') or device['name']} Netzladen zulässig",
+                              "sonstiges", "zustand", None, source="hems"))
     return specs, terms, notes
+
+
+def series_samples(analysis: Dict[str, Any]) -> Dict[str, Optional[float]]:
+    """Momentanwerte der eigenen Reihen aus der Auswertung; None = kein Wert."""
+    speicher = analysis.get("speicher") or {}
+    kennzahlen = analysis.get("kennzahlen") or {}
+    netz = analysis.get("netzladen") or {}
+    samples: Dict[str, Optional[float]] = {
+        "nutzbar": speicher.get("nutzbar_kwh"),
+        "reichweite": kennzahlen.get("reichweite_h"),
+        "netzladen_zulaessig": 1.0 if netz.get("zulaessig") else 0.0,
+    }
+    for entry in netz.get("je_speicher") or []:
+        samples[f"netzladen_zulaessig:{entry['name']}"] = 1.0 if entry.get("zulaessig") else 0.0
+    return samples
 
 
 def compute_grundlast(values: Dict[str, Dict[datetime, Any]], terms: List[GrundlastTerm],
@@ -214,6 +261,14 @@ class InsightSync:
         self._price_signature: Optional[Tuple] = None
         self._pv_signature: Optional[Tuple] = None
         self._last_pv_run: Optional[float] = None
+        self.load_forecast: Optional[LoadForecast] = None
+        self.load_reason: Optional[str] = ("Ohne Data Insight keine Verbrauchsprognose"
+                                           if not self.status.konfiguriert else "Noch keine Prognose")
+        self._last_load_run: Optional[float] = None
+        self._last_analysis_run: Optional[float] = None
+        self._runs_this_tick = False
+        self._slot: Optional[datetime] = None
+        self._samples: Dict[str, List[float]] = {}
 
     async def close(self) -> None:
         if self.client is not None:
@@ -231,9 +286,25 @@ class InsightSync:
             self.status.verbunden, self.status.grund = True, None
             if self._last_reconcile is None or self._clock() - self._last_reconcile >= RECONCILE_INTERVAL_S:
                 await self._reconcile(states, now)
+            self._runs_this_tick = False
             await self._write_price_run(price, now)
             await self._write_pv_run(pv_curve, pv_details, now)
             await self._write_grundlast(now)
+            await self._refresh_load_forecast(now)
+        except InsightError as exc:
+            self.status.verbunden, self.status.grund = False, str(exc)
+            if self.load_forecast is None:
+                self.load_reason = f"Data Insight nicht verbunden: {exc}"
+            log.warning("Data Insight: %s", exc)
+        return self.status.as_dict()
+
+    async def record(self, now: datetime, analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """Eigene Reihen je abgeschlossenem 15-min-Slot und Auswertungslauf schreiben. Wirft nie."""
+        if not self.status.konfiguriert or not self.status.verbunden or self.client is None:
+            return self.status.as_dict()
+        try:
+            await self._record_series(now, analysis)
+            await self._write_analysis_run(now, analysis)
         except InsightError as exc:
             self.status.verbunden, self.status.grund = False, str(exc)
             log.warning("Data Insight: %s", exc)
@@ -297,6 +368,7 @@ class InsightSync:
             details={"entity": entity}, times=[slot.start for slot in price.slots],
             values=[slot.price for slot in price.slots])
         self._price_signature = signature
+        self._runs_this_tick = True
         self.status.letzter_preislauf = format_berlin(now, with_seconds=True)
 
     async def _write_pv_run(self, curve: Optional[PvCurve], details: Dict[str, Optional[float]],
@@ -322,6 +394,7 @@ class InsightSync:
             times=[slot.start for slot in slots], values=[slot.watts for slot in slots],
             p10=[slot.p10 for slot in slots], p90=[slot.p90 for slot in slots])
         self._pv_signature, self._last_pv_run = signature, self._clock()
+        self._runs_this_tick = True
         self.status.letzter_pv_lauf = format_berlin(now, with_seconds=True)
 
     async def _write_grundlast(self, now: datetime) -> None:
@@ -350,3 +423,73 @@ class InsightSync:
         if times:
             await self.client.write_values(sensor_id, times, results)
             self.status.grundlast_bis = format_berlin(times[-1] + SLOT)
+
+    # ------------------------------------------------------------------
+    # Phase P5: Verbrauchsprognose, eigene Reihen, Auswertungslauf
+    # ------------------------------------------------------------------
+
+    async def _refresh_load_forecast(self, now: datetime) -> None:
+        if self._last_load_run is not None and self._clock() - self._last_load_run < LOAD_RUN_INTERVAL_S:
+            return
+        assert self.client is not None
+        values = await self.client.role_values([GRUNDLAST_ROLE], now - load_forecast.HISTORY, now)
+        history = {slot: value.mean for slot, value in values.get(GRUNDLAST_ROLE, {}).items()
+                   if value.mean is not None}
+        result = load_forecast.forecast(history, now)
+        self.load_forecast, self.load_reason = result, result.reason
+        self._last_load_run = self._clock()
+        if not result.valid:
+            return
+        await self.client.write_run(
+            kind="verbrauch", source=f"hems:{load_forecast.METHOD}", created=now, raster_min=15,
+            valid_from=result.slots[0].start, valid_until=result.slots[-1].start + SLOT, unit="W",
+            method=load_forecast.METHOD,
+            details={"ist_rolle": GRUNDLAST_ROLE, "historie_tage": result.history_days,
+                     "parameter": load_forecast.PARAMETERS},
+            times=[slot.start for slot in result.slots], values=[slot.p50 for slot in result.slots],
+            p10=[slot.p10 for slot in result.slots], p90=[slot.p90 for slot in result.slots])
+        self._runs_this_tick = True
+        self.status.letzter_verbrauchslauf = format_berlin(now, with_seconds=True)
+
+    async def _record_series(self, now: datetime, analysis: Dict[str, Any]) -> None:
+        """Mittelwert je Slot aus den Momentanwerten jedes Takts; geschrieben, wenn der Slot vorbei ist."""
+        slot = _floor_slot(now)
+        if self._slot is not None and slot != self._slot:
+            assert self.client is not None
+            for role, samples in self._samples.items():
+                sensor_id = self._role_ids.get(role)
+                if sensor_id is not None and samples:
+                    await self.client.write_values(sensor_id, [self._slot], [round(sum(samples) / len(samples), 3)])
+            self._samples = {}
+        self._slot = slot
+        for role, value in series_samples(analysis).items():
+            if value is not None:
+                self._samples.setdefault(role, []).append(float(value))
+
+    async def _write_analysis_run(self, now: datetime, analysis: Dict[str, Any]) -> None:
+        figures = analysis.get("kennzahlen") or {}
+        speicher = analysis.get("speicher") or {}
+        if not figures:
+            return
+        due = (self._last_analysis_run is None or self._runs_this_tick
+               or self._clock() - self._last_analysis_run >= ANALYSIS_RUN_INTERVAL_S)
+        if not due:
+            return
+        assert self.client is not None
+        median = speicher.get("median") or {}
+        details = {
+            **figures,
+            "nutzbar_kwh": speicher.get("nutzbar_kwh"),
+            "reichweite_bis": {key: (speicher.get(key) or {}).get("bis_iso")
+                               for key in ("median", "vorsichtig", "zuversichtlich")},
+            "netzladen_zulaessig": (analysis.get("netzladen") or {}).get("zulaessig"),
+        }
+        start = _floor_slot(now)
+        horizon = median.get("horizont_bis_iso")
+        end = datetime.fromisoformat(horizon) if horizon else start + timedelta(hours=48)
+        await self.client.write_run(
+            kind="auswertung", source="hems:kennzahlen", created=now, raster_min=15,
+            valid_from=start, valid_until=max(end, start + SLOT), unit="kWh", method="kennzahlen_v1",
+            details=details, times=[], values=[])
+        self._last_analysis_run = self._clock()
+        self.status.letzte_auswertung = format_berlin(now, with_seconds=True)

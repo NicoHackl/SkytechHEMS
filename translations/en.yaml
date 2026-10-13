@@ -187,6 +187,12 @@ configuration:
       direction change. During the lockout standby is requested rather than
       continuing the old direction.
 
+      • tariff_in_house_load, tariff_efficiency_charge,
+      tariff_efficiency_discharge (optional) – Dynamic price: whether the
+      battery is part of the house consumption sensor (base load), charge and
+      discharge efficiency 0.5–1.0 for the reach (default 0.92). Not used for
+      control.
+
       A storage writes ONE signed setpoint to
       input_number.ems_<prefix>_anforderung_leistung_w (positive = charge,
       negative = discharge) plus the operating mode to

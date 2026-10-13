@@ -76,8 +76,10 @@ Defizit und einer quittierpflichtigen Notabschaltung (D-059).
 | `app/status_publisher.py` | HEMS-Lebenszeichen `sensor.skytech_hems_status` (D-062) nach jedem durchlaufenen Zyklus veröffentlichen | Ein Gerät schalten, eine Ausnahme nach außen lassen |
 | `app/tariff/price_source.py`, `app/tariff/pv_source.py` | Preiskurve und PV-Prognose aus dem Schnappschuss lesen und prüfen (D-065) | HA selbst ansprechen, einen Ersatzwert erfinden |
 | `app/tariff/service.py` | Preis- und Prognosemodul: Auswertung im eigenen Takt (60 s) auf dem Schnappschuss des Regelzyklus, Statusobjekt für `api/tariff/status` | Den Regelzyklus blockieren oder seinen Schreib-Lock nehmen, ein Gerät schalten |
-| `app/tariff_publisher.py` | Anzeige-Sensoren `sensor.ems_dyn_preis` und `sensor.ems_dyn_pv_prognose`, nur bei Änderung | Ein Gerät schalten, eine Ausnahme nach außen lassen |
-| `app/tariff/insight_sync.py` | Abgleich mit Data Insight: Rollen anlegen, übernehmen, tauschen, stilllegen; Preis- und PV-Läufe; Grundlast je 15-min-Slot samt Nachrechnen | Selbst SQL sprechen, den Regelzyklus berühren |
+| `app/tariff_publisher.py` | Anzeige-Sensoren `sensor.ems_dyn_*` (Preis, PV-Prognose, Verbrauchsprognose, Reichweite, Preisfenster, Netzladen), nur bei Änderung | Ein Gerät schalten, eine Ausnahme nach außen lassen |
+| `app/tariff/insight_sync.py` | Abgleich mit Data Insight: Rollen anlegen, übernehmen, tauschen, stilllegen; Preis-, PV-, Verbrauchs- und Auswertungsläufe; Grundlast je 15-min-Slot samt Nachrechnen; eigene Reihen `hems.*` als Slot-Mittel | Selbst SQL sprechen, den Regelzyklus berühren |
+| `app/tariff/load_forecast.py` | Verbrauchsprognose `profil_v1` aus der Grundlast-Historie, rein rechnend | I/O, Ersatzwerte bei zu kurzer Historie |
+| `app/tariff/analysis.py` | Reichweite, Kennzahlen, Netzlade-Freigabe aus Zyklusstatus, Prognosen und HA-Helfern, rein rechnend | Ein Gerät schalten, in die Regelung eingreifen |
 | `app/insight_client.py` | **Einzige** Stelle mit Datenbankzugriff (psycopg 3): Vertragsversion prüfen, Funktionen `hems_*` aufrufen, Sichten lesen | Fachlogik enthalten, das Passwort loggen oder in eine Meldung schreiben |
 | `web/` → `app/static/` | Darstellung und Bedienung | Fachlogik doppeln — sie rechnet nur an, was `/api/status` liefert |
 

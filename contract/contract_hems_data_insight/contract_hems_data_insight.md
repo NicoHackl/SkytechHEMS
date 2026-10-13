@@ -2,7 +2,7 @@
 
 **Version:** 0.2
 
-**Status:** In beiden Projekten implementiert; einzelne Rollen und Reihen folgen mit der Verbrauchsprognose (siehe Abschnitte)
+**Status:** In beiden Projekten implementiert
 
 **Stand:** 13.10.2026
 
@@ -147,10 +147,8 @@ skytech.hems_sensor_stilllegen(sensor_id integer) → void
 
 ## Rollen und Austausch
 
-**Status:** Data Insight implementiert · SkytechHEMS implementiert für `hausverbrauch`, `pv_ist`,
-`preis`, `pv_prognose_*`, `speicher_soc:*`, `speicher_leistung:*`, `verbraucher_ist:*`,
-`verbraucher_schaltzustand:*` und `grundlast`; die Rollen `schalter_*`, `nutzbar`, `reichweite` und
-`netzladen_zulaessig*` folgen mit Phase P5 (Entwurf)
+**Status:** Data Insight implementiert · SkytechHEMS implementiert. Die Rollen `schalter_*` belegt das
+HEMS nur, wenn der jeweilige Helfer in Home Assistant existiert.
 
 Das HEMS spricht Sensoren nur über Rollen an. So kann es die Entität hinter einer Rolle tauschen
 (neues Home Assistant, umbenannte Entität, anderer Sensor im HEMS-Tab), ohne dass die Historie
@@ -194,8 +192,8 @@ Neue Rollen kommen mit einer neuen Vertragsversion dazu.
 
 ## HEMS-eigene Messreihen
 
-**Status:** Data Insight implementiert · SkytechHEMS implementiert für `hems.grundlast_w`; die übrigen
-Reihen folgen mit Phase P5 (Entwurf)
+**Status:** Data Insight implementiert · SkytechHEMS implementiert. `hems.reichweite_h` fehlt in Slots,
+in denen die Speicher über den Prognosehorizont hinaus reichen oder keine Reichweite berechenbar ist.
 
 ```text
 skytech.hems_messwerte_schreiben(sensor_id integer, zeiten timestamptz[],
@@ -215,8 +213,9 @@ skytech.hems_messwerte_schreiben(sensor_id integer, zeiten timestamptz[],
 
 ## Prognose- und Auswertungsläufe
 
-**Status:** Data Insight implementiert · SkytechHEMS implementiert für `preis` und `pv`; `verbrauch`
-und `auswertung` folgen mit Phase P5 (Entwurf)
+**Status:** Data Insight implementiert · SkytechHEMS implementiert. Verbrauchslauf mit Methode
+`profil_v1` stündlich ab 7 Tagen Grundlast-Historie; Auswertungslauf (Methode `kennzahlen_v1`)
+stündlich oder nach jedem neuen Preis-, PV- oder Verbrauchslauf.
 
 ```text
 skytech.hems_lauf_schreiben(art text, quelle text, erstellt timestamptz, raster_min integer,
@@ -296,4 +295,4 @@ jede Schreibverbindung von Data Insight zum HEMS.
 | Seite | Stellen |
 |---|---|
 | Skytech Data Insight | `app/sql/0003_hems_anbindung.sql` (Schema, Funktionen, Sichten, Rechte, Aufbewahrung), `rootfs/usr/share/skytech/bootstrap.sql` und `bootstrap_skytech.sql` (Rolle), `templates/pg_hba.conf` (Netz), `app/access_service.py` (Zugang `hems`), `app/sensor_service.py`, `app/main.py`, `app/mcp_tools.py` (Sperre, `409`), `app/collector.py` (keine HA-Werte für `hems.*`, Nachrechnen), Seiten „Sensoren“, „Sensor“, „Zugänge“, „Protokoll“; Tests in `tests/test_db_integration.py` |
-| SkytechHEMS | `app/insight_client.py` (einzige Stelle mit Datenbankzugriff, Vertragsversion), `app/tariff/insight_sync.py` (Rollen, Austausch, Läufe, Grundlast), `app/main.py` (Takt, Host über Supervisor `GET /addons`), `app/configuration.py` und `app/config_service.py` (Optionen `insight_*`, Passwort nie an die Oberfläche), Bereich „Dynamischer Strompreis“; Tests in `tests/test_insight.py` |
+| SkytechHEMS | `app/insight_client.py` (einzige Stelle mit Datenbankzugriff, Vertragsversion), `app/tariff/insight_sync.py` (Rollen, Austausch, Läufe, Grundlast, eigene Reihen), `app/tariff/load_forecast.py` (Verbrauchsprognose `profil_v1`), `app/tariff/analysis.py` (Reichweite, Kennzahlen, Netzlade-Freigabe), `app/main.py` (Takt, Host über Supervisor `GET /addons`), `app/configuration.py` und `app/config_service.py` (Optionen `insight_*`, Passwort nie an die Oberfläche), Bereich „Dynamischer Strompreis“; Tests in `tests/test_insight.py` und `tests/test_tariff_p5.py` |

@@ -286,8 +286,20 @@ Letzte Auswertung des Preis- und Prognosemoduls (D-065), Takt 60 s. Reine Anzeig
 - Zeiten mit `_iso` sind Maschinenformat; alle übrigen Zeitangaben sind Berliner Zeit (TT.MM.JJJJ, hh:mm).
 - `insight` (ab P4, nach der ersten Auswertung): Abgleich mit Data Insight –
   `{konfiguriert, verbunden, host, grund, letzter_abgleich, rollen: [{rolle, entity, sensor_id}],
-  hinweise, letzter_preislauf, letzter_pv_lauf, grundlast_bis, grundlast_grund}`. Das Passwort steht
-  nie darin.
+  hinweise, letzter_preislauf, letzter_pv_lauf, letzter_verbrauchslauf, letzte_auswertung,
+  grundlast_bis, grundlast_grund}`. Das Passwort steht nie darin.
+- Ab P5, reine Anzeige:
+  - `verbrauch`: `{gueltig, grund, methode, historie_tage, erstellt, bis_ende_morgen_kwh,
+    naechste_24h_kwh, naechste_24h_p10_kwh, naechste_24h_p90_kwh, aktuell_w}`.
+  - `speicher`: `{grund, nutzbar_kwh, nutzbar_max_kwh, je_speicher: [{name, label, gueltig, grund,
+    soc_prozent, nutzbar_kwh, ladeleistung_kw}], median, vorsichtig, zuversichtlich}`; jede Reichweite
+    als `{bis, bis_iso, ueber_horizont, horizont_bis, horizont_bis_iso}`.
+  - `kennzahlen`: `{reichweite_h, pv_im_fenster_kwh, defizit_bis_pv_kwh, naechster_ueberschuss_ab(_iso),
+    ladeblock_slots, guenstigstes_fenster_reichweite, guenstigstes_fenster_gesamt, horizont_reicht,
+    preis_rang_jetzt_prozent}`; ein Fenster ist `{von, bis, von_iso, bis_iso, slots, preis_mittel}`.
+  - `netzladen`: `{zulaessig, grund, freigabe, freigabe_vorhanden, freigabe_entity, manuell,
+    manuell_vorhanden, manuell_entity, pv_zu_wenig, je_speicher: [{name, label, entity, erlaubt,
+    vorhanden, zulaessig}]}`. `pv_zu_wenig` bleibt `null`, bis die Steuerungslogik feststeht.
 
 ## Konfigurations-Endpunkte
 

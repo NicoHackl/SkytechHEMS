@@ -463,6 +463,14 @@ bei geändertem Inhalt oder wenn die Entität nach einem HA-Neustart fehlt. Rein
 |---|---|---|
 | `sensor.ems_dyn_preis` | aktueller Endpreis in €/kWh, `unavailable` bei ungültiger Kurve | `gueltig`, `grund`, `quelle`, `raster_min`, `horizont_bis` (ISO), `morgen_vorhanden`, `guenstigster_slot` und `teuerster_slot` (je `von`, `bis` ISO, `preis`) |
 | `sensor.ems_dyn_pv_prognose` | PV-Prognose Rest heute in kWh, sonst `unavailable` | `gueltig`, `grund`, `heute_kwh`, `morgen_kwh`, `kurve_gueltig`, `kurve_bis` (ISO) |
+| `sensor.ems_dyn_verbrauch_prognose` (P5) | Verbrauchsprognose bis Ende morgen in kWh, sonst `unavailable` | `gueltig`, `grund`, `methode`, `historie_tage`, `naechste_24h_kwh`, `p10_kwh`, `p90_kwh` |
+| `sensor.ems_dyn_speicher_reichweite` (P5) | Reichweite bis (ISO, auf die Viertelstunde gerundet), `über Horizont` oder `unavailable` | `gueltig`, `grund`, `nutzbar_kwh`, `reichweite_vorsichtig`, `reichweite_zuversichtlich` (ISO), `ueber_horizont` |
+| `sensor.ems_dyn_preisfenster` (P5) | mittlerer Preis des günstigsten Ladeblocks innerhalb der Reichweite in €/kWh, sonst `unavailable` | `gueltig`, `von`, `bis`, `gesamt_preis`, `gesamt_von`, `gesamt_bis` (ISO), `horizont_reicht` |
+| `sensor.ems_dyn_netzladen` (P5) | `zulaessig` / `gesperrt` | `grund`, `freigabe`, `manuell`, `pv_zu_wenig`, `je_speicher` (Name → zulässig) |
+
+Gelesen, nie geschrieben (P5, vom Nutzer anzulegen): `input_boolean.ems_netzladen_freigabe`,
+`input_boolean.ems_netzladen_manuell`, je Speicher `input_boolean.ems_<prefix>_netzladen_erlaubt`.
+Fehlt ein Helfer, gilt er als aus.
 
 Die Kurven selbst stehen nicht in den Attributen; sie gehören nach Skytech Data Insight
 ([Vertrag](../contract/contract_hems_data_insight/contract_hems_data_insight.md), ab Phase P4).

@@ -5,10 +5,14 @@ import { ConfigActions, RestartOverlay } from '../components/ConfigActions'
 import { useConfigDraft } from '../components/ConfigDraft'
 import { EntityField, Field, NumberField, SelectField, TextField } from '../components/ConfigFields'
 import { KeyValue } from '../components/DeviceCard'
-import type { ConfigDevice, TariffEnergy, TariffInsight, TariffSlot, TariffStatus } from '../types'
+import type {
+  ConfigDevice, TariffEnergy, TariffFigures, TariffGridCharging, TariffInsight, TariffLoad, TariffSlot,
+  TariffStatus, TariffStorage, TariffWindow,
+} from '../types'
 
-/* Dynamischer Strompreis (D-065, Phasen P3 und P4): Quellen einstellen und prüfen,
-   Speicherung in Skytech Data Insight (Vertrag contract_hems_data_insight 0.2).
+/* Dynamischer Strompreis (D-065, Phasen P3 bis P5): Quellen einstellen und prüfen,
+   Speicherung in Skytech Data Insight (Vertrag contract_hems_data_insight 0.2),
+   Verbrauchsprognose, Reichweite, Kennzahlen und Netzlade-Freigabe.
 
    Das Modul erhebt nur Daten und zeigt sie an – es schaltet nichts. Der obere
    Teil zeigt den Zustand der GESPEICHERTEN Konfiguration (api/tariff/status),
@@ -30,6 +34,16 @@ function formatPrice(price: number): string {
 
 function formatKwh(value: number | null): string {
   return value === null ? '–' : `${value.toLocaleString('de-DE', { maximumFractionDigits: 2 })} kWh`
+}
+
+function windowText(window: TariffWindow | null | undefined): string {
+  return window ? `${window.von}–${window.bis} · ${formatPrice(window.preis_mittel)}` : '–'
+}
+
+function formatHours(value: number | null | undefined): string {
+  return value === null || value === undefined
+    ? '–'
+    : `${value.toLocaleString('de-DE', { maximumFractionDigits: 1 })} h`
 }
 
 function slotText(slot: TariffSlot | undefined): string {
@@ -76,8 +90,8 @@ export function DynamischerStrompreis() {
   const batteries = draft.devices
     .map((device, index) => ({ device, index }))
     .filter(({ device }) => device.class === 'battery')
-  const setInHouseLoad = (index: number, checked: boolean) => patch({
-    devices: draft.devices.map((device: ConfigDevice, i) => (i === index ? { ...device, tariff_in_house_load: checked } : device)),
+  const setDeviceField = (index: number, changes: Partial<ConfigDevice>) => patch({
+    devices: draft.devices.map((device: ConfigDevice, i) => (i === index ? { ...device, ...changes } : device)),
   })
 
   return (
@@ -184,6 +198,12 @@ export function DynamischerStrompreis() {
           </section>
         ) : null}
 
+        {status?.aktiv && status.verbrauch && status.speicher ? (
+          <ReachCard load={status.verbrauch} storage={status.speicher} figures={status.kennzahlen ?? {}} />
+        ) : null}
+
+        {status?.aktiv && status.netzladen ? <GridChargingCard grid={status.netzladen} /> : null}
+
         {status?.aktiv && status.insight ? <InsightCard insight={status.insight} /> : null}
 
         <section className="card">
@@ -287,11 +307,34 @@ export function DynamischerStrompreis() {
                 <input
                   type="checkbox"
                   checked={device.tariff_in_house_load ?? false}
-                  onChange={(event) => setInHouseLoad(index, event.target.checked)}
+                  onChange={(event) => setDeviceField(index, { tariff_in_house_load: event.target.checked })}
                 />
                 <span className="track" />
                 <span className="switch-label">{device.label || device.name}: steckt im Hausverbrauch-Sensor</span>
               </label>
+            ))}
+
+            <div className="section-title">Wirkungsgrade der Speicher</div>
+            <p className="hint-box">
+              Für die Reichweite: Wie viel der gespeicherten Energie kommt im Haus an (Entladen) und wie viel
+              Überschuss landet im Speicher (Laden). Startwert 0,92. Kapazität und SoC-Grenzen kommen aus den
+              Speichereinstellungen.
+            </p>
+            {batteries.map(({ device, index }) => (
+              <div className="form-grid" key={`eta-${device.name}`}>
+                <NumberField
+                  label={`${device.label || device.name}: Laden`} min={0.5} max={1} step={0.01}
+                  value={device.tariff_efficiency_charge ?? 0.92}
+                  error={fieldErrors[`devices[${index}].tariff_efficiency_charge`]}
+                  onChange={(next) => setDeviceField(index, { tariff_efficiency_charge: next })}
+                />
+                <NumberField
+                  label={`${device.label || device.name}: Entladen`} min={0.5} max={1} step={0.01}
+                  value={device.tariff_efficiency_discharge ?? 0.92}
+                  error={fieldErrors[`devices[${index}].tariff_efficiency_discharge`]}
+                  onChange={(next) => setDeviceField(index, { tariff_efficiency_discharge: next })}
+                />
+              </div>
             ))}
           </div>
         </section>
@@ -383,6 +426,8 @@ function InsightCard({ insight }: { insight: TariffInsight }) {
         <KeyValue label="Letzter Abgleich" value={insight.letzter_abgleich ?? '–'} tone="muted" />
         <KeyValue label="Letzter Preislauf" value={insight.letzter_preislauf ?? '–'} />
         <KeyValue label="Letzter PV-Lauf" value={insight.letzter_pv_lauf ?? '–'} />
+        <KeyValue label="Letzte Verbrauchsprognose" value={insight.letzter_verbrauchslauf ?? '–'} />
+        <KeyValue label="Letzte Auswertung" value={insight.letzte_auswertung ?? '–'} />
         <KeyValue
           label="Grundlast bis"
           value={insight.grundlast_grund ?? insight.grundlast_bis ?? '–'}
@@ -406,6 +451,126 @@ function InsightCard({ insight }: { insight: TariffInsight }) {
           </table>
         </div>
       ) : null}
+    </section>
+  )
+}
+
+function reachText(reach: TariffStorage['median']): string {
+  if (!reach) return '–'
+  return reach.ueber_horizont ? `über ${reach.horizont_bis ?? 'den Horizont'} hinaus` : (reach.bis ?? '–')
+}
+
+function ReachCard({ load, storage, figures }: { load: TariffLoad; storage: TariffStorage; figures: TariffFigures }) {
+  return (
+    <section className="card">
+      <div className="card-head">
+        <h2>Verbrauch und Reichweite</h2>
+        <div className="spacer" />
+        {storage.grund ? <span className="pill muted">Keine Reichweite</span> : <span className="pill ok">Berechnet</span>}
+      </div>
+      <div className="card-body">
+        <p className="hint-box">
+          Reine Anzeige zur Vorbereitung der Steuerung. Verbrauchsprognose aus der Grundlast der letzten 28 Tage
+          (Werktag, Samstag, Sonntag; jüngere Tage zählen mehr). Reichweite aller Speicher zusammen mit PV- und
+          Verbrauchsprognose – vorsichtig heißt hoher Verbrauch und wenig PV.
+        </p>
+        {load.gueltig ? (
+          <>
+            <KeyValue label="Verbrauch bis Ende morgen" value={formatKwh(load.bis_ende_morgen_kwh ?? null)} />
+            <KeyValue
+              label="Nächste 24 h"
+              value={`${formatKwh(load.naechste_24h_kwh ?? null)} (Band ${formatKwh(load.naechste_24h_p10_kwh ?? null)}`
+                + ` bis ${formatKwh(load.naechste_24h_p90_kwh ?? null)})`}
+            />
+            <KeyValue label="Historie" value={`${load.historie_tage ?? 0} Tage · ${load.methode ?? ''}`} tone="muted" />
+          </>
+        ) : <KeyValue label="Verbrauchsprognose" value={load.grund ?? 'nicht verfügbar'} tone="warn" />}
+
+        <KeyValue label="Nutzbar jetzt" value={`${formatKwh(storage.nutzbar_kwh)} von ${formatKwh(storage.nutzbar_max_kwh)}`} />
+        {storage.je_speicher.map((battery) => (
+          <KeyValue
+            key={battery.name}
+            label={battery.label}
+            value={battery.gueltig
+              ? `${battery.soc_prozent?.toLocaleString('de-DE') ?? '–'} % · ${formatKwh(battery.nutzbar_kwh)} nutzbar`
+              : (battery.grund ?? 'ungültig')}
+            tone={battery.gueltig ? 'muted' : 'warn'}
+          />
+        ))}
+        {storage.grund ? <KeyValue label="Reichweite" value={storage.grund} tone="warn" /> : (
+          <>
+            <KeyValue label="Reichweite" value={reachText(storage.median)} />
+            <KeyValue label="Vorsichtig" value={reachText(storage.vorsichtig)} tone="muted" />
+            <KeyValue label="Zuversichtlich" value={reachText(storage.zuversichtlich)} tone="muted" />
+          </>
+        )}
+        {figures.ladeblock_slots !== undefined ? (
+          <>
+            <div className="section-title">Kennzahlen</div>
+            <KeyValue label="Reichweite in Stunden" value={formatHours(figures.reichweite_h)} />
+            <KeyValue label="PV bis zur Reichweite" value={formatKwh(figures.pv_im_fenster_kwh ?? null)} />
+            <KeyValue label="Netzbezug danach bis zum PV-Überschuss" value={formatKwh(figures.defizit_bis_pv_kwh ?? null)} />
+            <KeyValue label="Nächster PV-Überschuss" value={figures.naechster_ueberschuss_ab ?? 'nicht im Horizont'} />
+            <KeyValue label="Günstigstes Fenster in der Reichweite" value={windowText(figures.guenstigstes_fenster_reichweite)} />
+            <KeyValue label="Günstigstes Fenster gesamt" value={windowText(figures.guenstigstes_fenster_gesamt)} />
+            <KeyValue
+              label="Preise reichen bis Reichweitenende"
+              value={figures.horizont_reicht ? 'ja' : 'nein'}
+              tone={figures.horizont_reicht ? 'ok' : 'warn'}
+            />
+          </>
+        ) : null}
+        {figures.preis_rang_jetzt_prozent !== undefined ? (
+          <KeyValue
+            label="Preis jetzt"
+            value={`günstiger als ${(100 - figures.preis_rang_jetzt_prozent).toLocaleString('de-DE')} % der kommenden Slots`}
+            tone="muted"
+          />
+        ) : null}
+      </div>
+    </section>
+  )
+}
+
+function SwitchRow({ label, entity, on, present }: { label: string; entity: string; on: boolean; present: boolean }) {
+  return (
+    <KeyValue
+      label={label}
+      value={present ? <>{on ? 'an' : 'aus'} · <span className="mono">{entity}</span></>
+        : <>Helfer fehlt · <span className="mono">{entity}</span></>}
+      tone={present ? (on ? 'ok' : 'muted') : 'warn'}
+    />
+  )
+}
+
+function GridChargingCard({ grid }: { grid: TariffGridCharging }) {
+  return (
+    <section className="card">
+      <div className="card-head">
+        <h2>Netzladen</h2>
+        <div className="spacer" />
+        {grid.zulaessig ? <span className="pill ok">Zulässig</span> : <span className="pill muted">Gesperrt</span>}
+      </div>
+      <div className="card-body">
+        <p className="hint-box">
+          Nur Anzeige: Zulässig = Freigabe und (manuell angefordert oder PV reicht nicht). Das PV-Kriterium folgt
+          mit der Steuerungslogik. Das HEMS lädt derzeit nie aus dem Netz. Die Schalter sind HA-Helfer
+          (input_boolean), die du selbst anlegst.
+        </p>
+        <KeyValue label="Ergebnis" value={grid.grund} tone={grid.zulaessig ? 'ok' : 'muted'} />
+        <SwitchRow label="Freigabe" entity={grid.freigabe_entity} on={grid.freigabe} present={grid.freigabe_vorhanden} />
+        <SwitchRow label="Manuell" entity={grid.manuell_entity} on={grid.manuell} present={grid.manuell_vorhanden} />
+        <KeyValue label="PV reicht nicht" value={grid.pv_zu_wenig === null ? 'noch nicht festgelegt' : (grid.pv_zu_wenig ? 'ja' : 'nein')} tone="muted" />
+        {grid.je_speicher.map((battery) => (
+          <SwitchRow
+            key={battery.name}
+            label={`${battery.label} erlaubt`}
+            entity={battery.entity}
+            on={battery.erlaubt}
+            present={battery.vorhanden}
+          />
+        ))}
+      </div>
     </section>
   )
 }
