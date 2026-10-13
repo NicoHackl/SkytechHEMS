@@ -8,6 +8,24 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Hinzugefügt — 13.10.2026 (Dynamischer Strompreis, Phase P4)
+
+- **Speicherung in Skytech Data Insight.** Mit gesetztem `insight_password` meldet sich das HEMS als
+  `skytech_hems` bei Data Insight an (Host automatisch über den Supervisor). Es legt die benötigten
+  Sensoren dort an oder übernimmt vorhandene, ordnet sie festen Rollen zu und legt bei einem Tausch
+  den alten Sensor still. Preisläufe (nur bei geänderter Kurve, kein Duplikat nach Neustart) und
+  PV-Prognoseläufe (stündlich oder bei Änderung) werden gespeichert.
+- **Grundlast** `hems.grundlast_w` je Viertelstunde: Hausverbrauch minus Istleistung der
+  HEMS-Verbraucher minus Leistung der Speicher, die im Hausverbrauch-Sensor stecken (neue Einstellung
+  je Speicher). Gerechnet aus den in Data Insight aufgezeichneten Werten; Lücken werden bis zu 10 Tage
+  nachgerechnet.
+- Im Bereich „Dynamischer Strompreis“: Hausverbrauch- und PV-Ist-Sensor, je Speicher „steckt im
+  Hausverbrauch-Sensor“, Verbindung zu Data Insight und eine Karte mit Zustand, Rollen und den letzten
+  Schreibvorgängen.
+- Das Passwort verlässt das Add-on nie: `GET api/config` liefert es leer, dazu nur „gesetzt ja/nein“.
+- Neue Abhängigkeit `psycopg` 3 mit `libpq5` im Image. Vertrag `contract_hems_data_insight` 0.2:
+  HEMS-Seite implementiert (Skytech-Data-Insight im selben Arbeitspaket nachgezogen).
+
 ### Hinzugefügt — 13.10.2026 (Dynamischer Strompreis, Phase P3)
 
 - **Neuer Bereich „Dynamischer Strompreis“** unter „Vorausschau“. Er zeigt den aktuellen Endpreis,

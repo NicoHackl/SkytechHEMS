@@ -380,6 +380,25 @@ Zeitpunkt darin liegt. Sonst steht der Grund im Status, es gibt keinen Ersatzwer
 Das Modul liest im eigenen Minutentakt den Zustand, den der Regelzyklus ohnehin holt; es löst
 keine eigene HA-Abfrage aus. Ist dieser Zustand älter als 5 min, gilt nichts als aktuell.
 
+**Speicherung in Skytech Data Insight (Phase P4).** Schnittstelle:
+[Vertrag](../contract/contract_hems_data_insight/contract_hems_data_insight.md) Version 0.2.
+
+| Option | Typ | Default | Bedeutung |
+|---|---|---|---|
+| `tariff_house_load_entity` | Entity-ID (`sensor.*`) | leer | Gesamter Hausverbrauch in W. Ohne ihn keine Grundlast |
+| `pv_actual_entity` | Entity-ID (`sensor.*`) | leer | Gemessene PV-Leistung in W, Ist-Wert zur PV-Prognose |
+| `insight_host` | `auto` oder Hostname | `auto` | `auto` sucht das Add-on `*_skytech_data_insight` über den Supervisor |
+| `insight_port` | Port | `5432` | PostgreSQL-Port im Add-on-Netz |
+| `insight_password` | Passwort (Secret) | leer | Passwort von `skytech_hems`; in Data Insight auf der Seite „Zugänge“ erzeugen. Leer = Speicherung aus |
+| `devices[].tariff_in_house_load` | bool, nur `battery` | `false` | Steckt die Leistung dieses Speichers im Hausverbrauch-Sensor? Nur für die Grundlast, kein Regelpfad |
+
+Grundlast = Hausverbrauch − Istleistung aller HEMS-Verbraucher (bei Binärgeräten ohne
+`power_actual_entity`: Schaltanteil × `power_w`) − Leistung der Speicher mit `tariff_in_house_load`
+(positiv = laden). Gerechnet wird je abgeschlossenem 15-min-Slot aus den Werten, die Data Insight
+aufgezeichnet hat; Slots mit unter 80 % Abdeckung eines Werts entfallen, Leistungen müssen in `W`
+vorliegen. Nach einem Ausfall wird so bis zu 10 Tage nachgerechnet. Speicher mit getrennten Lade- und
+Entladesensoren werden für die Grundlast noch nicht unterstützt.
+
 ## Konfigurationsdateien
 
 | Datei | Zweck | Eingecheckt |
@@ -393,8 +412,11 @@ keine eigene HA-Abfrage aus. Ist dieser Zustand älter als 5 min, gilt nichts al
 
 ## Secrets
 
-- Zugangsdaten kommen ausschließlich aus Umgebungsvariablen — nie aus dem Code, nie aus einer
-  eingecheckten Datei.
+- Zugangsdaten kommen ausschließlich aus Umgebungsvariablen oder Passwort-Optionen des Add-ons —
+  nie aus dem Code, nie aus einer eingecheckten Datei.
+- `insight_password` (D-065) ist eine Passwort-Option. `GET /api/config` liefert sie immer leer,
+  dazu `secrets_set.insight_password` als Ja/Nein. Beim Speichern heißt ein leerer Wert
+  „unverändert“, `null` heißt „entfernen“.
 - Der Token taucht nie in Logs, Fehlermeldungen oder Commit-Messages auf.
 - Fehlt der Token, schlägt der erste HA-Aufruf mit einer Fehlermeldung im Log fehl und der Zyklus
   wird als fehlerhaft markiert; geschaltet wird nichts.

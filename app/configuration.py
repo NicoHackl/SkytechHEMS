@@ -64,6 +64,7 @@ _NAME_RE = re.compile(r"^[a-z0-9_]+$")
 _ENTITY_RE = re.compile(r"^[a-z][a-z0-9_]*\.[a-z0-9_]+$")
 _TIME_OF_DAY_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 _ATTRIBUTE_RE = re.compile(r"^[a-z_][a-z0-9_]*$")
+_HOSTNAME_RE = re.compile(r"^[a-zA-Z0-9]([a-zA-Z0-9.-]{0,251}[a-zA-Z0-9])?$")
 # Strenger als _NAME_RE: ein Formel-Zeilenname (D-045) landet als Python-Bezeichner
 # im Namespace einer Formel, _NAME_RE erlaubt aber z. B. führende Ziffern ("123"),
 # was kein gültiger Bezeichner ist.
@@ -187,17 +188,30 @@ GLOBAL_DEFAULTS: Dict[str, Any] = {
     "pv_today_remaining_entity": "",
     "pv_curve_entity": "",
     "pv_curve_attribute": "forecast",
+    # Grundlast und Speicherung in Skytech Data Insight (D-065, Phase P4).
+    "tariff_house_load_entity": "",
+    "pv_actual_entity": "",
+    # Data Insight: `auto` sucht das Add-on über den Supervisor. Leeres
+    # Passwort = Anbindung aus. Das Passwort ist ein Secret (SECRET_OPTION_KEYS).
+    "insight_host": "auto",
+    "insight_port": 5432,
+    "insight_password": "",
 }
+
+# Optionen, die nie an die Oberfläche gehen: gelesen werden sie leer, ein leer
+# zurückgeschickter Wert heißt „unverändert", `null` heißt „entfernen".
+SECRET_OPTION_KEYS: Tuple[str, ...] = ("insight_password",)
 
 # Textfelder des dynamischen Strompreises (D-065). Sie werden beim Normalisieren getrimmt.
 TARIFF_TEXT_KEYS: Tuple[str, ...] = (
     "tariff_price_entity", "tariff_price_interval", "tariff_tomorrow_warning_time",
     "pv_today_entity", "pv_tomorrow_entity", "pv_today_remaining_entity",
     "pv_curve_entity", "pv_curve_attribute",
+    "tariff_house_load_entity", "pv_actual_entity", "insight_host", "insight_password",
 )
 TARIFF_ENTITY_KEYS: Tuple[str, ...] = (
     "tariff_price_entity", "pv_today_entity", "pv_tomorrow_entity",
-    "pv_today_remaining_entity", "pv_curve_entity",
+    "pv_today_remaining_entity", "pv_curve_entity", "tariff_house_load_entity", "pv_actual_entity",
 )
 TARIFF_INTERVALS: Tuple[str, ...] = ("auto", "15", "60")
 
@@ -255,6 +269,8 @@ GLOBAL_KEYS_FORCING_SHUTDOWN: Tuple[str, ...] = (
 # abschalten (D-048).
 DEVICE_KEYS_DISPLAY_ONLY: Tuple[str, ...] = (
     "flow_show", "flow_icon", "flow_color", "flow_navigation",
+    # Grundlast des dynamischen Strompreises (D-065): ändert die Regelung nicht.
+    "tariff_in_house_load",
 )
 
 
@@ -463,6 +479,9 @@ def _normalize_device(raw: Dict[str, Any]) -> Dict[str, Any]:
             "power_entity": _as_text(raw.get("power_entity")),
             "power_sign": _as_text(raw.get("power_sign")) or "positiv_laden",
             "capacity_kwh": _as_float(raw.get("capacity_kwh"), 0.0),
+            # Steckt die Leistung dieses Speichers im Hausverbrauch-Sensor? Nur für
+            # die Grundlast des dynamischen Strompreises (D-065), kein Regelpfad.
+            "tariff_in_house_load": bool(raw.get("tariff_in_house_load", False)),
         })
         for key in BATTERY_POWER_FIELDS:
             device[key] = _as_float(raw.get(key), None) if key in raw else None
@@ -600,6 +619,14 @@ def _validate_tariff(options: Dict[str, Any], result: ValidationResult) -> None:
         result.field_errors["tariff_tomorrow_warning_time"] = "Uhrzeit im Format hh:mm erwartet, z. B. 15:00."
     if not _ATTRIBUTE_RE.match(options.get("pv_curve_attribute") or ""):
         result.field_errors["pv_curve_attribute"] = "Attributname erwartet, z. B. forecast."
+    host = options.get("insight_host") or ""
+    if not (host == "auto" or _HOSTNAME_RE.match(host)):
+        result.field_errors["insight_host"] = "auto oder ein Hostname, z. B. e778e1d3-skytech-data-insight."
+    port = _as_float(options.get("insight_port"), None)
+    if port is None or port != int(port) or not 1 <= int(port) <= 65535:
+        result.field_errors["insight_port"] = "Port von 1 bis 65535 erwartet."
+    else:
+        options["insight_port"] = int(port)
 
 
 def _validate_flow(options: Dict[str, Any], result: ValidationResult) -> None:
@@ -1063,3 +1090,24 @@ def _optional_entity(device: Dict[str, Any], key: str, fail) -> None:
 def _short_path(path: str) -> str:
     """„devices[2].technical_maximum" → „technical_maximum" für die Gerätekarte."""
     return path.split(".", 1)[1] if "." in path else path
+
+
+def mask_secrets(options: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, bool]]:
+    """Secrets für die Oberfläche leeren; zurück kommt zusätzlich, welche gesetzt sind."""
+    masked = dict(options)
+    is_set = {key: bool(_as_text(options.get(key))) for key in SECRET_OPTION_KEYS}
+    for key in SECRET_OPTION_KEYS:
+        masked[key] = ""
+    return masked, is_set
+
+
+def restore_secrets(draft: Dict[str, Any], stored_raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Leerer Wert = unverändert (gespeicherten nehmen), `None` = entfernen, sonst neu."""
+    restored = dict(draft)
+    for key in SECRET_OPTION_KEYS:
+        value = draft.get(key, "")
+        if value is None:
+            restored[key] = ""
+        elif _as_text(value) == "":
+            restored[key] = _as_text((stored_raw or {}).get(key))
+    return restored

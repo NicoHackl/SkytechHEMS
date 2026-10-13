@@ -43,6 +43,7 @@ import flow_publisher
 from flow_publisher import FlowPublisher
 from status_publisher import StatusPublisher
 from supervisor_client import SupervisorClient
+from tariff.insight_sync import InsightSync
 from tariff.service import TARIFF_INTERVAL_S, TariffConfig, TariffService
 from tariff_publisher import TariffPublisher
 
@@ -77,6 +78,13 @@ OPTIONS_PATH = Path(os.environ.get("HEMS_OPTIONS_PATH", "/data/options.json"))
 # Persistentes Add-on-Verzeichnis. Eigener Inhalt: der Merker der Notabschaltung
 # (D-059) und die internen Ersatzwerte (D-061). Für die lokale Entwicklung überschreibbar.
 DATA_DIR = Path(os.environ.get("HEMS_DATA_DIR", "/data"))
+
+# Optionen, die der Abgleich mit Data Insight braucht (D-065, P4).
+INSIGHT_OPTION_KEYS = (
+    "tariff_price_entity", "pv_today_entity", "pv_tomorrow_entity", "pv_today_remaining_entity",
+    "pv_curve_entity", "tariff_house_load_entity", "pv_actual_entity",
+    "insight_host", "insight_port", "insight_password",
+)
 
 # Der Wächter der Notabschaltung fragt die Bedingungs-Entität in diesem Takt
 # ab – unabhängig vom Regelzyklus, damit „sofort“ nicht bis zu interval_s heißt.
@@ -547,6 +555,12 @@ class HEMSApp:
         self.tariff = TariffService(TariffConfig.from_options(
             {key: option(key) for key in TariffConfig.option_keys()}))
         self._tariff_publisher = TariffPublisher()
+        # Speicherung in Skytech Data Insight (D-065, P4). Ohne Passwort aus.
+        self.insight = InsightSync(
+            {key: option(key) for key in INSIGHT_OPTION_KEYS},
+            validated.devices,
+            resolve_host=self._resolve_insight_host,
+        )
         self._last_states_at: float | None = None   # time.monotonic() des Schnappschusses
 
     # ------------------------------------------------------------------
@@ -711,11 +725,29 @@ class HEMSApp:
     async def _tariff_once(self) -> None:
         """Eine Auswertung des Preis- und Prognosemoduls (D-065). Wirft nie."""
         try:
+            now = datetime.datetime.now(BERLIN)
             age = None if self._last_states_at is None else time.monotonic() - self._last_states_at
-            status = self.tariff.evaluate(self._last_states, age, datetime.datetime.now(BERLIN))
+            status = self.tariff.evaluate(self._last_states, age, now)
             await self._tariff_publisher.publish(self.ha, status, self._last_states)
+            pv_details = {key: (value.value_kwh if value is not None and value.valid else None)
+                          for key, value in self.tariff.pv_values.items()}
+            status["insight"] = await self.insight.tick(
+                now, self._last_states, self.tariff.price, self.tariff.pv_curve, pv_details)
         except Exception as exc:
             log.error("Dynamischer Strompreis: Auswertung fehlgeschlagen: %s", exc, exc_info=True)
+
+    async def _resolve_insight_host(self) -> str:
+        """Hostname des installierten Add-ons Skytech Data Insight über den Supervisor."""
+        try:
+            addons = await self.supervisor.list_addons()
+        except Exception as exc:
+            log.warning("Data Insight: Add-on-Liste nicht abrufbar: %s", exc)
+            return ""
+        for addon in addons:
+            slug = str(addon.get("slug") or "")
+            if slug == "skytech_data_insight" or slug.endswith("_skytech_data_insight"):
+                return slug.replace("_", "-")
+        return ""
 
     async def _tariff_loop(self) -> None:
         """Eigener Takt, unabhängig vom Regelzyklus; nimmt nie dessen Schreib-Lock."""
@@ -1187,6 +1219,7 @@ class HEMSApp:
                     await task
                 except asyncio.CancelledError:
                     pass
+            await self.insight.close()
             await self.ha.close()
             await self.supervisor.close()
             await runner.cleanup()

@@ -602,3 +602,20 @@ def test_fehlende_manager_rolle_bleibt_ein_403_fuer_die_oberflaeche():
 def test_supervisor_rejected_traegt_nur_die_meldung():
     fehler = SupervisorRejected("devices[0]: unbekanntes Feld")
     assert str(fehler) == "devices[0]: unbekanntes Feld"
+
+
+def test_secret_insight_password_never_leaves_and_survives_save():
+    """D-065: das Passwort für Data Insight geht nie an die Oberfläche, bleibt beim Speichern erhalten."""
+    stored = options(insight_password="geheim-123")
+    svc = service(stored)
+    data = run(svc.read())
+    assert data["options"]["insight_password"] == "" and data["secrets_set"] == {"insight_password": True}
+    assert "geheim-123" not in str(data)
+
+    draft = dict(data["options"], tariff_enabled=False)
+    run(svc.save(draft, data["stored_revision"]))
+    assert svc._supervisor.saved[-1]["insight_password"] == "geheim-123"     # leer = unverändert
+
+    data = run(svc.read())
+    run(svc.save(dict(data["options"], insight_password=None), data["stored_revision"]))
+    assert svc._supervisor.saved[-1]["insight_password"] == ""               # null = entfernen

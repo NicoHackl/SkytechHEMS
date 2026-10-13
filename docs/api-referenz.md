@@ -284,6 +284,10 @@ Letzte Auswertung des Preis- und Prognosemoduls (D-065), Takt 60 s. Reine Anzeig
 - Bei `preis.gueltig: false` fehlen alle Felder ab `raster_min`; `grund` nennt die verletzte Regel.
 - `warnung`: ab `tariff_tomorrow_warning_time`, solange die Kurve nicht bis Ende morgen reicht.
 - Zeiten mit `_iso` sind Maschinenformat; alle übrigen Zeitangaben sind Berliner Zeit (TT.MM.JJJJ, hh:mm).
+- `insight` (ab P4, nach der ersten Auswertung): Abgleich mit Data Insight –
+  `{konfiguriert, verbunden, host, grund, letzter_abgleich, rollen: [{rolle, entity, sensor_id}],
+  hinweise, letzter_preislauf, letzter_pv_lauf, grundlast_bis, grundlast_grund}`. Das Passwort steht
+  nie darin.
 
 ## Konfigurations-Endpunkte
 
@@ -311,6 +315,7 @@ Alles, was die Konfigurationsseite zum Anzeigen braucht.
 | `can_save`, `can_restart` | Fähigkeiten dieser Instanz — ohne Supervisor beide `false` |
 | `supervisor_available`, `supervisor_error` | Warum gegebenenfalls nicht |
 | `instance_id` | Kennung dieses Prozessstarts |
+| `secrets_set` | Welche Secrets gespeichert sind (`{"insight_password": true}`); in `options` stehen sie immer leer. Beim Speichern: leer = unverändert, `null` = entfernen (D-065) |
 | `supported` | Wertebereiche und Formular-Startwerte: Modi, Klassen, Log-Level, Einheiten, Phasen, Vorzeichen, Defaults je Klasse, dazu `emergency_operators` (`[{value, label}]`) und `emergency_target_kinds` (Domain → `on_off`, `option`, `number`, `press`, `run`) für die Notabschaltung |
 
 Außerhalb des Add-on-Containers fällt der Endpunkt auf die lokal gelesene Konfiguration zurück.
@@ -480,6 +485,8 @@ Vom Add-on genutzte Endpunkte von Home Assistant:
 
 | Dienst | Endpunkt | Wofür | Verhalten bei Ausfall |
 |---|---|---|---|
+| Skytech Data Insight | PostgreSQL im Add-on-Netz, Rolle `skytech_hems`, nur Funktionen `hems_*` und Sichten laut [Vertrag](../contract/contract_hems_data_insight/contract_hems_data_insight.md) | Speicherung von Preisen, Prognosen und Grundlast (D-065) | Status `insight.verbunden: false` mit Grund; neuer Versuch im nächsten Takt, Regelung unberührt |
+| Supervisor | `GET /addons` | Hostname von Data Insight bei `insight_host: auto` | Grund „nicht installiert oder nicht gefunden“ |
 | Home Assistant | `GET /api/states` | Kompletter State-Schnappschuss je Zyklus, Timeout 10 s | Zyklus wird abgebrochen und in `/api/status.error` gemeldet; die zuletzt geschriebenen Sollwerte bleiben stehen |
 | Home Assistant | `GET /api/states/<entity_id>` | Wächter der Notabschaltung (D-059) jede Sekunde, Quittieren und Live-Prüfung, Timeout 5 s | `404` heißt „Entität fehlt“, ein Verbindungsfehler „nicht erreichbar“ — beides löst nicht aus und sperrt das Quittieren; der Wächter loggt jede neue Fehlermeldung einmal |
 | Supervisor | `GET /addons/self/info` | Gespeicherte Add-on-Optionen lesen, Timeout 10 s | `GET /api/config` fällt auf die lokal gelesene Konfiguration zurück, Speichern und Neustarten sind gesperrt |

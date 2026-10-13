@@ -35,8 +35,10 @@ from configuration import (
     PROTECTED_MINIMUM_SCOPES,
     SPECIAL_MODES,
     devices_needing_shutdown,
+    mask_secrets,
     merge_known_fields,
     normalize_options,
+    restore_secrets,
     revision,
     validate_options,
 )
@@ -157,9 +159,12 @@ class ConfigService:
         validated = validate_options(stored)
         stored_revision = revision(stored)
         schreibbar = self._supervisor.available and not supervisor_error
+        # Secrets verlassen den Dienst nie (D-065): leer plus „gesetzt ja/nein".
+        options, secrets_set = mask_secrets(validated.options)
 
         return {
-            "options": validated.options,
+            "options": options,
+            "secrets_set": secrets_set,
             "valid": validated.valid,
             "errors": validated.errors,
             "field_errors": validated.field_errors,
@@ -299,7 +304,8 @@ class ConfigService:
                 {"stored_revision": revision(aktuell)},
             )
 
-        merged = merge_known_fields(aktuell, draft)
+        # Leeres Secret im Entwurf = unverändert, null = entfernen (D-065).
+        merged = merge_known_fields(aktuell, restore_secrets(draft, aktuell))
 
         gueltig, meldung = await self._call_supervisor(
             self._supervisor.validate_self_options(merged))

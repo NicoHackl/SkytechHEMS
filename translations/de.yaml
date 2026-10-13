@@ -38,6 +38,28 @@ configuration:
   pv_curve_attribute:
     name: Attribut der PV-Prognosekurve
     description: Name des Attributs mit der Kurve, Standard forecast.
+  tariff_house_load_entity:
+    name: Hausverbrauch (Leistung)
+    description: >-
+      Sensor mit dem gesamten Hausverbrauch in W. Daraus und aus den
+      Istleistungen der HEMS-Geräte rechnet das HEMS die Grundlast
+      (hems.grundlast_w in Data Insight).
+  pv_actual_entity:
+    name: PV-Leistung (Ist)
+    description: Gemessene PV-Leistung in W – Vergleichswert für die PV-Prognose in Data Insight.
+  insight_host:
+    name: Data Insight – Host
+    description: >-
+      auto sucht das Add-on Skytech Data Insight über den Supervisor. Sonst den
+      Hostnamen des Add-ons eintragen.
+  insight_port:
+    name: Data Insight – Port
+    description: PostgreSQL-Port im Add-on-Netz, Standard 5432.
+  insight_password:
+    name: Data Insight – Passwort
+    description: >-
+      Passwort des Datenbankbenutzers skytech_hems. In Data Insight auf der Seite
+      „Zugänge“ erzeugen. Leer = keine Speicherung in Data Insight.
   devices:
     name: Geräteliste
     description: >-

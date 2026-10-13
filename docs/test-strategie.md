@@ -115,6 +115,16 @@ Zeitpunkt außerhalb), Zeitumstellung (100 Viertelstunden am 25.10.2026), PV-Tag
 Warnung „Preise für morgen fehlen“ vor und nach der Uhrzeit, veralteter Schnappschuss, Modul aus,
 Anzeige-Sensoren nur bei Änderung oder fehlender Entität, Prüfung der Optionen.
 
+**Data Insight (D-065, `tests/test_insight.py`):** Rollen der Referenzanlage, Grundlast mit
+Lücken, Abdeckung und Einheitenprüfung, Secret nie an die Oberfläche (auch
+`test_supervisor_config_api.py`), Abgleich mit Attrappe: Tausch des Hausverbrauch-Sensors legt
+den alten still, kein doppelter Preislauf nach Neustart, PV-Lauf höchstens alle 15 min und
+stündlich, Grundlast nur für abgeschlossene Slots, Fehlertexte. Der Integrationstest läuft gegen
+eine von Data Insight migrierte Datenbank, wenn `HEMS_INSIGHT_TEST_DSN` gesetzt ist: erst im Repo
+Skytech-Data-Insight `SKYTECH_TEST_DSN=postgresql://postgres:test@127.0.0.1:15432/postgres pytest -q`
+(legt `skytech_test` an), dann hier
+`HEMS_INSIGHT_TEST_DSN=postgresql://postgres:test@127.0.0.1:15432/skytech_test pytest -q`.
+
 Ein Bugfix ohne Regressionstest ist nicht abgeschlossen. Der Test muss **vor** dem Fix
 nachweislich fehlschlagen.
 
