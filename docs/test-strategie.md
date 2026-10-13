@@ -108,6 +108,23 @@ Für die HEMS-internen Ersatzwerte (D-061) zusätzlich verpflichtend:
     interne Werte in Steuerschema, Speicher, Datei und `StateProxy`. Eine unlesbare Datei wirkt
     nicht und wird nicht überschrieben.
 
+**Dynamischer Strompreis (D-065, `tests/test_tariff.py`):** Preiskurve gültig mit negativen
+Preisen, 15- und 60-min-Raster samt fester Einstellung, jede Prüfregel mit Grund (Einheit, fehlende
+Daten, `unavailable`, NaN, Zeitstempel ohne Zone, Lücke, falsche Reihenfolge, gemischtes Raster,
+Zeitpunkt außerhalb), Zeitumstellung (100 Viertelstunden am 25.10.2026), PV-Tageswerte und -Kurve,
+Warnung „Preise für morgen fehlen“ vor und nach der Uhrzeit, veralteter Schnappschuss, Modul aus,
+Anzeige-Sensoren nur bei Änderung oder fehlender Entität, Prüfung der Optionen.
+
+**Data Insight (D-065, `tests/test_insight.py`):** Rollen der Referenzanlage, Grundlast mit
+Lücken, Abdeckung und Einheitenprüfung, Secret nie an die Oberfläche (auch
+`test_supervisor_config_api.py`), Abgleich mit Attrappe: Tausch des Hausverbrauch-Sensors legt
+den alten still, kein doppelter Preislauf nach Neustart, PV-Lauf höchstens alle 15 min und
+stündlich, Grundlast nur für abgeschlossene Slots, Fehlertexte. Der Integrationstest läuft gegen
+eine von Data Insight migrierte Datenbank, wenn `HEMS_INSIGHT_TEST_DSN` gesetzt ist: erst im Repo
+Skytech-Data-Insight `SKYTECH_TEST_DSN=postgresql://postgres:test@127.0.0.1:15432/postgres pytest -q`
+(legt `skytech_test` an), dann hier
+`HEMS_INSIGHT_TEST_DSN=postgresql://postgres:test@127.0.0.1:15432/skytech_test pytest -q`.
+
 Ein Bugfix ohne Regressionstest ist nicht abgeschlossen. Der Test muss **vor** dem Fix
 nachweislich fehlschlagen.
 
@@ -133,6 +150,9 @@ nie über Ziel **und** bisherigen Wert hinaus.
 Gerätekonstellation gelten müssen — etwa dass die Summe der Zuteilungen den Pool nie übersteigt und
 dass kein Gerät über `max_technisch` hinaus zugeteilt bekommt. Neue Regeln der Verteilungslogik
 gehören hierher, nicht in ein weiteres Beispiel.
+
+`test_tariff.py` prüft mit Hypothesis die Preiskurve: jede lückenlose Kurve mit 15- oder 60-min-Raster
+und beliebigen Preisen ist gültig und findet den laufenden Slot; jede Lücke macht sie ungültig.
 
 ## Coverage
 

@@ -252,6 +252,43 @@ Löscht einen internen Wert — danach greifen wieder Add-on-Feld bzw. Default. 
 verwaiste Einträge eines nicht mehr konfigurierten Geräts. **Rumpf** `{"entity_id": "…"}`.
 **Antwort `200`** `{"ok": true}`, auch wenn kein Wert gespeichert war; `400` bei unlesbarer Datei.
 
+### `GET /api/tariff/status`
+
+Letzte Auswertung des Preis- und Prognosemoduls (D-065), Takt 60 s. Reine Anzeige.
+
+```json
+{
+  "aktiv": true, "stand": "13.10.2026 06:15:14", "grund": null,
+  "preis": {
+    "entity": "sensor.epex_spot_data_total_price_2", "raster_einstellung": "auto",
+    "raster_erkannt_min": 15, "gueltig": true, "grund": null, "einheit": "€/kWh", "raster_min": 15,
+    "aktuell": {"tag": "13.10.2026", "von": "06:15", "bis": "06:30",
+                "von_iso": "2026-10-13T06:15:00+02:00", "bis_iso": "2026-10-13T06:30:00+02:00", "preis": 0.38458},
+    "horizont_bis": "14.10.2026 00:00", "horizont_bis_iso": "2026-10-14T00:00:00+02:00",
+    "stunden_voraus": 17.8, "morgen_vorhanden": false, "warnung": null,
+    "guenstigster": {"…": "Slot wie aktuell"}, "teuerster": {"…": "Slot wie aktuell"},
+    "kommend": ["höchstens 96 Slots wie aktuell"], "kommend_gesamt": 71
+  },
+  "pv": {
+    "heute": {"entity": "sensor.helios_hausdach_energy_day_1", "gueltig": true, "wert_kwh": 33.412, "grund": null},
+    "morgen": {"…": "wie heute"}, "rest_heute": {"…": "wie heute"},
+    "kurve": {"entity": "sensor.helios_hausdach_power_now", "attribut": "forecast", "gueltig": true, "grund": null,
+              "raster_min": 15, "bis": "20.10.2026 00:00", "bis_iso": "2026-10-20T00:00:00+02:00",
+              "tage": [{"tag": "13.10.2026", "kwh": 33.41}]}
+  }
+}
+```
+
+- `aktiv: false`: Modul ausgeschaltet; `preis` und `pv` sind dann `null`.
+- `grund` oben: Schnappschuss fehlt oder ist älter als 5 min; dann sind alle Werte ungültig.
+- Bei `preis.gueltig: false` fehlen alle Felder ab `raster_min`; `grund` nennt die verletzte Regel.
+- `warnung`: ab `tariff_tomorrow_warning_time`, solange die Kurve nicht bis Ende morgen reicht.
+- Zeiten mit `_iso` sind Maschinenformat; alle übrigen Zeitangaben sind Berliner Zeit (TT.MM.JJJJ, hh:mm).
+- `insight` (ab P4, nach der ersten Auswertung): Abgleich mit Data Insight –
+  `{konfiguriert, verbunden, host, grund, letzter_abgleich, rollen: [{rolle, entity, sensor_id}],
+  hinweise, letzter_preislauf, letzter_pv_lauf, grundlast_bis, grundlast_grund}`. Das Passwort steht
+  nie darin.
+
 ## Konfigurations-Endpunkte
 
 Sie bedienen den Bereich **Konfiguration** der Oberfläche. Geschrieben wird ausschließlich über die
@@ -278,6 +315,7 @@ Alles, was die Konfigurationsseite zum Anzeigen braucht.
 | `can_save`, `can_restart` | Fähigkeiten dieser Instanz — ohne Supervisor beide `false` |
 | `supervisor_available`, `supervisor_error` | Warum gegebenenfalls nicht |
 | `instance_id` | Kennung dieses Prozessstarts |
+| `secrets_set` | Welche Secrets gespeichert sind (`{"insight_password": true}`); in `options` stehen sie immer leer. Beim Speichern: leer = unverändert, `null` = entfernen (D-065) |
 | `supported` | Wertebereiche und Formular-Startwerte: Modi, Klassen, Log-Level, Einheiten, Phasen, Vorzeichen, Defaults je Klasse, dazu `emergency_operators` (`[{value, label}]`) und `emergency_target_kinds` (Domain → `on_off`, `option`, `number`, `press`, `run`) für die Notabschaltung |
 
 Außerhalb des Add-on-Containers fällt der Endpunkt auf die lokal gelesene Konfiguration zurück.
@@ -447,6 +485,8 @@ Vom Add-on genutzte Endpunkte von Home Assistant:
 
 | Dienst | Endpunkt | Wofür | Verhalten bei Ausfall |
 |---|---|---|---|
+| Skytech Data Insight | PostgreSQL im Add-on-Netz, Rolle `skytech_hems`, nur Funktionen `hems_*` und Sichten laut [Vertrag](../contract/contract_hems_data_insight/contract_hems_data_insight.md) | Speicherung von Preisen, Prognosen und Grundlast (D-065) | Status `insight.verbunden: false` mit Grund; neuer Versuch im nächsten Takt, Regelung unberührt |
+| Supervisor | `GET /addons` | Hostname von Data Insight bei `insight_host: auto` | Grund „nicht installiert oder nicht gefunden“ |
 | Home Assistant | `GET /api/states` | Kompletter State-Schnappschuss je Zyklus, Timeout 10 s | Zyklus wird abgebrochen und in `/api/status.error` gemeldet; die zuletzt geschriebenen Sollwerte bleiben stehen |
 | Home Assistant | `GET /api/states/<entity_id>` | Wächter der Notabschaltung (D-059) jede Sekunde, Quittieren und Live-Prüfung, Timeout 5 s | `404` heißt „Entität fehlt“, ein Verbindungsfehler „nicht erreichbar“ — beides löst nicht aus und sperrt das Quittieren; der Wächter loggt jede neue Fehlermeldung einmal |
 | Supervisor | `GET /addons/self/info` | Gespeicherte Add-on-Optionen lesen, Timeout 10 s | `GET /api/config` fällt auf die lokal gelesene Konfiguration zurück, Speichern und Neustarten sind gesperrt |

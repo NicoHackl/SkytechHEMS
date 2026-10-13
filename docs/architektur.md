@@ -21,10 +21,10 @@ Defizit und einer quittierpflichtigen Notabschaltung (D-059).
   `/data/interne_werte.json` (D-061), die im Steuerung-Tab eingegeben werden.
 - **Anlegen der HA-Helfer.** Das Add-on liest und schreibt sie, erzeugt sie aber nicht.
 - **Prognose und Planung.** Vorausschauende Optimierung liefert der separate **Energy Pilot**;
-  HEMS übernimmt dessen Vorschläge nur, siehe [datenmodell.md](datenmodell.md). **Geplante
-  Ausnahme:** Für den dynamischen Strompreis wertet das HEMS Preis-, PV- und Verbrauchsprognose
-  künftig selbst aus, in einem eigenen Modul außerhalb des Regelzyklus
-  ([D-065](adr/D-065-preis-und-prognosemodul.md), [roadmap.md](roadmap.md) M6). Noch nicht gebaut.
+  HEMS übernimmt dessen Vorschläge nur, siehe [datenmodell.md](datenmodell.md). **Ausnahme:** Für den dynamischen Strompreis wertet das HEMS Preis-, PV- und Verbrauchsprognose
+  selbst aus, in einem eigenen Modul außerhalb des Regelzyklus
+  ([D-065](adr/D-065-preis-und-prognosemodul.md), [roadmap.md](roadmap.md) M6). Gebaut ist die
+  Datenerhebung von Preis und PV-Prognose (P3); Verbrauchsprognose und Steuerung folgen.
   Datenhaltung in Skytech Data Insight laut
   [Vertrag](../contract/contract_hems_data_insight/contract_hems_data_insight.md) (Version 0.2).
 - **Direktes Schalten der Endgeräte.** Geschrieben werden ausschließlich `input_*`-Helfer;
@@ -74,6 +74,11 @@ Defizit und einer quittierpflichtigen Notabschaltung (D-059).
 | `app/ems/ops.py` | `WriteOp` (Operation samt verursachendem Gerät), `WriteResult`, `WriteTarget` | Selbst schreiben |
 | `app/flow_publisher.py` | Anzeigedaten der Power Flow Card (D-046) aus Optionen, Steuerschema und Zyklusstatus bauen und als zwei `sensor.*`-Entitäten veröffentlichen | Ein Gerät schalten, eine Ausnahme nach außen lassen, Home Assistant zusätzlich abfragen |
 | `app/status_publisher.py` | HEMS-Lebenszeichen `sensor.skytech_hems_status` (D-062) nach jedem durchlaufenen Zyklus veröffentlichen | Ein Gerät schalten, eine Ausnahme nach außen lassen |
+| `app/tariff/price_source.py`, `app/tariff/pv_source.py` | Preiskurve und PV-Prognose aus dem Schnappschuss lesen und prüfen (D-065) | HA selbst ansprechen, einen Ersatzwert erfinden |
+| `app/tariff/service.py` | Preis- und Prognosemodul: Auswertung im eigenen Takt (60 s) auf dem Schnappschuss des Regelzyklus, Statusobjekt für `api/tariff/status` | Den Regelzyklus blockieren oder seinen Schreib-Lock nehmen, ein Gerät schalten |
+| `app/tariff_publisher.py` | Anzeige-Sensoren `sensor.ems_dyn_preis` und `sensor.ems_dyn_pv_prognose`, nur bei Änderung | Ein Gerät schalten, eine Ausnahme nach außen lassen |
+| `app/tariff/insight_sync.py` | Abgleich mit Data Insight: Rollen anlegen, übernehmen, tauschen, stilllegen; Preis- und PV-Läufe; Grundlast je 15-min-Slot samt Nachrechnen | Selbst SQL sprechen, den Regelzyklus berühren |
+| `app/insight_client.py` | **Einzige** Stelle mit Datenbankzugriff (psycopg 3): Vertragsversion prüfen, Funktionen `hems_*` aufrufen, Sichten lesen | Fachlogik enthalten, das Passwort loggen oder in eine Meldung schreiben |
 | `web/` → `app/static/` | Darstellung und Bedienung | Fachlogik doppeln — sie rechnet nur an, was `/api/status` liefert |
 
 Regel: Keine Komponente übernimmt Aufgaben einer anderen. Verschiebt sich eine Verantwortung,
@@ -240,6 +245,9 @@ Details zu Endpunkten: [api-referenz.md](api-referenz.md).
 │   ├── json_file.py        Atomares Schreiben kleiner JSON-Dateien unter /data
 │   ├── flow_publisher.py   Anzeigedaten der Power Flow Card (D-046)
 │   ├── status_publisher.py HEMS-Lebenszeichen für die Provider (D-062)
+│   ├── tariff_publisher.py Anzeige-Sensoren des dynamischen Strompreises (D-065)
+│   ├── tariff/             Preis- und Prognosemodul: Preis, PV-Prognose, Abgleich mit Data Insight (D-065)
+│   ├── insight_client.py   Datenbankzugriff auf Skytech Data Insight (D-065)
 │   ├── requirements.txt    Laufzeit-Abhängigkeiten des Containers
 │   ├── ems/
 │   │   ├── controller.py   EMSController, config-getriebene Geräte-Registry
@@ -260,7 +268,8 @@ Zusagen, auf die sich der gesamte Code verlässt. Wer eine davon bricht, bricht 
 
 1. **Der Gerätename ist die Identität.** `name` aus der Konfiguration ist die stabile ID und taucht
    unverändert als `id` in `/api/status` auf; `label` ist reine Anzeige und darf sich ändern.
-2. **Nur der `HAClient` spricht mit Home Assistant.** Geräte und Controller sehen ausschließlich
+2. **Nur der `HAClient` spricht mit Home Assistant, nur der `InsightClient` mit der Datenbank von
+   Data Insight (D-065).** Geräte und Controller sehen ausschließlich
    einen `StateProxy` auf einen Schnappschuss. Das gilt auch für die WebSocket-Abfrage der
    Dashboardliste (D-049) — sie liegt im selben Client und außerhalb des Regelpfads.
 3. **Ein Zyklus liest einen Schnappschuss.** Innerhalb eines Zyklus ändert sich der gelesene
@@ -269,7 +278,7 @@ Zusagen, auf die sich der gesamte Code verlässt. Wer eine davon bricht, bricht 
    Home Assistant. Ausnahme sind die Zielzeilen der Notabschaltung (D-059): Sie schreiben
    ausdrücklich konfigurierte Fremd-Entitäten, um Geräte in ihre Automatik zurückzuschicken. Darüber hinaus veröffentlicht das Add-on reine Anzeigedaten als eigene
    `sensor.*`-Entitäten, die kein Gerät schalten und in keiner Regelentscheidung vorkommen
-   (D-046, D-057), sowie das Lebenszeichen `sensor.skytech_hems_status` für die Provider
+   (D-046, D-057, D-065), sowie das Lebenszeichen `sensor.skytech_hems_status` für die Provider
    (D-062). Der Regelpfad selbst bleibt davon unberührt.
 5. **Ein Zyklusfehler schaltet nichts.** Schlägt der Zyklus fehl, bleibt der letzte Sollwert
    stehen; die Anlage fällt nicht in einen undefinierten Zustand.

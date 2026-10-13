@@ -2,9 +2,12 @@
 
 ## Zugangsdaten
 
-- Der einzige Geheimnisträger ist der HA-Token. Im Add-on-Betrieb injiziert der Supervisor
-  `SUPERVISOR_TOKEN`; lokal wird `HA_TOKEN` exportiert. Gelesen wird beides ausschließlich in
-  [`app/ha_client.py`](../app/ha_client.py) — siehe [konfiguration.md](konfiguration.md).
+- Geheimnisträger sind der HA-Token und das Passwort `insight_password` für Skytech Data Insight
+  (D-065). Den Token injiziert im Add-on-Betrieb der Supervisor (`SUPERVISOR_TOKEN`); lokal wird
+  `HA_TOKEN` exportiert. Gelesen wird er ausschließlich in [`app/ha_client.py`](../app/ha_client.py).
+  Das Passwort ist eine Passwort-Option des Add-ons, wird nur in
+  [`app/insight_client.py`](../app/insight_client.py) benutzt und geht nie an die Oberfläche, in den
+  Status oder ins Log — siehe [konfiguration.md](konfiguration.md#secrets).
 - Keine Secrets im Code, in Logs, in Pfaden oder in Commit-Messages — [`AGENTS.md`](../AGENTS.md),
   Regel 6. Der Token wird nie geloggt, auch nicht gekürzt.
 - Vor jedem Commit `git diff --staged` prüfen.
@@ -92,7 +95,8 @@ gibt kein Gerät frei. Historie führt allein Home Assistant.
 
 | Dienst | Welche Daten gehen dorthin | Warum nötig |
 |---|---|---|
-| Home Assistant (lokal) | Sollwerte und Schaltanforderungen, Lesen des gesamten States | Einzige Datenquelle und -senke des Add-ons |
+| Home Assistant (lokal) | Sollwerte und Schaltanforderungen, Lesen des gesamten States | Einzige Datenquelle und -senke der Regelung |
+| Skytech Data Insight (lokal, Add-on-Netz, optional) | Zuordnung der Sensoren, Preis- und Prognosekurven, Grundlast; Lesen der aufgezeichneten 15-min-Werte | Speicherung und Grafana für den dynamischen Strompreis (D-065). Unverschlüsselt im internen Add-on-Netz; Anmeldung nur aus dem Add-on-Bereich |
 
 Es gibt **keine** Verbindung ins Internet: keine Telemetrie, keine Cloud, kein CDN. Die Oberfläche
 lädt keine externen Schriften oder Skripte — alles liegt im Bundle. Ein neuer externer Dienst wäre
@@ -100,7 +104,8 @@ eine Design-Entscheidung → [design-entscheidungen.md](design-entscheidungen.md
 
 ## Abhängigkeiten
 
-- Laufzeit: `aiohttp` (Python) sowie React und `react-router-dom` (Oberfläche). Bewusst schmal.
+- Laufzeit: `aiohttp` und `psycopg` 3 mit `libpq5` aus Debian (Python, D-065) sowie React und
+  `react-router-dom` (Oberfläche). Bewusst schmal.
 - Dependabot prüft `app/requirements.txt` und die GitHub-Actions wöchentlich
   ([`.github/dependabot.yml`](../.github/dependabot.yml)).
 - Sicherheitsupdates werden zeitnah eingespielt; nach einem Update an `web/` gehört das neu gebaute

@@ -16,11 +16,13 @@ export function Layout() {
 
   /* Wer den Konfigurationsbereich mit ungespeichertem Entwurf verlaesst, wird
      gefragt — innerhalb des Bereichs bleibt der Entwurf ohnehin erhalten.
-     Sensoren (D-045), Flow Card (D-046) und Notabschaltung (D-059) teilen sich
+     Sensoren (D-045), Flow Card (D-046), Notabschaltung (D-059) und der
+     dynamische Strompreis (D-065) teilen sich
      denselben Entwurf und zaehlen deshalb dazu. */
   const guard = (event: MouseEvent<HTMLAnchorElement>, to: string) => {
     if (!dirty || to.startsWith('/konfiguration') || to.startsWith('/sensoren')
-        || to.startsWith('/flow-card') || to.startsWith('/notabschaltung')) return
+        || to.startsWith('/flow-card') || to.startsWith('/notabschaltung')
+        || to.startsWith('/dynamischer-strompreis')) return
     if (!window.confirm('Es gibt ungespeicherte Änderungen an der Konfiguration. Trotzdem wechseln?')) {
       event.preventDefault()
     }
@@ -43,6 +45,10 @@ export function Layout() {
 
           <div className="nav-label">Vorausschau</div>
           <NavLink to="/energy-pilot" className={navClass} onClick={(event) => guard(event, '/energy-pilot')}><Icon name="spark" /><span>Energy Pilot</span></NavLink>
+          <NavLink to="/dynamischer-strompreis" className={navClass} onClick={(event) => guard(event, '/dynamischer-strompreis')}>
+            <Icon name="plug" /><span>Dynamischer Strompreis</span>
+            {dirty ? <span className="count">•</span> : null}
+          </NavLink>
 
           <div className="nav-label">Einrichtung</div>
           <NavLink to="/konfiguration/global" className={navClass}>

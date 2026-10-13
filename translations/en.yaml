@@ -1,4 +1,65 @@
 configuration:
+  tariff_enabled:
+    name: Dynamic electricity price
+    description: >-
+      Enables the price and forecast module (D-065). It reads price and PV
+      forecast and shows them in the "Dynamischer Strompreis" area and as
+      sensor.ems_dyn_preis and sensor.ems_dyn_pv_prognose. It switches nothing.
+  tariff_price_entity:
+    name: Price sensor
+    description: >-
+      Sensor with the final price actually paid in €/kWh and the price curve in
+      the attribute data (format like sensor.epex_spot_data_total_price_2).
+      Required when the dynamic price is enabled.
+  tariff_price_interval:
+    name: Price interval
+    description: >-
+      auto derives the interval from the curve (start_time to end_time). 15 or
+      60 fixes it; if the sensor differs, the curve is treated as invalid.
+  tariff_tomorrow_warning_time:
+    name: Warn when tomorrow's prices are missing
+    description: >-
+      From this time (hh:mm, Berlin time) a warning is shown if the price curve
+      does not yet reach the end of tomorrow.
+  pv_today_entity:
+    name: PV forecast today
+    description: Sensor with the expected PV energy for today in kWh (Helios).
+  pv_tomorrow_entity:
+    name: PV forecast tomorrow
+    description: Sensor with the expected PV energy for tomorrow in kWh (Helios).
+  pv_today_remaining_entity:
+    name: PV forecast remaining today
+    description: Sensor with the PV energy still expected today in kWh (Helios).
+  pv_curve_entity:
+    name: PV forecast curve
+    description: >-
+      Sensor whose attribute holds the PV forecast curve (list of datetime,
+      watts, p10, p90), e.g. sensor.helios_hausdach_power_now.
+  pv_curve_attribute:
+    name: Attribute of the PV forecast curve
+    description: Name of the attribute holding the curve, default forecast.
+  tariff_house_load_entity:
+    name: House consumption (power)
+    description: >-
+      Sensor with the total house consumption in W. Together with the actual
+      power of the HEMS devices HEMS derives the base load (hems.grundlast_w
+      in Data Insight).
+  pv_actual_entity:
+    name: PV power (actual)
+    description: Measured PV power in W – reference for the PV forecast in Data Insight.
+  insight_host:
+    name: Data Insight – host
+    description: >-
+      auto finds the Skytech Data Insight add-on via the Supervisor. Otherwise
+      enter the add-on's hostname.
+  insight_port:
+    name: Data Insight – port
+    description: PostgreSQL port in the add-on network, default 5432.
+  insight_password:
+    name: Data Insight – password
+    description: >-
+      Password of the database user skytech_hems. Generate it in Data Insight on
+      the "Access" page. Empty = no storage in Data Insight.
   devices:
     name: Device list
     description: >-

@@ -1,4 +1,65 @@
 configuration:
+  tariff_enabled:
+    name: Dynamischer Strompreis
+    description: >-
+      Schaltet das Preis- und Prognosemodul ein (D-065). Es liest Preis und
+      PV-Prognose, zeigt sie im Bereich „Dynamischer Strompreis“ und als
+      sensor.ems_dyn_preis und sensor.ems_dyn_pv_prognose. Es schaltet nichts.
+  tariff_price_entity:
+    name: Preissensor
+    description: >-
+      Sensor mit dem tatsächlich zu zahlenden Endpreis in €/kWh und der
+      Preiskurve im Attribut data (Format wie sensor.epex_spot_data_total_price_2).
+      Pflicht, wenn der dynamische Strompreis eingeschaltet ist.
+  tariff_price_interval:
+    name: Preisraster
+    description: >-
+      auto ermittelt das Raster aus der Kurve (start_time bis end_time). 15 oder
+      60 legt es fest; weicht der Sensor ab, gilt die Kurve als ungültig.
+  tariff_tomorrow_warning_time:
+    name: Warnung, wenn Preise für morgen fehlen
+    description: >-
+      Ab dieser Uhrzeit (hh:mm, Berliner Zeit) wird gewarnt, wenn die
+      Preiskurve noch nicht bis zum Ende des morgigen Tages reicht.
+  pv_today_entity:
+    name: PV-Prognose heute
+    description: Sensor mit der erwarteten PV-Energie für heute in kWh (Helios).
+  pv_tomorrow_entity:
+    name: PV-Prognose morgen
+    description: Sensor mit der erwarteten PV-Energie für morgen in kWh (Helios).
+  pv_today_remaining_entity:
+    name: PV-Prognose Rest heute
+    description: Sensor mit der für heute noch erwarteten PV-Energie in kWh (Helios).
+  pv_curve_entity:
+    name: PV-Prognosekurve
+    description: >-
+      Sensor, dessen Attribut die PV-Prognosekurve enthält (Liste von datetime,
+      watts, p10, p90), z. B. sensor.helios_hausdach_power_now.
+  pv_curve_attribute:
+    name: Attribut der PV-Prognosekurve
+    description: Name des Attributs mit der Kurve, Standard forecast.
+  tariff_house_load_entity:
+    name: Hausverbrauch (Leistung)
+    description: >-
+      Sensor mit dem gesamten Hausverbrauch in W. Daraus und aus den
+      Istleistungen der HEMS-Geräte rechnet das HEMS die Grundlast
+      (hems.grundlast_w in Data Insight).
+  pv_actual_entity:
+    name: PV-Leistung (Ist)
+    description: Gemessene PV-Leistung in W – Vergleichswert für die PV-Prognose in Data Insight.
+  insight_host:
+    name: Data Insight – Host
+    description: >-
+      auto sucht das Add-on Skytech Data Insight über den Supervisor. Sonst den
+      Hostnamen des Add-ons eintragen.
+  insight_port:
+    name: Data Insight – Port
+    description: PostgreSQL-Port im Add-on-Netz, Standard 5432.
+  insight_password:
+    name: Data Insight – Passwort
+    description: >-
+      Passwort des Datenbankbenutzers skytech_hems. In Data Insight auf der Seite
+      „Zugänge“ erzeugen. Leer = keine Speicherung in Data Insight.
   devices:
     name: Geräteliste
     description: >-

@@ -8,6 +8,40 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Hinzugefügt — 13.10.2026 (Dynamischer Strompreis, Phase P4)
+
+- **Speicherung in Skytech Data Insight.** Mit gesetztem `insight_password` meldet sich das HEMS als
+  `skytech_hems` bei Data Insight an (Host automatisch über den Supervisor). Es legt die benötigten
+  Sensoren dort an oder übernimmt vorhandene, ordnet sie festen Rollen zu und legt bei einem Tausch
+  den alten Sensor still. Preisläufe (nur bei geänderter Kurve, kein Duplikat nach Neustart) und
+  PV-Prognoseläufe (stündlich oder bei Änderung) werden gespeichert.
+- **Grundlast** `hems.grundlast_w` je Viertelstunde: Hausverbrauch minus Istleistung der
+  HEMS-Verbraucher minus Leistung der Speicher, die im Hausverbrauch-Sensor stecken (neue Einstellung
+  je Speicher). Gerechnet aus den in Data Insight aufgezeichneten Werten; Lücken werden bis zu 10 Tage
+  nachgerechnet.
+- Im Bereich „Dynamischer Strompreis“: Hausverbrauch- und PV-Ist-Sensor, je Speicher „steckt im
+  Hausverbrauch-Sensor“, Verbindung zu Data Insight und eine Karte mit Zustand, Rollen und den letzten
+  Schreibvorgängen.
+- Das Passwort verlässt das Add-on nie: `GET api/config` liefert es leer, dazu nur „gesetzt ja/nein“.
+- Neue Abhängigkeit `psycopg` 3 mit `libpq5` im Image. Vertrag `contract_hems_data_insight` 0.2:
+  HEMS-Seite implementiert (Skytech-Data-Insight im selben Arbeitspaket nachgezogen).
+
+### Hinzugefügt — 13.10.2026 (Dynamischer Strompreis, Phase P3)
+
+- **Neuer Bereich „Dynamischer Strompreis“** unter „Vorausschau“. Er zeigt den aktuellen Endpreis,
+  bis wann Preise bekannt sind, ob die Preise für morgen schon da sind, den günstigsten und teuersten
+  kommenden Slot, eine Tabelle der nächsten Preise sowie die PV-Prognose (heute, morgen, Rest heute,
+  Prognosekurve mit Tagessummen). Darunter werden die Quellen eingestellt: Preissensor im Format von
+  `sensor.epex_spot_data_total_price_2`, Raster automatisch, 15 oder 60 min, Uhrzeit der Warnung und
+  die Helios-Sensoren (D-065).
+- **Anzeige-Sensoren** `sensor.ems_dyn_preis` (aktueller Endpreis) und `sensor.ems_dyn_pv_prognose`
+  (PV Rest heute) mit Gültigkeit und Grund. Sie werden nur bei Änderung geschrieben.
+- **`GET api/tariff/status`** mit dem vollständigen Zustand.
+- Das Modul läuft im eigenen Minutentakt auf dem Zustand, den der Regelzyklus ohnehin holt. Es schaltet
+  nichts, löst keine zusätzliche Abfrage bei Home Assistant aus und ist ohne `tariff_enabled` aus.
+  Ungültige Daten (falsches Raster, Lücke, falsche Einheit, Zeitpunkt außerhalb der Kurve …) werden mit
+  Grund angezeigt, nie durch Ersatzwerte überdeckt.
+
 ### Dokumentation — 12.10.2026 (Vertrag mit Data-Insight 0.2)
 
 - Vertrag `contract_hems_data_insight` auf Version 0.2, wortgleich mit Skytech-Data-Insight: Das HEMS

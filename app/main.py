@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import signal
+import time
 import uuid
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -42,6 +43,9 @@ import flow_publisher
 from flow_publisher import FlowPublisher
 from status_publisher import StatusPublisher
 from supervisor_client import SupervisorClient
+from tariff.insight_sync import InsightSync
+from tariff.service import TARIFF_INTERVAL_S, TariffConfig, TariffService
+from tariff_publisher import TariffPublisher
 
 # Alle für Menschen lesbaren Zeitangaben laufen über diese Zone und dieses
 # Format – Datum TT.MM.JJJJ, Uhrzeit Berliner Zeit ohne Offset oder Kürzel.
@@ -74,6 +78,13 @@ OPTIONS_PATH = Path(os.environ.get("HEMS_OPTIONS_PATH", "/data/options.json"))
 # Persistentes Add-on-Verzeichnis. Eigener Inhalt: der Merker der Notabschaltung
 # (D-059) und die internen Ersatzwerte (D-061). Für die lokale Entwicklung überschreibbar.
 DATA_DIR = Path(os.environ.get("HEMS_DATA_DIR", "/data"))
+
+# Optionen, die der Abgleich mit Data Insight braucht (D-065, P4).
+INSIGHT_OPTION_KEYS = (
+    "tariff_price_entity", "pv_today_entity", "pv_tomorrow_entity", "pv_today_remaining_entity",
+    "pv_curve_entity", "tariff_house_load_entity", "pv_actual_entity",
+    "insight_host", "insight_port", "insight_password",
+)
 
 # Der Wächter der Notabschaltung fragt die Bedingungs-Entität in diesem Takt
 # ab – unabhängig vom Regelzyklus, damit „sofort“ nicht bis zu interval_s heißt.
@@ -539,6 +550,19 @@ class HEMSApp:
         self._flow_options: dict = options
         self._addon_version: str = ""
 
+        # Dynamischer Strompreis (D-065): eigener Takt, liest nur den
+        # Schnappschuss des Regelzyklus und schaltet nichts.
+        self.tariff = TariffService(TariffConfig.from_options(
+            {key: option(key) for key in TariffConfig.option_keys()}))
+        self._tariff_publisher = TariffPublisher()
+        # Speicherung in Skytech Data Insight (D-065, P4). Ohne Passwort aus.
+        self.insight = InsightSync(
+            {key: option(key) for key in INSIGHT_OPTION_KEYS},
+            validated.devices,
+            resolve_host=self._resolve_insight_host,
+        )
+        self._last_states_at: float | None = None   # time.monotonic() des Schnappschusses
+
     # ------------------------------------------------------------------
     # Aufbau
     # ------------------------------------------------------------------
@@ -632,7 +656,9 @@ class HEMSApp:
             states = await self.ha.fetch_all_states()
             # Für die Entitätsauswahl der Konfigurationsseite vorhalten: sie
             # braucht denselben Schnappschuss, nicht einen eigenen HA-Abruf.
+            # Das Preis- und Prognosemodul (D-065) liest ihn ebenfalls.
             self._last_states = states
+            self._last_states_at = time.monotonic()
             if await self._emergency_cycle(states):
                 # Auch während der Notabschaltung lebt das HEMS: die Provider
                 # setzen dann die vom HEMS genullten Helfer um.
@@ -695,6 +721,52 @@ class HEMSApp:
         while True:
             await self._run_cycle()
             await asyncio.sleep(self.interval_s)
+
+    async def _tariff_once(self) -> None:
+        """Eine Auswertung des Preis- und Prognosemoduls (D-065). Wirft nie."""
+        try:
+            now = datetime.datetime.now(BERLIN)
+            age = None if self._last_states_at is None else time.monotonic() - self._last_states_at
+            status = self.tariff.evaluate(self._last_states, age, now)
+            await self._tariff_publisher.publish(self.ha, status, self._last_states)
+            pv_details = {key: (value.value_kwh if value is not None and value.valid else None)
+                          for key, value in self.tariff.pv_values.items()}
+            status["insight"] = await self.insight.tick(
+                now, self._last_states, self.tariff.price, self.tariff.pv_curve, pv_details)
+        except Exception as exc:
+            log.error("Dynamischer Strompreis: Auswertung fehlgeschlagen: %s", exc, exc_info=True)
+
+    async def _resolve_insight_host(self) -> str:
+        """Hostname des installierten Add-ons Skytech Data Insight über den Supervisor."""
+        try:
+            addons = await self.supervisor.list_addons()
+        except Exception as exc:
+            log.warning("Data Insight: Add-on-Liste nicht abrufbar: %s", exc)
+            return ""
+        for addon in addons:
+            slug = str(addon.get("slug") or "")
+            if slug == "skytech_data_insight" or slug.endswith("_skytech_data_insight"):
+                return slug.replace("_", "-")
+        return ""
+
+    async def _tariff_loop(self) -> None:
+        """Eigener Takt, unabhängig vom Regelzyklus; nimmt nie dessen Schreib-Lock."""
+        if not self.tariff.config.enabled:
+            return
+        log.info("Dynamischer Strompreis aktiv (Takt %d s).", TARIFF_INTERVAL_S)
+        # Erst nach dem ersten Schnappschuss des Regelzyklus auswerten – sonst
+        # stünden die Anzeige-Sensoren nach jedem Start kurz auf unavailable.
+        # Kommt keiner, wird nach zwei Intervallen trotzdem ausgewertet.
+        waited = 0.0
+        while self._last_states_at is None and waited < 2 * self.interval_s + 5:
+            await asyncio.sleep(1)
+            waited += 1
+        while True:
+            await self._tariff_once()
+            await asyncio.sleep(TARIFF_INTERVAL_S)
+
+    async def _handle_tariff_status(self, request: web.Request) -> web.Response:
+        return web.json_response(self.tariff.status)
 
     async def _emergency_watcher(self) -> None:
         """Fragt die Bedingungs-Entität jede Sekunde ab (D-059).
@@ -1107,6 +1179,7 @@ class HEMSApp:
                             self._handle_config_save_and_restart)
         app.router.add_post("/api/emergency/acknowledge", self._handle_emergency_acknowledge)
         app.router.add_post("/api/emergency/test",        self._handle_emergency_test)
+        app.router.add_get("/api/tariff/status",           self._handle_tariff_status)
 
         # Gebündelte Assets der Oberfläche. Vite legt sie unter assets/ ab; die
         # Pfade in index.html sind relativ, damit sie auch unter dem
@@ -1135,16 +1208,18 @@ class HEMSApp:
 
         scheduler_task = asyncio.create_task(self._scheduler())
         watcher_task = asyncio.create_task(self._emergency_watcher())
+        tariff_task = asyncio.create_task(self._tariff_loop())
         try:
             await stop_event.wait()
         finally:
             log.info("Herunterfahren – Scheduler stoppen und Ressourcen freigeben.")
-            for task in (scheduler_task, watcher_task):
+            for task in (scheduler_task, watcher_task, tariff_task):
                 task.cancel()
                 try:
                     await task
                 except asyncio.CancelledError:
                     pass
+            await self.insight.close()
             await self.ha.close()
             await self.supervisor.close()
             await runner.cleanup()

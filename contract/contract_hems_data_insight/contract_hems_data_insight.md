@@ -2,9 +2,9 @@
 
 **Version:** 0.2
 
-**Status:** In Skytech Data Insight implementiert; in SkytechHEMS Entwurf (Client noch nicht gebaut)
+**Status:** In beiden Projekten implementiert; einzelne Rollen und Reihen folgen mit der Verbrauchsprognose (siehe Abschnitte)
 
-**Stand:** 12.10.2026
+**Stand:** 13.10.2026
 
 **Grundlage:** SkytechHEMS D-065 (`docs/adr/D-065-preis-und-prognosemodul.md`, Preis- und
 Prognosemodul für den dynamischen Strompreis) und Skytech Data Insight D-027
@@ -20,8 +20,9 @@ eigenen Repository.
 | **Bekannte Grenze** | Bewusst nicht gelöst; wird nicht als Zusage gelesen. |
 
 Jeder Abschnitt nennt seinen Status je Seite. Data Insight erfüllt diese Version mit der
-System-Migration `0003_hems_anbindung.sql`; SkytechHEMS setzt seine Seite mit dem
-Data-Insight-Client um und trägt den Status dann hier nach.
+System-Migration `0003_hems_anbindung.sql`, SkytechHEMS mit dem Data-Insight-Client (Phase P4).
+Geprüft am 13.10.2026 mit einem Integrationstest des HEMS gegen eine von Data Insight migrierte
+Datenbank und Ende-zu-Ende mit Live-Daten der Referenzanlage.
 
 **Änderung gegenüber 0.1:** Das HEMS schreibt nicht mehr direkt in Tabellen, sondern nur über
 Datenbankfunktionen. Grund: Das HEMS schreibt den Mittelwert eines Slots erst nach dessen Ende,
@@ -65,7 +66,7 @@ Home Assistant ── Zustände der Sensoren mit Quelle ha ───────
 
 ## Verbindung und Anmeldung
 
-**Status:** Data Insight implementiert · SkytechHEMS Entwurf
+**Status:** Data Insight implementiert · SkytechHEMS implementiert
 
 | Punkt | Festlegung |
 |---|---|
@@ -82,7 +83,7 @@ Home Assistant ── Zustände der Sensoren mit Quelle ha ───────
 
 ## Vertragsversion
 
-**Status:** Data Insight implementiert · SkytechHEMS Entwurf
+**Status:** Data Insight implementiert · SkytechHEMS implementiert
 
 Data Insight stellt die Sicht `skytech.v_hems_vertrag` mit genau einer Zeile und der Spalte
 `version` (`text`) bereit; für diese Vertragsversion `0.2`. Das HEMS prüft sie bei jedem
@@ -91,7 +92,7 @@ und meldet die Abweichung in seinem Status.
 
 ## Rechte der Rolle `skytech_hems`
 
-**Status:** Data Insight implementiert · SkytechHEMS Entwurf
+**Status:** Data Insight implementiert · SkytechHEMS implementiert
 
 Die Rolle schreibt ausschließlich über die Funktionen unten (`SECURITY DEFINER`, für alle anderen
 Rollen gesperrt). Direkte `INSERT`, `UPDATE` oder `DELETE` auf Tabellen sind ihr nicht erlaubt.
@@ -110,7 +111,7 @@ SQLSTATE `22023` und einer deutschen Meldung.
 
 ## Verwaltete Sensoren
 
-**Status:** Data Insight implementiert · SkytechHEMS Entwurf
+**Status:** Data Insight implementiert · SkytechHEMS implementiert
 
 `skytech.sensor` hat die Spalte `verwaltet_von` (`text`, `NULL` oder `'hems'`).
 
@@ -146,7 +147,10 @@ skytech.hems_sensor_stilllegen(sensor_id integer) → void
 
 ## Rollen und Austausch
 
-**Status:** Data Insight implementiert · SkytechHEMS Entwurf
+**Status:** Data Insight implementiert · SkytechHEMS implementiert für `hausverbrauch`, `pv_ist`,
+`preis`, `pv_prognose_*`, `speicher_soc:*`, `speicher_leistung:*`, `verbraucher_ist:*`,
+`verbraucher_schaltzustand:*` und `grundlast`; die Rollen `schalter_*`, `nutzbar`, `reichweite` und
+`netzladen_zulaessig*` folgen mit Phase P5 (Entwurf)
 
 Das HEMS spricht Sensoren nur über Rollen an. So kann es die Entität hinter einer Rolle tauschen
 (neues Home Assistant, umbenannte Entität, anderer Sensor im HEMS-Tab), ohne dass die Historie
@@ -190,7 +194,8 @@ Neue Rollen kommen mit einer neuen Vertragsversion dazu.
 
 ## HEMS-eigene Messreihen
 
-**Status:** Data Insight implementiert · SkytechHEMS Entwurf
+**Status:** Data Insight implementiert · SkytechHEMS implementiert für `hems.grundlast_w`; die übrigen
+Reihen folgen mit Phase P5 (Entwurf)
 
 ```text
 skytech.hems_messwerte_schreiben(sensor_id integer, zeiten timestamptz[],
@@ -210,7 +215,8 @@ skytech.hems_messwerte_schreiben(sensor_id integer, zeiten timestamptz[],
 
 ## Prognose- und Auswertungsläufe
 
-**Status:** Data Insight implementiert · SkytechHEMS Entwurf
+**Status:** Data Insight implementiert · SkytechHEMS implementiert für `preis` und `pv`; `verbrauch`
+und `auswertung` folgen mit Phase P5 (Entwurf)
 
 ```text
 skytech.hems_lauf_schreiben(art text, quelle text, erstellt timestamptz, raster_min integer,
@@ -257,7 +263,7 @@ Data Insight.
 
 ## Fehlerverhalten
 
-**Status:** Data Insight implementiert · SkytechHEMS Entwurf
+**Status:** Data Insight implementiert · SkytechHEMS implementiert
 
 - Data Insight nicht erreichbar, Anmeldung abgelehnt oder Vertragsversion abweichend: Das HEMS
   meldet das in seinem Status und versucht es im nächsten Takt erneut. Läufe werden nicht
@@ -290,4 +296,4 @@ jede Schreibverbindung von Data Insight zum HEMS.
 | Seite | Stellen |
 |---|---|
 | Skytech Data Insight | `app/sql/0003_hems_anbindung.sql` (Schema, Funktionen, Sichten, Rechte, Aufbewahrung), `rootfs/usr/share/skytech/bootstrap.sql` und `bootstrap_skytech.sql` (Rolle), `templates/pg_hba.conf` (Netz), `app/access_service.py` (Zugang `hems`), `app/sensor_service.py`, `app/main.py`, `app/mcp_tools.py` (Sperre, `409`), `app/collector.py` (keine HA-Werte für `hems.*`, Nachrechnen), Seiten „Sensoren“, „Sensor“, „Zugänge“, „Protokoll“; Tests in `tests/test_db_integration.py` |
-| SkytechHEMS | noch nicht umgesetzt |
+| SkytechHEMS | `app/insight_client.py` (einzige Stelle mit Datenbankzugriff, Vertragsversion), `app/tariff/insight_sync.py` (Rollen, Austausch, Läufe, Grundlast), `app/main.py` (Takt, Host über Supervisor `GET /addons`), `app/configuration.py` und `app/config_service.py` (Optionen `insight_*`, Passwort nie an die Oberfläche), Bereich „Dynamischer Strompreis“; Tests in `tests/test_insight.py` |

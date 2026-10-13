@@ -409,6 +409,8 @@ export interface ConfigDevice {
   capacity_kwh?: number | null
   soc_max_hysteresis_percent?: number | null
   direction_switch_delay_s?: number | null
+  /** Steckt die Leistung im Hausverbrauch-Sensor? Nur für die Grundlast (D-065). */
+  tariff_in_house_load?: boolean
 
   /* Flow Card (D-046): reine Anzeige, ohne Wirkung auf die Regelung. */
   flow_show?: boolean
@@ -489,6 +491,25 @@ export interface ConfigOptions {
   flow_nav_house: string
   flow_nav_battery: string
   flow_nav_rest: string
+  /** Dynamischer Strompreis (D-065): Datenerhebung und Anzeige, kein Regelpfad. */
+  tariff_enabled: boolean
+  tariff_price_entity: string
+  /** `auto`, `15` oder `60`. */
+  tariff_price_interval: string
+  /** hh:mm, Berliner Zeit. */
+  tariff_tomorrow_warning_time: string
+  pv_today_entity: string
+  pv_tomorrow_entity: string
+  pv_today_remaining_entity: string
+  pv_curve_entity: string
+  pv_curve_attribute: string
+  tariff_house_load_entity: string
+  pv_actual_entity: string
+  /** `auto` oder Hostname des Add-ons Skytech Data Insight. */
+  insight_host: string
+  insight_port: number
+  /** Secret: kommt immer leer. Leer senden = unverändert, `null` = entfernen. */
+  insight_password: string | null
 
   devices: ConfigDevice[]
 }
@@ -595,6 +616,8 @@ export interface ConfigResponse extends ConfigValidation {
   supervisor_error: string
   instance_id: string
   supported: ConfigSupported
+  /** Welche Secrets gespeichert sind; ihr Wert verlässt das Add-on nie. */
+  secrets_set: Record<string, boolean>
 }
 
 /** Antwort auf Speichern, Neustart und Speichern-und-neu-starten. */
@@ -638,4 +661,81 @@ export interface FormulaTestResult {
   error: string | null
   error_line: number | null
   variables: FormulaVariableResult[]
+}
+
+/* Dynamischer Strompreis (D-065) – GET api/tariff/status */
+
+export interface TariffSlot {
+  /** TT.MM.JJJJ in Berliner Zeit. */
+  tag: string
+  /** hh:mm in Berliner Zeit. */
+  von: string
+  bis: string
+  von_iso: string
+  bis_iso: string
+  /** €/kWh */
+  preis: number
+}
+
+export interface TariffPrice {
+  entity: string
+  raster_einstellung: string
+  raster_erkannt_min: number | null
+  gueltig: boolean
+  grund: string | null
+  einheit: string | null
+  raster_min?: number
+  aktuell?: TariffSlot
+  horizont_bis?: string
+  horizont_bis_iso?: string
+  stunden_voraus?: number
+  morgen_vorhanden?: boolean
+  warnung?: string | null
+  guenstigster?: TariffSlot
+  teuerster?: TariffSlot
+  kommend?: TariffSlot[]
+  kommend_gesamt?: number
+}
+
+export interface TariffEnergy {
+  entity: string
+  gueltig: boolean
+  wert_kwh: number | null
+  grund: string | null
+}
+
+export interface TariffPvCurve {
+  entity: string
+  attribut: string
+  gueltig: boolean
+  grund: string | null
+  raster_min?: number | null
+  bis?: string | null
+  bis_iso?: string | null
+  tage?: { tag: string; kwh: number }[]
+}
+
+export interface TariffStatus {
+  aktiv: boolean
+  /** TT.MM.JJJJ hh:mm:ss der letzten Auswertung. */
+  stand: string | null
+  grund: string | null
+  preis: TariffPrice | null
+  pv: { heute: TariffEnergy; morgen: TariffEnergy; rest_heute: TariffEnergy; kurve: TariffPvCurve } | null
+  /** Abgleich mit Skytech Data Insight (P4); fehlt, solange keine Auswertung lief. */
+  insight?: TariffInsight
+}
+
+export interface TariffInsight {
+  konfiguriert: boolean
+  verbunden: boolean
+  host: string | null
+  grund: string | null
+  letzter_abgleich: string | null
+  rollen: { rolle: string; entity: string; sensor_id: number }[]
+  hinweise: string[]
+  letzter_preislauf: string | null
+  letzter_pv_lauf: string | null
+  grundlast_bis: string | null
+  grundlast_grund: string | null
 }

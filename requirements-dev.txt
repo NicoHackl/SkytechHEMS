@@ -4,3 +4,5 @@ ruff
 pytest
 hypothesis
 pyyaml
+# Lokal und in der CI ohne Systembibliothek libpq: psycopg mit eigener libpq.
+psycopg[binary]==3.2.13

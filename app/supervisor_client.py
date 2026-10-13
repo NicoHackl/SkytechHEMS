@@ -16,7 +16,7 @@ Referenzen:
 
 import logging
 import os
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import aiohttp
 
@@ -96,6 +96,12 @@ class SupervisorClient:
     async def save_self_options(self, options: Dict[str, Any]) -> None:
         """Speichert die Optionen. Startet das Add-on ausdrücklich NICHT neu."""
         await self._request("POST", "/addons/self/options", payload={"options": options})
+
+    async def list_addons(self) -> List[Dict[str, Any]]:
+        """Installierte Add-ons (Slug, Name, Zustand). Für die Suche nach Data Insight (D-065)."""
+        data = await self._request("GET", "/addons")
+        addons = data.get("addons")
+        return [addon for addon in addons if isinstance(addon, dict)] if isinstance(addons, list) else []
 
     async def restart_self(self) -> None:
         """Startet das eigene Add-on neu. Der Prozess endet dabei."""
