@@ -62,6 +62,8 @@ INTERVAL_MAX_S = 300
 
 _NAME_RE = re.compile(r"^[a-z0-9_]+$")
 _ENTITY_RE = re.compile(r"^[a-z][a-z0-9_]*\.[a-z0-9_]+$")
+_TIME_OF_DAY_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+_ATTRIBUTE_RE = re.compile(r"^[a-z_][a-z0-9_]*$")
 # Strenger als _NAME_RE: ein Formel-Zeilenname (D-045) landet als Python-Bezeichner
 # im Namespace einer Formel, _NAME_RE erlaubt aber z. B. führende Ziffern ("123"),
 # was kein gültiger Bezeichner ist.
@@ -174,7 +176,30 @@ GLOBAL_DEFAULTS: Dict[str, Any] = {
     "flow_nav_house": "",
     "flow_nav_battery": "",
     "flow_nav_rest": "",
+    # Dynamischer Strompreis (D-065): reine Datenerhebung und Anzeige, kein
+    # Regelpfad – deshalb nicht in GLOBAL_KEYS_FORCING_SHUTDOWN.
+    "tariff_enabled": False,
+    "tariff_price_entity": "",
+    "tariff_price_interval": "auto",
+    "tariff_tomorrow_warning_time": "15:00",
+    "pv_today_entity": "",
+    "pv_tomorrow_entity": "",
+    "pv_today_remaining_entity": "",
+    "pv_curve_entity": "",
+    "pv_curve_attribute": "forecast",
 }
+
+# Textfelder des dynamischen Strompreises (D-065). Sie werden beim Normalisieren getrimmt.
+TARIFF_TEXT_KEYS: Tuple[str, ...] = (
+    "tariff_price_entity", "tariff_price_interval", "tariff_tomorrow_warning_time",
+    "pv_today_entity", "pv_tomorrow_entity", "pv_today_remaining_entity",
+    "pv_curve_entity", "pv_curve_attribute",
+)
+TARIFF_ENTITY_KEYS: Tuple[str, ...] = (
+    "tariff_price_entity", "pv_today_entity", "pv_tomorrow_entity",
+    "pv_today_remaining_entity", "pv_curve_entity",
+)
+TARIFF_INTERVALS: Tuple[str, ...] = ("auto", "15", "60")
 
 # Obergrenze der Umschaltschwelle W/kW. Darüber wäre die Karte nie in kW.
 FLOW_WATT_THRESHOLD_MAX = 100000
@@ -336,6 +361,8 @@ def normalize_options(raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     options["emergency_targets"] = _normalize_emergency_targets(raw.get("emergency_targets"))
 
     for key in FLOW_TEXT_KEYS:
+        options[key] = _as_text(options.get(key))
+    for key in TARIFF_TEXT_KEYS:
         options[key] = _as_text(options.get(key))
     options["flow_pv_power_entities"] = _normalize_flow_entities(
         raw.get("flow_pv_power_entities"))
@@ -551,6 +578,28 @@ def _validate_global(options: Dict[str, Any], result: ValidationResult) -> None:
         )
 
     _validate_flow(options, result)
+    _validate_tariff(options, result)
+
+
+def _validate_tariff(options: Dict[str, Any], result: ValidationResult) -> None:
+    """Prüft die Quellen des dynamischen Strompreises (D-065).
+
+    Ist das Modul aus, bleiben eingetragene Werte erhalten und werden nur auf
+    ihre Form geprüft – so lässt es sich vorbereiten und später einschalten.
+    """
+    options["tariff_enabled"] = bool(options.get("tariff_enabled"))
+    for key in TARIFF_ENTITY_KEYS:
+        value = options.get(key) or ""
+        if value and not (value.startswith("sensor.") and _ENTITY_RE.match(value)):
+            result.field_errors[key] = "Vollständige Sensor-Entity-ID erwartet, z. B. sensor.strompreis."
+    if options["tariff_enabled"] and not options.get("tariff_price_entity"):
+        result.field_errors["tariff_price_entity"] = "Bei eingeschaltetem dynamischem Strompreis ein Pflichtfeld."
+    if options.get("tariff_price_interval") not in TARIFF_INTERVALS:
+        result.field_errors["tariff_price_interval"] = "Zulässig sind auto, 15 oder 60."
+    if not _TIME_OF_DAY_RE.match(options.get("tariff_tomorrow_warning_time") or ""):
+        result.field_errors["tariff_tomorrow_warning_time"] = "Uhrzeit im Format hh:mm erwartet, z. B. 15:00."
+    if not _ATTRIBUTE_RE.match(options.get("pv_curve_attribute") or ""):
+        result.field_errors["pv_curve_attribute"] = "Attributname erwartet, z. B. forecast."
 
 
 def _validate_flow(options: Dict[str, Any], result: ValidationResult) -> None:

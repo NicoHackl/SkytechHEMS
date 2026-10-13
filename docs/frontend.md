@@ -139,13 +139,14 @@ dabei ausdrücklich nur die **Entwurfsposition** — die fachliche Identität bl
 | `/steuerung` | – | HA-Helfer je Gerät, direkt bedienbar; fehlt ein Helfer, wird der Wert im HEMS gespeichert (D-061) |
 | `/steuerung-info` | – | Je Helferwert: HA-Helfer vorhanden?, wirksame Quelle und Wert, wohin die Steuerung schreibt; verwaiste interne Werte löschen (D-061) |
 | `/energy-pilot` | Vorausschau | Vorschläge und Planstatus des Energy Pilot |
+| `/dynamischer-strompreis` | Vorausschau | Zustand von Preis und PV-Prognose (`api.tariffStatus()`, alle 30 s), kommende Preise, Quellen als Teil des Konfigurationsentwurfs (D-065) |
 | `/sensoren/ueberschuss`, `/sensoren/hausbilanz` | Einrichtung | Formel-basierte Sensorwerte (D-045) |
 | `/flow-card` | Einrichtung | Anlagenwerte, Anzeigeoptionen und Navigationsziele der Power Flow Card (D-046, D-049) |
 | `/notabschaltung` | Einrichtung | Auslösebedingung mit Live-Prüfung und Zielzustände der Notabschaltung (D-059). Quittiert wird auf `/` |
 | `/konfiguration/*` | Einrichtung | Globale Optionen und Geräteliste |
 
-**Vier Bereiche teilen sich einen Entwurf.** `/konfiguration`, `/sensoren`, `/flow-card` und
-`/notabschaltung` schreiben alle in denselben `ConfigDraft`. Sie stehen deshalb in der Ausnahmeliste von `guard()`
+**Fünf Bereiche teilen sich einen Entwurf.** `/konfiguration`, `/sensoren`, `/flow-card`,
+`/notabschaltung` und `/dynamischer-strompreis` schreiben alle in denselben `ConfigDraft`. Sie stehen deshalb in der Ausnahmeliste von `guard()`
 in `Layout.tsx` — ein Wechsel zwischen ihnen darf keine Rückfrage auslösen, der Entwurf bleibt ja
 erhalten — und tragen alle denselben Punkt in der Navigation, solange etwas ungespeichert ist.
 

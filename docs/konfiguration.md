@@ -354,6 +354,32 @@ recorder:
       - sensor.skytech_hems_flow_status
 ```
 
+### Dynamischer Strompreis (`tariff_*`, `pv_*`)
+
+Preis- und Prognosemodul (D-065, Phase P3). Es erhebt nur Daten und zeigt sie an – es schaltet
+nichts und gehört deshalb nicht zu den Optionen, deren Änderung Geräte vorsorglich abschaltet.
+Gepflegt im Bereich **Dynamischer Strompreis** der Oberfläche.
+
+| Option | Typ | Default | Bedeutung |
+|---|---|---|---|
+| `tariff_enabled` | bool | `false` | Modul an/aus. Aus = keine Auswertung, keine Anzeige-Sensoren |
+| `tariff_price_entity` | Entity-ID (`sensor.*`) | leer | Preissensor mit dem tatsächlich zu zahlenden Endpreis in €/kWh; Pflicht bei `tariff_enabled` |
+| `tariff_price_interval` | `auto` · `15` · `60` | `auto` | Raster der Preiskurve. `auto` = aus `end_time − start_time` ermittelt; ein fest gewähltes Raster, das der Sensor nicht hat, macht die Kurve ungültig |
+| `tariff_tomorrow_warning_time` | `hh:mm` | `15:00` | Ab dieser Uhrzeit (Berliner Zeit) Warnung, wenn die Kurve noch nicht bis Ende morgen reicht |
+| `pv_today_entity`, `pv_tomorrow_entity`, `pv_today_remaining_entity` | Entity-ID (`sensor.*`) | leer | PV-Prognose heute, morgen und Rest heute in kWh (Helios, z. B. `sensor.helios_hausdach_energy_day_1`/`_day_2`/`_today_remaining`) |
+| `pv_curve_entity` | Entity-ID (`sensor.*`) | leer | Sensor mit der PV-Prognosekurve im Attribut, z. B. `sensor.helios_hausdach_power_now` |
+| `pv_curve_attribute` | Attributname | `forecast` | Attribut mit der Kurve: Liste von `{datetime, watts, p10, p90}` |
+
+**Format des Preissensors** (Vorbild `sensor.epex_spot_data_total_price_2`): Einheit `€/kWh`
+oder `EUR/kWh`, Attribut `data` als Liste von `{start_time, end_time, price_per_kwh}` mit
+Zeitstempeln samt Zonenangabe. Die Kurve gilt nur, wenn alle Einträge dasselbe Raster (15 oder
+60 min) haben, lückenlos aufsteigen, endliche Preise tragen (negative sind gültig) und der aktuelle
+Zeitpunkt darin liegt. Sonst steht der Grund im Status, es gibt keinen Ersatzwert. Gerechnet wird
+über Zeitstempel, deshalb sind Tage mit 92 oder 100 Viertelstunden kein Sonderfall.
+
+Das Modul liest im eigenen Minutentakt den Zustand, den der Regelzyklus ohnehin holt; es löst
+keine eigene HA-Abfrage aus. Ist dieser Zustand älter als 5 min, gilt nichts als aktuell.
+
 ## Konfigurationsdateien
 
 | Datei | Zweck | Eingecheckt |

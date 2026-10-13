@@ -252,6 +252,39 @@ Löscht einen internen Wert — danach greifen wieder Add-on-Feld bzw. Default. 
 verwaiste Einträge eines nicht mehr konfigurierten Geräts. **Rumpf** `{"entity_id": "…"}`.
 **Antwort `200`** `{"ok": true}`, auch wenn kein Wert gespeichert war; `400` bei unlesbarer Datei.
 
+### `GET /api/tariff/status`
+
+Letzte Auswertung des Preis- und Prognosemoduls (D-065), Takt 60 s. Reine Anzeige.
+
+```json
+{
+  "aktiv": true, "stand": "13.10.2026 06:15:14", "grund": null,
+  "preis": {
+    "entity": "sensor.epex_spot_data_total_price_2", "raster_einstellung": "auto",
+    "raster_erkannt_min": 15, "gueltig": true, "grund": null, "einheit": "€/kWh", "raster_min": 15,
+    "aktuell": {"tag": "13.10.2026", "von": "06:15", "bis": "06:30",
+                "von_iso": "2026-10-13T06:15:00+02:00", "bis_iso": "2026-10-13T06:30:00+02:00", "preis": 0.38458},
+    "horizont_bis": "14.10.2026 00:00", "horizont_bis_iso": "2026-10-14T00:00:00+02:00",
+    "stunden_voraus": 17.8, "morgen_vorhanden": false, "warnung": null,
+    "guenstigster": {"…": "Slot wie aktuell"}, "teuerster": {"…": "Slot wie aktuell"},
+    "kommend": ["höchstens 96 Slots wie aktuell"], "kommend_gesamt": 71
+  },
+  "pv": {
+    "heute": {"entity": "sensor.helios_hausdach_energy_day_1", "gueltig": true, "wert_kwh": 33.412, "grund": null},
+    "morgen": {"…": "wie heute"}, "rest_heute": {"…": "wie heute"},
+    "kurve": {"entity": "sensor.helios_hausdach_power_now", "attribut": "forecast", "gueltig": true, "grund": null,
+              "raster_min": 15, "bis": "20.10.2026 00:00", "bis_iso": "2026-10-20T00:00:00+02:00",
+              "tage": [{"tag": "13.10.2026", "kwh": 33.41}]}
+  }
+}
+```
+
+- `aktiv: false`: Modul ausgeschaltet; `preis` und `pv` sind dann `null`.
+- `grund` oben: Schnappschuss fehlt oder ist älter als 5 min; dann sind alle Werte ungültig.
+- Bei `preis.gueltig: false` fehlen alle Felder ab `raster_min`; `grund` nennt die verletzte Regel.
+- `warnung`: ab `tariff_tomorrow_warning_time`, solange die Kurve nicht bis Ende morgen reicht.
+- Zeiten mit `_iso` sind Maschinenformat; alle übrigen Zeitangaben sind Berliner Zeit (TT.MM.JJJJ, hh:mm).
+
 ## Konfigurations-Endpunkte
 
 Sie bedienen den Bereich **Konfiguration** der Oberfläche. Geschrieben wird ausschließlich über die

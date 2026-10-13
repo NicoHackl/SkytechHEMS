@@ -8,6 +8,22 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Hinzugefügt — 13.10.2026 (Dynamischer Strompreis, Phase P3)
+
+- **Neuer Bereich „Dynamischer Strompreis“** unter „Vorausschau“. Er zeigt den aktuellen Endpreis,
+  bis wann Preise bekannt sind, ob die Preise für morgen schon da sind, den günstigsten und teuersten
+  kommenden Slot, eine Tabelle der nächsten Preise sowie die PV-Prognose (heute, morgen, Rest heute,
+  Prognosekurve mit Tagessummen). Darunter werden die Quellen eingestellt: Preissensor im Format von
+  `sensor.epex_spot_data_total_price_2`, Raster automatisch, 15 oder 60 min, Uhrzeit der Warnung und
+  die Helios-Sensoren (D-065).
+- **Anzeige-Sensoren** `sensor.ems_dyn_preis` (aktueller Endpreis) und `sensor.ems_dyn_pv_prognose`
+  (PV Rest heute) mit Gültigkeit und Grund. Sie werden nur bei Änderung geschrieben.
+- **`GET api/tariff/status`** mit dem vollständigen Zustand.
+- Das Modul läuft im eigenen Minutentakt auf dem Zustand, den der Regelzyklus ohnehin holt. Es schaltet
+  nichts, löst keine zusätzliche Abfrage bei Home Assistant aus und ist ohne `tariff_enabled` aus.
+  Ungültige Daten (falsches Raster, Lücke, falsche Einheit, Zeitpunkt außerhalb der Kurve …) werden mit
+  Grund angezeigt, nie durch Ersatzwerte überdeckt.
+
 ### Dokumentation — 12.10.2026 (Vertrag mit Data-Insight 0.2)
 
 - Vertrag `contract_hems_data_insight` auf Version 0.2, wortgleich mit Skytech-Data-Insight: Das HEMS

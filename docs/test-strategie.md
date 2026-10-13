@@ -108,6 +108,13 @@ Für die HEMS-internen Ersatzwerte (D-061) zusätzlich verpflichtend:
     interne Werte in Steuerschema, Speicher, Datei und `StateProxy`. Eine unlesbare Datei wirkt
     nicht und wird nicht überschrieben.
 
+**Dynamischer Strompreis (D-065, `tests/test_tariff.py`):** Preiskurve gültig mit negativen
+Preisen, 15- und 60-min-Raster samt fester Einstellung, jede Prüfregel mit Grund (Einheit, fehlende
+Daten, `unavailable`, NaN, Zeitstempel ohne Zone, Lücke, falsche Reihenfolge, gemischtes Raster,
+Zeitpunkt außerhalb), Zeitumstellung (100 Viertelstunden am 25.10.2026), PV-Tageswerte und -Kurve,
+Warnung „Preise für morgen fehlen“ vor und nach der Uhrzeit, veralteter Schnappschuss, Modul aus,
+Anzeige-Sensoren nur bei Änderung oder fehlender Entität, Prüfung der Optionen.
+
 Ein Bugfix ohne Regressionstest ist nicht abgeschlossen. Der Test muss **vor** dem Fix
 nachweislich fehlschlagen.
 
@@ -133,6 +140,9 @@ nie über Ziel **und** bisherigen Wert hinaus.
 Gerätekonstellation gelten müssen — etwa dass die Summe der Zuteilungen den Pool nie übersteigt und
 dass kein Gerät über `max_technisch` hinaus zugeteilt bekommt. Neue Regeln der Verteilungslogik
 gehören hierher, nicht in ein weiteres Beispiel.
+
+`test_tariff.py` prüft mit Hypothesis die Preiskurve: jede lückenlose Kurve mit 15- oder 60-min-Raster
+und beliebigen Preisen ist gültig und findet den laufenden Slot; jede Lücke macht sie ungültig.
 
 ## Coverage
 

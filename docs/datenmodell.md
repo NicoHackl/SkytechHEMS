@@ -454,6 +454,19 @@ Reine Anzeige, Quelle der Wahrheit ist die Merkerdatei. HA-Automationen können 
 insbesondere sollten Automationen, die HEMS-Helfer an echte Geräte weiterreichen, ihn als
 Bedingung prüfen.
 
+## Veröffentlichte Sensoren des dynamischen Strompreises (D-065)
+
+Nur bei `tariff_enabled`. Geschrieben vom Preis- und Prognosemodul im eigenen Takt (60 s), aber nur
+bei geändertem Inhalt oder wenn die Entität nach einem HA-Neustart fehlt. Reine Anzeige.
+
+| Entität | State | Attribute |
+|---|---|---|
+| `sensor.ems_dyn_preis` | aktueller Endpreis in €/kWh, `unavailable` bei ungültiger Kurve | `gueltig`, `grund`, `quelle`, `raster_min`, `horizont_bis` (ISO), `morgen_vorhanden`, `guenstigster_slot` und `teuerster_slot` (je `von`, `bis` ISO, `preis`) |
+| `sensor.ems_dyn_pv_prognose` | PV-Prognose Rest heute in kWh, sonst `unavailable` | `gueltig`, `grund`, `heute_kwh`, `morgen_kwh`, `kurve_gueltig`, `kurve_bis` (ISO) |
+
+Die Kurven selbst stehen nicht in den Attributen; sie gehören nach Skytech Data Insight
+([Vertrag](../contract/contract_hems_data_insight/contract_hems_data_insight.md), ab Phase P4).
+
 ## Migrationen
 
 Es gibt kein Schema, das migriert werden müsste. Ändert sich der Statusvertrag, müssen im
