@@ -414,6 +414,9 @@ export interface ConfigDevice {
   /** Wirkungsgrade 0,5–1,0 für die Reichweite (D-065, P5), Standard 0,92. */
   tariff_efficiency_charge?: number | null
   tariff_efficiency_discharge?: number | null
+  /** Lade-/Entladezähler in kWh oder Wh für Data Insight (Vertrag 0.3), nur Datenerhebung. */
+  tariff_charge_energy_entity?: string
+  tariff_discharge_energy_entity?: string
 
   /* Flow Card (D-046): reine Anzeige, ohne Wirkung auf die Regelung. */
   flow_show?: boolean
@@ -508,6 +511,12 @@ export interface ConfigOptions {
   pv_curve_attribute: string
   tariff_house_load_entity: string
   pv_actual_entity: string
+  /* Netzanschluss und Energiezähler (Vertrag 0.3): nur Datenerhebung in Data Insight. */
+  tariff_grid_power_entity: string
+  tariff_grid_import_energy_entity: string
+  tariff_grid_export_energy_entity: string
+  pv_actual_energy_entity: string
+  tariff_house_load_energy_entity: string
   /** `auto` oder Hostname des Add-ons Skytech Data Insight. */
   insight_host: string
   insight_port: number

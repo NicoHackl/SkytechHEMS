@@ -139,6 +139,11 @@ options:
   pv_curve_attribute: "forecast"
   tariff_house_load_entity: ""
   pv_actual_entity: ""
+  tariff_grid_power_entity: ""
+  tariff_grid_import_energy_entity: ""
+  tariff_grid_export_energy_entity: ""
+  pv_actual_energy_entity: ""
+  tariff_house_load_energy_entity: ""
   insight_host: "auto"
   insight_port: 5432
   insight_password: ""
@@ -273,6 +278,11 @@ schema:
   pv_curve_attribute: str?
   tariff_house_load_entity: str?
   pv_actual_entity: str?
+  tariff_grid_power_entity: str?
+  tariff_grid_import_energy_entity: str?
+  tariff_grid_export_energy_entity: str?
+  pv_actual_energy_entity: str?
+  tariff_house_load_energy_entity: str?
   insight_host: str?
   insight_port: port?
   insight_password: password?
@@ -309,6 +319,8 @@ schema:
       tariff_in_house_load: bool?
       tariff_efficiency_charge: float(0.5,1)?
       tariff_efficiency_discharge: float(0.5,1)?
+      tariff_charge_energy_entity: str?
+      tariff_discharge_energy_entity: str?
       power_entity: str?
       power_sign: list(positiv_laden|positiv_entladen)?
       available_charge_power_w: float?

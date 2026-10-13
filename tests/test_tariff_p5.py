@@ -234,7 +234,7 @@ def test_sync_short_history_gives_reason_without_run():
     assert not any(run["kind"] == "verbrauch" for run in sync.client.runs)
 
 
-def test_sync_records_slot_means_and_analysis_run():
+def test_sync_records_minute_values_and_analysis_run():
     sync, ticks = _sync()
     asyncio.run(sync.tick(NOW, {**STATES, **SWITCHES}, None, None, {}))
     assert "schalter_netzladen_freigabe" in sync.client.assignments
@@ -247,16 +247,21 @@ def test_sync_records_slot_means_and_analysis_run():
     assert len(runs) == 1 and runs[0]["times"] == [] and runs[0]["source"] == "hems:kennzahlen"
     assert runs[0]["details"]["reichweite_h"] == pytest.approx(3.68)
 
-    later = {**result, "speicher": {**result["speicher"], "nutzbar_kwh": 5.68}}
-    asyncio.run(sync.record(NOW + timedelta(minutes=5), later))
-    assert sync.client.values == []                          # Slot noch nicht vorbei
-    ticks["t"] = 600
-    asyncio.run(sync.record(NOW + timedelta(minutes=15), later))
-    written = {sensor_id: (times, values) for sensor_id, times, values in sync.client.values}
+    # Je Takt ein Momentanwert zum Minutenbeginn (Vertrag 0.3); derselbe Takt zweimal schreibt nichts doppelt.
     nutzbar = sync.client.sensors["hems.nutzbar_kwh"][0]
-    assert written[nutzbar] == ([datetime(2026, 10, 12, 18, 0, tzinfo=UTC)], [4.68])
     zulaessig = sync.client.sensors["hems.netzladen_zulaessig"][0]
-    assert written[zulaessig][1] == [1.0]
+    asyncio.run(sync.record(NOW + timedelta(seconds=20), result))
+    later = {**result, "speicher": {**result["speicher"], "nutzbar_kwh": 5.68}}
+    ticks["t"] = 600
+    asyncio.run(sync.record(NOW + timedelta(minutes=1), later))
+    written = {}
+    for sensor_id, times, values in sync.client.values:
+        written.setdefault(sensor_id, []).extend(zip(times, values))
+    minute = datetime(2026, 10, 12, 18, 5, tzinfo=UTC)
+    assert written[nutzbar] == [(minute, 3.68), (minute + timedelta(minutes=1), 5.68)]
+    assert written[zulaessig] == [(minute, 1.0), (minute + timedelta(minutes=1), 1.0)]
+    reichweite = sync.client.sensors["hems.reichweite_h"][0]
+    assert [value for _, value in written[reichweite]] == [3.68, 3.68]
     # Keine neuen Läufe in diesem Takt und keine Stunde vergangen: kein zweiter Auswertungslauf.
     assert sum(run["kind"] == "auswertung" for run in sync.client.runs) == 1
 

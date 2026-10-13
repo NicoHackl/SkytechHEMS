@@ -8,6 +8,26 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Behoben — 13.10.2026 (Grundlast wurde nicht fortgeschrieben)
+
+- Das HEMS schrieb nach dem ersten Wert keine Grundlast mehr: Data Insight führte den Wert als
+  Konstante fort, und das HEMS hielt die Reihe deshalb für aktuell. Mit Vertrag 0.3 zählt nur noch
+  eine Minute mit echtem Rohwert; die fehlende Grundlast wird bis 10 Tage zurück nachgerechnet.
+
+### Geändert — 13.10.2026 (Vertrag mit Data Insight 0.3)
+
+- Grundlast `hems.grundlast_w` je Minute statt je Viertelstunde, damit kurze Spitzen (z. B.
+  Herdplatten) sichtbar bleiben. Die eigenen Reihen `hems.nutzbar_kwh`, `hems.reichweite_h` und
+  `hems.netzladen_zulaessig*` ebenfalls je Minute.
+- Neue, optionale Datenerhebung: Netzanschluss (Leistung, positiv = Bezug), Zähler für Netzbezug,
+  Einspeisung, PV-Ertrag und Hausverbrauch sowie je Speicher für Laden und Entladen. Felder im
+  Bereich „Dynamischer Strompreis“.
+- Einheitenprüfung: Leistungsrollen nur mit W, Zähler nur mit kWh oder Wh. Ein falscher Sensor wird
+  nicht zugeordnet, die Karte „Speicherung in Data Insight“ zeigt einen Hinweis.
+- Die Verbrauchsprognose nimmt nur Viertelstunden mit mindestens 80 % Grundlast-Abdeckung.
+- Skytech Data Insight im selben Arbeitspaket nachgezogen (Migration 0004). Beide Add-ons zusammen
+  aktualisieren: Bis beide auf 0.3 sind, schreibt das HEMS nichts.
+
 ### Dokumentation — 13.10.2026 (Dynamischer Strompreis, Phase P6)
 
 - Das Grafana-Dashboard „Skytech Dynamischer Strompreis“ steht in Skytech Data Insight

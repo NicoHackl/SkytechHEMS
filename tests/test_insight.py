@@ -88,19 +88,20 @@ def test_roles_without_house_load_or_with_split_battery_sensors():
 
 def _slots(count=3):
     start = datetime(2026, 10, 12, 18, 0, tzinfo=UTC)
-    return [start + timedelta(minutes=15 * i) for i in range(count)]
+    return [start + timedelta(minutes=i) for i in range(count)]
 
 
 def test_grundlast_formula_and_gaps():
+    # Je Minute (Vertrag 0.3): volle Abdeckung 60 s, Minimum 48 s.
     slots = _slots()
-    full = 900.0
+    full = 60.0
     values = {
         "hausverbrauch": {slot: RoleValue(12.0, full, "W") for slot in slots},
         "verbraucher_ist:heizstab": {slot: RoleValue(0.0, full, "W") for slot in slots},
         "verbraucher_schaltzustand:heizlufter_2": {slot: RoleValue(0.5, full, None) for slot in slots},
         "speicher_leistung:acspeicher1": {slot: RoleValue(-1101.0, full, "W") for slot in slots},
     }
-    values["hausverbrauch"][slots[1]] = RoleValue(12.0, 300.0, "W")            # lückenhaft
+    values["hausverbrauch"][slots[1]] = RoleValue(12.0, 30.0, "W")             # lückenhaft
     del values["verbraucher_ist:heizstab"][slots[2]]                            # fehlt
     terms = [GrundlastTerm("verbraucher_ist:heizstab", -1.0),
              GrundlastTerm("verbraucher_schaltzustand:heizlufter_2", -1.0, 1500, needs_watt=False),
@@ -155,6 +156,9 @@ class FakeClient:
         self.values = []
         self.prices = {}
         self.role_data = {}
+        self.minute_data = {}
+        self.counters = {}
+        self.last = None
         self.fail = None
 
     async def connect(self):
@@ -164,10 +168,11 @@ class FakeClient:
     async def close(self):
         pass
 
-    async def ensure_sensor(self, entity, attribute, name, category, quantity, unit, source):
+    async def ensure_sensor(self, entity, attribute, name, category, quantity, unit, source, counter=False):
         if entity not in self.sensors:
             self.sensors[entity] = [len(self.sensors) + 1, True, True]
         self.sensors[entity][1] = True
+        self.counters[entity] = counter
         return self.sensors[entity][0]
 
     async def deactivate_sensor(self, sensor_id):
@@ -192,11 +197,12 @@ class FakeClient:
         self.runs.append(kwargs)
         return len(self.runs)
 
-    async def last_slot(self, role):
-        return None
+    async def last_minute(self, role):
+        return self.last
 
-    async def role_values(self, roles, start, end):
-        return {role: self.role_data.get(role, {}) for role in roles}
+    async def role_values(self, roles, start, end, minutes=False):
+        data = self.minute_data if minutes else self.role_data
+        return {role: {t: v for t, v in data.get(role, {}).items() if start <= t < end} for role in roles}
 
     async def write_values(self, sensor_id, times, values):
         self.values.append((sensor_id, times, values))
@@ -259,19 +265,23 @@ def test_sync_pv_run_throttling_and_grundlast():
     asyncio.run(sync.tick(NOW, STATES, None, curve, details))
     assert len(sync.client.runs) == 2
 
-    # Grundlast: ohne Werte nichts, mit vollständigen Werten genau die abgeschlossenen Slots.
+    # Grundlast je Minute: ohne Werte nichts, mit vollständigen Werten genau die abgeschlossenen Minuten.
     assert sync.client.values == []
-    slot = datetime(2026, 10, 12, 17, 30, tzinfo=UTC)
-    data = {role: {slot: RoleValue(0.0, 900.0, "W")} for role in
+    minute = datetime(2026, 10, 12, 17, 58, tzinfo=UTC)
+    data = {role: {minute: RoleValue(0.0, 60.0, "W")} for role in
             ("verbraucher_ist:heizstab", "verbraucher_ist:wallbox_1", "verbraucher_ist:heizlufter_1",
              "speicher_leistung:acspeicher1")}
-    data["hausverbrauch"] = {slot: RoleValue(450.0, 900.0, "W")}
-    data["verbraucher_schaltzustand:heizlufter_2"] = {slot: RoleValue(0.0, 900.0, None)}
-    sync.client.role_data = data
+    data["hausverbrauch"] = {minute: RoleValue(450.0, 60.0, "W")}
+    data["verbraucher_schaltzustand:heizlufter_2"] = {minute: RoleValue(0.0, 60.0, None)}
+    # Zu spät für diese Minute: noch nicht abgeschlossen (NOW 18:05, Verzögerung 2 min → bis 18:03).
+    data["hausverbrauch"][datetime(2026, 10, 12, 18, 3, tzinfo=UTC)] = RoleValue(1.0, 60.0, "W")
+    sync.client.minute_data = data
+    sync.client.last = datetime(2026, 10, 12, 17, 55, tzinfo=UTC)
+    sync._grundlast_from = None
     asyncio.run(sync.tick(NOW, STATES, None, None, {}))
     sensor_id, times, values = sync.client.values[0]
-    assert sensor_id == sync.client.sensors["hems.grundlast_w"][0] and times == [slot] and values == [450.0]
-    assert sync.status.grundlast_bis == "12.10.2026 19:45"
+    assert sensor_id == sync.client.sensors["hems.grundlast_w"][0] and times == [minute] and values == [450.0]
+    assert sync.status.grundlast_bis == "12.10.2026 19:59"
 
 
 def test_sync_reports_errors_and_missing_password():
@@ -300,6 +310,49 @@ def test_client_error_texts_never_contain_the_password():
 # ---------------------------------------------------------------------------
 # Integration gegen eine von Data Insight migrierte Datenbank
 # ---------------------------------------------------------------------------
+
+def test_roles_for_grid_and_energy_meters_with_unit_check():
+    options = {**OPTIONS, "tariff_grid_power_entity": "sensor.netz", "tariff_grid_import_energy_entity": "sensor.bezug",
+               "tariff_grid_export_energy_entity": "sensor.einspeisung", "pv_actual_energy_entity": "sensor.pv_zaehler",
+               "tariff_house_load_energy_entity": "sensor.haus_zaehler"}
+    devices = [*DEVICES[:5], {**DEVICES[5], "tariff_charge_energy_entity": "sensor.e3dc_laden",
+                              "tariff_discharge_energy_entity": "sensor.e3dc_entladen"}]
+    unit = lambda u: {"state": "1", "attributes": {"unit_of_measurement": u}}  # noqa: E731
+    states = {**STATES, "sensor.netz": unit("W"), "sensor.bezug": unit("kWh"), "sensor.einspeisung": unit("Wh"),
+              "sensor.pv_zaehler": unit("kWh"), "sensor.haus_zaehler": unit("kWh"),
+              "sensor.e3dc_laden": unit("kWh"), "sensor.e3dc_entladen": unit("kWh")}
+    specs, _, notes = build_roles(options, devices, states)
+    roles = {spec.role: spec for spec in specs}
+    assert notes == []
+    assert roles["netz_leistung"].category == "netz" and not roles["netz_leistung"].counter
+    for role in ("netz_bezug_energie", "netz_einspeisung_energie", "pv_ist_energie", "hausverbrauch_energie",
+                 "speicher_laden_energie:e3dc_speicher", "speicher_entladen_energie:e3dc_speicher"):
+        assert roles[role].counter and roles[role].quantity == "energie", role
+    assert "speicher_laden_energie:acspeicher1" not in roles
+
+    # Falsche Einheiten: Rolle wird nicht zugeordnet, Hinweis statt Datenmüll (Fall 13.10.2026).
+    wrong = {**states, "sensor.pv_ist": unit("kWh"), "sensor.bezug": unit("W"), "sensor.haus": unit("kW")}
+    specs, terms, notes = build_roles(options, devices, wrong)
+    roles = {spec.role for spec in specs}
+    assert "pv_ist" not in roles and "netz_bezug_energie" not in roles and "hausverbrauch" not in roles
+    assert "grundlast" not in roles and terms == []
+    assert any(note.startswith("pv_ist: sensor.pv_ist hat die Einheit kWh, erwartet W") for note in notes)
+    assert any("erwartet kWh oder Wh" in note for note in notes)
+
+
+def test_sync_marks_counters_and_grundlast_progress_skips_gaps():
+    sync, ticks = _sync(options={**OPTIONS, "pv_actual_energy_entity": "sensor.pv_zaehler"})
+    states = {**STATES, "sensor.pv_zaehler": {"state": "1", "attributes": {"unit_of_measurement": "kWh"}}}
+    asyncio.run(sync.tick(NOW, states, None, None, {}))
+    assert sync.client.counters["sensor.pv_zaehler"] is True and sync.client.counters["sensor.haus"] is False
+    # Ohne echte Grundlast in Data Insight: Start 10 Tage zurück, je Takt höchstens 2 Tage in Tagesblöcken.
+    assert sync._grundlast_from == NOW.replace(second=0) - insight_sync.MAX_BACKFILL \
+        + insight_sync.BACKFILL_PER_TICK - insight_sync.MINUTE_DELAY
+    # Eine Lücke ohne Werte hält den Fortschritt nicht auf.
+    for _ in range(5):
+        asyncio.run(sync.tick(NOW, states, None, None, {}))
+    assert sync._grundlast_from == NOW.replace(second=0) - 2 * insight_sync.MINUTE_DELAY
+
 
 DSN = os.environ.get("HEMS_INSIGHT_TEST_DSN")
 
@@ -352,12 +405,22 @@ def test_integration_against_data_insight_database():
                     "abdeckung_s) VALUES (%s, %s, %s, %s, %s, %s, 1, 60)",
                     (slot + timedelta(minutes=minute), ids[entity], value, value, value, value))
         sync._last_reconcile = None
+        sync._grundlast_from = slot              # sonst begänne das Nachrechnen 10 Tage zurück
         status = await sync.tick(now, states, price, None, {})
         assert status["grundlast_grund"] is None
         rows = await (await admin.execute(
             "SELECT zeit, wert FROM skytech.messwert m JOIN skytech.sensor s ON s.id = m.sensor_id "
             "WHERE s.entity_id = 'hems.grundlast_w' ORDER BY zeit")).fetchall()
-        assert (slot, 1200.0) in [(row[0], row[1]) for row in rows]   # 900 − 0 − (−300)
+        # Je Minute: 900 − 0 − (−300), für alle 15 Minuten des Slots.
+        assert [(row[0], row[1]) for row in rows if slot <= row[0] < slot + timedelta(minutes=15)] == [
+            (slot + timedelta(minutes=i), 1200.0) for i in range(15)]
+        # Fortschritt nur aus echten Rohwerten: eine Minute mit anzahl = 0 zählt nicht.
+        for minute, count in ((slot, 1), (slot + timedelta(minutes=1), 0)):
+            await admin.execute(
+                "INSERT INTO skytech.messwert_1min (zeit, sensor_id, mittel, minimum, maximum, letzter, anzahl, "
+                "abdeckung_s) VALUES (%s, %s, 1200, 1200, 1200, 1200, %s, 60) ON CONFLICT DO NOTHING",
+                (minute, ids["hems.grundlast_w"], count))
+        assert await sync.client.last_minute("grundlast") == slot
 
         # Phase P5: Verbrauchsprognose mit Band, Auswertung ohne Werte, eigene Reihen als 1/0.
         start = slot + timedelta(minutes=60)
@@ -376,11 +439,18 @@ def test_integration_against_data_insight_database():
         assert kinds == ["auswertung", "preis", "verbrauch"]
         result = analyse_for_integration()
         await sync.record(slot, result)
-        await sync.record(slot + timedelta(minutes=15), result)
+        await sync.record(slot + timedelta(minutes=1), result)
         rows = await (await admin.execute(
             "SELECT s.entity_id, m.wert FROM skytech.messwert m JOIN skytech.sensor s ON s.id = m.sensor_id "
             "WHERE s.entity_id IN ('hems.nutzbar_kwh', 'hems.netzladen_zulaessig')")).fetchall()
-        assert sorted(rows) == [("hems.netzladen_zulaessig", 0.0), ("hems.nutzbar_kwh", 2.5)]
+        assert sorted(rows) == [("hems.netzladen_zulaessig", 0.0)] * 2 + [("hems.nutzbar_kwh", 2.5)] * 2
+        # Zählerrolle: Data Insight kennzeichnet den Sensor als Zähler.
+        sync.options = {**sync.options, "pv_actual_energy_entity": "sensor.pv_zaehler"}
+        sync._last_reconcile = None
+        await sync.tick(now, {**states, "sensor.pv_zaehler": {"state": "1", "attributes": {"unit_of_measurement": "kWh"}}},
+                        price, None, {})
+        assert (await (await admin.execute(
+            "SELECT energie_zaehler FROM skytech.sensor WHERE entity_id = 'sensor.pv_zaehler'")).fetchone())[0] is True
         await sync.close()
         await admin.close()
 

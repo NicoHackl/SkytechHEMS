@@ -47,6 +47,21 @@ configuration:
   pv_actual_entity:
     name: PV power (actual)
     description: Measured PV power in W – reference for the PV forecast in Data Insight.
+  tariff_grid_power_entity:
+    name: Grid connection (power)
+    description: Power at the grid connection in W, positive = import. Data collection in Data Insight only.
+  tariff_grid_import_energy_entity:
+    name: Grid import (meter)
+    description: Grid import meter in kWh or Wh. Data collection in Data Insight only.
+  tariff_grid_export_energy_entity:
+    name: Grid export (meter)
+    description: Grid export meter in kWh or Wh. Data collection in Data Insight only.
+  pv_actual_energy_entity:
+    name: PV yield (meter)
+    description: PV yield meter in kWh or Wh – robust daily energy for the forecast comparison.
+  tariff_house_load_energy_entity:
+    name: House consumption (meter)
+    description: House consumption meter in kWh or Wh – reference for the daily energy.
   insight_host:
     name: Data Insight – host
     description: >-
@@ -192,6 +207,10 @@ configuration:
       battery is part of the house consumption sensor (base load), charge and
       discharge efficiency 0.5–1.0 for the reach (default 0.92). Not used for
       control.
+
+      • tariff_charge_energy_entity, tariff_discharge_energy_entity
+      (optional) – meters of charged and discharged energy in kWh or Wh,
+      data collection in Data Insight only (measured efficiency).
 
       A storage writes ONE signed setpoint to
       input_number.ems_<prefix>_anforderung_leistung_w (positive = charge,
