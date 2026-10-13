@@ -4,7 +4,7 @@
 
 **Status:** In beiden Projekten implementiert
 
-**Stand:** 13.10.2026
+**Stand:** 13.10.2026 (0.3 mit Präzisierung zu Neustarts)
 
 **Grundlage:** SkytechHEMS D-065 (`docs/adr/D-065-preis-und-prognosemodul.md`, Preis- und
 Prognosemodul für den dynamischen Strompreis) und Skytech Data Insight D-027
@@ -223,8 +223,11 @@ skytech.hems_messwerte_schreiben(sensor_id integer, zeiten timestamptz[],
   (`netzladen_zulaessig`) als `1`/`0`.
   - `hems.grundlast_w`: aus den Minutenwerten der Rollen (`v_hems_rolle_1min`) für jede
     abgeschlossene Minute, sobald ihr Ende mindestens 2 min zurückliegt. Eine Minute entfällt, wenn
-    ein Summand fehlt oder unter 48 s abdeckt; Leistungen müssen in `W` vorliegen. Den Fortschritt
-    misst das HEMS nur an Minuten mit echtem Rohwert (`anzahl > 0`).
+    ein Summand fehlt oder unter 48 s abdeckt, oder wenn der Hausverbrauch in dieser Minute keinen
+    Rohwert hat (`anzahl = 0`, Aufzeichnung unterbrochen); Leistungen müssen in `W` vorliegen. Den
+    Fortschritt misst das HEMS nur an Minuten mit echtem Rohwert (`anzahl > 0`). Alle 15 min prüft
+    es die letzten 24 h und rechnet Minuten nach, deren Quellen inzwischen vollständig sind (etwa
+    nachdem Data Insight eine Lücke aus dem HA-Verlauf nachgeladen hat).
   - `hems.nutzbar_kwh`, `hems.reichweite_h`, `hems.netzladen_zulaessig*`: der Momentanwert des
     Auswertungstakts (60 s) zum Minutenbeginn.
 - **Keine Fortführung:** Ein Rohwert einer Reihe mit Quelle `hems` gilt genau für seine Minute.
@@ -233,7 +236,9 @@ skytech.hems_messwerte_schreiben(sensor_id integer, zeiten timestamptz[],
 - Zeitpunkte dürfen nicht in der Zukunft liegen; Werte müssen endlich sein; höchstens 10 000 Werte
   je Aufruf. Bereits vorhandene Zeitpunkte bleiben unverändert (kein Überschreiben).
 - Neue Werte meldet die Funktion per `NOTIFY skytech_hems_werte`. Data Insight rechnet die
-  Minutenwerte ab dem frühesten neuen Zeitpunkt nach, höchstens 10 Tage zurück. Aus Home Assistant
+  Minutenwerte ab dem frühesten neuen Zeitpunkt nach, höchstens 10 Tage zurück. Weil eine Meldung
+  während eines Neustarts verloren geht, gleicht Data Insight zusätzlich beim Start und alle 15 min
+  selbst ab und rechnet Rohwerte ohne Minutenwert nach. Aus Home Assistant
   holt Data Insight für diese Sensoren nichts.
 - Nach einem Ausfall füllt das HEMS Lücken von `hems.grundlast_w` aus den aufgezeichneten
   Einzelsensoren nach (höchstens 10 Tage zurück, je Aufruf höchstens ein Tag); die übrigen

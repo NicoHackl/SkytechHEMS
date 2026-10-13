@@ -405,8 +405,12 @@ Grundlast = Hausverbrauch − Istleistung aller HEMS-Verbraucher (bei Binärger�
 `power_actual_entity`: Schaltanteil × `power_w`) − Leistung der Speicher mit `tariff_in_house_load`
 (positiv = laden). Gerechnet wird je abgeschlossener Minute aus den Minutenwerten, die Data Insight
 aufgezeichnet hat, sobald ihr Ende 2 min zurückliegt; Minuten mit unter 48 s Abdeckung eines Werts
-entfallen, Leistungen müssen in `W` vorliegen. So bleiben kurze Spitzen (z. B. Herdplatten)
-sichtbar. Nach einem Ausfall wird bis zu 10 Tage nachgerechnet, je Takt höchstens 2 Tage. Speicher mit getrennten Lade- und
+entfallen, ebenso Minuten, in denen der Hausverbrauch-Sensor keinen einzigen Rohwert geliefert hat
+(Aufzeichnung unterbrochen, Werte nur fortgeführt). Leistungen müssen in `W` vorliegen. So bleiben
+kurze Spitzen (z. B. Herdplatten) sichtbar. Nach einem Ausfall wird bis zu 10 Tage nachgerechnet, je
+Takt höchstens 2 Tage; alle 15 min prüft das HEMS zusätzlich die letzten 24 h und rechnet Minuten
+nach, deren Quellen inzwischen vollständig sind. Zu Data Insight verbindet sich das HEMS nur über
+IPv4 (Data Insight lässt `skytech_hems` nur aus dem IPv4-Add-on-Netz zu). Speicher mit getrennten Lade- und
 Entladesensoren werden für die Grundlast noch nicht unterstützt.
 
 **Verbrauchsprognose, Reichweite und Netzlade-Freigabe (Phase P5).** Reine Anzeige, schaltet nichts.

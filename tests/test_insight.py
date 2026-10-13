@@ -354,6 +354,43 @@ def test_sync_marks_counters_and_grundlast_progress_skips_gaps():
     assert sync._grundlast_from == NOW.replace(second=0) - 2 * insight_sync.MINUTE_DELAY
 
 
+def test_grundlast_skips_minutes_without_house_raw_values():
+    minute = _slots(1)[0]
+    values = {"hausverbrauch": {minute: RoleValue(5935.0, 60.0, "W", 0)}}  # nur fortgeführt (DI-Ausfall)
+    assert compute_grundlast(values, [], [minute])[0] == []
+    values["hausverbrauch"][minute] = RoleValue(5935.0, 60.0, "W", 17)
+    assert compute_grundlast(values, [], [minute])[1] == [5935.0]
+
+
+def test_sync_heals_missing_grundlast_minutes_later():
+    sync, ticks = _sync()
+    asyncio.run(sync.tick(NOW, STATES, None, None, {}))       # Abgleich, Grundlast-Fortschritt gesetzt
+    gap = datetime(2026, 10, 12, 12, 30, tzinfo=UTC)          # vor 5,5 h: damals fehlten die Quellen
+    sync._grundlast_from = datetime(2026, 10, 12, 18, 0, tzinfo=UTC)
+    full = {role: {gap: RoleValue(0.0, 60.0, "W", 3)} for role in
+            ("verbraucher_ist:heizstab", "verbraucher_ist:wallbox_1", "verbraucher_ist:heizlufter_1",
+             "speicher_leistung:acspeicher1")}
+    full["hausverbrauch"] = {gap: RoleValue(640.0, 60.0, "W", 30)}
+    full["verbraucher_schaltzustand:heizlufter_2"] = {gap: RoleValue(0.0, 60.0, None, 0)}
+    sync.client.minute_data = full
+    sync.client.values.clear()
+    ticks["t"] = insight_sync.HEAL_INTERVAL_S + 1
+    asyncio.run(sync._heal_grundlast(NOW))
+    sensor_id = sync.client.sensors["hems.grundlast_w"][0]
+    assert (sensor_id, [gap], [640.0]) in sync.client.values
+    # Steht die Minute schon in Data Insight, wird sie nicht erneut geschrieben.
+    full["grundlast"] = {gap: RoleValue(640.0, 60.0, "W", 1)}
+    sync.client.values.clear()
+    ticks["t"] = 2 * insight_sync.HEAL_INTERVAL_S + 2
+    asyncio.run(sync._heal_grundlast(NOW))
+    assert sync.client.values == []
+
+
+def test_client_resolves_ipv4_only():
+    assert asyncio.run(insight_client._ipv4("localhost", 5432)) == "127.0.0.1"
+    assert asyncio.run(insight_client._ipv4("gibt-es-nicht.invalid", 5432)) is None
+
+
 DSN = os.environ.get("HEMS_INSIGHT_TEST_DSN")
 
 

@@ -16,7 +16,9 @@ Grenzen:
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import socket
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
@@ -55,6 +57,8 @@ class RoleValue:
     mean: Optional[float]
     coverage_s: float
     unit: Optional[str]
+    # Zahl der Rohwerte (`anzahl`); 0 = nur fortgeführt, None = unbekannt.
+    count: Optional[int] = None
 
 
 class InsightClient:
@@ -72,7 +76,8 @@ class InsightClient:
             return
         try:
             self._conn = await psycopg.AsyncConnection.connect(
-                host=self.settings.host, port=self.settings.port, dbname=self.settings.database, user=ROLE,
+                host=self.settings.host, hostaddr=await _ipv4(self.settings.host, self.settings.port),
+                port=self.settings.port, dbname=self.settings.database, user=ROLE,
                 password=self.settings.password, connect_timeout=CONNECT_TIMEOUT_S, autocommit=True,
                 application_name="skytech_hems", options=f"-c statement_timeout={STATEMENT_TIMEOUT_MS}")
         except psycopg.OperationalError as exc:
@@ -137,12 +142,13 @@ class InsightClient:
         """15-min-Werte (oder mit `minutes` Minutenwerte) je Rolle mit Beginn in [start, end)."""
         view = "v_hems_rolle_1min" if minutes else "v_hems_rolle_15min"
         rows = await self._fetch(
-            f"SELECT rolle, zeit, mittel, abdeckung_s, einheit FROM skytech.{view} "
+            f"SELECT rolle, zeit, mittel, abdeckung_s, einheit, anzahl FROM skytech.{view} "
             "WHERE rolle = ANY(%s) AND zeit >= %s AND zeit < %s",
             (list(roles), start, end))
         result: Dict[str, Dict[datetime, RoleValue]] = {role: {} for role in roles}
-        for role, slot, mean, coverage, unit in rows:
-            result[role][slot] = RoleValue(None if mean is None else float(mean), float(coverage or 0.0), unit)
+        for role, slot, mean, coverage, unit, count in rows:
+            result[role][slot] = RoleValue(None if mean is None else float(mean), float(coverage or 0.0), unit,
+                                           None if count is None else int(count))
         return result
 
     async def price_values(self, start: datetime, end: datetime) -> Dict[datetime, float]:
@@ -219,3 +225,18 @@ def _query_reason(exc: psycopg.Error) -> str:
     if isinstance(exc, psycopg.OperationalError):
         return "Verbindung zu Data Insight unterbrochen"
     return f"Datenbankfehler {exc.sqlstate or ''}".strip()
+
+
+async def _ipv4(host: str, port: int) -> Optional[str]:
+    """IPv4-Adresse des Hosts, sonst None (dann löst libpq selbst auf).
+
+    Data Insight lässt `skytech_hems` nur aus dem IPv4-Add-on-Netz zu. Über IPv6 lehnt es ab,
+    und libpq versucht dann erst die nächste Adresse – mit einem FATAL-Eintrag im Log von
+    Data Insight bei jeder Verbindung (Referenzanlage 13.10.2026).
+    """
+    try:
+        infos = await asyncio.get_running_loop().getaddrinfo(host, port, family=socket.AF_INET,
+                                                             type=socket.SOCK_STREAM)
+    except OSError:
+        return None
+    return str(infos[0][4][0]) if infos else None

@@ -50,6 +50,9 @@ MAX_BACKFILL = timedelta(days=10)
 BACKFILL_PER_TICK = timedelta(days=2)
 WRITE_CHUNK = timedelta(days=1)
 MIN_COVERAGE = 0.8 * MINUTE.total_seconds()
+# Selbstheilung: so weit zurück nach fehlenden Grundlast-Minuten suchen, so oft.
+HEAL_WINDOW = timedelta(hours=24)
+HEAL_INTERVAL_S = 15 * 60
 MIN_SLOT_COVERAGE = 0.8 * SLOT.total_seconds()
 POWER_UNITS = ("W",)
 ENERGY_UNITS = ("kWh", "Wh")
@@ -257,7 +260,12 @@ def series_samples(analysis: Dict[str, Any]) -> Dict[str, Optional[float]]:
 
 def compute_grundlast(values: Dict[str, Dict[datetime, Any]], terms: List[GrundlastTerm],
                       slots: List[datetime]) -> Tuple[List[datetime], List[float], Optional[str]]:
-    """Grundlast je Minute; Minuten mit fehlenden oder lückenhaften Werten (< 48 s) entfallen."""
+    """Grundlast je Minute; Minuten mit fehlenden oder lückenhaften Werten (< 48 s) entfallen.
+
+    Ebenso Minuten, in denen der Hausverbrauch keinen einzigen Rohwert hatte (`count == 0`): Der
+    Sensor meldet im Betrieb alle paar Sekunden; ohne Meldung war die Aufzeichnung unterbrochen,
+    und die Werte sind nur fortgeführt (Referenzanlage 13.10.2026: 5635 W statt rund 2800 W).
+    """
     for role in ["hausverbrauch"] + [term.role for term in terms if term.needs_watt]:
         units = {value.unit for value in values.get(role, {}).values()}
         if units and units != {"W"}:
@@ -266,7 +274,7 @@ def compute_grundlast(values: Dict[str, Dict[datetime, Any]], terms: List[Grundl
     results: List[float] = []
     for slot in slots:
         house = values.get("hausverbrauch", {}).get(slot)
-        if house is None or house.mean is None or house.coverage_s < MIN_COVERAGE:
+        if house is None or house.mean is None or house.coverage_s < MIN_COVERAGE or house.count == 0:
             continue
         total = house.mean
         complete = True
@@ -311,6 +319,7 @@ class InsightSync:
         self._runs_this_tick = False
         self._last_series_minute: Optional[datetime] = None
         self._grundlast_from: Optional[datetime] = None
+        self._last_heal: Optional[float] = None
 
     async def close(self) -> None:
         if self.client is not None:
@@ -332,6 +341,7 @@ class InsightSync:
             await self._write_price_run(price, now)
             await self._write_pv_run(pv_curve, pv_details, now)
             await self._write_grundlast(now)
+            await self._heal_grundlast(now)
             await self._refresh_load_forecast(now)
         except InsightError as exc:
             self.status.verbunden, self.status.grund = False, str(exc)
@@ -474,6 +484,40 @@ class InsightSync:
         # Auch Minuten ohne Ergebnis gelten als bearbeitet – sonst hinge der Fortschritt an einer Lücke.
         # Die jüngsten Minuten bleiben offen: die Einzelsensoren können noch nachgeliefert werden.
         self._grundlast_from = max(start, stop - MINUTE_DELAY)
+
+    async def _heal_grundlast(self, now: datetime) -> None:
+        """Fehlende Grundlast-Minuten der letzten 24 h nachrechnen.
+
+        Fehlten die Quellwerte beim ersten Versuch (Data Insight neu gestartet, Lücke erst später
+        aus dem HA-Verlauf nachgeladen), entfiel die Minute. Ist sie jetzt vollständig, wird sie
+        hier geschrieben; vorhandene Minuten verwirft die Datenbank als Duplikat.
+        """
+        sensor_id = self._role_ids.get(GRUNDLAST_ROLE)
+        if sensor_id is None or self._grundlast_from is None:
+            return
+        if self._last_heal is not None and self._clock() - self._last_heal < HEAL_INTERVAL_S:
+            return
+        self._last_heal = self._clock()
+        assert self.client is not None
+        end = self._grundlast_from
+        start = max(_floor_minute(now - HEAL_WINDOW), end - HEAL_WINDOW)
+        if start >= end:
+            return
+        roles = [GRUNDLAST_ROLE, "hausverbrauch"] + [term.role for term in self._terms]
+        values = await self.client.role_values(roles, start, end, minutes=True)
+        present = {moment for moment, value in values.get(GRUNDLAST_ROLE, {}).items()
+                   if value.count is None or value.count > 0}
+        missing = []
+        moment = start
+        while moment < end:
+            if moment not in present:
+                missing.append(moment)
+            moment += MINUTE
+        times, results, _ = compute_grundlast(values, self._terms, missing)
+        if times:
+            written = await self.client.write_values(sensor_id, times, results)
+            if written:
+                log.info("Grundlast: %d fehlende Minuten nachgerechnet.", written)
 
     # ------------------------------------------------------------------
     # Phase P5: Verbrauchsprognose, eigene Reihen, Auswertungslauf
