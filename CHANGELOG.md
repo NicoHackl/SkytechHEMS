@@ -8,6 +8,12 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Dokumentation — 13.10.2026 (Dynamischer Strompreis, Phase P6)
+
+- Das Grafana-Dashboard „Skytech Dynamischer Strompreis“ steht in Skytech Data Insight
+  (`grafana/dashboards/`, uid `skytech-dynamischer-strompreis`). Roadmap M6 und D-065 nachgezogen.
+  Es folgt P7: mindestens 14 Tage beobachten.
+
 ### Hinzugefügt — 13.10.2026 (Dynamischer Strompreis, Phase P5)
 
 - **Verbrauchsprognose** `profil_v1` aus der Grundlast der letzten 28 Tage: je Uhrzeit und Tagtyp

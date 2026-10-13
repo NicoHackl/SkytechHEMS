@@ -114,7 +114,7 @@ Grundsatzentscheidung: [D-065](adr/D-065-preis-und-prognosemodul.md).
 | P3 — Preis- und PV-Quelle, eigener Takt, Anzeige-Sensoren, Tab „Dynamischer Strompreis“ | fertig | D-065, [konfiguration.md](konfiguration.md#dynamischer-strompreis-tariff_-pv_) |
 | P4 — Data-Insight-Client: Sensoren anlegen und austauschen, Prognosen schreiben | fertig | D-065, [Vertrag](../contract/contract_hems_data_insight/contract_hems_data_insight.md) |
 | P5 — Verbrauchsprognose, Reichweite, Kennzahlen, Schalter (nur Anzeige) | fertig | D-065; Grenzen in [bekannte-luecken.md](bekannte-luecken.md) |
-| P6 — Grafana-Dashboard „Dynamischer Strompreis“ | offen | Repo Skytech-Data-Insight |
+| P6 — Grafana-Dashboard „Dynamischer Strompreis“ | fertig (13.10.2026, uid `skytech-dynamischer-strompreis`) | Repo Skytech-Data-Insight, `grafana/dashboards/` |
 | P7 — Beobachtung ≥ 14 Tage, Abnahme der Prognosegüte | offen | D-065 |
 | Steuerung (Netzladen, Entladesperre) | offen | eigener Plan, Logik noch zu besprechen |
 
