@@ -15,10 +15,12 @@ Defizit und einer quittierpflichtigen Notabschaltung (D-059).
 - **Eigene Persistenz.** Es gibt keine Datenbank. Alles, was einen Neustart überleben soll,
   steht als HA-Helfer-Entität in Home Assistant. Auch die Konfigurationsseite legt nichts an: sie
   schreibt über die Supervisor-API dieselbe Optionsquelle, die die native Add-on-Seite bedient.
-  **Ausnahmen** sind genau zwei Dateien unter `/data`: der Merker der Notabschaltung,
+  **Ausnahmen** sind genau drei Dateien unter `/data`: der Merker der Notabschaltung,
   `/data/notabschaltung.json` (D-059) — er muss auch dann gelten, wenn Home Assistant selbst neu
-  startet oder einen Helfer verliert — und die HEMS-internen Ersatzwerte für fehlende HA-Helfer,
-  `/data/interne_werte.json` (D-061), die im Steuerung-Tab eingegeben werden.
+  startet oder einen Helfer verliert —, die HEMS-internen Ersatzwerte für fehlende HA-Helfer,
+  `/data/interne_werte.json` (D-061), die im Steuerung-Tab eingegeben werden, und die Sperre der
+  Speicher am SoC-Maximum, `/data/speicher_sperre.json` (D-066), damit ein Neustart im
+  Hysterese-Band das Laden nicht wieder freigibt.
 - **Anlegen der HA-Helfer.** Das Add-on liest und schreibt sie, erzeugt sie aber nicht.
 - **Prognose und Planung.** Vorausschauende Optimierung liefert der separate **Energy Pilot**;
   HEMS übernimmt dessen Vorschläge nur, siehe [datenmodell.md](datenmodell.md). **Ausnahme:** Für den dynamischen Strompreis wertet das HEMS Preis-, PV- und Verbrauchsprognose
@@ -64,7 +66,8 @@ Defizit und einer quittierpflichtigen Notabschaltung (D-059).
 | `app/configuration.py` | Add-on-Optionen normalisieren und validieren, Modus-Listen parsen und stabil serialisieren, Revisions-Hash bilden, Diff für die sichere Deaktivierung liefern | HA oder den Supervisor ansprechen, Zustand halten |
 | `app/emergency.py` | Notabschaltung (D-059): Bedingung auswerten, Merker lesen und atomar schreiben, Abschaltfolge und Wiederholung fehlgeschlagener Befehle, Quittieren, Statusobjekt und Anzeige-Sensor | Regelentscheidungen des Zyklus treffen, ohne `write_lock` schreiben |
 | `app/internal_values.py` | HEMS-interne Ersatzwerte (D-061): Datei lesen und atomar schreiben, Eingaben gegen das Steuerschema prüfen | Freigaben oder Zwang annehmen, eine unlesbare Datei überschreiben |
-| `app/json_file.py` | Atomares Schreiben kleiner JSON-Dateien unter `/data` (D-059, D-061) | Fachlogik enthalten |
+| `app/battery_latch.py` | Sperre der Speicher am SoC-Maximum (D-066): Datei lesen und nur bei Änderung atomar schreiben | Die Regelung bei einem Lese- oder Schreibfehler anhalten |
+| `app/json_file.py` | Atomares Schreiben kleiner JSON-Dateien unter `/data` (D-059, D-061, D-066) | Fachlogik enthalten |
 | `app/emergency_rules.py` | Operatoren, Domain-Zuordnung der Zielzeilen und Feldfehler — eine Quelle für Validierung, Ausführung und Oberfläche | Etwas importieren, das `configuration.py` importiert (Importzyklus) |
 | `app/formula.py` | Formel-basierte Sensorwerte (D-045): AST-Whitelist prüfen, eingeschränkten Code gegen ein fertiges Namespace-Dict auswerten | HA-Entitäten auflösen, Zustand zwischen Aufrufen halten, `exec`/`eval` auf kompiliertem Python verwenden |
 | `app/ems/controller.py` | Einen Zyklus orchestrieren: globale Eingaben, Pool, Prioritätskaskade, Statusaufbau | Selbst HTTP sprechen |
@@ -244,6 +247,7 @@ Details zu Endpunkten: [api-referenz.md](api-referenz.md).
 │   ├── emergency.py        Notabschaltung: Merker, Abschaltfolge, Quittieren (D-059)
 │   ├── emergency_rules.py  Operatoren, Zielzeilen-Domains, Feldfehler (D-059)
 │   ├── internal_values.py  HEMS-interne Ersatzwerte für fehlende Helfer (D-061)
+│   ├── battery_latch.py    Sperre der Speicher am SoC-Maximum über Neustarts (D-066)
 │   ├── json_file.py        Atomares Schreiben kleiner JSON-Dateien unter /data
 │   ├── flow_publisher.py   Anzeigedaten der Power Flow Card (D-046)
 │   ├── status_publisher.py HEMS-Lebenszeichen für die Provider (D-062)

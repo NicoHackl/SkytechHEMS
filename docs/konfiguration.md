@@ -22,7 +22,7 @@ stehen in der Referenz [Geräteklassen](device_classes/global.md).
 | `HA_TOKEN` | nein | Wert von `SUPERVISOR_TOKEN` | Long-Lived Access Token für die lokale Entwicklung. |
 | `SUPERVISOR_URL` | nein | `http://supervisor` | Nur für Tests und lokale Entwicklung. |
 | `HEMS_OPTIONS_PATH` | nein | `/data/options.json` | Nur für die lokale Entwicklung: von wo die Add-on-Optionen **gelesen** werden. |
-| `HEMS_DATA_DIR` | nein | `/data` | Nur für die lokale Entwicklung: Verzeichnis des Merkers der Notabschaltung (`notabschaltung.json`, D-059) und der internen Ersatzwerte (`interne_werte.json`, D-061). |
+| `HEMS_DATA_DIR` | nein | `/data` | Nur für die lokale Entwicklung: Verzeichnis des Merkers der Notabschaltung (`notabschaltung.json`, D-059), der internen Ersatzwerte (`interne_werte.json`, D-061) und der Speicher-Sperre (`speicher_sperre.json`, D-066). |
 
 Gelesen werden sie in [`app/ha_client.py`](../app/ha_client.py) (HA-Zugriff),
 [`app/supervisor_client.py`](../app/supervisor_client.py) (`SUPERVISOR_TOKEN`, `SUPERVISOR_URL`) und
@@ -441,6 +441,7 @@ Entladesensoren werden für die Grundlast noch nicht unterstützt.
 | `/data/options.json` | Vom Supervisor erzeugte Laufzeitkonfiguration; wird nur **gelesen** | nein (nicht im Repo) |
 | `/data/notabschaltung.json` | Merker der Notabschaltung (D-059), vom Add-on atomar geschrieben. Fehlt = nicht aktiv, unlesbar = aktiv | nein (nicht im Repo) |
 | `/data/interne_werte.json` | HEMS-interne Ersatzwerte für fehlende HA-Helfer (D-061), atomar geschrieben. Fehlt = leer, unlesbar = wirkt nicht und wird nicht überschrieben | nein (nicht im Repo) |
+| `/data/speicher_sperre.json` | Sperre der Speicher am SoC-Maximum (D-066), atomar und nur bei Änderung geschrieben. Fehlt oder unlesbar = keine Sperre, wird beim nächsten Wechsel neu geschrieben | nein (nicht im Repo) |
 
 ## Secrets
 

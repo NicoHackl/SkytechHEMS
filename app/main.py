@@ -40,6 +40,7 @@ from internal_values import (
 )
 import battery_publisher
 import flow_publisher
+from battery_latch import BATTERY_LATCH_FILENAME, BatteryLatchStore
 from flow_publisher import FlowPublisher
 from status_publisher import StatusPublisher
 from supervisor_client import SupervisorClient
@@ -528,6 +529,10 @@ class HEMSApp:
         self.internal_values = InternalValueStore(DATA_DIR / INTERNAL_VALUES_FILENAME)
         self.internal_values.load()
 
+        # Sperre am Ladedeckel der Speicher über den Neustart halten (D-066).
+        self.battery_latch = BatteryLatchStore(DATA_DIR / BATTERY_LATCH_FILENAME)
+        self.ems.restore_battery_latches(self.battery_latch.load())
+
         self.config = ConfigService(
             supervisor=self.supervisor,
             write_ops=self.ha.execute_write_ops,
@@ -670,6 +675,7 @@ class HEMSApp:
                 return
             st     = StateProxy(states, internal=self.internal_values.snapshot())
             result = self.ems.run_cycle(st)
+            self.battery_latch.save(self.ems.battery_latches())
             # Der Schreib-Lock gehört auch der Notabschaltung: löst sie während
             # dieser Charge aus, bricht `abort` die restlichen Befehle ab, und
             # ihre Abschaltfolge läuft erst danach – nie ein Sollwert hinterher.
@@ -1094,8 +1100,11 @@ class HEMSApp:
             return web.json_response({"error": reason, "emergency": em.to_status_dict()},
                                      status=409)
         # Ohne await zwischen Quittieren und Neuaufbau: kein Zyklus erwischt
-        # den alten Controller.
+        # den alten Controller. Die Speicher-Sperre (D-066) folgt dem SoC, nicht
+        # dem Regelzustand – sie wird übernommen.
+        latches = self.ems.battery_latches()
         self.ems = self._build_controller()
+        self.ems.restore_battery_latches(latches)
         self._device_configs = self.ems.device_configs
         await em.publish_sensor()
         return web.json_response({"ok": True, "emergency": em.to_status_dict()})

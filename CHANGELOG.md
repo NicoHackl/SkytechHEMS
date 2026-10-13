@@ -8,6 +8,15 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Behoben — 13.10.2026 (Speicher lädt nach Neustart nicht mehr im Hysterese-Band nach)
+
+- Die Sperre am SoC-Maximum („Wiedereinstieg unter SoC-Maximum“) ging bei jedem Neustart von
+  Add-on oder Home Assistant verloren. Beispiel: Ein Speicher, der nach dem Vollladen auf 99 % fiel,
+  wurde bei 3 % Wiedereinstieg trotzdem wieder auf 100 % geladen. Jetzt steht die Sperre in
+  `/data/speicher_sperre.json` und wird beim Start und nach dem Quittieren der Notabschaltung
+  übernommen (D-066). Fehlt die Datei oder ist sie unlesbar, startet das HEMS wie bisher ohne
+  Sperre.
+
 ### Behoben — 13.10.2026 (Grundlast stabil bei Neustarts von Data Insight)
 
 - Während einer Aufzeichnungslücke von Data Insight rechnete das HEMS die Grundlast aus nur

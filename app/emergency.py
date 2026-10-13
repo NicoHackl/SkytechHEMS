@@ -6,7 +6,8 @@ schickt die Geräte über eine frei konfigurierbare Zielliste zurück in ihre
 eigene Automatik und hält danach still, bis ein Mensch quittiert.
 
 Der Merker „Notabschaltung aktiv“ ist eine kleine JSON-Datei unter /data – neben
-den internen Ersatzwerten (D-061) die einzige eigene Persistenz des Add-ons. Ein
+den internen Ersatzwerten (D-061) und der Speicher-Sperre (D-066) die einzige eigene
+Persistenz des Add-ons. Ein
 HA-Helfer reicht nicht, weil
 der Merker auch dann gelten muss, wenn HA selbst neu startet oder den Helfer
 verliert. `sensor.ems_notabschaltung_aktiv` spiegelt ihn nur zur Anzeige.

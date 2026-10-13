@@ -1924,6 +1924,16 @@ class BatteryDevice(ControllableDevice):
             return None
         return min(passend, key=lambda s: (s["max_w"], s["n"]))
 
+    @property
+    def soc_max_latch(self) -> bool:
+        return self._soc_max_latch
+
+    def restore_soc_max_latch(self, value: bool) -> None:
+        """Setzt die Sperre am Ladedeckel aus der gespeicherten Datei (D-066),
+        vor dem ersten Zyklus. Ohne sie gäbe ein Neustart im Hysterese-Band das
+        Laden wieder frei."""
+        self._soc_max_latch = bool(value)
+
     def _update_soc_latch(self) -> None:
         """Hysterese am Ladedeckel: ab soc_max gesperrt, Freigabe erst
         soc_max_hysteresis_percent darunter. Ohne sie flippt der Speicher bei

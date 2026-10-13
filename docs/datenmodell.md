@@ -1,9 +1,9 @@
 # Datenmodell
 
-Das Add-on hat **keine eigene Persistenz** bis auf zwei Dateien unter `/data`: den Merker der
-Notabschaltung (D-059) und die HEMS-internen Ersatzwerte (D-061). Zustand lebt sonst an zwei Orten:
-in den HA-Helfer-Entitäten (überlebt Neustarts) und im Speicher der Geräteobjekte (Timer, überlebt
-keinen Neustart). Dieses
+Das Add-on hat **keine eigene Persistenz** bis auf drei Dateien unter `/data`: den Merker der
+Notabschaltung (D-059), die HEMS-internen Ersatzwerte (D-061) und die Sperre der Speicher am
+SoC-Maximum (D-066). Zustand lebt sonst an zwei Orten: in den HA-Helfer-Entitäten (überlebt
+Neustarts) und im Speicher der Geräteobjekte (Timer, überlebt keinen Neustart). Dieses
 Dokument beschreibt Identität und Statusverträge. Die vollständigen Pflichtfelder, Leserichtungen,
 Schreibrichtungen und Fallbacks der HA-Entitäten stehen in [device_classes/](device_classes/global.md).
 
@@ -363,6 +363,21 @@ Grund steht als `file_error` in `GET /api/internal_values`, und Schreiben ist ge
 Datei repariert oder gelöscht ist. Einträge für Freigaben und Zwang werden beim Laden verworfen.
 Einträge eines nicht mehr konfigurierten Geräts wirken nicht und erscheinen im Tab „Steuerung
 Info“ als verwaist.
+
+### Speicher-Sperre `/data/speicher_sperre.json` (D-066)
+
+Sperre am Ladedeckel je Speicher (`class: battery`): `true` ab Erreichen von `soc_max`, `false`
+ab `soc_max − soc_max_hysteresis_percent`. Schlüssel ist die Geräte-ID (`name`):
+
+```json
+{"latches": {"e3dc_speicher": true}}
+```
+
+Gelesen beim Start und vor dem ersten Zyklus übernommen, auch nach dem Quittieren der
+Notabschaltung. Geschrieben nur, wenn sich eine Sperre ändert. Fehlt die Datei oder ist sie
+unlesbar, startet das HEMS ohne Sperre (Verhalten vor D-066), eine unlesbare Datei wird beim
+nächsten Wechsel überschrieben. Ein Schreibfehler wird geloggt und hält die Regelung nicht an.
+Einträge umbenannter oder gelöschter Speicher wirken nicht und fallen beim nächsten Schreiben weg.
 
 ## Vertrag zum Energy Pilot
 
