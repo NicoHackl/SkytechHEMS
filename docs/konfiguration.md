@@ -399,6 +399,24 @@ aufgezeichnet hat; Slots mit unter 80 % Abdeckung eines Werts entfallen, Leistun
 vorliegen. Nach einem Ausfall wird so bis zu 10 Tage nachgerechnet. Speicher mit getrennten Lade- und
 Entladesensoren werden für die Grundlast noch nicht unterstützt.
 
+**Verbrauchsprognose, Reichweite und Netzlade-Freigabe (Phase P5).** Reine Anzeige, schaltet nichts.
+
+- Verbrauchsprognose `profil_v1`: aus `hems.grundlast_w` der letzten 28 Tage, je Berliner Uhrzeit
+  und Tagtyp (Werktag, Samstag, Sonntag; Feiertage noch nicht), gewichteter Median mit p10/p90,
+  jüngere Tage zählen mehr (Halbwertszeit 7 Tage). Unter 7 Tagen Historie gibt es keine Prognose.
+  Neu gerechnet und in Data Insight gespeichert wird stündlich; ohne Data Insight entfällt sie.
+- Reichweite: alle Speicher mit `capacity_kwh` > 0 als ein Gesamtspeicher. Nutzbar = (SoC − `soc_min`)
+  × Kapazität × Entladewirkungsgrad. Vorausgerechnet je Viertelstunde mit Verbrauchs- und
+  PV-Prognose; Überschuss lädt bis `soc_max`, höchstens mit der Summe der Ladeleistungen. Dreifach: Median, vorsichtig (Verbrauch p90, PV p10)
+  und zuversichtlich (Verbrauch p10, PV p90).
+- Neue Optionen je Speicher: `tariff_efficiency_charge`, `tariff_efficiency_discharge`
+  (0,5–1,0, Default 0,92).
+- Netzlade-Schalter sind HA-Helfer, die der Nutzer selbst anlegt; das HEMS liest sie nur:
+  `input_boolean.ems_netzladen_freigabe`, `input_boolean.ems_netzladen_manuell` und je Speicher
+  `input_boolean.ems_<prefix>_netzladen_erlaubt`. Zulässig = Freigabe UND (Manuell ODER PV reicht
+  nicht); je Speicher zusätzlich dessen Schalter. Das PV-Kriterium kommt mit der Steuerungslogik und
+  gilt bis dahin als nicht erfüllt. Das HEMS lädt weiterhin nie aus dem Netz.
+
 ## Konfigurationsdateien
 
 | Datei | Zweck | Eingecheckt |

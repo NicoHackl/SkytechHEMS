@@ -124,6 +124,14 @@ eine von Data Insight migrierte Datenbank, wenn `HEMS_INSIGHT_TEST_DSN` gesetzt 
 Skytech-Data-Insight `SKYTECH_TEST_DSN=postgresql://postgres:test@127.0.0.1:15432/postgres pytest -q`
 (legt `skytech_test` an), dann hier
 `HEMS_INSIGHT_TEST_DSN=postgresql://postgres:test@127.0.0.1:15432/skytech_test pytest -q`.
+Der Integrationstest schreibt auch einen Verbrauchslauf mit Band, einen Auswertungslauf ohne Werte
+und die Reihen `hems.nutzbar_kwh` und `hems.netzladen_zulaessig`.
+
+**Phase P5 (`tests/test_tariff_p5.py`):** gewichtete Quantile, Mindesthistorie, Tagtypen,
+Zeitumstellung (02:30 Sommer- und Winterzeit gleich, 48 h über Zeitstempel), Speicher aus dem
+Zyklusstatus, Reichweite mit Defizit und nächstem Überschuss, Laden bei Überschuss, Preisblock mit
+Grenze, Gesamtauswertung, Begründungen ohne Prognosen, Netzlade-Freigabe, neue Anzeige-Sensoren,
+Verbrauchslauf stündlich, Slot-Mittel der eigenen Reihen und Auswertungslauf, Wirkungsgrade.
 
 Ein Bugfix ohne Regressionstest ist nicht abgeschlossen. Der Test muss **vor** dem Fix
 nachweislich fehlschlagen.

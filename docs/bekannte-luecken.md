@@ -151,6 +151,19 @@ Der Code ist gebaut und getestet; diese Fragen betreffen die **Inbetriebnahme am
 | F-13 | ~~Welches Gerät wird der AC-Speicher?~~ **Beantwortet (03.09.2026):** Marstek Venus E 3.0, Präfix `acspeicher1`, aktuell über die bestehende Modbus-Automation angebunden. | — |
 | F-14 | Bringt das Gerät eine eigene Nulleinspeisung mit, und lässt sie sich abschalten? Nicht abschaltbar heißt: HEMS und Gerät regeln gegeneinander | Inbetriebnahme |
 
+## Grenzen des dynamischen Strompreises (D-065)
+
+Alles reine Anzeige; die Grenzen betreffen die Aussagekraft, nicht die Regelung.
+
+| Thema | Grenze | Folge |
+|---|---|---|
+| Verbrauchsprognose | Feiertage werden nicht erkannt, sie zählen als Werktag | Feiertage werden mit dem Werktagsprofil vorhergesagt |
+| Verbrauchsprognose | Erst ab 7 Tagen Grundlast-Historie in Data Insight | Bis dahin keine Reichweite und keine Kennzahlen |
+| Grundlast | Speicher mit getrennten Lade- und Entladesensoren fließen nicht ein | Für diese Anlagen fehlt die Grundlast, die Oberfläche zeigt einen Hinweis |
+| Reichweite | Alle Speicher als ein Gesamtspeicher mit summierter Ladeleistung; die Entladeleistung wird nicht begrenzt | Bei hohen Lastspitzen etwas zu optimistisch |
+| Netzlade-Freigabe | Das Kriterium „PV reicht nicht“ ist offen bis zur Entscheidung über die Steuerungslogik | Zulässig nur bei manueller Anforderung |
+| Eigene Reihen | `hems.nutzbar_kwh`, `hems.reichweite_h`, `hems.netzladen_zulaessig*` werden nicht nachgerechnet | Nach einem Ausfall des HEMS bleiben Lücken |
+
 ## Bewusst nicht umgesetzt
 
 | Thema | Warum nicht | Verweis |

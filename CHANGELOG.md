@@ -8,6 +8,26 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Hinzugefügt — 13.10.2026 (Dynamischer Strompreis, Phase P5)
+
+- **Verbrauchsprognose** `profil_v1` aus der Grundlast der letzten 28 Tage: je Uhrzeit und Tagtyp
+  (Werktag, Samstag, Sonntag) ein gewichteter Median mit Band p10–p90, jüngere Tage zählen mehr.
+  Ab 7 Tagen Historie; stündlich neu und in Data Insight gespeichert.
+- **Reichweite der Speicher** (alle zusammen) mit Verbrauchs- und PV-Prognose, dreifach: erwartet,
+  vorsichtig, zuversichtlich. Neue Einstellung je Speicher: Lade- und Entladewirkungsgrad (Start 0,92).
+- **Kennzahlen** für die spätere Steuerung: PV bis zur Reichweite, Netzbezug danach bis zum nächsten
+  PV-Überschuss, günstigstes Ladefenster innerhalb der Reichweite und im ganzen Preishorizont, Rang
+  des aktuellen Preises. Stündlich als Auswertungslauf in Data Insight.
+- **Netzlade-Freigabe als Anzeige:** liest `input_boolean.ems_netzladen_freigabe`,
+  `input_boolean.ems_netzladen_manuell` und je Speicher `input_boolean.ems_<prefix>_netzladen_erlaubt`.
+  Das HEMS lädt weiterhin nie aus dem Netz.
+- Neue Anzeige-Sensoren `sensor.ems_dyn_verbrauch_prognose`, `sensor.ems_dyn_speicher_reichweite`,
+  `sensor.ems_dyn_preisfenster`, `sensor.ems_dyn_netzladen`; Reihen `hems.nutzbar_kwh`,
+  `hems.reichweite_h`, `hems.netzladen_zulaessig*` in Data Insight; Karten „Verbrauch und
+  Reichweite“ und „Netzladen“ im Bereich „Dynamischer Strompreis“.
+- Vertrag `contract_hems_data_insight` 0.2: HEMS-Seite vollständig implementiert (Skytech-Data-Insight
+  im selben Arbeitspaket nachgezogen).
+
 ### Hinzugefügt — 13.10.2026 (Dynamischer Strompreis, Phase P4)
 
 - **Speicherung in Skytech Data Insight.** Mit gesetztem `insight_password` meldet sich das HEMS als

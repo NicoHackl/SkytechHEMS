@@ -198,6 +198,12 @@ configuration:
       einem Richtungswechsel. Währenddessen wird Standby angefordert, nicht die
       alte Richtung fortgesetzt.
 
+      • tariff_in_house_load, tariff_efficiency_charge,
+      tariff_efficiency_discharge (optional) – Dynamischer Strompreis: steckt
+      der Speicher im Hausverbrauch-Sensor (Grundlast), Lade- und
+      Entladewirkungsgrad 0,5–1,0 für die Reichweite (Standard 0,92). Keine
+      Regelgröße.
+
       Ein Speicher schreibt EINEN signierten Sollwert nach
       input_number.ems_<präfix>_anforderung_leistung_w (positiv = laden,
       negativ = entladen) und die Betriebsart nach

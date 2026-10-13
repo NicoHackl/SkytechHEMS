@@ -270,7 +270,7 @@ GLOBAL_KEYS_FORCING_SHUTDOWN: Tuple[str, ...] = (
 DEVICE_KEYS_DISPLAY_ONLY: Tuple[str, ...] = (
     "flow_show", "flow_icon", "flow_color", "flow_navigation",
     # Grundlast des dynamischen Strompreises (D-065): ändert die Regelung nicht.
-    "tariff_in_house_load",
+    "tariff_in_house_load", "tariff_efficiency_charge", "tariff_efficiency_discharge",
 )
 
 
@@ -482,6 +482,9 @@ def _normalize_device(raw: Dict[str, Any]) -> Dict[str, Any]:
             # Steckt die Leistung dieses Speichers im Hausverbrauch-Sensor? Nur für
             # die Grundlast des dynamischen Strompreises (D-065), kein Regelpfad.
             "tariff_in_house_load": bool(raw.get("tariff_in_house_load", False)),
+            # Wirkungsgrade für die Reichweite des dynamischen Strompreises (D-065).
+            "tariff_efficiency_charge": _as_float(raw.get("tariff_efficiency_charge"), 0.92),
+            "tariff_efficiency_discharge": _as_float(raw.get("tariff_efficiency_discharge"), 0.92),
         })
         for key in BATTERY_POWER_FIELDS:
             device[key] = _as_float(raw.get(key), None) if key in raw else None
@@ -948,6 +951,8 @@ def _validate_battery(device: Dict[str, Any], fail) -> None:
     capacity = _as_float(device.get("capacity_kwh"), None)
     if capacity is None or not math.isfinite(capacity) or capacity < 0:
         fail("capacity_kwh", "Endliche Zahl ab 0 kWh erwartet.")
+    for key in ("tariff_efficiency_charge", "tariff_efficiency_discharge"):
+        _number(device, key, fail, minimum=0.5, maximum=1.0, text="Wirkungsgrad von 0,5 bis 1,0 erwartet.")
 
     _number(device, "soc_max_hysteresis_percent", fail, minimum=0.0, maximum=100.0,
             text="Endliche Zahl von 0 bis 100 Prozent erwartet.")

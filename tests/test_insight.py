@@ -62,6 +62,8 @@ def test_roles_for_reference_installation():
         "verbraucher_schaltzustand:heizlufter_2",
         "speicher_soc:acspeicher1", "speicher_leistung:acspeicher1",
         "speicher_soc:e3dc_speicher", "speicher_leistung:e3dc_speicher", "grundlast",
+        "nutzbar", "reichweite", "netzladen_zulaessig",
+        "netzladen_zulaessig:acspeicher1", "netzladen_zulaessig:e3dc_speicher",
     }
     assert roles["hausverbrauch"].unit == "W" and roles["pv_ist"].unit is None
     assert roles["grundlast"].entity_id == "hems.grundlast_w" and roles["grundlast"].source == "hems"
@@ -217,7 +219,7 @@ def test_sync_reconciles_roles_and_swaps_sensors():
     price = parse_price_curve(price_state(), "auto", NOW)
     status = asyncio.run(sync.tick(NOW, STATES, price, None, {}))
     client = sync.client
-    assert status["verbunden"] and status["grund"] is None and len(status["rollen"]) == 13
+    assert status["verbunden"] and status["grund"] is None and len(status["rollen"]) == 18
     assert client.assignments["hausverbrauch"][1] == "sensor.haus"
     assert [run["kind"] for run in client.runs] == ["preis"]
     # Gleiche Kurve: kein zweiter Lauf.
@@ -356,7 +358,35 @@ def test_integration_against_data_insight_database():
             "SELECT zeit, wert FROM skytech.messwert m JOIN skytech.sensor s ON s.id = m.sensor_id "
             "WHERE s.entity_id = 'hems.grundlast_w' ORDER BY zeit")).fetchall()
         assert (slot, 1200.0) in [(row[0], row[1]) for row in rows]   # 900 − 0 − (−300)
+
+        # Phase P5: Verbrauchsprognose mit Band, Auswertung ohne Werte, eigene Reihen als 1/0.
+        start = slot + timedelta(minutes=60)
+        await sync.client.write_run(
+            kind="verbrauch", source="hems:profil_v1", created=now, raster_min=15, valid_from=start,
+            valid_until=start + timedelta(hours=1), unit="W", method="profil_v1",
+            details={"ist_rolle": "grundlast", "historie_tage": 14, "parameter": {}},
+            times=[start + timedelta(minutes=15 * i) for i in range(4)], values=[400.0] * 4,
+            p10=[300.0] * 4, p90=[500.0] * 4)
+        await sync.client.write_run(
+            kind="auswertung", source="hems:kennzahlen", created=now, raster_min=15, valid_from=start,
+            valid_until=start + timedelta(hours=1), unit="kWh", method="kennzahlen_v1",
+            details={"reichweite_h": 3.5}, times=[], values=[])
+        kinds = sorted(row[0] for row in await (await admin.execute(
+            "SELECT art FROM skytech.prognose_lauf")).fetchall())
+        assert kinds == ["auswertung", "preis", "verbrauch"]
+        result = analyse_for_integration()
+        await sync.record(slot, result)
+        await sync.record(slot + timedelta(minutes=15), result)
+        rows = await (await admin.execute(
+            "SELECT s.entity_id, m.wert FROM skytech.messwert m JOIN skytech.sensor s ON s.id = m.sensor_id "
+            "WHERE s.entity_id IN ('hems.nutzbar_kwh', 'hems.netzladen_zulaessig')")).fetchall()
+        assert sorted(rows) == [("hems.netzladen_zulaessig", 0.0), ("hems.nutzbar_kwh", 2.5)]
         await sync.close()
         await admin.close()
 
     asyncio.run(run())
+
+
+def analyse_for_integration():
+    return {"speicher": {"nutzbar_kwh": 2.5}, "kennzahlen": {},
+            "netzladen": {"zulaessig": False, "je_speicher": []}}
