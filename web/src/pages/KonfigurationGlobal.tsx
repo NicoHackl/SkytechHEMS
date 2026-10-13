@@ -126,7 +126,8 @@ export function KonfigurationGlobal() {
               value={draft.battery_residual_power_entity} entities={entities} domains={['sensor']}
               error={fieldErrors.battery_residual_power_entity}
               hint={'Nur für AC-Speicher: negativ = Netzbezug/Unterdeckung, positiv = Einspeisung. '
-                    + 'Sie muss Netzleistung und E3DC-Batterieleistung enthalten; sie steuert nur die Entladung.'}
+                    + 'Sie enthält die Netzleistung plus Speicher, die das HEMS nicht regelt – vom HEMS '
+                    + 'geregelte Speicher gehören nicht hinein. Sie steuert nur die Entladung.'}
               onChange={(value) => patch({ battery_residual_power_entity: value })}
             />
             <label className="switch">

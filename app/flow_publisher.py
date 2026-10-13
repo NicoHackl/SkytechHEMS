@@ -10,7 +10,7 @@ HA-Zustandsmaschine:
 * ``sensor.skytech_hems_flow_status`` — die Kennzahlen des letzten Zyklus und
   je Geraet einen Rueckfallwert.
 
-Beide Nutzlasten sind in ``vertrag_powerflow_card_hems/kontrakt.md`` Feld fuer
+Beide Nutzlasten sind in ``contract/contract_powerflow_card_hems/kontrakt.md`` Feld fuer
 Feld festgeschrieben; der Vertrag ist autoritativ, diese Datei setzt ihn um.
 
 Grenzen, die dieses Modul einhaelt:
@@ -63,6 +63,7 @@ INACTIVE_REASON_TEXTS: Dict[str, str] = {
     "schreibziel_nicht_verfuegbar": "Schreibziel nicht verfügbar",
     "schreibziel_ungueltig": "Schreibziel ungültig",
     "schreiben_fehlgeschlagen": "Schreiben fehlgeschlagen",
+    "istleistung_ungueltig": "Istleistung ungültig",
 }
 
 

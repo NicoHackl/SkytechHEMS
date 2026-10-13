@@ -511,7 +511,6 @@ def _battery(name, *, prefix=None, soc=50, lade_ist=0, entlade_ist=0, sollwert=0
         f"input_select.ems_{p}_betriebsart":                  betriebsart,
         f"input_boolean.ems_{p}_laden_erlaubt":               "on",
         f"input_boolean.ems_{p}_entladen_erlaubt":            "on",
-        f"input_boolean.ems_{p}_netzladen_aktiv":             "off",
         f"input_number.ems_{p}_prioritat":                    prio,
         f"input_number.ems_{p}_entlade_prioritat":            entlade_prio,
         f"input_number.ems_{p}_min_ladeleistung_w":           min_lade,
@@ -525,7 +524,6 @@ def _battery(name, *, prefix=None, soc=50, lade_ist=0, entlade_ist=0, sollwert=0
         f"input_number.ems_{p}_min_anderung_pro_schritt_w":   0,
         f"input_number.ems_{p}_geschutzte_mindestleistung_w": 0,
         f"input_number.ems_{p}_reserve_w":                    0,
-        f"input_number.ems_{p}_netzlade_leistung_w":          0,
     }
 
 
@@ -905,21 +903,31 @@ def test_zu_kleine_zuteilung_rastet_auf_null_im_zyklus():
     assert _op_for(res["write_ops"], "input_number.ems_sp2_anforderung_leistung_w") is None
 
 
-def test_netzladender_speicher_ist_keine_hauslast():
-    """11.3 Regel 1: sonst deckt Speicher B das Netzladen von Speicher A."""
-    cfg = [_battery_cfg("sp1"), _battery_cfg("sp2")]
-    ctrl = EMSController(cfg, residual_power_entity="sensor.s")
+def test_alte_netzlade_helfer_laden_nicht_aus_dem_netz():
+    """D-064: stehen die früheren Netzlade-Helfer noch in HA, bleiben sie wirkungslos.
+
+    Bei Hausdefizit entlädt der Speicher wie gewohnt; ein Netzlade-Sollwert
+    entsteht nicht, und der Status kennt das Feld nicht mehr.
+    """
+    ctrl = EMSController(
+        [_battery_cfg("speicher")],
+        residual_power_entity="sensor.ueberschuss",
+        battery_residual_power_entity="sensor.hausleistungsbilanz",
+    )
     states = {
         **_global(),
-        **_battery("sp1", lade_ist=3000, sollwert=3000),
-        **_battery("sp2"),
-        "input_boolean.ems_sp1_netzladen_aktiv": "on",
-        "sensor.s": -3000,
+        **_battery("speicher"),
+        "input_boolean.ems_speicher_netzladen_aktiv": "on",
+        "input_number.ems_speicher_netzlade_leistung_w": 2000,
+        "sensor.ueberschuss": -700,
+        "sensor.hausleistungsbilanz": -700,
+        "input_number.ems_ac_speicher_entlade_abschlag_w": 0,
     }
-    status = ctrl.run_cycle(make_states(states))["status"]
-    assert status["hems_last_w"] == 0             # nicht in den Pool zurückrechnen
-    assert status["hems_last_gemessen_w"] == 3000  # aber als Last sichtbar
-    assert status["hausdefizit_w"] == 0            # sp2 deckt es nicht
+    res = ctrl.run_cycle(make_states(states))
+    speicher = _dev(res, "speicher")
+    assert speicher["netto_w"] == pytest.approx(-700)
+    assert speicher["entlade_blockiert_grund"] is None
+    assert "netzladen_aktiv" not in speicher
 
 
 def test_speicher_prio_1_verdraengt_heizstab():
@@ -2054,3 +2062,82 @@ def test_ohne_speicher_kein_verbraucherdefizit():
     status = ctrl.run_cycle(make_states(states))["status"]
     assert status["speicher_deckbar_w"] == pytest.approx(3000)
     assert status["verbraucherdefizit_w"] == 0
+
+
+# ---- T-01: Phasenwechsel muss den passenden Strom mitschreiben ----
+
+def test_phasenwechsel_schreibt_strom_trotz_totband_und_rampe():
+    # Vorher 1 Phase, 16 A (3680 W), Wallbox zieht 3680 W, Überschuss +1320 W → Pool 5000 W.
+    # Intern 4140 W (6 A dreiphasig): Änderung 460 W < Totband 690 W (dreiphasig). Früher
+    # entfiel der Stromwert, der Helfer blieb auf 16 A – dreiphasig 11 kW freigegeben.
+    ctrl = EMSController([_wallbox_cfg()], residual_power_entity="sensor.s")
+    res = ctrl.run_cycle(make_states(_wallbox_states(**{
+        "input_number.ems_wallbox_anforderung_leistung_a": 16,
+        "input_number.ems_wallbox_anzahl_phase": 1,
+        "input_number.ems_wallbox_hoch_regelzeit_s": 60,
+        "input_number.ems_wallbox_runter_regelzeit_s": 60,
+        "input_number.ems_wallbox_max_anderung_pro_schritt_a": 2,
+        "input_number.ems_wallbox_min_anderung_pro_schritt_a": 1,
+        "sensor.wb": 3680,
+        "sensor.s": 1320,
+    })))
+    phase = _op_for(res["write_ops"], "input_number.ems_wallbox_anzahl_phase")
+    amp = _op_for(res["write_ops"], "input_number.ems_wallbox_anforderung_leistung_a")
+    assert phase is not None and phase[2]["value"] == 3.0
+    assert amp is not None and amp[2]["value"] == 6   # floor(4140 / 690) = 6 A
+
+
+def test_phasenwechsel_runter_schreibt_strom_mit():
+    # Dreiphasig 6 A (4140 W), Pool 3640 W trägt dreiphasig das Minimum nicht mehr →
+    # einphasig. Der Stromhelfer muss mit der neuen Phasenzahl mitgeschrieben werden.
+    ctrl = EMSController([_wallbox_cfg()], residual_power_entity="sensor.s")
+    res = ctrl.run_cycle(make_states(_wallbox_states(**{
+        "input_number.ems_wallbox_anforderung_leistung_a": 6,
+        "input_number.ems_wallbox_anzahl_phase": 3,
+        "input_number.ems_wallbox_hoch_regelzeit_s": 60,
+        "input_number.ems_wallbox_runter_regelzeit_s": 60,
+        "input_number.ems_wallbox_max_anderung_pro_schritt_a": 2,
+        "input_number.ems_wallbox_min_anderung_pro_schritt_a": 1,
+        "sensor.wb": 4140,
+        "sensor.s": -500,
+    })))
+    phase = _op_for(res["write_ops"], "input_number.ems_wallbox_anzahl_phase")
+    amp = _op_for(res["write_ops"], "input_number.ems_wallbox_anforderung_leistung_a")
+    assert phase is not None and phase[2]["value"] == 1.0
+    assert amp is not None and 6 <= amp[2]["value"] <= 16
+
+
+# ---- Ampere-Gerät ohne gültige Istleistung fährt auf 0 A (Vertrag Wallbox-Provider) ----
+
+@pytest.mark.parametrize("ist", ["unavailable", "unknown", "abc", None])
+def test_ampere_ohne_gueltige_istleistung_schreibt_null(ist):
+    ctrl = EMSController([_wallbox_cfg()], residual_power_entity="sensor.s")
+    states = _wallbox_states(**{
+        "input_number.ems_wallbox_anforderung_leistung_a": 10,
+        "sensor.s": 5000,
+    })
+    if ist is None:
+        del states["sensor.wb"]
+    else:
+        states["sensor.wb"] = ist
+    res = ctrl.run_cycle(make_states(states))
+    amp = _op_for(res["write_ops"], "input_number.ems_wallbox_anforderung_leistung_a")
+    assert amp is not None and amp[2]["value"] == 0
+    dev = _dev(res, "wallbox_1")
+    assert "istleistung_ungueltig" in dev["inactive_reasons"]
+    assert dev["runtime_active"] is False
+
+
+def test_ampere_mit_gueltiger_istleistung_bleibt_aktiv():
+    ctrl = EMSController([_wallbox_cfg()], residual_power_entity="sensor.s")
+    res = ctrl.run_cycle(make_states(_wallbox_states(**{"sensor.s": 5000})))
+    assert "istleistung_ungueltig" not in _dev(res, "wallbox_1")["inactive_reasons"]
+
+
+def test_watt_geraet_ohne_istleistung_bleibt_unveraendert():
+    # Bewusst nur Ampere-Geräte: ein Heizstab ohne Istleistung regelt wie bisher.
+    ctrl = EMSController([_heizstab_cfg()], residual_power_entity="sensor.s")
+    states = _heizstab_states()
+    states["sensor.heizstab_ist"] = "unavailable"
+    res = ctrl.run_cycle(make_states(states))
+    assert "istleistung_ungueltig" not in _dev(res)["inactive_reasons"]

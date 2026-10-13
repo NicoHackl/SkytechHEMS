@@ -1,5 +1,10 @@
 # D-044: Separate Hausleistungsbilanz steuert die AC-Speicherentladung
 
+> **Abgelöst in einem Punkt durch [D-063](D-063-e3dc-als-hems-speicher.md) (12.10.2026):** Der E3DC
+> ist inzwischen selbst HEMS-Speicher (`e3dc_speicher`). Seine Batterieleistung gehört deshalb
+> nicht mehr in die Bilanz. Die Mechanik dieser Entscheidung gilt unverändert; die Bilanz enthält
+> die Netzleistung plus die Leistung von Speichern, die das HEMS nicht regelt.
+
 > **Ergänzung:** [D-045](D-045-formel-basierte-sensorwerte.md) erlaubt zusätzlich eine im
 > Ingress-Panel gepflegte, intern ausgewertete Formel als Alternative zu der hier beschriebenen
 > externen HA-Vorlage. Diese Entscheidung bleibt unverändert gültig — die externe Vorlage

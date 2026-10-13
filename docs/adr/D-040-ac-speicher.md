@@ -104,6 +104,8 @@ sich selbst regelt.
 6. **Der vorhandene E3DC ist kein HEMS-Gerät.** Er regelt sich selbst und bekommt keine
    `BatteryDevice`-Instanz. Seit D-044 ist seine Leistung bewusst Teil der separaten
    Hausleistungsbilanz; er wird nie als HEMS-Speicher abgezogen oder angesteuert.
+   **Abgelöst durch [D-063](D-063-e3dc-als-hems-speicher.md) (12.10.2026):** Der E3DC ist jetzt
+   HEMS-Speicher `e3dc_speicher` und nicht mehr Teil der Hausleistungsbilanz.
 
 Gegen Option A spricht der Skalierungseinwand allein schon zwingend. Option C wird erst
 interessant, wenn die Overrides ausufern; heute trägt die Vererbung den kompletten Ladepfad

@@ -186,8 +186,10 @@ configuration:
     description: >-
       HA-Sensor-Entität für die Entladeplanung aller AC-Speicher. Negativ
       bedeutet Netzbezug beziehungsweise Unterdeckung, positiv Einspeisung.
-      Der Wert muss Netzleistung und die Leistung der selbstregelnden
-      E3DC-Batterie zusammenführen. Er wird ausschließlich für die Entladung
+      Der Wert führt die Netzleistung und die Leistung von Speichern zusammen,
+      die das HEMS nicht regelt (z. B. ein selbstregelnder Hybridspeicher).
+      Vom HEMS geregelte Speicher gehören nicht hinein, sonst zählt ihre
+      Entladung doppelt. Er wird ausschließlich für die Entladung
       benutzt; das Laden bleibt am Überschuss-Sensor. Bei einem konfigurierten
       AC-Speicher ist dieses Feld Pflicht. Liefert der Sensor unknown,
       unavailable oder keinen Zahlenwert, gehen alle AC-Speicher sicher in
@@ -381,8 +383,9 @@ configuration:
     description: >-
       Beschriftung des Batterieknotens. Leer lassen und keinen SoC-Sensor
       eintragen heißt: kein Batterieknoten. Gemeint ist der Hausspeicher der
-      Anlage – auch dann, wenn das HEMS ihn gar nicht regelt (z. B. ein E3DC).
-      Vom HEMS geregelte AC-Speicher stehen dagegen in der Geräteliste.
+      Anlage – auch dann, wenn das HEMS ihn gar nicht regelt (z. B. ein
+      selbstregelnder Hybridspeicher).
+      Vom HEMS geregelte Speicher stehen dagegen in der Geräteliste.
   flow_battery_soc_entity:
     name: Ladestand der Batterie
     description: >-

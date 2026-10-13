@@ -21,7 +21,12 @@ Defizit und einer quittierpflichtigen Notabschaltung (D-059).
   `/data/interne_werte.json` (D-061), die im Steuerung-Tab eingegeben werden.
 - **Anlegen der HA-Helfer.** Das Add-on liest und schreibt sie, erzeugt sie aber nicht.
 - **Prognose und Planung.** Vorausschauende Optimierung liefert der separate **Energy Pilot**;
-  HEMS übernimmt dessen Vorschläge nur, siehe [datenmodell.md](datenmodell.md).
+  HEMS übernimmt dessen Vorschläge nur, siehe [datenmodell.md](datenmodell.md). **Geplante
+  Ausnahme:** Für den dynamischen Strompreis wertet das HEMS Preis-, PV- und Verbrauchsprognose
+  künftig selbst aus, in einem eigenen Modul außerhalb des Regelzyklus
+  ([D-065](adr/D-065-preis-und-prognosemodul.md), [roadmap.md](roadmap.md) M6). Noch nicht gebaut.
+  Datenhaltung in Skytech Data Insight laut
+  [Vertrag](../contract/contract_hems_data_insight/contract_hems_data_insight.md) (Version 0.2).
 - **Direktes Schalten der Endgeräte.** Geschrieben werden ausschließlich `input_*`-Helfer;
   die Übersetzung in reale Schaltvorgänge erledigen HA-Automationen.
 
@@ -68,6 +73,7 @@ Defizit und einer quittierpflichtigen Notabschaltung (D-059).
 | `app/ha_client.py` | Einzige Stelle mit HA-Zugriff: REST für Zustände und Dienste, dazu **eine** WebSocket-Abfrage für die Dashboardliste (D-049), Session-Verwaltung, Timeouts; meldet je Schreiboperation Erfolg oder bereinigten Fehler zurück | Fachlogik enthalten, einen Fehlschlag im Regelpfad verschlucken |
 | `app/ems/ops.py` | `WriteOp` (Operation samt verursachendem Gerät), `WriteResult`, `WriteTarget` | Selbst schreiben |
 | `app/flow_publisher.py` | Anzeigedaten der Power Flow Card (D-046) aus Optionen, Steuerschema und Zyklusstatus bauen und als zwei `sensor.*`-Entitäten veröffentlichen | Ein Gerät schalten, eine Ausnahme nach außen lassen, Home Assistant zusätzlich abfragen |
+| `app/status_publisher.py` | HEMS-Lebenszeichen `sensor.skytech_hems_status` (D-062) nach jedem durchlaufenen Zyklus veröffentlichen | Ein Gerät schalten, eine Ausnahme nach außen lassen |
 | `web/` → `app/static/` | Darstellung und Bedienung | Fachlogik doppeln — sie rechnet nur an, was `/api/status` liefert |
 
 Regel: Keine Komponente übernimmt Aufgaben einer anderen. Verschiebt sich eine Verantwortung,
@@ -194,7 +200,7 @@ Ein Zyklus (`EMSController.run_cycle()`), ausgelöst alle `interval_s` Sekunden:
     jeden Fehler. Die Konfigurationsentität wird nur geschrieben, wenn sich ihr Revisionshash
     geändert hat oder sie im Zustandsabbild fehlt — Letzteres deckt den HA-Neustart ab, nach dem
     per `POST /api/states` erzeugte Entitäten verschwinden. Datenvertrag:
-    [`vertrag_powerflow_card_hems/kontrakt.md`](../vertrag_powerflow_card_hems/kontrakt.md).
+    [`contract/contract_powerflow_card_hems/kontrakt.md`](../contract/contract_powerflow_card_hems/kontrakt.md).
 15. **Ladelimit der Speicher veröffentlichen** (`app/battery_publisher.py`, immer): je Speicher
     `sensor.ems_<prefix>_lade_limit_w` aus dem Statusfeld `lade_limit_w` (D-057). Gleiche
     Grenzen wie Schritt 14: nach dem Zyklus, ohne eigene HA-Abfrage, ohne Regelentscheidung,
@@ -233,6 +239,7 @@ Details zu Endpunkten: [api-referenz.md](api-referenz.md).
 │   ├── internal_values.py  HEMS-interne Ersatzwerte für fehlende Helfer (D-061)
 │   ├── json_file.py        Atomares Schreiben kleiner JSON-Dateien unter /data
 │   ├── flow_publisher.py   Anzeigedaten der Power Flow Card (D-046)
+│   ├── status_publisher.py HEMS-Lebenszeichen für die Provider (D-062)
 │   ├── requirements.txt    Laufzeit-Abhängigkeiten des Containers
 │   ├── ems/
 │   │   ├── controller.py   EMSController, config-getriebene Geräte-Registry
@@ -243,7 +250,7 @@ Details zu Endpunkten: [api-referenz.md](api-referenz.md).
 ├── web/                    Quellen der Oberfläche (React + TypeScript + Vite)
 ├── tests/                  pytest, inklusive Hypothesis-Property-Tests
 ├── erweiterungen/          Entwürfe für geplante Ausbaustufen
-├── vertrag_powerflow_card_hems/  Datenvertrag und Umsetzungsplan der Power Flow Card
+├── contract/                    Projektübergreifende Verträge, je Projektpaar ein Ordner
 └── docs/                   diese Doku
 ```
 
@@ -262,7 +269,8 @@ Zusagen, auf die sich der gesamte Code verlässt. Wer eine davon bricht, bricht 
    Home Assistant. Ausnahme sind die Zielzeilen der Notabschaltung (D-059): Sie schreiben
    ausdrücklich konfigurierte Fremd-Entitäten, um Geräte in ihre Automatik zurückzuschicken. Darüber hinaus veröffentlicht das Add-on reine Anzeigedaten als eigene
    `sensor.*`-Entitäten, die kein Gerät schalten und in keiner Regelentscheidung vorkommen
-   (D-046, D-057). Der Regelpfad selbst bleibt davon unberührt.
+   (D-046, D-057), sowie das Lebenszeichen `sensor.skytech_hems_status` für die Provider
+   (D-062). Der Regelpfad selbst bleibt davon unberührt.
 5. **Ein Zyklusfehler schaltet nichts.** Schlägt der Zyklus fehl, bleibt der letzte Sollwert
    stehen; die Anlage fällt nicht in einen undefinierten Zustand.
 6. **Ein Speicher lädt und entlädt nie gleichzeitig.** Sein einzelner signierter Sollwert und die

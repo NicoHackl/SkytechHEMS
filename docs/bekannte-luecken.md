@@ -1,5 +1,16 @@
 # Bekannte Lücken und Stolpersteine
 
+## Gemeinsamer Contract-Stand — 06.10.2026
+
+EP unterstützt `battery` nicht ausdrücklich in der Discovery. Der Ampere-Schutzvorschlag wird nicht durchgängig übernommen; EP liest die HEMS-interne Ersatzwertkette nicht vollständig.
+Details und geprüfte Codebasis: [gemeinsamer Vertrag](../contract/contract_hems_energy_pilot/contract_hems_energy_pilot.md).
+
+## Provider-Schnittstellen — 07.10.2026
+
+HEMS-Lebenszeichen (D-062) und "ungültige Istleistung ⇒ 0 A" für Ampere-Geräte sind im HEMS
+implementiert. Ob ein Provider sie auswertet, steht im jeweiligen Vertrag unter `contract/`.
+Physische Ausführung bestätigt das HEMS weiterhin nicht.
+
 **Vor jeder Annahme lesen.** Diese Datei existiert, weil Doku und Code auseinanderlaufen. Steht
 etwas in [architektur.md](architektur.md), heißt das nicht, dass es implementiert ist — hier steht,
 wo nicht.
@@ -52,7 +63,9 @@ Dinge, die schon einmal Zeit gekostet haben:
   Doppelzählung und Aufschwingen — siehe [konfiguration.md](konfiguration.md).
 - **Hausleistungsbilanz ist ein zweiter Vertrag.** `battery_residual_power_entity` ersetzt den
   Überschuss-Sensor nicht: negativ bedeutet Unterdeckung, positiv Einspeisung und die Bilanz
-  enthält Netz- plus E3DC-Batterieleistung. Sie steuert nur die AC-Entladung. Fehlt ihr Wert,
+  enthält die Netzleistung plus die Leistung von Speichern, die das HEMS **nicht** regelt. Ein
+  vom HEMS geregelter Speicher gehört nicht hinein, sonst zählt seine Entladung doppelt (D-063).
+  Sie steuert nur die Speicher-Entladung. Fehlt ihr Wert,
   gehen die AC-Speicher auf `standby`; Verbraucher laufen über `residual_power_entity` weiter.
   Formel und die drei `700-W`-Kontrollfälle stehen in
   [konfiguration.md](konfiguration.md#hausleistungsbilanz-für-ac-speicher).
@@ -63,12 +76,17 @@ Dinge, die schon einmal Zeit gekostet haben:
   Speicher. Nach einem Add-on-Neustart beginnt der Zeitschutz von vorn.
 - **Ampere-Modus rechnet intern in Watt.** Nur beim Schreiben wird abgerundet. Wer Ampere-Werte
   vergleicht, muss `new_a` bzw. `schutz_a` nehmen, nicht die Watt-Felder durch die Spannung teilen.
-- **Der Namensraum `ems_speicher_*` gehört nicht dem HEMS.** In dieser Anlage regelt eine eigene
-  HA-Automation den vorhandenen E3DC über `input_number.ems_speicher_mindesladeleistung_1/2`,
-  `ems_speicher_soc_mindestwert_1/2` und `input_boolean.ems_speicher_regelung_stufe_1_aktiv`. Der
-  AC-Speicher des HEMS benutzt deshalb `acspeicher1` als Präfix, sein globaler Helfer heißt
-  `input_number.ems_ac_speicher_entlade_abschlag_w`. Der E3DC ist **kein** HEMS-Gerät: er regelt
-  sich selbst, ist aber bewusst in der Hausleistungsbilanz für die AC-Entladung enthalten.
+- **Der Namensraum `ems_speicher_*` gehört nicht dem HEMS.** In dieser Anlage hat früher eine
+  eigene HA-Automation den E3DC über `input_number.ems_speicher_mindesladeleistung_1/2`,
+  `ems_speicher_soc_mindestwert_1/2` und `input_boolean.ems_speicher_regelung_stufe_1_aktiv`
+  geregelt; die Helfer existieren noch. Die HEMS-Speicher benutzen deshalb eigene Präfixe
+  (`acspeicher1`, `e3dc_speicher`), der globale Helfer heißt
+  `input_number.ems_ac_speicher_entlade_abschlag_w`. Seit D-063 ist der E3DC selbst HEMS-Gerät
+  `e3dc_speicher` (über den Battery-Provider) und **nicht** mehr Teil der Hausleistungsbilanz.
+- **Parallelbetrieb E3DC-Automation (Stand 12.10.2026).** `automation.e3dc_manuelle_leistung`
+  ist in dieser Anlage noch eingeschaltet. Schreibt sie weiter auf den E3DC, steuern zwei Stellen
+  dasselbe Gerät. Prüfung und Abschaltung gehören zur Inbetriebnahme des E3DC-Adapters, siehe
+  `docs/bekannte-luecken.md` im Battery-Provider (D-015).
 - **`acspeicher1` bekommt künftig eine zusätzliche Datenquelle für seine Lese-Entitäten.** Für
   Marstek-Speicher entsteht das eigenständige Repo
   [Skytech-HEMS-Battery-Provider](https://github.com/NicoHackl/Skytech-HEMS-Battery-Provider)
@@ -115,11 +133,13 @@ Dinge, die schon einmal Zeit gekostet haben:
 
 ## Offene Bugs
 
+B-4 (reservierte Netzlade-Helfer wurden ausgeführt) ist seit 12.10.2026 behoben: Die Helfer
+entfallen ersatzlos ([D-064](adr/D-064-netzlade-helfer-entfallen.md)).
+
 | ID | Beschreibung | Auswirkung | Umgehung |
 |---|---|---|---|
 | B-1 | Im Ampere-Modus rechnen Deadband und Schreib-Guard in [`app/ems/devices.py`](../app/ems/devices.py) (`get_write_ops`) in **Watt**, geschrieben werden aber abgerundete Ampere. Eine Watt-Änderung unter 1 A ergibt denselben Ampere-Wert und löst trotzdem einen Schreibvorgang aus | Der identische Wert wird erneut geschrieben, `last_changed` springt und stört das Rampen-Timing. Nur bei `output_unit=ampere`, vor allem bei `min_anderung_pro_schritt_a = 0` | `min_anderung_pro_schritt_a` > 0 setzen. Fix: Ziel- gegen Ist-**Ampere** vergleichen und das Totband ebenfalls in Ampere prüfen |
 | B-3 | `POST /api/set` schränkt die Ziel-Entität innerhalb der erlaubten Domains nicht auf `ems_*` ein | Wer den Endpunkt direkt aufruft, kann jeden `input_*`-Helfer setzen. Hinter dem Ingress authentifiziert, deshalb bewusst belassen | — |
-| B-4 | Die reservierten Helfer `input_boolean.ems_<prefix>_netzladen_aktiv` und `input_number.ems_<prefix>_netzlade_leistung_w` werden bereits ausgeführt, obwohl Netzladen zurückgestellt ist. `netzlade_soc_ziel_prozent` wird dagegen nicht gelesen; SoC-Ziel, Preislogik und vollständige Sicherheitsbegrenzung fehlen | Ein versehentliches `netzladen_aktiv: on` kann einen AC-Speicher unkontrolliert aus dem Netz laden | Beide Helfer nicht anlegen oder auf `off` und `0 W` halten. Vor Freigabe des Netzladens den Pfad hart sperren oder Phase 6 vollständig implementieren und testen |
 
 ## Offene Fachfragen der AC-Speicher-Erweiterung
 

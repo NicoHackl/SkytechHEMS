@@ -8,6 +8,88 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Dokumentation — 12.10.2026 (Vertrag mit Data-Insight 0.2)
+
+- Vertrag `contract_hems_data_insight` auf Version 0.2, wortgleich mit Skytech-Data-Insight: Das HEMS
+  schreibt dort nur über geprüfte Datenbankfunktionen (`hems_sensor_sichern`, `hems_zuordnen`,
+  `hems_messwerte_schreiben`, `hems_lauf_schreiben` …) statt direkt in Tabellen; Grund ist das
+  Nachrechnen der Minutenwerte für Slot-Mittelwerte, die erst nach Slot-Ende vorliegen. Zugelassenes
+  Netz `172.30.33.0/24`. Die Data-Insight-Seite ist implementiert, der HEMS-Client folgt (M6, P4).
+
+### Dokumentation — 12.10.2026 (Vertrag mit Data-Insight)
+
+- **Vertrag `contract_hems_data_insight` 0.1 (Entwurf)** wortgleich mit Skytech-Data-Insight:
+  Verbindung über das interne Add-on-Netz (Host automatisch über den Supervisor), Rolle
+  `skytech_hems` mit abschließend aufgezählten Rechten, vom HEMS verwaltete und in Data Insight
+  gesperrte Sensoren, Rollen-Zuordnung für den Sensortausch, eigene `hems.*`-Messreihen sowie
+  Prognose- und Preisläufe. Noch nicht implementiert. Verlinkt aus D-065, `architektur.md`,
+  `roadmap.md` (M6, P1) und `contract/README.md`.
+
+### Entfernt — 12.10.2026
+
+- **Alte Netzlade-Helfer wirken nicht mehr (D-064, B-4 behoben).** `input_boolean.ems_<prefix>_netzladen_aktiv`
+  und `input_number.ems_<prefix>_netzlade_leistung_w` werden nicht mehr gelesen. Bisher konnte
+  `netzladen_aktiv: on` einen Speicher ohne SoC-Ziel und Zeitlimit aus dem Netz laden. Ein Speicher
+  lädt jetzt ausschließlich aus PV-Überschuss, bei Hausdefizit nie. Stehen die Helfer noch in Home
+  Assistant, bleiben sie wirkungslos und können gelöscht werden. Im Status entfallen das Feld
+  `netzladen_aktiv` und der Sperrgrund „Netzladen aktiv“.
+
+### Dokumentation — 12.10.2026 (dynamischer Strompreis)
+
+- **Grundsatzentscheidung D-065:** Für den dynamischen Strompreis wertet das HEMS künftig Preis-,
+  PV- und Verbrauchsprognose selbst aus, in einem eigenen Modul außerhalb des Regelzyklus, mit
+  Datenhaltung in Skytech Data Insight. Noch nicht gebaut; Phasen in `roadmap.md` (neuer
+  Meilenstein M6). Abgrenzung in `architektur.md`, Abschnitt 11 des AC-Speicher-Entwurfs und
+  Speicher-Doku angepasst. Zugehörige Doku-Commits: Skytech-Energy-Pilot und Skytech-Data-Insight.
+
+### Dokumentation — 12.10.2026
+
+- **E3DC als HEMS-Speicher (D-063).** Die Doku beschreibt jetzt den tatsächlichen Anlagenstand:
+  Der E3DC ist HEMS-Gerät `e3dc_speicher` (`class: battery`), angebunden über den E3DC-RSCP-Adapter
+  des Battery-Providers, und nicht mehr Teil der Hausleistungsbilanz. Allgemein gilt: Die Bilanz
+  enthält die Netzleistung plus Speicher, die das HEMS **nicht** regelt; ein geregelter Speicher
+  darin zählte doppelt. Angepasst: README, `konfiguration.md`, `bekannte-luecken.md`,
+  `datenmodell.md`, `roadmap.md`, `device_classes/battery.md` und `global.md`,
+  `test-strategie.md`, Hinweise in D-040, D-044 und im Entwurf `erweiterung_ac_speicher_1.md`,
+  Kommentar in der HA-Vorlage unter `erweiterungen/`, Feldbeschreibungen (de, en) und der
+  Hinweistext zur Hausleistungsbilanz im Bereich „Konfiguration“. Kein Regelverhalten geändert.
+  Zugehörige Doku-Commits: Battery-Provider, Energy-Pilot, Powerflow-Card (Kartenvertrag).
+
+### Hinzugefügt — 07.10.2026
+
+- **HEMS-Lebenszeichen (D-062).** Nach jedem Zyklus veröffentlicht das HEMS `sensor.skytech_hems_status`
+  mit Zykluszähler und Zykluslänge. Wallbox- und Battery-Provider erkennen daran einen HEMS-Ausfall und
+  stoppen ihr Gerät. Auch während der Notabschaltung wird es weiter veröffentlicht. Der Battery-Provider
+  wertet es aus (Vertrag `contract_hems_battery_provider` Version 1.1: implementiert), ebenso der neue
+  Wallbox-Provider (Vertrag `contract_hems_wallbox_provider`: implementiert, Hardware-Abnahme offen).
+- **Wallbox ohne Istleistung fährt auf 0 A.** Ein Ampere-Gerät mit fehlender oder ungültiger Istleistung
+  wird mit dem Grund „Istleistung ungültig“ aus der Regelung genommen und auf `0` gesetzt — wie ein
+  Speicher mit ungültigem Sensor. Heizstäbe und andere Watt-Geräte bleiben unverändert.
+
+### Dokumentation — 07.10.2026
+
+- Vertrag zum Wallbox-Provider auf Version 1.1 überarbeitet: Betriebsart `HEMS`/`manuell`,
+  HEMS-Lebenszeichen `sensor.skytech_hems_status` (Entwurf, im HEMS noch nicht umgesetzt),
+  Phasenbetrieb, Befehlsfolge und Statuskennzeichnung je Abschnitt.
+- Vertrag zum Battery-Provider auf Version 1.1: HEMS-Lebenszeichen als Entwurf ergänzt.
+- Umsetzungsreihenfolge: `umsetzungsplan.md` im Repo Skytech-HEMS-Wallbox-Provider.
+
+### Behoben — 07.10.2026
+
+- **Phasenwechsel schreibt den Strom mit.** Bei einem Wechsel der Phasenanzahl (Ampere-Modus) blieb der
+  Stromhelfer unverändert, wenn die Änderung kleiner als das Totband der neuen Phasenzahl war. Beispiel:
+  1 Phase mit 16 A → 3 Phasen schrieb nur `anzahl_phase = 3`, der Strom blieb auf 16 A (11 kW statt 6 A).
+  Der Strom wird jetzt bei jedem Phasenwechsel zusammen mit der Phase geschrieben. Regressionstests für
+  beide Richtungen in `tests/test_run_cycle.py`. Gegenstelle: Wallbox-Provider
+  (`contract/contract_hems_wallbox_provider/`).
+
+### Dokumentation — 06.10.2026
+
+- Gemeinsame Contract-Ablage mit einem Ordner je Projektpaar und aktualisierten Verweisen.
+- Aktueller Austausch mit Energy-Pilot und Battery-Provider einschließlich bestehender Kompatibilitäts- und Betriebsgrenzen dokumentiert.
+- Regel zur Pflege projektübergreifender Verträge in `AGENTS.md` verankert, damit KI-Assistenten sie automatisch beachten.
+
+
 ### Hinzugefügt
 
 - **Steuerwerte ohne HA-Helfer (D-061).** Fehlt ein Helfer der Namenskonvention, ist er nicht

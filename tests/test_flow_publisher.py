@@ -1,6 +1,6 @@
 """Vertragstests der Kartendaten für die Skytech Power Flow Card (D-046).
 
-Die Nutzlasten sind in `vertrag_powerflow_card_hems/kontrakt.md` Feld für Feld
+Die Nutzlasten sind in `contract/contract_powerflow_card_hems/kontrakt.md` Feld für Feld
 festgeschrieben. Geprüft wird deshalb der reine Payload-Builder, nicht der
 HTTP-Weg: er ist die Stelle, an der der Vertrag entsteht.
 

@@ -794,8 +794,15 @@ class ControllableDevice(Device):
         # Nach Watt umrechnen mit aktueller Phasenanzahl (kann später von select_phases angepasst werden)
         self._apply_raw_to_watt()
 
-        self._actual_w = max(
-            self._num(st, self.entity_actual_w, "actual_power", internal=0.0), 0.0)
+        actual = self._note(self.entity_actual_w, "actual_power",
+                            st.resolve_number(self.entity_actual_w, internal=0.0))
+        self._actual_w = max(0.0 if actual.value is None else float(actual.value), 0.0)
+        # Ampere-Geräte (Wallbox) ohne gültige Istleistung fahren auf 0 A, wie ein
+        # Speicher bei ungültigem Sensor: Ohne Messwert ist nicht bekannt, was das
+        # Gerät zieht, und der Provider meldet einen Kommunikationsfehler über
+        # `unavailable`. Watt-Geräte bleiben bewusst beim bisherigen Verhalten.
+        if self.output_unit == 'ampere' and actual.state != STATE_VALID:
+            self.mark_inactive("istleistung_ungueltig")
 
         # Sollwert lesen; aus nativer Einheit nach Watt mit HA-Phasenanzahl umrechnen (für Genauigkeit)
         raw_anf = self._num(st, self.entity_anforderung_w, "request", internal=0.0)
@@ -1088,7 +1095,13 @@ class ControllableDevice(Device):
         # Annahme, und das Rampen-Timing spielt ohnehin keine Rolle mehr.
         # Unter Zwang und an seinem Ende zählt das Totband nicht – aber auch
         # dann nur bei echter Änderung, sonst altert last_changed nie.
-        write = (not self._runtime_active) or is_stop or start_ok or (
+        # Phasenwechsel: Der Strom wird immer mitgeschrieben. Das Totband gilt in
+        # Watt der neuen Phasenzahl, der alte Sollwert aber in Watt der alten –
+        # sonst bliebe der Stromhelfer unverändert (z. B. 16 A einphasig → 16 A
+        # dreiphasig = 11 kW statt 6 A). Die Phase wird vor dem Strom geschrieben.
+        phase_changed = (self.output_unit == 'ampere'
+                         and self._current_phases != self._ha_phases)
+        write = (not self._runtime_active) or is_stop or start_ok or phase_changed or (
             (self._force_active or self._force_released) and delta > 0) or (
             not is_start and delta > 0
             and (self.deadband_w <= 0 or delta >= self.deadband_w))
@@ -1572,10 +1585,6 @@ class BatteryDevice(ControllableDevice):
         # überbrücken? Fehlt der Helfer, nein – Bestandsverhalten (D-B14).
         self.uberschussverbraucher_versorgen = False
         self.betriebsart               = "standby"
-        # v2 (Netzladen). In v1 hält die Klemme in calculate_ramp den Pfad zu;
-        # die Felder existieren, damit später keine Config-Migration nötig ist.
-        self.netzladen_aktiv           = False
-        self.netzlade_leistung_w       = 0.0
 
         # ---- Laufzeitzustand aus HA ----
         self._soc            = 0.0
@@ -1694,22 +1703,17 @@ class BatteryDevice(ControllableDevice):
 
     @property
     def current_w(self) -> float:
-        """Nur vom HEMS angeforderte LADEleistung aus PV-Überschuss.
-
-        Bei Netzladen (v2) bewusst 0: diese Leistung stammt nicht aus dem
-        PV-Überschuss und darf nicht in den Pool zurückgerechnet werden – sonst
-        würden die Überschussverbraucher aus dem Netz mitgespeist.
-        """
-        if not self.eligible or self.netzladen_aktiv:
+        """Nur vom HEMS angeforderte LADEleistung aus PV-Überschuss."""
+        if not self.eligible:
             return 0.0
         return min(self._lade_ist_w, self._lade_anf_w)
 
     @property
     def gemessene_last_w(self) -> float:
-        """Gemessene LADEleistung – auch bei Netzladen, anders als current_w.
+        """Gemessene LADEleistung – auch ohne HEMS-Anforderung, anders als current_w.
 
-        Verhindert, dass ein Speicher, der aus dem Netz lädt, für einen ANDEREN
-        Speicher wie Hausverbrauch aussieht (Kreisstrom über zwei Geräte).
+        Verhindert, dass ein ladender Speicher für einen ANDEREN Speicher wie
+        Hausverbrauch aussieht (Kreisstrom über zwei Geräte, D-B14).
         """
         return self._lade_ist_w
 
@@ -1739,7 +1743,7 @@ class BatteryDevice(ControllableDevice):
         return  # Speicher werden immer in Watt geregelt
 
     def resolve_force(self, st: StateProxy) -> None:
-        return  # Speicher kennen keinen Zwang (D-053); netzladen_aktiv bleibt ihr Weg
+        return  # Speicher kennen keinen Zwang (D-053)
 
     # ------------------------------------------------------------------
     # HA-Zustand lesen
@@ -1800,11 +1804,6 @@ class BatteryDevice(ControllableDevice):
         self.uberschussverbraucher_versorgen = self._flag(
             st, f"input_boolean.ems_{pfx}_uberschussverbraucher_versorgen",
             "uberschussverbraucher_versorgen")
-        self.netzladen_aktiv = self._flag(
-            st, f"input_boolean.ems_{pfx}_netzladen_aktiv", "netzladen_aktiv")
-        self.netzlade_leistung_w = self._num(
-            st, helper("netzlade_leistung_w"), "netzlade_leistung_w",
-            internal=0.0, minimum=0.0)
 
         self.betriebsart = self._choice(
             st, f"input_select.ems_{pfx}_betriebsart", "betriebsart",
@@ -2031,7 +2030,6 @@ class BatteryDevice(ControllableDevice):
              "hausleistungsbilanz_sensor_ungueltig"),
             (self.betriebsart not in ("auto", "nur_entladen"),   "betriebsart"),
             (not self.entladen_erlaubt,                          "entladen_gesperrt"),
-            (self.netzladen_aktiv,                               "netzladen"),
             (self._soc <= self.soc_min_prozent,                  "soc_min"),
             (self._wr_entlade_limit_w <= 0,                      "wr_derating"),
         )
@@ -2134,14 +2132,11 @@ class BatteryDevice(ControllableDevice):
 
         # D-B10: aus der PV-Logik heraus wird bei Hausdefizit nie geladen.
         # Die Klemme ist die Absicherung gegen Rechenfehler an anderer Stelle.
-        if entlade_wunsch > 0 and not self.netzladen_aktiv:
+        # Seit D-064 gilt sie ohne Ausnahme: es gibt keinen Netzlade-Pfad mehr.
+        if entlade_wunsch > 0:
             if lade_wunsch > 0:
                 self._lade_block = "hausdefizit"
             lade_wunsch = 0.0
-        # D-B16: Netzladen schlägt Entladen, sonst Kreisstrom mit Round-Trip-Verlust
-        if self.netzladen_aktiv:
-            entlade_wunsch = 0.0
-            lade_wunsch    = self.netzlade_leistung_w
 
         netto = lade_wunsch - entlade_wunsch                  # + laden / - entladen
 
@@ -2337,7 +2332,6 @@ class BatteryDevice(ControllableDevice):
             "laden_erlaubt":         self.laden_erlaubt,
             "entladen_erlaubt":      self.entladen_erlaubt,
             "uberschussverbraucher_versorgen": self.uberschussverbraucher_versorgen,
-            "netzladen_aktiv":       self.netzladen_aktiv,
             "soc_min_prozent":       self.soc_min_prozent,
             "soc_max_prozent":       self.soc_max_prozent,
             "soc_max_hysteresis_percent": self.soc_max_hysteresis_percent,

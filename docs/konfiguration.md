@@ -82,8 +82,17 @@ Sein Vorzeichenvertrag ist:
 - **negativ:** Netzbezug beziehungsweise Unterdeckung;
 - **positiv:** Netzeinspeisung.
 
-In dieser Anlage enthält die Bilanz die Leistung am Netzübergabepunkt und die Leistung der
-selbstregelnden E3DC-Batterie. Für die verwendeten E3DC-Entitäten lautet die Template-Formel:
+Die Bilanz enthält die Leistung am Netzübergabepunkt und die Leistung von Speichern, die das HEMS
+**nicht** regelt. Vom HEMS geregelte Speicher (`class: battery`) gehören nicht hinein, ihre
+Leistung rechnet das HEMS über `netz_support_w` selbst heraus; stünden sie zusätzlich in der
+Bilanz, zählte ihre Entladung doppelt (D-063).
+
+**Referenzanlage seit D-063:** Der E3DC ist HEMS-Speicher `e3dc_speicher`. Bilanz und
+Überschuss-Sensor sind dort die negierte Netzleistung (`−sensor.e3dc_leistung_netz_modbus`,
+geprüft am 12.10.2026).
+
+**Anlage mit selbstregelndem Speicher (Stand der Referenzanlage vor D-063):** Für einen E3DC,
+der sich selbst regelt, lautet die Template-Formel:
 
 ```text
 hausleistungsbilanz_w = −e3dc_leistung_netz
@@ -94,6 +103,8 @@ hausleistungsbilanz_w = −e3dc_leistung_netz
 Dabei liefert `sensor.e3dc_leistung_netz` positiv den Netzbezug. Die vollständige, mit
 `availability` abgesicherte Vorlage steht in
 [`erweiterungen/zusatz_sensor_für_speicher_null_einspeisung/ueberschusssensor_von_ha.yaml`](../erweiterungen/zusatz_sensor_für_speicher_null_einspeisung/ueberschusssensor_von_ha.yaml).
+
+Kontrollfälle für diese Variante (E3DC selbstregelnd, AC-Speicher vom HEMS geregelt):
 
 | Situation bei PV `0 W` | Hausleistungsbilanz | HEMS-Entladeziel vor Abschlag |
 |---|---:|---:|
@@ -119,11 +130,11 @@ dieser abgeregelt hat (D-060). Dazu müssen am Verbraucher
 `input_boolean.ems_<prefix>_uberschussverbraucher_versorgen` auf `on` stehen. Dieser Anteil kommt
 nach dem Hausdefizit, und den Abschlag bekommt zuerst das Hausdefizit.
 
-Der E3DC ist absichtlich kein HEMS-Gerät. Erkennt das HEMS bei einer E3DC-Entladung einen
-negativen Bilanzwert, fordert es den AC-Speicher an; der E3DC regelt anschließend selbst zurück.
-Die Betriebsannahme dieser Anlage ist eine E3DC-Reaktion in unter zwei Sekunden bei einem
-HEMS-Zyklus von drei Sekunden. Reagiert die Anlage langsamer oder oszilliert sie, müssen
-`hoch_regelzeit_s` und die Schrittbegrenzung entsprechend größer gewählt werden.
+Bei einem selbstregelnden Speicher gilt: Erkennt das HEMS bei dessen Entladung einen negativen
+Bilanzwert, fordert es den eigenen Speicher an; der fremde Speicher regelt anschließend selbst
+zurück. Die frühere Betriebsannahme der Referenzanlage war eine E3DC-Reaktion in unter zwei
+Sekunden bei einem HEMS-Zyklus von drei Sekunden. Reagiert eine Anlage langsamer oder oszilliert
+sie, müssen `hoch_regelzeit_s` und die Schrittbegrenzung entsprechend größer gewählt werden.
 
 Ein ausgefallener Bilanzsensor löst **keinen** Hard-Lockout der gesamten Anlage aus. Stattdessen
 schreibt das HEMS für alle AC-Speicher aktiv `0 W` und `standby`; die Überschussverbraucher laufen

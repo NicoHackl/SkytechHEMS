@@ -124,7 +124,6 @@ regelbaren Geräte (`hoch_regelzeit_s`, `runter_regelzeit_s`, `max_anderung_pro_
 | `soc_max_prozent` | % | 100 | Ladeschluss |
 | `umschalt_totzone_w` | W | 100 | Totzone um 0; ein Netto-Wunsch darunter führt aus `standby` oder bei Gegenrichtung zu `standby`, ein laufender Speicher darf in derselben Richtung darunter absenken (D-058) |
 | `ladestufe_<n>_aktiv` (`input_boolean`), `ladestufe_<n>_soc_prozent`, `ladestufe_<n>_max_ladeleistung_w` | –, %, W | keiner | **Optionale Ladestufen (D-056).** Begrenzen die Ladeleistung ab einer SoC-Schwelle; gelesen ab `n = 1` bis zur ersten Lücke. Details: [device_classes/battery.md](device_classes/battery.md#ladestufen-optional-d-056) |
-| `netzlade_leistung_w` | W | 0 | Reservierte, noch nicht sicher freigegebene Netzlade-Schnittstelle; muss wegen [B-4](bekannte-luecken.md#offene-bugs) auf `0` bleiben |
 | `anforderung_leistung_w` **(Ausgabe)** | W | – | **Ein signierter Sollwert: + laden / − entladen.** Der Helfer braucht ein **negatives Minimum** |
 | `anforderung_betriebsart` **(Ausgabe, `input_select`)** | – | – | `laden` / `entladen` / `standby`; genau diese drei Optionen sind erforderlich |
 
@@ -146,7 +145,6 @@ Dazu drei Schalter und eine Auswahlliste:
 | `input_boolean.ems_<prefix>_laden_erlaubt` | `on`/`off` | Ladepfad freigeben |
 | `input_boolean.ems_<prefix>_entladen_erlaubt` | `on`/`off` | Entladepfad freigeben |
 | `input_boolean.ems_<prefix>_uberschussverbraucher_versorgen` | `on`/`off` | Überbrückung von Überschussverbrauchern mit `aus_speicher_decken` (D-060). Fehlt oder ausgefallen = `off` |
-| `input_boolean.ems_<prefix>_netzladen_aktiv` | `on`/`off` | Reserviert; bis zur Behebung von [B-4](bekannte-luecken.md#offene-bugs) zwingend `off` |
 | `input_select.ems_<prefix>_betriebsart` | `auto`, `nur_laden`, `nur_entladen`, `standby` | Was das HEMS überhaupt darf |
 
 Externe Sensoren je Speicher: `soc_entity` (Pflicht) und genau eine Ist-Leistungsvariante —
@@ -167,9 +165,9 @@ Add-on-Konfiguration; Notstromreserve, Drosselband und Sofort-Schwelle entfallen
 Fehlt einer der Messwerte (`unavailable`), fällt genau dieser Speicher aus der Regelung und geht
 auf `standby`; die übrigen laufen weiter. Ohne Ist-Leistung wäre die Pool-Bereinigung blind.
 
-> **Namensraum:** In dieser Anlage ist `ems_speicher_*` bereits von einer eigenen
-> HA-Automation für den vorhandenen E3DC belegt. Der HEMS-Speicher benutzt deshalb `acspeicher1`
-> als Präfix. Der E3DC selbst ist **kein** HEMS-Gerät (D-040).
+> **Namensraum:** In dieser Anlage ist `ems_speicher_*` bereits von der früheren
+> HA-Automation für den E3DC belegt. Die HEMS-Speicher benutzen deshalb die Präfixe
+> `acspeicher1` (Marstek) und `e3dc_speicher` (E3DC, seit D-063 HEMS-Gerät).
 
 ### Externe, nur gelesene Entitäten
 
@@ -231,7 +229,7 @@ Jedes Gerät trägt zusätzlich:
 |---|---|---|
 | `entity_diagnostics` | Objekt | `{entity_id: {role, state, source, value}}`; `value` (D-061) ist der wirksame Wert und fehlt bei Schreibzielen |
 | `runtime_active` | bool | `false`, wenn ein Schreibziel fehlt, unbrauchbar ist oder der letzte Schreibversuch fehlschlug |
-| `inactive_reasons` | Liste | `schreibziel_fehlt`, `schreibziel_nicht_verfuegbar`, `schreibziel_ungueltig`, `schreiben_fehlgeschlagen` |
+| `inactive_reasons` | Liste | `schreibziel_fehlt`, `schreibziel_nicht_verfuegbar`, `schreibziel_ungueltig`, `schreiben_fehlgeschlagen`, `istleistung_ungueltig` (nur Ampere-Geräte) |
 | `write_error` | string oder `null` | Bereinigte Fehlermeldung des letzten Schreibversuchs |
 
 Regelbare und binäre Geräte tragen außerdem die Zwangsfelder (D-053):
@@ -268,7 +266,7 @@ Speicher (`type: "battery"`): `id`, `entity_prefix` (D-057), `label`, `priority`
 `max_entladeleistung_w`, `lade_limit_w`, `entlade_limit_w`, `hausdefizit_anteil_w` (seit D-060
 nur der Hausanteil), `verbraucher_anteil_w` (Überbrückung, D-060), `schutz_w`,
 `geschuetzte_mindestleistung_w`, `laden_erlaubt`, `entladen_erlaubt`,
-`uberschussverbraucher_versorgen`, `netzladen_aktiv`,
+`uberschussverbraucher_versorgen`,
 `soc_min_prozent`, `soc_max_prozent`, `soc_max_hysteresis_percent`, `direction_switch_delay_s`,
 `lade_limit_gueltig`, `entlade_limit_gueltig`, `umschaltsperre_rest_s`, `lade_blockiert_grund`,
 `entlade_blockiert_grund`, `blockiert_grund`, `ladestufen` (Liste `{n, aktiv, soc_prozent, max_w,
@@ -368,8 +366,9 @@ Info“ als verwaist.
 
 ## Vertrag zum Energy Pilot
 
-Der Energy Pilot ist ein eigenes Add-on. Es gibt **keinen** direkten Aufruf zwischen beiden — der
-Austausch läuft ausschließlich über HA-Entitäten:
+Der gemeinsame [HEMS–Energy-Pilot-Vertrag](../contract/contract_hems_energy_pilot/contract_hems_energy_pilot.md)
+beschreibt den aktuellen Austausch und seine Kompatibilitätsgrenzen. EP liest Geräte-Schema und
+Regelstatus direkt über die HEMS-HTTP-API. Die Vorschläge laufen dagegen über HA-Entitäten:
 
 | Entität | Richtung | Inhalt |
 |---|---|---|
@@ -396,7 +395,7 @@ Vergangenheit) werden ausgeblendet, und bei doppeltem Feld je Gerät bleibt nur 
 Für die **Skytech Power Flow Card** schreibt das Add-on zwei eigene Anzeige-Entitäten über
 `POST /api/states` (D-046). Sie sind ein Datenvertrag zu einem zweiten Repository; autoritativ
 für jedes Feld ist
-[`vertrag_powerflow_card_hems/kontrakt.md`](../vertrag_powerflow_card_hems/kontrakt.md).
+[`contract/contract_powerflow_card_hems/kontrakt.md`](../contract/contract_powerflow_card_hems/kontrakt.md).
 
 | Entität | State | Inhalt | Schreibtakt |
 |---|---|---|---|

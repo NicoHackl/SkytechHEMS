@@ -37,7 +37,8 @@ Der entscheidende Gedanke: Die „Individual Devices" des Vorbilds
 [`power-flow-card-plus`](https://github.com/flixlix/power-flow-card-plus) sind im Bestand exakt
 die Geräte, die das HEMS ohnehin schon kennt und regelt. Das HEMS ist damit die einzige Quelle
 der Wahrheit für die Geräteliste. Was es bisher **nicht** kennt, sind die Standardwerte der
-Anlage (PV-Leistung, Netzleistung, Hausleistung, E3DC-SoC und -Leistung); die werden im HEMS im
+Anlage (PV-Leistung, Netzleistung, Hausleistung, SoC und Leistung eines Speichers, den das HEMS
+nicht regelt); die werden im HEMS im
 neuen Bereich „Flow Card" gepflegt.
 
 Der Vertrag besteht deshalb aus zwei Teilen:
@@ -417,8 +418,9 @@ Auflösungsreihenfolge je Gerät:
 
 ## 8. Vollständiges Beispiel
 
-Anlage mit zwei PV-Feldern, E3DC-Speicher (kein HEMS-Gerät), Heizstab, Wallbox und zwei
-Heizlüftern.
+Beispielanlage mit zwei PV-Feldern, einem selbstregelnden E3DC-Speicher (in diesem Beispiel kein
+HEMS-Gerät), Heizstab, Wallbox und zwei Heizlüftern. Ein vom HEMS geregelter Speicher erscheint
+dagegen als Gerät und nicht im Batterieknoten.
 
 **`sensor.skytech_hems_flow_config`** — `state: "a3f19c02b7d4"`
 

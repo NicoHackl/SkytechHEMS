@@ -46,6 +46,9 @@
         {{([erg_max, erg_voll, erg_1, erg_2] | max)}}
 
     # Separate Bilanz für die Entladeplanung von AC-Speichern.
+    # STAND VOR D-063: Gilt nur, solange der E3DC sich selbst regelt. Seit der E3DC
+    # HEMS-Speicher ist (D-063), gehört seine Batterieleistung NICHT mehr hinein,
+    # sonst zählt seine Entladung doppelt. Dann gilt: Bilanz = -Netzleistung.
     # Negativ = Netzbezug/Unterdeckung, positiv = Einspeisung. Der E3DC-Akku
     # wird bewusst einbezogen: Liefert er Hauslast, fordert das HEMS die
     # AC-Speicher an und der E3DC regelt anschließend wieder zurück.

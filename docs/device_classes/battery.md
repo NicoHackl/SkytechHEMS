@@ -1,5 +1,7 @@
 # AC-Speicher (`class: battery`)
 
+Gemeinsamer Schnittstellenstand: [Battery-Provider-Vertrag](../../contract/contract_hems_battery_provider/contract_hems_battery_provider.md).
+
 Ein AC-Speicher kann als einziges HEMS-Gerät Leistung aufnehmen und abgeben. Laden konkurriert in
 der normalen Prioritätsreihenfolge um PV-Überschuss. Entladen deckt ausschließlich normalen
 Hausverbrauch und wird getrennt über `entlade_prioritat` verteilt.
@@ -56,8 +58,8 @@ Werte nicht mehr.
 ## Über Namenskonvention gelesene HA-Helfer
 
 Alle Helfer sind optional. Ein **gültiger** HA-State hat Vorrang; sonst gilt ein im Steuerung-Tab
-eingegebener HEMS-interner Wert (D-061) und erst danach der Ersatzwert. Ladestufen,
-`netzladen_aktiv` und `netzlade_leistung_w` sind nicht intern einstellbar, siehe
+eingegebener HEMS-interner Wert (D-061) und erst danach der Ersatzwert. Ladestufen sind nicht
+intern einstellbar, siehe
 [Doppelte Auflösung](global.md#doppelte-auflösung-von-ha-entitäten).
 
 ### Freigaben und Richtung
@@ -234,20 +236,14 @@ Totband geschrieben werden nur das Stoppen auf `0 W` und ein direkter Richtungsw
 aus `0 W` wird erst geschrieben, wenn der neue Betrag das Totband erreicht. Bis dahin bleiben
 Sollwert und Betriebsart (`standby`) unverändert.
 
-## Reservierte Netzlade-Helfer: nicht aktivieren
+## Netzladen
 
-Der aktuelle Code liest außerdem:
-
-```text
-input_boolean.ems_<prefix>_netzladen_aktiv
-input_number.ems_<prefix>_netzlade_leistung_w
-```
-
-Diese Schnittstelle ist noch nicht freigegeben und nicht hart auf AUS geklemmt:
-`netzladen_aktiv: on` kann den Leistungspfad aktivieren, obwohl SoC-Ziel, Preislogik und
-vollständige Sicherheitsbegrenzung fehlen. Beide Helfer müssen bis zur Behebung von
-[B-4](../bekannte-luecken.md#offene-bugs) auf `off` beziehungsweise `0 W` bleiben oder dürfen ganz
-fehlen.
+Ein Speicher lädt ausschließlich aus PV-Überschuss; bei Hausdefizit wird nie geladen (D-B10). Die
+früher reservierten Helfer `input_boolean.ems_<prefix>_netzladen_aktiv` und
+`input_number.ems_<prefix>_netzlade_leistung_w` entfallen seit
+[D-064](../adr/D-064-netzlade-helfer-entfallen.md) ersatzlos; stehen sie noch in HA, bleiben sie
+wirkungslos. Netzladen mit dynamischem Strompreis ist als eigenes Modul geplant
+([D-065](../adr/D-065-preis-und-prognosemodul.md), [roadmap.md](../roadmap.md) M6).
 
 ## Energy-Pilot-Vorschläge
 
@@ -284,8 +280,9 @@ Zusätzlich ist die Add-on-Option `battery_residual_power_entity` für jede Inst
 negativ = Netzbezug/Unterdeckung, positiv = Einspeisung. Das HEMS nutzt sie nur für die
 Entladeplanung; PV-Laden und Verbraucher-Verteilung bleiben am Überschuss-Sensor. Fehlt der
 Sensor oder liefert er keinen brauchbaren Zahlenwert, gehen alle AC-Speicher aktiv auf `0 W` und
-`standby`, ohne die übrigen Verbraucher stillzulegen. Details, Formeln und die E3DC-Vorlage stehen
-in [konfiguration.md](../konfiguration.md#hausleistungsbilanz-für-ac-speicher).
+`standby`, ohne die übrigen Verbraucher stillzulegen. Ein vom HEMS geregelter Speicher gehört
+nicht in diese Bilanz, nur Speicher, die das HEMS nicht regelt (D-063). Details, Formeln und die
+Vorlage stehen in [konfiguration.md](../konfiguration.md#hausleistungsbilanz-für-ac-speicher).
 
 Die Option `speicher_in_residual_enthalten` betrifft weiterhin nur die Pool-Berechnung aus dem
 Überschuss-Sensor; sie verändert die Hausleistungsbilanz nicht.
@@ -303,8 +300,9 @@ Die Option `speicher_in_residual_enthalten` betrifft weiterhin nur die Pool-Bere
   `0 W` und `standby` setzt
 
 Für diese Anlage darf das Präfix nicht `speicher` sein, weil `ems_speicher_*` bereits zur
-vorhandenen E3DC-Regelung gehört. Der geplante Präfix lautet `acspeicher1`; der E3DC selbst wird
-nicht als `battery` eingetragen.
+früheren E3DC-Regelung gehört. Eingetragen sind `acspeicher1` (Marstek Venus E 3.0) und
+`e3dc_speicher` (E3DC, seit D-063). `class: battery` ist nicht auf AC-gekoppelte Speicher
+beschränkt: Entscheidend ist, dass Lade- und Entladeleistung am Netzübergabepunkt wirken.
 
 ## Beispiel
 

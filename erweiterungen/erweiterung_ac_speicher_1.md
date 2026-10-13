@@ -138,6 +138,10 @@ wichtig.
 
 ### Der vorhandene E3DC gehört nicht dazu (D‑B21)
 
+> **Überholt (12.10.2026):** Der E3DC ist inzwischen HEMS-Speicher `e3dc_speicher` und nicht mehr
+> Teil der Hausleistungsbilanz, siehe [`docs/adr/D-063-e3dc-als-hems-speicher.md`](../docs/adr/D-063-e3dc-als-hems-speicher.md).
+> Der folgende Abschnitt beschreibt den Entwurfsstand.
+
 Die Anlage hat bereits einen DC‑gekoppelten E3DC‑Hybrid, der sich selbst auf
 Eigenverbrauch regelt. Seine Lade‑ und Entladeleistung ist im Überschuss‑Sensor
 **bereits verrechnet**, bevor das HEMS ihn liest.
@@ -1867,6 +1871,12 @@ davon weiß.
 ---
 
 ## 11. Netzladen mit dynamischen Tarifen (Vorbereitung)
+
+> **Überholt (12.10.2026):** Die Schnittstelle aus 11.2 entfällt ersatzlos
+> ([D-064](../docs/adr/D-064-netzlade-helfer-entfallen.md)), die Aufgabenteilung aus 11.1 ist
+> abgelöst: Das HEMS wertet Preise und Prognosen selbst aus
+> ([D-065](../docs/adr/D-065-preis-und-prognosemodul.md)). Die Regeln aus 11.3 bleiben
+> Anforderung an die künftige Steuerung.
 
 Nicht in v1 implementiert, aber die Schnittstellen werden jetzt festgelegt,
 damit v2 keine Migration braucht.

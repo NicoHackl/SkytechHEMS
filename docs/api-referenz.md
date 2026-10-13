@@ -1,7 +1,10 @@
 # API-Referenz
 
-> Die HTTP-Schnittstelle des Add-ons. Sie bedient die eigene Oberfläche und ist nicht als
-> öffentliche API gedacht — erreichbar ist sie nur über den HA-Ingress.
+Gemeinsamer Schnittstellenstand: [Energy-Pilot-Vertrag](../contract/contract_hems_energy_pilot/contract_hems_energy_pilot.md), [Battery-Provider-Vertrag](../contract/contract_hems_battery_provider/contract_hems_battery_provider.md).
+
+> Die HTTP-Schnittstelle des Add-ons bedient die eigene Oberfläche und die lesende
+> Energy-Pilot-Anbindung. Die Oberfläche verwendet HA-Ingress; EP verwendet die konfigurierte,
+> intern erreichbare HEMS-Basisadresse. Sie ist keine öffentlich freizugebende API.
 
 ## Grundsätzliches
 
@@ -370,7 +373,7 @@ unvollständige Flow-Konfiguration ist kein HTTP-Fehler:
 `zuletzt_geschrieben` ist leer, solange noch nie veröffentlicht wurde. `value` bleibt bei einem
 unbrauchbaren Zustand `null` und wird nie zu `0` — eine fehlende Messung sieht sonst aus wie ein
 ausgeschaltetes Gerät. Aufbau beider Nutzlasten:
-[`vertrag_powerflow_card_hems/kontrakt.md`](../vertrag_powerflow_card_hems/kontrakt.md).
+[`contract/contract_powerflow_card_hems/kontrakt.md`](../contract/contract_powerflow_card_hems/kontrakt.md).
 
 ### `GET api/flow/dashboards`
 
@@ -451,5 +454,5 @@ Vom Add-on genutzte Endpunkte von Home Assistant:
 | Supervisor | `POST /addons/self/options` | Optionen speichern, Timeout 10 s | Fehlende Manager-Rolle als erklärendes `403`, Verbindungsfehler als `502`; es wird nie vorgetäuscht, das Speichern sei gelungen |
 | Supervisor | `POST /addons/self/restart` | Eigenes Add-on neu starten, Timeout 30 s | Wird erst nach der ausgelieferten `202`-Antwort angestoßen |
 | Home Assistant | `POST /api/services/<domain>/<service>` | Sollwerte, Schaltanforderungen, Post-Cycle-Skript, Timeout 5 s | Eine fehlgeschlagene Write-Op wird ihrem Gerät zugeordnet, geloggt und im Status sichtbar gemacht; das Gerät fährt im nächsten Zyklus nur noch seinen sicheren Zustand, die übrigen regeln weiter. Das Post-Cycle-Skript wirft und wird als Warnung gemeldet |
-| Home Assistant | `POST /api/states/<entity_id>` | Anzeigedaten der Power Flow Card (D-046), `sensor.ems_<prefix>_lade_limit_w` je Speicher (D-057) und `sensor.ems_notabschaltung_aktiv` (D-059), Timeout 5 s | Wird protokolliert und verschluckt: ein misslungener Anzeigeschrieb darf keinen Regelzyklus kosten. Die Karte zeichnet in der Lücke aus den HA-Entitäten weiter; der Ladelimit-Sensor behält seinen letzten Wert |
+| Home Assistant | `POST /api/states/<entity_id>` | Anzeigedaten der Power Flow Card (D-046), `sensor.ems_<prefix>_lade_limit_w` je Speicher (D-057) `sensor.ems_notabschaltung_aktiv` (D-059) und das Lebenszeichen `sensor.skytech_hems_status` (D-062, Felder siehe [Wallbox-Vertrag](../contract/contract_hems_wallbox_provider/contract_hems_wallbox_provider.md#hems-lebenszeichen)), Timeout 5 s | Wird protokolliert und verschluckt: ein misslungener Anzeigeschrieb darf keinen Regelzyklus kosten. Die Karte zeichnet in der Lücke aus den HA-Entitäten weiter; der Ladelimit-Sensor behält seinen letzten Wert |
 | Home Assistant | `WS /api/websocket` — `lovelace/dashboards/list`, `lovelace/config` | Dashboards und Ansichten für die Zielauswahl (D-049), Timeout 10 s je Nachricht | Wird protokolliert und verschluckt; die Seite fällt auf ein Textfeld zurück. Strategie- und YAML-Dashboards erscheinen ohne Ansichten mit einer Warnung |

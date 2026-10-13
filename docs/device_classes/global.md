@@ -104,7 +104,8 @@ Add-on-Neustart wieder eingefangen wird. Die übrigen Geräte regeln unveränder
 Zyklus gilt nicht als fehlgeschlagen.
 
 Die Ursache steht in `inactive_reasons` (`schreibziel_fehlt`, `schreibziel_nicht_verfuegbar`,
-`schreibziel_ungueltig`, `schreiben_fehlgeschlagen`), die betroffene Entität in
+`schreibziel_ungueltig`, `schreiben_fehlgeschlagen`, bei Ampere-Geräten zusätzlich
+`istleistung_ungueltig`), die betroffene Entität in
 `entity_diagnostics`, die bereinigte Fehlermeldung in `write_error`.
 
 Ein fehlendes Schreibziel kann **nicht** durch einen Direktzugriff auf das reale Gerät ersetzt
@@ -154,8 +155,7 @@ lässt sich über „Zurücksetzen“ löschen.
 | `input_boolean.ems_<prefix>_freigabe`, `input_boolean.ems_<prefix>_technische_freigabe` | Freigaben |
 | `input_boolean.ems_<prefix>_force`, `input_number.ems_<prefix>_force_leistung_w` | Zwang (D-053) |
 
-Ebenfalls nicht im Umfang sind die Ladestufen (D-056), `netzladen_aktiv`, `netzlade_leistung_w`
-und alle Ausgabe-Helfer. Welche Werte gerade aus HA kommen und welche nur im HEMS existieren, zeigt
+Ebenfalls nicht im Umfang sind die Ladestufen (D-056) und alle Ausgabe-Helfer. Welche Werte gerade aus HA kommen und welche nur im HEMS existieren, zeigt
 der Tab „Steuerung Info“.
 
 ## Globale HA-Helfer
@@ -203,15 +203,17 @@ verwendet, sondern nur für die Entladeplanung der AC-Speicher:
 
 - negativer Wert: Netzbezug beziehungsweise Unterdeckung;
 - positiver Wert: Einspeisung;
-- er enthält die Netzleistung und die Leistung der selbstregelnden E3DC-Batterie;
+- er enthält die Netzleistung und die Leistung von Speichern, die das HEMS **nicht** regelt;
+  vom HEMS geregelte Speicher gehören nicht hinein (D-063). In der Referenzanlage ist die Bilanz
+  deshalb seit D-063 einfach die negierte Netzleistung;
 - fehlt die Entität oder ist ihr Wert `unknown`, `unavailable` oder nicht numerisch, fahren alle
   AC-Speicher aktiv auf `0 W` und `standby`. Die übrigen Verbraucher laufen über den
   Überschuss-Sensor weiter; es ist kein globaler Hard-Lockout.
 
-Die zugehörige HA-Template-Vorlage, die in dieser Anlage aus E3DC-Netz- und Batterieleistung die
-Bilanz bildet, liegt unter
+Die HA-Template-Vorlage für eine Anlage mit selbstregelndem E3DC (Stand vor D-063), die aus
+Netz- und E3DC-Batterieleistung die Bilanz bildet, liegt unter
 [`erweiterungen/zusatz_sensor_für_speicher_null_einspeisung/ueberschusssensor_von_ha.yaml`](../../erweiterungen/zusatz_sensor_für_speicher_null_einspeisung/ueberschusssensor_von_ha.yaml).
-Formeln, Vorzeichen und die Rückkopplung mit dem E3DC stehen in
+Formeln, Vorzeichen und die Rückkopplung mit einem selbstregelnden Speicher stehen in
 [konfiguration.md](../konfiguration.md#hausleistungsbilanz-für-ac-speicher).
 
 #### Formel statt Einzel-Entität (D-045)
