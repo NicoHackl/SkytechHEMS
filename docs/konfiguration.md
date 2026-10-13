@@ -381,7 +381,7 @@ Das Modul liest im eigenen Minutentakt den Zustand, den der Regelzyklus ohnehin 
 keine eigene HA-Abfrage aus. Ist dieser Zustand älter als 5 min, gilt nichts als aktuell.
 
 **Speicherung in Skytech Data Insight (Phase P4).** Schnittstelle:
-[Vertrag](../contract/contract_hems_data_insight/contract_hems_data_insight.md) Version 0.2.
+[Vertrag](../contract/contract_hems_data_insight/contract_hems_data_insight.md) Version 0.3.
 
 | Option | Typ | Default | Bedeutung |
 |---|---|---|---|
@@ -391,12 +391,22 @@ keine eigene HA-Abfrage aus. Ist dieser Zustand älter als 5 min, gilt nichts al
 | `insight_port` | Port | `5432` | PostgreSQL-Port im Add-on-Netz |
 | `insight_password` | Passwort (Secret) | leer | Passwort von `skytech_hems`; in Data Insight auf der Seite „Zugänge“ erzeugen. Leer = Speicherung aus |
 | `devices[].tariff_in_house_load` | bool, nur `battery` | `false` | Steckt die Leistung dieses Speichers im Hausverbrauch-Sensor? Nur für die Grundlast, kein Regelpfad |
+| `tariff_grid_power_entity` | Entity-ID (`sensor.*`) | leer | Leistung am Netzanschluss in W, **positiv = Bezug** (Rolle `netz_leistung`) |
+| `tariff_grid_import_energy_entity`, `tariff_grid_export_energy_entity` | Entity-ID (`sensor.*`) | leer | Zähler für Netzbezug und Einspeisung in kWh oder Wh |
+| `pv_actual_energy_entity` | Entity-ID (`sensor.*`) | leer | Zähler des PV-Ertrags in kWh oder Wh |
+| `tariff_house_load_energy_entity` | Entity-ID (`sensor.*`) | leer | Zähler des Hausverbrauchs in kWh oder Wh |
+| `devices[].tariff_charge_energy_entity`, `devices[].tariff_discharge_energy_entity` | Entity-ID, nur `battery` | leer | Zähler der geladenen bzw. entladenen Energie in kWh oder Wh |
+
+Netzanschluss und Zähler sind optional und reine Datenerhebung (Vertrag 0.3). Leistungsrollen
+brauchen die Einheit `W`, Zähler `kWh` oder `Wh`; sonst ordnet das HEMS die Rolle nicht zu und zeigt
+einen Hinweis in der Karte „Speicherung in Data Insight“.
 
 Grundlast = Hausverbrauch − Istleistung aller HEMS-Verbraucher (bei Binärgeräten ohne
 `power_actual_entity`: Schaltanteil × `power_w`) − Leistung der Speicher mit `tariff_in_house_load`
-(positiv = laden). Gerechnet wird je abgeschlossenem 15-min-Slot aus den Werten, die Data Insight
-aufgezeichnet hat; Slots mit unter 80 % Abdeckung eines Werts entfallen, Leistungen müssen in `W`
-vorliegen. Nach einem Ausfall wird so bis zu 10 Tage nachgerechnet. Speicher mit getrennten Lade- und
+(positiv = laden). Gerechnet wird je abgeschlossener Minute aus den Minutenwerten, die Data Insight
+aufgezeichnet hat, sobald ihr Ende 2 min zurückliegt; Minuten mit unter 48 s Abdeckung eines Werts
+entfallen, Leistungen müssen in `W` vorliegen. So bleiben kurze Spitzen (z. B. Herdplatten)
+sichtbar. Nach einem Ausfall wird bis zu 10 Tage nachgerechnet, je Takt höchstens 2 Tage. Speicher mit getrennten Lade- und
 Entladesensoren werden für die Grundlast noch nicht unterstützt.
 
 **Verbrauchsprognose, Reichweite und Netzlade-Freigabe (Phase P5).** Reine Anzeige, schaltet nichts.

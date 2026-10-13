@@ -191,6 +191,12 @@ GLOBAL_DEFAULTS: Dict[str, Any] = {
     # Grundlast und Speicherung in Skytech Data Insight (D-065, Phase P4).
     "tariff_house_load_entity": "",
     "pv_actual_entity": "",
+    # Netzanschluss und Energiezähler für Data Insight (Vertrag 0.3): nur Datenerhebung.
+    "tariff_grid_power_entity": "",
+    "tariff_grid_import_energy_entity": "",
+    "tariff_grid_export_energy_entity": "",
+    "pv_actual_energy_entity": "",
+    "tariff_house_load_energy_entity": "",
     # Data Insight: `auto` sucht das Add-on über den Supervisor. Leeres
     # Passwort = Anbindung aus. Das Passwort ist ein Secret (SECRET_OPTION_KEYS).
     "insight_host": "auto",
@@ -208,10 +214,14 @@ TARIFF_TEXT_KEYS: Tuple[str, ...] = (
     "pv_today_entity", "pv_tomorrow_entity", "pv_today_remaining_entity",
     "pv_curve_entity", "pv_curve_attribute",
     "tariff_house_load_entity", "pv_actual_entity", "insight_host", "insight_password",
+    "tariff_grid_power_entity", "tariff_grid_import_energy_entity", "tariff_grid_export_energy_entity",
+    "pv_actual_energy_entity", "tariff_house_load_energy_entity",
 )
 TARIFF_ENTITY_KEYS: Tuple[str, ...] = (
     "tariff_price_entity", "pv_today_entity", "pv_tomorrow_entity",
     "pv_today_remaining_entity", "pv_curve_entity", "tariff_house_load_entity", "pv_actual_entity",
+    "tariff_grid_power_entity", "tariff_grid_import_energy_entity", "tariff_grid_export_energy_entity",
+    "pv_actual_energy_entity", "tariff_house_load_energy_entity",
 )
 TARIFF_INTERVALS: Tuple[str, ...] = ("auto", "15", "60")
 
@@ -271,6 +281,7 @@ DEVICE_KEYS_DISPLAY_ONLY: Tuple[str, ...] = (
     "flow_show", "flow_icon", "flow_color", "flow_navigation",
     # Grundlast des dynamischen Strompreises (D-065): ändert die Regelung nicht.
     "tariff_in_house_load", "tariff_efficiency_charge", "tariff_efficiency_discharge",
+    "tariff_charge_energy_entity", "tariff_discharge_energy_entity",
 )
 
 
@@ -485,6 +496,9 @@ def _normalize_device(raw: Dict[str, Any]) -> Dict[str, Any]:
             # Wirkungsgrade für die Reichweite des dynamischen Strompreises (D-065).
             "tariff_efficiency_charge": _as_float(raw.get("tariff_efficiency_charge"), 0.92),
             "tariff_efficiency_discharge": _as_float(raw.get("tariff_efficiency_discharge"), 0.92),
+            # Lade-/Entladezähler für Data Insight (Vertrag 0.3), reine Datenerhebung.
+            "tariff_charge_energy_entity": _as_text(raw.get("tariff_charge_energy_entity")),
+            "tariff_discharge_energy_entity": _as_text(raw.get("tariff_discharge_energy_entity")),
         })
         for key in BATTERY_POWER_FIELDS:
             device[key] = _as_float(raw.get(key), None) if key in raw else None
@@ -953,6 +967,8 @@ def _validate_battery(device: Dict[str, Any], fail) -> None:
         fail("capacity_kwh", "Endliche Zahl ab 0 kWh erwartet.")
     for key in ("tariff_efficiency_charge", "tariff_efficiency_discharge"):
         _number(device, key, fail, minimum=0.5, maximum=1.0, text="Wirkungsgrad von 0,5 bis 1,0 erwartet.")
+    for key in ("tariff_charge_energy_entity", "tariff_discharge_energy_entity"):
+        _optional_entity(device, key, fail)
 
     _number(device, "soc_max_hysteresis_percent", fail, minimum=0.0, maximum=100.0,
             text="Endliche Zahl von 0 bis 100 Prozent erwartet.")

@@ -84,6 +84,8 @@ DATA_DIR = Path(os.environ.get("HEMS_DATA_DIR", "/data"))
 INSIGHT_OPTION_KEYS = (
     "tariff_price_entity", "pv_today_entity", "pv_tomorrow_entity", "pv_today_remaining_entity",
     "pv_curve_entity", "tariff_house_load_entity", "pv_actual_entity",
+    "tariff_grid_power_entity", "tariff_grid_import_energy_entity", "tariff_grid_export_energy_entity",
+    "pv_actual_energy_entity", "tariff_house_load_energy_entity",
     "insight_host", "insight_port", "insight_password",
 )
 

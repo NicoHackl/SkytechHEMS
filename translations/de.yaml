@@ -47,6 +47,21 @@ configuration:
   pv_actual_entity:
     name: PV-Leistung (Ist)
     description: Gemessene PV-Leistung in W – Vergleichswert für die PV-Prognose in Data Insight.
+  tariff_grid_power_entity:
+    name: Netzanschluss (Leistung)
+    description: Leistung am Netzanschluss in W, positiv = Bezug. Nur Datenerhebung in Data Insight.
+  tariff_grid_import_energy_entity:
+    name: Netzbezug (Zähler)
+    description: Zähler des Netzbezugs in kWh oder Wh. Nur Datenerhebung in Data Insight.
+  tariff_grid_export_energy_entity:
+    name: Netzeinspeisung (Zähler)
+    description: Zähler der Einspeisung in kWh oder Wh. Nur Datenerhebung in Data Insight.
+  pv_actual_energy_entity:
+    name: PV-Ertrag (Zähler)
+    description: Zähler des PV-Ertrags in kWh oder Wh – robuste Tagesenergie für den Prognosevergleich.
+  tariff_house_load_energy_entity:
+    name: Hausverbrauch (Zähler)
+    description: Zähler des Hausverbrauchs in kWh oder Wh – Referenz für die Tagesenergie.
   insight_host:
     name: Data Insight – Host
     description: >-
@@ -203,6 +218,10 @@ configuration:
       der Speicher im Hausverbrauch-Sensor (Grundlast), Lade- und
       Entladewirkungsgrad 0,5–1,0 für die Reichweite (Standard 0,92). Keine
       Regelgröße.
+
+      • tariff_charge_energy_entity, tariff_discharge_energy_entity
+      (optional) – Zähler der geladenen bzw. entladenen Energie in kWh oder
+      Wh, nur Datenerhebung in Data Insight (gemessener Wirkungsgrad).
 
       Ein Speicher schreibt EINEN signierten Sollwert nach
       input_number.ems_<präfix>_anforderung_leistung_w (positiv = laden,

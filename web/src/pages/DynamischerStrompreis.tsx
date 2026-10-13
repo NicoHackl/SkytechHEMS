@@ -295,11 +295,71 @@ export function DynamischerStrompreis() {
               />
             </div>
 
+            <div className="section-title">Netzanschluss und Energiezähler</div>
+            <p className="hint-box">
+              Optional und nur zur Datenerhebung in Data Insight: echter Netzbezug, robuste Tagesenergien und
+              gemessene Wirkungsgrade. Leistung in W, Zähler in kWh oder Wh – passt die Einheit nicht, ordnet das
+              HEMS die Rolle nicht zu und zeigt unten einen Hinweis.
+            </p>
+            <div className="form-grid">
+              <EntityField
+                label="Netzanschluss (Leistung)"
+                value={draft.tariff_grid_power_entity} entities={entities} domains={['sensor']}
+                error={fieldErrors.tariff_grid_power_entity}
+                hint="In W, positiv = Bezug, z. B. sensor.e3dc_leistung_netz_modbus."
+                onChange={(next) => patch({ tariff_grid_power_entity: next })}
+              />
+              <EntityField
+                label="Netzbezug (Zähler)"
+                value={draft.tariff_grid_import_energy_entity} entities={entities} domains={['sensor']}
+                error={fieldErrors.tariff_grid_import_energy_entity}
+                hint="z. B. sensor.e3dc_energie_netz_bezug."
+                onChange={(next) => patch({ tariff_grid_import_energy_entity: next })}
+              />
+              <EntityField
+                label="Netzeinspeisung (Zähler)"
+                value={draft.tariff_grid_export_energy_entity} entities={entities} domains={['sensor']}
+                error={fieldErrors.tariff_grid_export_energy_entity}
+                hint="z. B. sensor.e3dc_energie_netz_einspeisung."
+                onChange={(next) => patch({ tariff_grid_export_energy_entity: next })}
+              />
+              <EntityField
+                label="PV-Ertrag (Zähler)"
+                value={draft.pv_actual_energy_entity} entities={entities} domains={['sensor']}
+                error={fieldErrors.pv_actual_energy_entity}
+                hint="z. B. sensor.e3dc_energie_ertrag_gesamt."
+                onChange={(next) => patch({ pv_actual_energy_entity: next })}
+              />
+              <EntityField
+                label="Hausverbrauch (Zähler)"
+                value={draft.tariff_house_load_energy_entity} entities={entities} domains={['sensor']}
+                error={fieldErrors.tariff_house_load_energy_entity}
+                hint="z. B. sensor.e3dc_energie_hausverbrauch_gesamt."
+                onChange={(next) => patch({ tariff_house_load_energy_entity: next })}
+              />
+            </div>
+            {batteries.map(({ device, index }) => (
+              <div className="form-grid" key={`meter-${device.name}`}>
+                <EntityField
+                  label={`${device.label || device.name}: Laden (Zähler)`}
+                  value={device.tariff_charge_energy_entity ?? ''} entities={entities} domains={['sensor']}
+                  error={fieldErrors[`devices[${index}].tariff_charge_energy_entity`]}
+                  onChange={(next) => setDeviceField(index, { tariff_charge_energy_entity: next })}
+                />
+                <EntityField
+                  label={`${device.label || device.name}: Entladen (Zähler)`}
+                  value={device.tariff_discharge_energy_entity ?? ''} entities={entities} domains={['sensor']}
+                  error={fieldErrors[`devices[${index}].tariff_discharge_energy_entity`]}
+                  onChange={(next) => setDeviceField(index, { tariff_discharge_energy_entity: next })}
+                />
+              </div>
+            ))}
+
             <div className="section-title">Grundlast</div>
             <p className="hint-box">
               Grundlast = Hausverbrauch − Istleistung aller HEMS-Verbraucher − Leistung der Speicher, die im
               Hausverbrauch-Sensor stecken (Laden erhöht ihn, Entladen senkt ihn). Das HEMS rechnet sie je
-              Viertelstunde aus den in Data Insight aufgezeichneten Werten.
+              Minute aus den in Data Insight aufgezeichneten Werten.
             </p>
             {batteries.length === 0 ? <p className="muted">Keine Speicher konfiguriert.</p> : null}
             {batteries.map(({ device, index }) => (

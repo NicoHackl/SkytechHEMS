@@ -26,7 +26,7 @@ from psycopg.types.json import Jsonb
 
 log = logging.getLogger(__name__)
 
-CONTRACT_VERSION = "0.2"
+CONTRACT_VERSION = "0.3"
 DATABASE = "skytech"
 ROLE = "skytech_hems"
 CONNECT_TIMEOUT_S = 5
@@ -50,7 +50,7 @@ class InsightSettings:
 
 @dataclass(frozen=True)
 class RoleValue:
-    """Ein 15-min-Wert einer Rolle aus `v_hems_rolle_15min`."""
+    """Ein 15-min- oder Minutenwert einer Rolle aus `v_hems_rolle_15min` bzw. `v_hems_rolle_1min`."""
 
     mean: Optional[float]
     coverage_s: float
@@ -101,10 +101,10 @@ class InsightClient:
     # ------------------------------------------------------------------
 
     async def ensure_sensor(self, entity_id: str, attribute: Optional[str], name: str, category: str,
-                            quantity: str, unit: Optional[str], source: str) -> int:
+                            quantity: str, unit: Optional[str], source: str, counter: bool = False) -> int:
         return int(await self._fetchval(
-            "SELECT skytech.hems_sensor_sichern(%s, %s, %s, %s, %s, %s, %s)",
-            (entity_id, attribute, name, category, quantity, unit, source)))
+            "SELECT skytech.hems_sensor_sichern(%s, %s, %s, %s, %s, %s, %s, %s)",
+            (entity_id, attribute, name, category, quantity, unit, source, counter)))
 
     async def deactivate_sensor(self, sensor_id: int) -> None:
         await self._execute("SELECT skytech.hems_sensor_stilllegen(%s)", (sensor_id,))
@@ -127,15 +127,17 @@ class InsightClient:
     # Werte
     # ------------------------------------------------------------------
 
-    async def last_slot(self, role: str) -> Optional[datetime]:
-        """Jüngster 15-min-Slot, den es für eine Rolle gibt."""
-        return await self._fetchval("SELECT max(zeit) FROM skytech.v_hems_rolle_15min WHERE rolle = %s", (role,))
+    async def last_minute(self, role: str) -> Optional[datetime]:
+        """Jüngste Minute einer Rolle mit echtem Rohwert (`anzahl > 0`), nicht bloß fortgeführt."""
+        return await self._fetchval(
+            "SELECT max(zeit) FROM skytech.v_hems_rolle_1min WHERE rolle = %s AND anzahl > 0", (role,))
 
-    async def role_values(self, roles: Sequence[str], start: datetime, end: datetime
+    async def role_values(self, roles: Sequence[str], start: datetime, end: datetime, minutes: bool = False
                           ) -> Dict[str, Dict[datetime, RoleValue]]:
-        """15-min-Werte je Rolle für Slots mit Beginn in [start, end)."""
+        """15-min-Werte (oder mit `minutes` Minutenwerte) je Rolle mit Beginn in [start, end)."""
+        view = "v_hems_rolle_1min" if minutes else "v_hems_rolle_15min"
         rows = await self._fetch(
-            "SELECT rolle, zeit, mittel, abdeckung_s, einheit FROM skytech.v_hems_rolle_15min "
+            f"SELECT rolle, zeit, mittel, abdeckung_s, einheit FROM skytech.{view} "
             "WHERE rolle = ANY(%s) AND zeit >= %s AND zeit < %s",
             (list(roles), start, end))
         result: Dict[str, Dict[datetime, RoleValue]] = {role: {} for role in roles}

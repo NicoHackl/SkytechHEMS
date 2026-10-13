@@ -125,7 +125,10 @@ Skytech-Data-Insight `SKYTECH_TEST_DSN=postgresql://postgres:test@127.0.0.1:1543
 (legt `skytech_test` an), dann hier
 `HEMS_INSIGHT_TEST_DSN=postgresql://postgres:test@127.0.0.1:15432/skytech_test pytest -q`.
 Der Integrationstest schreibt auch einen Verbrauchslauf mit Band, einen Auswertungslauf ohne Werte
-und die Reihen `hems.nutzbar_kwh` und `hems.netzladen_zulaessig`.
+und die Reihen `hems.nutzbar_kwh` und `hems.netzladen_zulaessig` je Minute, rechnet die Grundlast je
+Minute, prüft den Fortschritt nur an echten Rohwerten (`anzahl > 0`) und das Zählerkennzeichen.
+Ohne Integration (Vertrag 0.3): Rollen für Netzanschluss und Zähler, Einheitenprüfung (kWh-Zähler
+als PV-Leistung wird abgelehnt), Grundlast-Fortschritt über Lücken hinweg.
 
 **Phase P5 (`tests/test_tariff_p5.py`):** gewichtete Quantile, Mindesthistorie, Tagtypen,
 Zeitumstellung (02:30 Sommer- und Winterzeit gleich, 48 h über Zeitstempel), Speicher aus dem
