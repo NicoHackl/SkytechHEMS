@@ -196,6 +196,7 @@ erfindet keine Synonyme (`.button`, `.panel`, `.chip` gibt es nicht).
 | `.sidebar` | Feste Navigationsspalte, `position: sticky` |
 | `.sidebar-brand` / `.crest` | Kopf der Sidebar mit quadratischem Logo-Kürzel |
 | `.nav` / `.nav-label` / `.nav-item` / `.nav-item.active` / `.count` | Navigation, Gruppenüberschrift, Eintrag, aktiver Eintrag, Zähler-Badge rechts |
+| `.nav-item.branch` / `.nav-sub` / `.nav-sub-item` | Bereich mit Unterseiten (aktiv nur über die Textfarbe), eingerückte Liste der Unterseiten mit Führungslinie, Unterseiten-Eintrag (13px, `.active` wie `.nav-item.active`) |
 | `.sidebar-foot` / `.avatar` / `.who` | Fuß der Sidebar: Benutzer bzw. Systemzustand |
 | `.main` | Hauptspalte |
 | `.topbar` | Klebriger Seitenkopf: `h1`, `.sub`, `.spacer`, danach Aktionsbuttons |

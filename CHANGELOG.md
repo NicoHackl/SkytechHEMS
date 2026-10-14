@@ -8,6 +8,17 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Geändert — 14.10.2026 (Vorausschau in Unterseiten aufgeteilt)
+
+- „Energy Pilot“ und „Dynamischer Strompreis“ unter „Vorausschau“ sind keine langen Einzelseiten
+  mehr. Der aktive Bereich klappt seine Unterseiten eingerückt in der Sidebar auf:
+  - Energy Pilot: **Übersicht** (Plan-Status, Verbindung) und **Vorschläge** (je Gerät).
+  - Dynamischer Strompreis: **Übersicht** (Preis, PV-Prognose, Verbrauch, Reichweite, Kennzahlen),
+    **Preise** (kommende Slots), **Netzladen**, **Data Insight** (Zustand und Verbindung) und
+    **Quellen** (Sensoren, Zähler, Grundlast, Wirkungsgrade).
+- Der Punkt für ungespeicherte Änderungen steht am Bereich und an den Unterseiten Data Insight und
+  Quellen. Alte Adressen (`#/energy-pilot`, `#/dynamischer-strompreis`) leiten auf die Übersicht um.
+
 ### Behoben — 13.10.2026 (Speicher lädt nach Neustart nicht mehr im Hysterese-Band nach)
 
 - Die Sperre am SoC-Maximum („Wiedereinstieg unter SoC-Maximum“) ging bei jedem Neustart von

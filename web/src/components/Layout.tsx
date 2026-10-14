@@ -1,5 +1,5 @@
 import { useState, type MouseEvent, type ReactNode } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { Icon } from './Icon'
 import { ThemeSwitch } from './Theme'
 import { useConfigDraft } from './ConfigDraft'
@@ -8,6 +8,24 @@ import { useConfigDraft } from './ConfigDraft'
    damit Navigation und Kopfzeile beim Seitenwechsel nicht neu montiert werden. */
 
 const navClass = ({ isActive }: { isActive: boolean }) => `nav-item${isActive ? ' active' : ''}`
+
+/* Bereiche mit Unterseiten (Vorausschau). Die Unterseiten klappen in der
+   Sidebar auf, solange der Bereich aktiv ist. `draft` markiert Unterseiten, die
+   in den gemeinsamen Konfigurationsentwurf schreiben – sie tragen den Punkt. */
+interface NavSubPage { to: string; label: string; draft?: boolean }
+
+const ENERGY_PILOT_PAGES: NavSubPage[] = [
+  { to: '/energy-pilot/uebersicht', label: 'Übersicht' },
+  { to: '/energy-pilot/vorschlaege', label: 'Vorschläge' },
+]
+
+const TARIFF_PAGES: NavSubPage[] = [
+  { to: '/dynamischer-strompreis/uebersicht', label: 'Übersicht' },
+  { to: '/dynamischer-strompreis/preise', label: 'Preise' },
+  { to: '/dynamischer-strompreis/netzladen', label: 'Netzladen' },
+  { to: '/dynamischer-strompreis/data-insight', label: 'Data Insight', draft: true },
+  { to: '/dynamischer-strompreis/quellen', label: 'Quellen', draft: true },
+]
 
 export function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -44,11 +62,11 @@ export function Layout() {
           <NavLink to="/steuerung-info" className={navClass} onClick={(event) => guard(event, '/steuerung-info')}><Icon name="info" /><span>Steuerung Info</span></NavLink>
 
           <div className="nav-label">Vorausschau</div>
-          <NavLink to="/energy-pilot" className={navClass} onClick={(event) => guard(event, '/energy-pilot')}><Icon name="spark" /><span>Energy Pilot</span></NavLink>
-          <NavLink to="/dynamischer-strompreis" className={navClass} onClick={(event) => guard(event, '/dynamischer-strompreis')}>
-            <Icon name="plug" /><span>Dynamischer Strompreis</span>
-            {dirty ? <span className="count">•</span> : null}
-          </NavLink>
+          <NavBranch to="/energy-pilot" icon="spark" label="Energy Pilot" pages={ENERGY_PILOT_PAGES} guard={guard} />
+          <NavBranch
+            to="/dynamischer-strompreis" icon="plug" label="Dynamischer Strompreis"
+            pages={TARIFF_PAGES} guard={guard} dirty={dirty}
+          />
 
           <div className="nav-label">Einrichtung</div>
           <NavLink to="/konfiguration/global" className={navClass}>
@@ -80,6 +98,42 @@ export function Layout() {
         <Outlet />
       </main>
     </div>
+  )
+}
+
+/** Bereichseintrag mit aufklappbaren Unterseiten. Der Bereich selbst führt auf
+    seine Übersicht (Weiterleitung in App.tsx); aktiv markiert ist nur die
+    Unterseite, der Bereich zeigt den Zustand allein über die Textfarbe. */
+function NavBranch({ to, icon, label, pages, guard, dirty = false }: {
+  to: string
+  icon: string
+  label: string
+  pages: NavSubPage[]
+  guard: (event: MouseEvent<HTMLAnchorElement>, to: string) => void
+  dirty?: boolean
+}) {
+  const { pathname } = useLocation()
+  const open = pathname === to || pathname.startsWith(`${to}/`)
+  const branchClass = ({ isActive }: { isActive: boolean }) => `nav-item branch${isActive ? ' active' : ''}`
+  const subClass = ({ isActive }: { isActive: boolean }) => `nav-item nav-sub-item${isActive ? ' active' : ''}`
+
+  return (
+    <>
+      <NavLink to={to} className={branchClass} onClick={(event) => guard(event, to)} aria-expanded={open}>
+        <Icon name={icon} /><span>{label}</span>
+        {dirty ? <span className="count">•</span> : null}
+      </NavLink>
+      {open ? (
+        <div className="nav-sub">
+          {pages.map((page) => (
+            <NavLink key={page.to} to={page.to} className={subClass} onClick={(event) => guard(event, page.to)}>
+              <span>{page.label}</span>
+              {dirty && page.draft ? <span className="count">•</span> : null}
+            </NavLink>
+          ))}
+        </div>
+      ) : null}
+    </>
   )
 }
 

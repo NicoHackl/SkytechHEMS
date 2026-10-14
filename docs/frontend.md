@@ -112,11 +112,19 @@ Seitenwechsel nicht neu montiert werden.
     <Route path="/" element={<Status />} />
     <Route path="/steuerung" element={<Steuerung />} />
     <Route path="/steuerung-info" element={<SteuerungInfo />} />
-    <Route path="/energy-pilot" element={<EnergyPilot />} />
+    <Route path="/energy-pilot" element={<Navigate to="/energy-pilot/uebersicht" replace />} />
+    <Route path="/energy-pilot/uebersicht" element={<EnergyPilotUebersicht />} />
+    <Route path="/energy-pilot/vorschlaege" element={<EnergyPilotVorschlaege />} />
     <Route path="/sensoren/ueberschuss" element={<SensorenUeberschuss />} />
     <Route path="/sensoren/hausbilanz" element={<SensorenHausbilanz />} />
     <Route path="/flow-card" element={<FlowCard />} />
     <Route path="/notabschaltung" element={<Notabschaltung />} />
+    <Route path="/dynamischer-strompreis" element={<Navigate to="/dynamischer-strompreis/uebersicht" replace />} />
+    <Route path="/dynamischer-strompreis/uebersicht" element={<StrompreisUebersicht />} />
+    <Route path="/dynamischer-strompreis/preise" element={<StrompreisPreise />} />
+    <Route path="/dynamischer-strompreis/netzladen" element={<StrompreisNetzladen />} />
+    <Route path="/dynamischer-strompreis/data-insight" element={<StrompreisDataInsight />} />
+    <Route path="/dynamischer-strompreis/quellen" element={<StrompreisQuellen />} />
     <Route path="/konfiguration/global" element={<KonfigurationGlobal />} />
     <Route path="/konfiguration/geraete" element={<KonfigurationGeraete />} />
     <Route path="/konfiguration/geraete/neu" element={<KonfigurationGeraet mode="create" />} />
@@ -138,17 +146,32 @@ dabei ausdrücklich nur die **Entwurfsposition** — die fachliche Identität bl
 | `/` | – | Statusseite: laufender Zyklus, Geräte, Kennzahlen |
 | `/steuerung` | – | HA-Helfer je Gerät, direkt bedienbar; fehlt ein Helfer, wird der Wert im HEMS gespeichert (D-061) |
 | `/steuerung-info` | – | Je Helferwert: HA-Helfer vorhanden?, wirksame Quelle und Wert, wohin die Steuerung schreibt; verwaiste interne Werte löschen (D-061) |
-| `/energy-pilot` | Vorausschau | Vorschläge und Planstatus des Energy Pilot |
-| `/dynamischer-strompreis` | Vorausschau | Zustand von Preis und PV-Prognose (`api.tariffStatus()`, alle 30 s), kommende Preise, Quellen als Teil des Konfigurationsentwurfs (D-065) |
+| `/energy-pilot/uebersicht` | Vorausschau › Energy Pilot | Planstatus und Verbindung Energy Pilot ↔ HEMS (`api.energyPilot()`, alle 10 s) |
+| `/energy-pilot/vorschlaege` | Vorausschau › Energy Pilot | Vorschläge je Gerät |
+| `/dynamischer-strompreis/uebersicht` | Vorausschau › Dynamischer Strompreis | Preis, PV-Prognose, Verbrauch, Reichweite und Kennzahlen (`api.tariffStatus()`, alle 30 s, D-065) |
+| `/dynamischer-strompreis/preise` | Vorausschau › Dynamischer Strompreis | Kommende Preise als Tabelle |
+| `/dynamischer-strompreis/netzladen` | Vorausschau › Dynamischer Strompreis | Netzlade-Freigabe, nur Anzeige |
+| `/dynamischer-strompreis/data-insight` | Vorausschau › Dynamischer Strompreis | Zustand der Speicherung und Verbindung zu Data Insight, Teil des Konfigurationsentwurfs |
+| `/dynamischer-strompreis/quellen` | Vorausschau › Dynamischer Strompreis | Preis- und PV-Quellen, Zähler, Grundlast, Wirkungsgrade, Teil des Konfigurationsentwurfs |
 | `/sensoren/ueberschuss`, `/sensoren/hausbilanz` | Einrichtung | Formel-basierte Sensorwerte (D-045) |
 | `/flow-card` | Einrichtung | Anlagenwerte, Anzeigeoptionen und Navigationsziele der Power Flow Card (D-046, D-049) |
 | `/notabschaltung` | Einrichtung | Auslösebedingung mit Live-Prüfung und Zielzustände der Notabschaltung (D-059). Quittiert wird auf `/` |
 | `/konfiguration/*` | Einrichtung | Globale Optionen und Geräteliste |
 
 **Fünf Bereiche teilen sich einen Entwurf.** `/konfiguration`, `/sensoren`, `/flow-card`,
-`/notabschaltung` und `/dynamischer-strompreis` schreiben alle in denselben `ConfigDraft`. Sie stehen deshalb in der Ausnahmeliste von `guard()`
+`/notabschaltung` und `/dynamischer-strompreis` (dort die Unterseiten Data Insight und Quellen)
+schreiben alle in denselben `ConfigDraft`. Sie stehen deshalb in der Ausnahmeliste von `guard()`
 in `Layout.tsx` — ein Wechsel zwischen ihnen darf keine Rückfrage auslösen, der Entwurf bleibt ja
 erhalten — und tragen alle denselben Punkt in der Navigation, solange etwas ungespeichert ist.
+
+**Bereiche mit Unterseiten.** Energy Pilot und Dynamischer Strompreis sind in der Gruppe
+„Vorausschau“ jeweils in Unterseiten aufgeteilt. Die Unterseiten stehen eingerückt in der Sidebar
+(`NavBranch` in `Layout.tsx`, Listen `ENERGY_PILOT_PAGES` und `TARIFF_PAGES`) und klappen nur auf,
+solange der Bereich aktiv ist; der Stammpfad leitet auf die Übersicht um. Abruf, Formatierer und
+Seitenhülle teilen sich die Unterseiten über `components/EnergyPilotShared.tsx` bzw.
+`components/TariffShared.tsx`. Konfiguration und Sensoren schalten ihre Ansichten dagegen weiter
+über `config-tabs` in der Seite um — sie sind Teil der Gruppe „Einrichtung“ und haben nur zwei
+Ansichten.
 
 Die Seite **Flow Card** pflegt ausdrücklich **nicht** die Geräteliste: die Geräte kommen aus der
 Gerätekonfiguration, hier lässt sich je Gerät nur die Darstellung ändern. Eine zweite Pflegestelle
