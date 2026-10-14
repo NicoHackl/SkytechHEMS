@@ -394,8 +394,8 @@ class FlowPublisher:
     """Schreibt die beiden Anzeige-Sensoren, wenn die Veroeffentlichung an ist.
 
     Haelt genau zwei Dinge im Speicher: die zuletzt geschriebene Revision und
-    den Zeitpunkt des letzten Schreibens. Keine Datei, keine Datenbank — das
-    HEMS hat bewusst keine eigene Persistenz.
+    den Zeitpunkt des letzten Schreibens. Keine Datei, keine Datenbank — die
+    Anzeige braucht keine eigene Persistenz.
     """
 
     def __init__(self, ha_client) -> None:

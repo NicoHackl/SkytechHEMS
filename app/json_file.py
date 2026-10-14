@@ -1,7 +1,7 @@
 """Atomares Schreiben kleiner JSON-Dateien unter /data.
 
-Gemeinsam genutzt vom Merker der Notabschaltung (D-059) und den HEMS-internen
-Ersatzwerten (D-061): erst eine temporäre Datei vollständig schreiben, dann
+Gemeinsam genutzt vom Merker der Notabschaltung (D-059), den HEMS-internen
+Ersatzwerten (D-061) und der Speicher-Sperre (D-066): erst eine temporäre Datei vollständig schreiben, dann
 umbenennen – ein Absturz mitten im Schreiben hinterlässt nie eine halbe Datei.
 """
 

@@ -281,6 +281,14 @@ select {
 .nav-item .count { margin-left: auto; font-size: 12px; background: var(--surface-2); color: var(--text-3); padding: 1px 8px; border-radius: 999px; }
 .nav-item.active .count { background: var(--surface); color: var(--primary); }
 
+/* Bereich mit Unterseiten: aktiv nur über die Textfarbe, den Hintergrund trägt
+   allein die aktive Unterseite — sonst wäre die Auswahl doppelt markiert. */
+.nav-item.branch.active { background: none; color: var(--primary); }
+.nav-item.branch.active:hover { background: var(--surface-2); }
+.nav-item.branch.active .count { background: var(--surface-2); }
+.nav-sub { margin: 2px 0 6px 20px; padding-left: 10px; border-left: 1px solid var(--border); display: grid; gap: 2px; }
+.nav-sub-item { padding: 6px 10px; font-size: 13px; }
+
 .sidebar-foot { border-top: 1px solid var(--border); padding: 12px; display: flex; align-items: center; gap: 10px; }
 .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--primary-soft); color: var(--primary); display: grid; place-items: center; font-weight: 700; font-size: 12px; flex-shrink: 0; }
 .sidebar-foot .who { flex: 1; min-width: 0; }

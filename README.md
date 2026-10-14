@@ -6,8 +6,9 @@ zyklisch und prioritätsbasiert auf regelbare Verbraucher (Heizstab, Wallbox), b
 Mehrfachabschaltung bei Defizit und quittierpflichtiger Notabschaltung.
 
 Bedient wird es über ein Ingress-Panel und Home-Assistant-Helfer-Entitäten. Eine eigene Persistenz
-gibt es nicht: gelesen und geschrieben wird ausschließlich der HA-State. Einzige Ausnahme ist der
-Merker der Notabschaltung (D-059).
+gibt es nicht: gelesen und geschrieben wird ausschließlich der HA-State. Ausnahmen sind der
+Merker der Notabschaltung (D-059), die HEMS-internen Ersatzwerte (D-061) und die Sperre der
+Speicher am SoC-Maximum (D-066).
 
 ## Installation
 

@@ -226,6 +226,20 @@ class EMSController:
                  self._battery_residual_entity or "nicht konfiguriert",
                  self._speicher_in_residual, self._protected_minimum_scope)
 
+    def battery_latches(self) -> Dict[str, bool]:
+        """Sperre am Ladedeckel je Speicher, zum Speichern unter /data (D-066)."""
+        return {d.id: d.soc_max_latch for d in self._devices if isinstance(d, BatteryDevice)}
+
+    def restore_battery_latches(self, latches: Dict[str, bool]) -> None:
+        """Übernimmt gespeicherte Sperren. Unbekannte IDs (umbenannte oder
+        gelöschte Speicher) fallen weg und verschwinden beim nächsten Speichern."""
+        for device in self._devices:
+            if isinstance(device, BatteryDevice) and device.id in latches:
+                device.restore_soc_max_latch(latches[device.id])
+                if latches[device.id]:
+                    log.info("Speicher '%s': Sperre am SoC-Maximum aus dem letzten Lauf "
+                             "übernommen.", device.id)
+
     def report_write_results(self, results: List[WriteResult]) -> None:
         """Ordnet fehlgeschlagene Schreiboperationen ihrem Gerät zu (behebt B-2).
 
