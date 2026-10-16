@@ -123,7 +123,7 @@ Name und Konfigurationsseite des Add-ons in Home Assistant für den Sidebar-Fuß
 immer mit 200.
 
 ```json
-{ "name": "Skytech HEMS", "config_path": "/hassio/addon/58c515f2_skytech_hems/config" }
+{ "name": "Skytech HEMS", "config_path": "/config/app/58c515f2_skytech_hems/config" }
 ```
 
 `name` und Slug kommen aus `GET /addons/self/info` des Supervisors; der Slug trägt das Präfix des
