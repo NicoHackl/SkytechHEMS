@@ -179,7 +179,7 @@ class ConfigService:
             return fallback
         self._addon_link = {
             "name": str(info.get("name") or ADDON_FALLBACK_NAME),
-            "config_path": f"/hassio/addon/{slug}/config",
+            "config_path": f"/config/app/{slug}/config",
         }
         return self._addon_link
 
