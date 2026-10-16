@@ -40,6 +40,8 @@ const paths: Record<string, JSX.Element> = {
   pulse: <path d="M3 12h4l2-7 4 14 3-9 2 2h4" />,
   /* Verzweigung — Flow Card, Leistungsfluss zwischen Knoten. */
   flow: <><circle cx="5" cy="12" r="2" /><circle cx="19" cy="5" r="2" /><circle cx="19" cy="19" r="2" /><path d="M7 12h4M11 12l6-6M11 12l6 6" /></>,
+  /* Solarmodul — Produkt-Icon von Skytech HEMS im Sidebar-Fuß. */
+  solar: <><path d="M5 4h14l2 10H3L5 4Z" /><path d="M12 4v10M4 9h16M8.5 4l-1 10M15.5 4l1 10" /><path d="M12 14v7M8 21h8" /></>,
 }
 
 export function Icon({ name, size = 18, ...props }: { name: string; size?: number } & SVGProps<SVGSVGElement>) {

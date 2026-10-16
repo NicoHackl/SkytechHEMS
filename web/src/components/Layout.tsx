@@ -1,5 +1,6 @@
 import { useState, type MouseEvent, type ReactNode } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { AddonFoot } from './AddonFoot'
 import { Icon } from './Icon'
 import { ThemeSwitch } from './Theme'
 import { useConfigDraft } from './ConfigDraft'
@@ -87,10 +88,7 @@ export function Layout() {
           </NavLink>
         </nav>
 
-        <div className="sidebar-foot">
-          <span className="avatar"><Icon name="spark" size={16} /></span>
-          <div className="who"><b>PV-Überschuss</b><span>Regelung über HA-Helfer</span></div>
-        </div>
+        <AddonFoot />
       </aside>
 
       <main className="main">

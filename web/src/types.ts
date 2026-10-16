@@ -828,3 +828,10 @@ export interface TariffInsight {
   grundlast_bis: string | null
   grundlast_grund: string | null
 }
+
+/** Antwort von `GET /api/addon` (D-067): Name und HA-Konfigurationsseite des
+    Add-ons. `config_path` fehlt ohne Supervisor — dann gibt es keinen Link. */
+export interface AddonInfo {
+  name: string
+  config_path: string | null
+}

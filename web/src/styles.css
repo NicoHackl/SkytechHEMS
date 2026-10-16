@@ -294,6 +294,10 @@ select {
 .sidebar-foot .who { flex: 1; min-width: 0; }
 .sidebar-foot .who b { font-size: 13px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sidebar-foot .who span { font-size: 11px; color: var(--text-3); }
+/* Als Link (D-067) führt der Fuß auf die Konfigurationsseite des Add-ons in HA. */
+a.sidebar-foot { transition: background .12s; }
+a.sidebar-foot:hover { background: var(--surface-2); }
+a.sidebar-foot:focus-visible { outline: none; box-shadow: inset 0 0 0 3px var(--primary-ring); }
 .status-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); flex-shrink: 0; }
 .sidebar-backdrop, .mobile-menu { display: none; }
 

@@ -197,7 +197,7 @@ erfindet keine Synonyme (`.button`, `.panel`, `.chip` gibt es nicht).
 | `.sidebar-brand` / `.crest` | Kopf der Sidebar mit quadratischem Logo-Kürzel |
 | `.nav` / `.nav-label` / `.nav-item` / `.nav-item.active` / `.count` | Navigation, Gruppenüberschrift, Eintrag, aktiver Eintrag, Zähler-Badge rechts |
 | `.nav-item.branch` / `.nav-sub` / `.nav-sub-item` | Bereich mit Unterseiten (aktiv nur über die Textfarbe), eingerückte Liste der Unterseiten mit Führungslinie, Unterseiten-Eintrag (13px, `.active` wie `.nav-item.active`) |
-| `.sidebar-foot` / `.avatar` / `.who` | Fuß der Sidebar: Benutzer bzw. Systemzustand |
+| `.sidebar-foot` / `.avatar` / `.who` | Fuß der Sidebar, in allen Skytech-Add-ons gleich (D-067): Produkt-Icon, Name des Add-ons, darunter „Addon-Config“. Als `<a>` Link auf die Konfigurationsseite des Add-ons in HA (Hover wie `.nav-item`, Fokusring); ohne Supervisor ein `<div>` ohne Link. Komponente `AddonFoot` |
 | `.main` | Hauptspalte |
 | `.topbar` | Klebriger Seitenkopf: `h1`, `.sub`, `.spacer`, danach Aktionsbuttons |
 | `.content` | Inhaltsbreite (`max-width` 1080–1180px, `padding: 28px`, zentriert) |
@@ -295,6 +295,8 @@ Ein eigenes, kleines Set als React-Komponente, **keine** Icon-Bibliothek als Abh
 - Farbe kommt immer über `currentColor` vom Elternelement — nie hart im SVG.
 - Unbekannter Name liefert ein neutrales Fallback statt eines Absturzes.
 - Neue Icons werden dem Set hinzugefügt, nicht als Einzel-SVG in eine Seite kopiert.
+- Produkt-Icon im Sidebar-Fuß: `solar` (Solarmodul). Jedes Skytech-Add-on hat ein eigenes,
+  nicht doppelt vergebenes Produkt-Icon (D-067).
 
 ## Barrierefreiheit
 
