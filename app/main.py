@@ -784,6 +784,13 @@ class HEMSApp:
     async def _handle_tariff_status(self, request: web.Request) -> web.Response:
         return web.json_response(self.tariff.status)
 
+    async def _handle_addon(self, request: web.Request) -> web.Response:
+        """Name und HA-Konfigurationsseite des Add-ons für den Sidebar-Fuß (D-067).
+
+        Antwortet immer mit 200: ohne Supervisor fehlt nur der Link.
+        """
+        return web.json_response(await self.config.addon_link())
+
     async def _emergency_watcher(self) -> None:
         """Fragt die Bedingungs-Entität jede Sekunde ab (D-059).
 
@@ -1179,6 +1186,7 @@ class HEMSApp:
         app.router.add_get("/",              self._handle_index)
         app.router.add_get("/index.html",    self._handle_index)
         app.router.add_get("/api/status",                  self._handle_status)
+        app.router.add_get("/api/addon",                   self._handle_addon)
         app.router.add_get("/api/controls",               self._handle_controls)
         app.router.add_get("/api/ep",                      self._handle_ep)
         app.router.add_get("/api/device_controls_schema", self._handle_device_controls_schema)

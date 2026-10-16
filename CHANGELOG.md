@@ -8,6 +8,14 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Geändert — 16.10.2026 (Sidebar-Fuß führt zur Add-on-Konfiguration)
+
+- Links unten in der Sidebar stehen jetzt ein Solarmodul-Icon, der Name des Add-ons („Skytech
+  HEMS“) und darunter „Addon-Config“. Ein Klick öffnet die Konfigurationsseite des Add-ons in Home
+  Assistant (D-067). Der bisherige Text „PV-Überschuss / Regelung über HA-Helfer“ entfällt. Der Fuß
+  ist in allen Skytech-Add-ons gleich aufgebaut.
+- Neuer Endpunkt `GET /api/addon` liefert Name und Pfad der Konfigurationsseite vom Supervisor.
+
 ### Geändert — 14.10.2026 (Vorausschau in Unterseiten aufgeteilt)
 
 - „Energy Pilot“ und „Dynamischer Strompreis“ unter „Vorausschau“ sind keine langen Einzelseiten

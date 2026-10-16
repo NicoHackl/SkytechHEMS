@@ -1,5 +1,5 @@
 import type {
-  ConfigOptions, ConfigResponse, ConfigSaveResult, ConfigValidation,
+  AddonInfo, ConfigOptions, ConfigResponse, ConfigSaveResult, ConfigValidation,
   ControlGroup, EmergencyCondition, EmergencyStatus, EntityOption, FlowDashboards, FlowPreview,
   FormulaTestResult, FormulaVariable, HaEntities, InternalValues, StatusResponse, TariffStatus,
 } from './types'
@@ -49,6 +49,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 /* Jeder Aufruf ist ein benannter Eintrag — kein roher Pfad in einer Seite. */
 export const api = {
   status: () => request<StatusResponse>('/status'),
+  /* Name und HA-Konfigurationsseite des Add-ons für den Sidebar-Fuß (D-067). */
+  addon: () => request<AddonInfo>('/addon'),
   controls: () => request<HaEntities>('/controls'),
   controlsSchema: () => request<ControlGroup[]>('/device_controls_schema'),
   energyPilot: () => request<HaEntities>('/ep'),

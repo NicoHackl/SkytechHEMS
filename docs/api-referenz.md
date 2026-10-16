@@ -117,6 +117,19 @@ Notabschaltung: `configured`, `active`, `since`, `trigger`, `condition`, `can_ac
 [datenmodell.md](datenmodell.md#notabschaltung-emergency-d-059). Bei `active: true` ist `status`
 der letzte Zyklus vor der Notabschaltung, `cycle_count` steht still.
 
+### `GET /api/addon`
+
+Name und Konfigurationsseite des Add-ons in Home Assistant für den Sidebar-Fuß (D-067). Antwortet
+immer mit 200.
+
+```json
+{ "name": "Skytech HEMS", "config_path": "/hassio/addon/58c515f2_skytech_hems/config" }
+```
+
+`name` und Slug kommen aus `GET /addons/self/info` des Supervisors; der Slug trägt das Präfix des
+Add-on-Repositorys und ist deshalb nicht fest verdrahtet. Ohne Supervisor oder bei einem Fehler:
+`name` = „Skytech HEMS“, `config_path` = `null`. Ein Erfolg wird bis zum Neustart gemerkt.
+
 ### `POST /api/emergency/acknowledge`
 
 Quittiert die Notabschaltung (D-059). Kein Rumpf. Die Bedingung wird dafür **frisch** über

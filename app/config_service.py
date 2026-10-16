@@ -16,6 +16,7 @@ Reihenfolge beim Speichern, in genau dieser Abfolge:
 
 import asyncio
 import logging
+import re
 from dataclasses import asdict
 from typing import Any, Callable, Dict, List, Optional
 
@@ -60,6 +61,13 @@ DEFAULT_ENTITY_DOMAINS = ("sensor", "switch", "script")
 # Nach dem Auslösen des Neustarts bleibt der Antwort Zeit, den Browser zu
 # erreichen, bevor der Supervisor den Prozess beendet.
 RESTART_DELAY_S = 0.5
+
+# Anzeigename im Sidebar-Fuß, solange der Supervisor den echten nicht liefert.
+ADDON_FALLBACK_NAME = "Skytech HEMS"
+
+# Supervisor-Slugs bestehen aus Kleinbuchstaben, Ziffern und Unterstrichen. Was
+# anders aussieht, wird nicht zu einem Pfad im HA-Frontend zusammengesetzt.
+_SLUG_PATTERN = re.compile(r"[a-z0-9_]+")
 
 
 class ConfigProblem(Exception):
@@ -113,6 +121,7 @@ class ConfigService:
         # Die laufende Neustart-Aufgabe bleibt greifbar: sonst wäre von außen
         # nicht feststellbar, ob der Neustart tatsächlich angestoßen wurde.
         self.restart_task: Optional["asyncio.Task"] = None
+        self._addon_link: Optional[Dict[str, Any]] = None
 
     # ------------------------------------------------------------------
     # Lesen
@@ -144,6 +153,35 @@ class ConfigService:
         except Exception:
             return ""
         return str(info.get("version") or "")
+
+    async def addon_link(self) -> Dict[str, Any]:
+        """Name und HA-Konfigurationsseite des eigenen Add-ons (D-067).
+
+        Speist den Fuß der Sidebar. Der Slug trägt das Präfix des
+        Add-on-Repositorys (z. B. `58c515f2_skytech_hems`) und steht nur beim
+        Supervisor. Ohne ihn gibt es keinen Link – der Fuß zeigt dann nur den
+        Namen. Gemerkt wird nur ein Erfolg; ein Ausfall wird beim nächsten
+        Aufruf erneut versucht.
+        """
+        if self._addon_link is not None:
+            return self._addon_link
+        fallback: Dict[str, Any] = {"name": ADDON_FALLBACK_NAME, "config_path": None}
+        if not self._supervisor.available:
+            return fallback
+        try:
+            info = await self._supervisor.get_self_info()
+        except (SupervisorUnavailable, SupervisorRejected) as exc:
+            log.warning("Add-on-Slug nicht abrufbar, Sidebar-Fuß ohne Link: %s", exc)
+            return fallback
+        slug = str(info.get("slug") or "")
+        if not _SLUG_PATTERN.fullmatch(slug):
+            log.warning("Supervisor meldet keinen gültigen Add-on-Slug, Sidebar-Fuß ohne Link.")
+            return fallback
+        self._addon_link = {
+            "name": str(info.get("name") or ADDON_FALLBACK_NAME),
+            "config_path": f"/hassio/addon/{slug}/config",
+        }
+        return self._addon_link
 
     async def read(self) -> Dict[str, Any]:
         """Alles, was die Konfigurationsseite zum Anzeigen braucht."""
