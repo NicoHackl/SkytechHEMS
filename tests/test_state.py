@@ -225,3 +225,39 @@ def test_resolve_formula_namespace_leere_zeilenliste():
     namespace, diagnostics = proxy().resolve_formula_namespace([])
     assert namespace == {}
     assert diagnostics == []
+
+
+# ---------------------------------------------------------------------------
+# Attribut-Resolver für den Schnittstellen-Sensor (D-068)
+# ---------------------------------------------------------------------------
+
+def _attr_proxy(attrs, state="bereit"):
+    return StateProxy({"sensor.x": {"state": state, "attributes": attrs}},
+                      internal={"sensor.x": 99.0})
+
+
+def test_attribut_zahl_gueltig():
+    r = _attr_proxy({"soc_prozent": 14}).resolve_attribute_number("sensor.x", "soc_prozent")
+    assert (r.value, r.state, r.source) == (14.0, STATE_VALID, SOURCE_HA)
+
+
+def test_attribut_zahl_ohne_ersatzwert():
+    """Ein Messwert kommt nie aus einem HEMS-internen Wert, auch wenn einer gespeichert ist."""
+    proxy = _attr_proxy({"soc_prozent": None, "text": "abc", "flag": True, "neg": -1,
+                         "nan": float("nan")})
+    assert proxy.resolve_attribute_number("sensor.x", "soc_prozent").state == STATE_UNAVAILABLE
+    assert proxy.resolve_attribute_number("sensor.x", "fehlt").value is None
+    assert proxy.resolve_attribute_number("sensor.x", "text").state == STATE_INVALID
+    assert proxy.resolve_attribute_number("sensor.x", "flag").state == STATE_INVALID
+    assert proxy.resolve_attribute_number("sensor.x", "nan").state == STATE_INVALID
+    assert proxy.resolve_attribute_number("sensor.x", "neg", minimum=0).state == STATE_INVALID
+    assert StateProxy({}).resolve_attribute_number("sensor.x", "a").state == STATE_MISSING
+
+
+def test_attribut_bool_nur_echte_booleans():
+    proxy = _attr_proxy({"an": True, "aus": False, "text": "on", "zahl": 1, "leer": None})
+    assert proxy.resolve_attribute_bool("sensor.x", "an").value is True
+    assert proxy.resolve_attribute_bool("sensor.x", "aus").value is False
+    assert proxy.resolve_attribute_bool("sensor.x", "text").state == STATE_INVALID
+    assert proxy.resolve_attribute_bool("sensor.x", "zahl").value is None
+    assert proxy.resolve_attribute_bool("sensor.x", "leer").state == STATE_UNAVAILABLE

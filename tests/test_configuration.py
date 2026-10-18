@@ -755,3 +755,41 @@ def test_geaendertes_navigationsziel_schaltet_kein_geraet_ab():
     old = options(binary(), controllable())
     new = options(binary(flow_navigation="/dashboard-pv/heizlufter-1"), controllable())
     assert cfg.devices_needing_shutdown(old, new) == []
+
+
+# ---------------------------------------------------------------------------
+# Schnittstellen-Sensor des Battery-Providers (D-068)
+# ---------------------------------------------------------------------------
+
+def test_speicher_mit_provider_braucht_keine_einzelsensoren():
+    result = cfg.validate_options(options(battery(
+        provider_entity="sensor.ac_speicher_1_hems_schnittstelle",
+        soc_entity="", charge_power_entity="", discharge_power_entity="")))
+    assert result.valid, result.field_errors
+    assert result.inactive_devices == []
+    assert result.devices[0]["provider_entity"] == "sensor.ac_speicher_1_hems_schnittstelle"
+
+
+def test_speicher_mit_provider_darf_einzelsensoren_behalten():
+    """soc_entity bleibt erlaubt – Data Insight und Flow-Card lesen ihn weiter."""
+    result = cfg.validate_options(options(battery(
+        provider_entity="sensor.ac_speicher_1_hems_schnittstelle")))
+    assert result.valid, result.field_errors
+    assert result.inactive_devices == []
+
+
+def test_provider_muss_ein_sensor_sein():
+    result = cfg.validate_options(options(battery(
+        provider_entity="binary_sensor.ac_speicher_1", soc_entity="")))
+    assert [i.name for i in result.inactive_devices] == ["acspeicher1"]
+    assert "provider_entity" in result.inactive_devices[0].errors
+
+
+def test_ohne_provider_bleibt_soc_entity_pflicht():
+    result = cfg.validate_options(options(battery(soc_entity="")))
+    assert "soc_entity" in result.inactive_devices[0].errors
+
+
+def test_provider_fehlt_in_bestandskonfiguration():
+    result = cfg.validate_options(options(battery()))
+    assert result.devices[0]["provider_entity"] == ""

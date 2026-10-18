@@ -174,11 +174,19 @@ configuration:
 
       AC BATTERY STORAGE (class: battery)
 
-      • soc_entity (required) – Sensor entity with the state of charge in
-      percent. If it reports "unavailable", this storage drops out of control
-      and goes to standby; the other devices keep running.
+      • provider_entity (optional) – Interface sensor of the Battery Provider,
+      e.g. sensor.ac_speicher_1_hems_schnittstelle. If set, state of charge,
+      actual power and the device's charge/discharge permission come from it;
+      soc_entity and the power fields are then not required. If the device
+      blocks a direction, the HEMS takes this storage out of the distribution
+      for it and the next storage takes over.
 
-      • charge_power_entity + discharge_power_entity OR power_entity (required)
+      • soc_entity (required without provider_entity) – Sensor entity with the
+      state of charge in percent. If it reports "unavailable", this storage
+      drops out of control and goes to standby; the other devices keep running.
+
+      • charge_power_entity + discharge_power_entity OR power_entity (required
+      without provider_entity)
       – Exactly one complete actual-power variant: either two unsigned sensors
       for charge and discharge power in watts, or one signed sensor. Both
       variants at once is invalid.

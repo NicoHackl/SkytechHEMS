@@ -199,6 +199,48 @@ class StateProxy:
             return self._select_fallback(entity_id, STATE_INVALID, allowed, addon, fallback)
         return Resolved(raw, STATE_VALID, SOURCE_HA)
 
+    def resolve_attribute_number(self, entity_id: str, key: str, *,
+                                 minimum: Optional[float] = None,
+                                 maximum: Optional[float] = None) -> Resolved:
+        """Zahl aus einem Attribut einer Entität – ohne jeden Ersatzwert.
+
+        Für Messwerte, die ein Provider in einem Schnittstellen-Sensor liefert
+        (D-068). Ein Messwert darf nie aus einem HEMS-internen Wert oder Default
+        stammen: fehlt er oder ist er unbrauchbar, ist `value` `None`, und der
+        Aufrufer behandelt das wie einen ausgefallenen Sensor.
+        """
+        if not self.has(entity_id):
+            return Resolved(None, STATE_MISSING, SOURCE_INTERNAL)
+        raw = (self.getattr(entity_id) or {}).get(key)
+        if raw is None:
+            return Resolved(None, STATE_UNAVAILABLE, SOURCE_INTERNAL)
+        if isinstance(raw, bool):
+            return Resolved(None, STATE_INVALID, SOURCE_INTERNAL)
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            return Resolved(None, STATE_INVALID, SOURCE_INTERNAL)
+        if (not math.isfinite(value)
+                or (minimum is not None and value < minimum)
+                or (maximum is not None and value > maximum)):
+            return Resolved(None, STATE_INVALID, SOURCE_INTERNAL)
+        return Resolved(value, STATE_VALID, SOURCE_HA)
+
+    def resolve_attribute_bool(self, entity_id: str, key: str) -> Resolved:
+        """Echter Bool aus einem Attribut, sonst `value` `None` – nichts wird gedeutet.
+
+        Text wie "on" oder Zahlen wie 1 gelten hier bewusst als ungültig: ein
+        Attribut ist JSON, und der Vertrag verlangt dort einen Bool (D-068).
+        """
+        if not self.has(entity_id):
+            return Resolved(None, STATE_MISSING, SOURCE_INTERNAL)
+        raw = (self.getattr(entity_id) or {}).get(key)
+        if raw is None:
+            return Resolved(None, STATE_UNAVAILABLE, SOURCE_INTERNAL)
+        if not isinstance(raw, bool):
+            return Resolved(None, STATE_INVALID, SOURCE_INTERNAL)
+        return Resolved(raw, STATE_VALID, SOURCE_HA)
+
     def resolve_raw(self, entity_id: str, *, fallback: Any = None) -> Resolved:
         """Roher State ohne Typprüfung, sonst HEMS-intern, sonst Ersatzwert.
 

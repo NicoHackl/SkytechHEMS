@@ -8,6 +8,23 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Hinzugefügt — 18.10.2026 (Speicher über die Schnittstelle der Speicher-Integration)
+
+- Ein Speicher lässt sich jetzt über den Sensor „HEMS-Schnittstelle“ der Speicher-Integration
+  (Skytech HEMS Battery Provider) einbinden: neues Feld **Schnittstelle zum Speicher** im
+  Geräteformular (`provider_entity`). Ladezustand und Ist-Leistung kommen dann aus diesem einen
+  Sensor; die einzelnen Sensorfelder werden für die Regelung nicht mehr gebraucht. Ohne das Feld
+  bleibt alles wie bisher (D-068).
+- Das HEMS erfährt so, wenn der Speicher selbst Laden oder Entladen sperrt. Sperrt er das
+  Entladen, übernimmt der nächste Speicher in der Entladereihenfolge das Hausdefizit, statt dass
+  der Bedarf aus dem Netz kommt. Anlass war der 18.10.2026: Der AC-Speicher hat von 09:01 bis 09:16
+  nicht entladen, obwohl das HEMS es anforderte, und der E3DC sprang nicht ein.
+- Die Statuskarte des Speichers zeigt eine Sperre des Geräts mit Ursache, z. B. „Speicher: sperrt
+  Entladen (Notstromreserve erreicht)“. Neue Sperrgründe „Speicher sperrt Laden“ und „Speicher
+  sperrt Entladen“.
+- Vertrag mit der Speicher-Integration auf Version 1.2 (Schnittstellen-Sensor). Ob der Marstek
+  seine Entladesperre im unteren Ladezustand wirklich meldet, ist noch zu bestätigen.
+
 ### Geändert — 16.10.2026 (Sidebar-Fuß führt zur Add-on-Konfiguration)
 
 - Links unten in der Sidebar stehen jetzt ein Solarmodul-Icon, der Name des Add-ons („Skytech

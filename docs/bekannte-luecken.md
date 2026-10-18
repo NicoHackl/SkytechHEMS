@@ -151,6 +151,21 @@ Der Code ist gebaut und getestet; diese Fragen betreffen die **Inbetriebnahme am
 | F-13 | ~~Welches Gerät wird der AC-Speicher?~~ **Beantwortet (03.09.2026):** Marstek Venus E 3.0, Präfix `acspeicher1`, aktuell über die bestehende Modbus-Automation angebunden. | — |
 | F-14 | Bringt das Gerät eine eigene Nulleinspeisung mit, und lässt sie sich abschalten? Nicht abschaltbar heißt: HEMS und Gerät regeln gegeneinander | Inbetriebnahme |
 
+## Gerätefreigaben über den Battery-Provider (D-068)
+
+Anlass: Am 18.10.2026 von 09:01 bis 09:16 forderte das HEMS beim Marstek `acspeicher1` bis 2320 W
+Entladung an; der Provider sendete sie, der Speicher führte sie nicht aus (Shelly: rund 8 W
+Leerlauf). Das Defizit ging ins Netz, der E3DC (Entladepriorität 10) bekam 0 W. In den drei Tagen
+davor nur bei 12–15 % SoC nach Wiederaufladen vom Boden, ab 17 % entlud er wieder. Seit D-068 kann
+das HEMS die Gerätefreigaben über `provider_entity` lesen.
+
+| Grenze | Folge | Stand |
+|---|---|---|
+| Ob Marstek `dischrg_flag` die Verweigerung meldet, ist nicht an Hardware bestätigt | Meldet das Gerät `true` und verweigert trotzdem, bleibt das Verhalten wie am 18.10.2026 | `provider_entity` erst setzen, wenn die History von `entladen_freigegeben` im unteren SoC-Band bestätigt ist |
+| Kein Abgleich Soll gegen Ist | Eine Verweigerung ohne gemeldete Sperre erkennt das HEMS nicht | Bewusst nicht umgesetzt, die Ursache soll vom Gerät kommen |
+| Die Freigaben sind bis zu 15 s plus ein Poll-Intervall alt | Eine neue Sperre greift entsprechend später | Provider-Taktung, Vertrag 1.2 |
+| `device_controls_schema` (Energy Pilot) kennt `provider_entity` nicht | Der Energy Pilot sieht weiterhin nur `soc_entity`; ist es leer, fehlt ihm der SoC | `soc_entity` zusätzlich setzen |
+
 ## Grenzen des dynamischen Strompreises (D-065)
 
 Alles reine Anzeige; die Grenzen betreffen die Aussagekraft, nicht die Regelung.

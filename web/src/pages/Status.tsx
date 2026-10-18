@@ -515,6 +515,29 @@ const BLOCK_LABELS: Record<string, string> = {
   hausdefizit: 'Hausdefizit – Laden gesperrt',
   umschaltsperre: 'Umschaltsperre',
   totzone: 'Totzone um Null',
+  geraet_laden_gesperrt: 'Speicher sperrt Laden',
+  geraet_entladen_gesperrt: 'Speicher sperrt Entladen',
+}
+
+/* Warum der Speicher selbst eine Richtung sperrt (Schnittstellen-Sensor, D-068). */
+const GERAET_SPERRGRUND_LABELS: Record<string, string> = {
+  ladesperrzeit: 'Ladesperrzeit',
+  entladesperrzeit: 'Entladesperrzeit',
+  notstromreserve: 'Notstromreserve erreicht',
+}
+
+/** Was der Speicher selbst gerade sperrt, als Klartext – null, wenn er nichts sperrt. */
+function geraeteSperre(device: BatteryDevice): string | null {
+  const richtungen = [
+    device.geraet_laden_freigegeben === false ? 'Laden' : null,
+    device.geraet_entladen_freigegeben === false ? 'Entladen' : null,
+  ].filter(Boolean)
+  if (richtungen.length === 0) return null
+  // Die allgemeine Sperre steckt schon in der Richtung; nur die genauere Ursache anhängen.
+  const gruende = (device.geraet_sperrgruende ?? [])
+    .filter((grund) => grund !== 'geraet_laden_gesperrt' && grund !== 'geraet_entladen_gesperrt')
+    .map((grund) => GERAET_SPERRGRUND_LABELS[grund] ?? grund)
+  return `sperrt ${richtungen.join(' und ')}` + (gruende.length ? ` (${gruende.join(', ')})` : '')
 }
 
 /* Warum eine Ladestufe als Lücke gilt und die Liste dort endet (D-056). */
@@ -557,6 +580,7 @@ function BatteryCard({ device, elapsed }: { device: BatteryDevice; elapsed: numb
   const changed = Math.round(device.netto_w) !== Math.round(altNetto)
   const istNetto = device.lade_ist_w - device.entlade_ist_w
   const sperre = Math.max(0, device.umschaltsperre_rest_s - elapsed)
+  const speicherSperre = geraeteSperre(device)
   const grund = blockLabel(device.blockiert_grund)
     ?? (device.new_lade_w === 0 && device.new_entlade_w === 0
       ? blockLabel(device.entlade_blockiert_grund) ?? blockLabel(device.lade_blockiert_grund)
@@ -586,6 +610,7 @@ function BatteryCard({ device, elapsed }: { device: BatteryDevice; elapsed: numb
       {!device.battery_residual_sensor_valid ? (
         <KeyValue label="Hausleistungsbilanz" value="ungültig – Standby" tone="err" />
       ) : null}
+      {speicherSperre ? <KeyValue label="Speicher" value={speicherSperre} tone="warn" /> : null}
       <KeyValue
         label="Betriebsart"
         value={`${BETRIEBSART_LABELS[device.betriebsart] ?? device.betriebsart} → ${

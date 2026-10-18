@@ -160,6 +160,14 @@ export interface BatteryDevice extends DeviceBase {
   entlade_blockiert_grund: string | null
   /** Grund auf Auflösungsebene: umschaltsperre oder totzone. */
   blockiert_grund: string | null
+  /** Schnittstellen-Sensor des Battery-Providers (D-068), sonst null. */
+  provider_entity?: string | null
+  /** Zustand der Schnittstelle: bereit, laden_gesperrt, entladen_gesperrt, gesperrt, getrennt. */
+  provider_zustand?: string | null
+  /** Freigaben des Speichers selbst; ohne Schnittstelle immer true. */
+  geraet_laden_freigegeben?: boolean
+  geraet_entladen_freigegeben?: boolean
+  geraet_sperrgruende?: string[]
 }
 
 /** Eine gültig gelesene Ladestufe; greift = aktiv und SoC ≥ Schwelle. */
@@ -400,6 +408,8 @@ export interface ConfigDevice {
 
   /* battery */
   soc_entity?: string
+  /** Schnittstellen-Sensor des Battery-Providers (D-068); ersetzt SoC- und Leistungssensoren. */
+  provider_entity?: string
   charge_power_entity?: string
   discharge_power_entity?: string
   power_entity?: string

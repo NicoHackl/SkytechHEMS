@@ -129,6 +129,7 @@ def _build_devices(device_configs: List[dict]) -> List[Device]:
                 capacity_kwh=cfg["capacity_kwh"],
                 soc_max_hysteresis_percent=cfg["soc_max_hysteresis_percent"],
                 direction_switch_delay_s=cfg["direction_switch_delay_s"],
+                provider_entity=cfg.get("provider_entity") or None,
                 entity_prefix=prefix,
                 label=label,
             ))

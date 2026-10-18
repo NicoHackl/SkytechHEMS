@@ -2141,3 +2141,58 @@ def test_watt_geraet_ohne_istleistung_bleibt_unveraendert():
     states["sensor.heizstab_ist"] = "unavailable"
     res = ctrl.run_cycle(make_states(states))
     assert "istleistung_ungueltig" not in _dev(res)["inactive_reasons"]
+
+
+# ---------------------------------------------------------------------------
+# Schnittstellen-Sensor des Battery-Providers (D-068)
+# ---------------------------------------------------------------------------
+
+def _provider_battery_cfg(name, **kw):
+    cfg = _battery_cfg(name, **kw)
+    cfg.update({"provider_entity": f"sensor.{name}_hems_schnittstelle", "soc_entity": "",
+                "charge_power_entity": "", "discharge_power_entity": ""})
+    return cfg
+
+
+def _provider_attrs(*, soc=14, entladen=True, laden=True):
+    return {
+        "schnittstelle_version": 1,
+        "messung_ok": True,
+        "soc_prozent": soc,
+        "ist_ladeleistung_w": 0,
+        "ist_entladeleistung_w": 0,
+        "laden_freigegeben": laden,
+        "entladen_freigegeben": entladen,
+        "sperrgruende": [] if entladen else ["geraet_entladen_gesperrt"],
+    }
+
+
+@pytest.mark.parametrize(("entladen", "erwartet_sp1", "erwartet_sp2"), [
+    (True, -2256, 0),     # Gerät gibt frei: der Speicher mit Priorität 1 deckt allein
+    (False, 0, -2256),    # Vorfall 18.10.2026: Gerät sperrt, der nächste übernimmt
+])
+def test_geraetesperre_gibt_defizit_an_naechsten_speicher(entladen, erwartet_sp1, erwartet_sp2):
+    cfg = [_provider_battery_cfg("sp1", entlade_limit=2500), _battery_cfg("sp2")]
+    ctrl = EMSController(
+        cfg,
+        residual_power_entity="sensor.ueberschuss",
+        battery_residual_power_entity="sensor.hausleistungsbilanz",
+    )
+    states = {
+        **_global(),
+        **_battery("sp1", entlade_prio=1),
+        **_battery("sp2", entlade_prio=10),
+        "sensor.sp1_hems_schnittstelle": "bereit" if entladen else "entladen_gesperrt",
+        "sensor.ueberschuss": 0,
+        "sensor.hausleistungsbilanz": -2256,
+        "input_number.ems_ac_speicher_entlade_abschlag_w": 0,
+    }
+    res = ctrl.run_cycle(make_states(
+        states, attributes={"sensor.sp1_hems_schnittstelle": _provider_attrs(entladen=entladen)}))
+
+    v1 = _op_for(res["write_ops"], "input_number.ems_sp1_anforderung_leistung_w")
+    v2 = _op_for(res["write_ops"], "input_number.ems_sp2_anforderung_leistung_w")
+    assert (v1[2]["value"] if v1 else 0) == pytest.approx(erwartet_sp1)
+    assert (v2[2]["value"] if v2 else 0) == pytest.approx(erwartet_sp2)
+    if not entladen:
+        assert _dev(res, "sp1")["entlade_blockiert_grund"] == "geraet_entladen_gesperrt"
