@@ -1535,6 +1535,11 @@ class BatteryDevice(ControllableDevice):
     # endlosen Suche; eingelesen wird ohnehin nur bis zur ersten Lücke.
     MAX_LADESTUFEN = 20
 
+    # Gültige Zustände und Attributversion des Schnittstellen-Sensors des
+    # Battery-Providers (D-068, Vertrag 1.2). `getrennt` fehlt bewusst.
+    PROVIDER_ZUSTAENDE = ("bereit", "laden_gesperrt", "entladen_gesperrt", "gesperrt")
+    PROVIDER_VERSION = 1
+
     def __init__(self, id: str, allowed_modes: List[str], *,
                  soc_entity: str,
                  available_charge_power_w: float,
@@ -1546,6 +1551,7 @@ class BatteryDevice(ControllableDevice):
                  capacity_kwh: float = 0.0,
                  soc_max_hysteresis_percent: float = 2.0,
                  direction_switch_delay_s: float = 5.0,
+                 provider_entity: Optional[str] = None,
                  entity_prefix: Optional[str] = None,
                  label: Optional[str] = None):
         prefix = entity_prefix or id
@@ -1558,6 +1564,11 @@ class BatteryDevice(ControllableDevice):
             output_unit="watt",          # Speicher werden immer in Watt geregelt
         )
         self.soc_entity                       = soc_entity
+        # Schnittstellen-Sensor des Battery-Providers (D-068, Vertrag 1.2). Ist er
+        # gesetzt, kommen SoC, Ist-Leistung und Gerätefreigaben ausschließlich aus
+        # seinen Attributen; soc_entity und die Leistungsfelder wirken dann nicht
+        # auf die Regelung.
+        self.provider_entity                  = provider_entity or None
         self.charge_power_entity              = charge_power_entity
         self.discharge_power_entity           = discharge_power_entity
         self.power_entity                     = power_entity
@@ -1593,6 +1604,12 @@ class BatteryDevice(ControllableDevice):
         self._battery_residual_sensor_valid = True
         self._lade_ist_w     = 0.0
         self._entlade_ist_w  = 0.0
+        # Gerätefreigaben aus dem Schnittstellen-Sensor (D-068). Ohne Provider oder
+        # ohne Angabe des Geräts True: keine Information ist keine Sperre.
+        self._geraet_laden_ok    = True
+        self._geraet_entladen_ok = True
+        self._geraet_sperrgruende: List[str] = []
+        self._provider_zustand: Optional[str] = None
         self._lade_anf_w     = 0.0
         self._entlade_anf_w  = 0.0
         self._betriebsart_anf: Optional[str] = None
@@ -1821,14 +1838,19 @@ class BatteryDevice(ControllableDevice):
                 self.betriebsart = str(vorschlag)
 
         # --- Messwerte ---
-        soc = self._note(self.soc_entity, "soc",
-                         st.resolve_number(self.soc_entity)) if self.soc_entity else None
-        self._soc_valid = soc is not None and soc.state == STATE_VALID
-        self._soc = float(soc.value) if self._soc_valid else 0.0
+        if self.provider_entity:
+            self._read_provider(st)
+        else:
+            soc = self._note(self.soc_entity, "soc",
+                             st.resolve_number(self.soc_entity)) if self.soc_entity else None
+            self._soc_valid = soc is not None and soc.state == STATE_VALID
+            self._soc = float(soc.value) if self._soc_valid else 0.0
+            self._power_valid, self._lade_ist_w, self._entlade_ist_w = self._read_power(st)
+            self._geraet_laden_ok = self._geraet_entladen_ok = True
+            self._geraet_sperrgruende = []
+            self._provider_zustand = None
         self._update_soc_latch()
         self._read_ladestufen(st)
-
-        self._power_valid, self._lade_ist_w, self._entlade_ist_w = self._read_power(st)
         # Für die geerbte Pool-Rückrechnung ist der Speicher ein Verbraucher:
         # _actual_w ist die Ladeleistung, nicht die Nettoleistung.
         self._actual_w = self._lade_ist_w
@@ -1847,6 +1869,57 @@ class BatteryDevice(ControllableDevice):
         self._raw_min = self.min_ladeleistung_w
         self._raw_max = self._lade_limit_w()
         self._apply_raw_to_watt()
+
+    def _read_provider(self, st: StateProxy) -> None:
+        """Liest SoC, Ist-Leistung und Gerätefreigaben aus dem Schnittstellen-Sensor (D-068).
+
+        Gültig ist der Sensor nur mit einem bekannten Zustand und der
+        Attributversion 1. `getrennt`, `unavailable`, ein fehlender Sensor oder
+        eine fremde Version machen SoC und Leistung ungültig – der Speicher geht
+        über den vorhandenen Sperrgrund `sensor_ungueltig` in den sicheren
+        Zustand. Eine Freigabe ohne Angabe (`null`, fehlend, kein Bool) gilt als
+        erlaubt: keine Information ist keine Sperre (Vertrag 1.2).
+        """
+        pe = self.provider_entity
+        availability = st.availability(pe)
+        zustand = str(st.get(pe)) if availability == STATE_VALID else None
+        version = (st.getattr(pe) or {}).get("schnittstelle_version")
+        if availability != STATE_VALID:
+            gueltig_state = availability
+        elif zustand not in self.PROVIDER_ZUSTAENDE or version != self.PROVIDER_VERSION:
+            # `getrennt` ist ein regulärer Zustand des Providers, für die Regelung
+            # aber dasselbe wie ein ausgefallener Sensor.
+            gueltig_state = STATE_UNAVAILABLE if zustand == "getrennt" else STATE_INVALID
+        else:
+            gueltig_state = STATE_VALID
+        self._provider_zustand = zustand
+        self._note(pe, "provider_schnittstelle",
+                   Resolved(zustand, gueltig_state,
+                            SOURCE_HA if gueltig_state == STATE_VALID else SOURCE_INTERNAL))
+
+        self._geraet_laden_ok = self._geraet_entladen_ok = True
+        self._geraet_sperrgruende = []
+        if gueltig_state != STATE_VALID:
+            self._soc_valid = self._power_valid = False
+            self._soc = self._lade_ist_w = self._entlade_ist_w = 0.0
+            return
+
+        soc = st.resolve_attribute_number(pe, "soc_prozent")
+        lade = st.resolve_attribute_number(pe, "ist_ladeleistung_w", minimum=0.0)
+        entlade = st.resolve_attribute_number(pe, "ist_entladeleistung_w", minimum=0.0)
+        self._soc_valid = soc.state == STATE_VALID
+        self._soc = float(soc.value) if self._soc_valid else 0.0
+        self._power_valid = lade.state == STATE_VALID and entlade.state == STATE_VALID
+        self._lade_ist_w = float(lade.value) if self._power_valid else 0.0
+        self._entlade_ist_w = float(entlade.value) if self._power_valid else 0.0
+
+        laden = st.resolve_attribute_bool(pe, "laden_freigegeben")
+        entladen = st.resolve_attribute_bool(pe, "entladen_freigegeben")
+        self._geraet_laden_ok = laden.value is not False
+        self._geraet_entladen_ok = entladen.value is not False
+        gruende = (st.getattr(pe) or {}).get("sperrgruende")
+        self._geraet_sperrgruende = ([str(g) for g in gruende]
+                                     if isinstance(gruende, list) else [])
 
     def _read_power(self, st: StateProxy):
         """Normalisiert die Ist-Leistung auf (gültig, laden_w, entladen_w), beide >= 0."""
@@ -1990,6 +2063,7 @@ class BatteryDevice(ControllableDevice):
             (not self.sensoren_gueltig,                        "sensor_ungueltig"),
             (not self.battery_residual_sensor_valid,
              "hausleistungsbilanz_sensor_ungueltig"),
+            (not self._geraet_laden_ok,                        "geraet_laden_gesperrt"),
             (self.betriebsart not in ("auto", "nur_laden"),    "betriebsart"),
             (not self.laden_erlaubt,                           "laden_gesperrt"),
             (self._wr_lade_limit_w <= 0,                       "wr_derating"),
@@ -2038,6 +2112,7 @@ class BatteryDevice(ControllableDevice):
             (not self.sensoren_gueltig,                          "sensor_ungueltig"),
             (not self.battery_residual_sensor_valid,
              "hausleistungsbilanz_sensor_ungueltig"),
+            (not self._geraet_entladen_ok,                       "geraet_entladen_gesperrt"),
             (self.betriebsart not in ("auto", "nur_entladen"),   "betriebsart"),
             (not self.entladen_erlaubt,                          "entladen_gesperrt"),
             (self._soc <= self.soc_min_prozent,                  "soc_min"),
@@ -2350,6 +2425,12 @@ class BatteryDevice(ControllableDevice):
             "lade_blockiert_grund":    self._lade_block,
             "entlade_blockiert_grund": self._entlade_block,
             "blockiert_grund":         self._blockiert_grund,
+            # Schnittstellen-Sensor des Battery-Providers (D-068); ohne ihn None.
+            "provider_entity":             self.provider_entity,
+            "provider_zustand":            self._provider_zustand,
+            "geraet_laden_freigegeben":    self._geraet_laden_ok,
+            "geraet_entladen_freigegeben": self._geraet_entladen_ok,
+            "geraet_sperrgruende":         list(self._geraet_sperrgruende),
         }
         if self.capacity_kwh > 0:
             d["energie_kwh"] = round(self.capacity_kwh * self._soc / 100.0, 2)

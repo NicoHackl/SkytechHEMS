@@ -184,12 +184,19 @@ configuration:
 
       AC-SPEICHER (class: battery)
 
-      • soc_entity (Pflicht) – Sensor-Entität mit dem Ladezustand in Prozent.
-      Liefert sie „unavailable", fällt dieser Speicher aus der Regelung und
-      geht auf Standby; die übrigen Geräte laufen weiter.
+      • provider_entity (optional) – Schnittstellen-Sensor des Battery-Providers,
+      z. B. sensor.ac_speicher_1_hems_schnittstelle. Ist er gesetzt, kommen
+      Ladezustand, Ist-Leistung und die Lade-/Entladefreigabe des Geräts daraus;
+      soc_entity und die Leistungsfelder sind dann keine Pflicht. Sperrt das
+      Gerät eine Richtung, nimmt das HEMS diesen Speicher dafür aus der
+      Verteilung, und der nächste Speicher übernimmt.
+
+      • soc_entity (Pflicht ohne provider_entity) – Sensor-Entität mit dem
+      Ladezustand in Prozent. Liefert sie „unavailable", fällt dieser Speicher
+      aus der Regelung und geht auf Standby; die übrigen Geräte laufen weiter.
 
       • charge_power_entity + discharge_power_entity ODER power_entity
-      (Pflicht) – Genau eine vollständige Ist-Leistungsvariante. Entweder zwei
+      (Pflicht ohne provider_entity) – Genau eine vollständige Ist-Leistungsvariante. Entweder zwei
       vorzeichenlose Sensoren für Lade- und Entladeleistung in Watt oder ein
       signierter Sensor. Beide Varianten gleichzeitig sind ungültig.
 

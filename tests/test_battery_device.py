@@ -46,7 +46,7 @@ def battery_states(*, soc=50, lade_ist=0, entlade_ist=0, sollwert=0,
                    prio=1, entlade_prio=50, totzone=0,
                    hoch=0, runter=0, schritt=100000, deadband=0,
                    laden="on", entladen="on",
-                   geschuetzt=0, reserve=0, **extra):
+                   geschuetzt=0, reserve=0, attributes=None, **extra):
     """Vollständiger HA-Schnappschuss eines Speichers.
 
     Die Voreinstellungen schalten alle Zeit- und Totband-Bremsen aus, damit ein
@@ -76,7 +76,7 @@ def battery_states(*, soc=50, lade_ist=0, entlade_ist=0, sollwert=0,
         f"input_number.ems_{PREFIX}_reserve_w":                reserve,
     }
     states.update(extra)
-    return make_states(states)
+    return make_states(states, attributes=attributes)
 
 
 def prepare(device, now_ts=10_000.0, **kw):
@@ -978,3 +978,145 @@ def test_entladeziel_ohne_ueberbrueckung_bleibt_wie_bisher():
     b.calculate_ramp()
     assert b.new_entlade_w == 1500.0
     assert b.to_status_dict()["verbraucher_anteil_w"] == 0.0
+
+
+# ---------------------------------------------------------------------------
+# Schnittstellen-Sensor des Battery-Providers (D-068, Vertrag 1.2)
+# ---------------------------------------------------------------------------
+
+PROVIDER_ENTITY = "sensor.ac_speicher_1_hems_schnittstelle"
+
+
+def make_provider_battery(**kw):
+    """Speicher, der SoC, Ist-Leistung und Freigaben nur aus dem Provider liest.
+
+    soc_entity und die Leistungsfelder bleiben leer: sie dürfen ohne Wirkung
+    sein, sobald provider_entity gesetzt ist.
+    """
+    kw.setdefault("available_charge_power_w", 2500)
+    kw.setdefault("available_discharge_power_w", 2500)
+    d = BatteryDevice(id=PREFIX, allowed_modes=["auto", "manuell"],
+                      soc_entity="", provider_entity=PROVIDER_ENTITY,
+                      entity_prefix=PREFIX, **kw)
+    d.eligible = True
+    d.source = "user"
+    return d
+
+
+def provider_attrs(**overrides):
+    attrs = {
+        "schnittstelle_version": 1,
+        "messung_ok": True,
+        "soc_prozent": 14,
+        "ist_ladeleistung_w": 0,
+        "ist_entladeleistung_w": 0,
+        "laden_freigegeben": True,
+        "entladen_freigegeben": True,
+        "sperrgruende": [],
+    }
+    attrs.update(overrides)
+    return attrs
+
+
+def prepare_provider(device, *, zustand="bereit", attrs=None, **kw):
+    states = {PROVIDER_ENTITY: zustand}
+    states.update(kw.pop("extra", {}))
+    device.begin_cycle(10_000.0)
+    device.update_from_ha(
+        battery_states(attributes={PROVIDER_ENTITY: attrs if attrs is not None
+                                   else provider_attrs()},
+                       **{**kw, **states}),
+        10_000.0, 0.0)
+    return device
+
+
+def test_provider_liefert_soc_und_ist_leistung():
+    b = prepare_provider(make_provider_battery(),
+                         attrs=provider_attrs(soc_prozent=63, ist_ladeleistung_w=420))
+    assert b.sensoren_gueltig is True
+    assert b.soc_prozent == 63
+    assert b.current_w == 0.0  # kein HEMS-Sollwert: externe Ladung zählt nicht in den Pool
+    assert b.gemessene_last_w == 420.0
+    assert b.entlade_kapazitaet_w() == 2500.0
+
+
+def test_provider_ersetzt_die_einzelsensoren():
+    """Ist provider_entity gesetzt, wirken soc_entity und Leistungssensoren nicht."""
+    b = make_provider_battery()
+    b.soc_entity = SOC_ENTITY
+    prepare_provider(b, soc=99, attrs=provider_attrs(soc_prozent=20))
+    assert b.soc_prozent == 20
+
+
+@pytest.mark.parametrize("zustand", ["getrennt", "unavailable", "unknown"])
+def test_provider_getrennt_faellt_aus_regelung(zustand):
+    b = prepare_provider(make_provider_battery(), zustand=zustand,
+                         sollwert=-1000, anforderung_betriebsart="entladen")
+    assert b.sensoren_gueltig is False
+    assert b.entlade_kapazitaet_w() == 0.0
+    assert b._entlade_block == "sensor_ungueltig"
+    b.calculate_ramp()
+    assert (b.new_lade_w, b.new_entlade_w, b.new_betriebsart) == (0.0, 0.0, "standby")
+
+
+def test_provider_fehlt_faellt_aus_regelung():
+    b = make_provider_battery()
+    b.begin_cycle(10_000.0)
+    b.update_from_ha(battery_states(), 10_000.0, 0.0)
+    assert b.sensoren_gueltig is False
+
+
+def test_provider_fremde_version_faellt_aus_regelung():
+    """Eine inkompatible Attributstruktur wird nicht geraten."""
+    b = prepare_provider(make_provider_battery(),
+                         attrs=provider_attrs(schnittstelle_version=2))
+    assert b.sensoren_gueltig is False
+
+
+def test_provider_ohne_soc_faellt_aus_regelung():
+    b = prepare_provider(make_provider_battery(), attrs=provider_attrs(soc_prozent=None))
+    assert b.sensoren_gueltig is False
+
+
+def test_geraet_sperrt_entladen():
+    """Vorfall 18.10.2026: das Gerät verweigert, das HEMS darf es nicht einplanen."""
+    b = prepare_provider(
+        make_provider_battery(), zustand="entladen_gesperrt",
+        attrs=provider_attrs(entladen_freigegeben=False,
+                             sperrgruende=["geraet_entladen_gesperrt"]))
+    assert b.sensoren_gueltig is True
+    assert b.entlade_kapazitaet_w() == 0.0
+    assert b._entlade_block == "geraet_entladen_gesperrt"
+    assert b._darf_laden() is True
+    status = b.to_status_dict()
+    assert status["geraet_entladen_freigegeben"] is False
+    assert status["geraet_laden_freigegeben"] is True
+    assert status["geraet_sperrgruende"] == ["geraet_entladen_gesperrt"]
+    assert status["provider_zustand"] == "entladen_gesperrt"
+
+
+def test_geraet_sperrt_laden():
+    b = prepare_provider(make_provider_battery(), zustand="laden_gesperrt",
+                         attrs=provider_attrs(laden_freigegeben=False))
+    assert b._darf_laden() is False
+    assert b._lade_block == "geraet_laden_gesperrt"
+    assert b.entlade_kapazitaet_w() == 2500.0
+
+
+@pytest.mark.parametrize("wert", [None, "off", 0, "false"])
+def test_freigabe_ohne_angabe_gilt_als_erlaubt(wert):
+    """Vertrag 1.2: null, fehlend oder kein Bool ist keine Sperre."""
+    b = prepare_provider(make_provider_battery(),
+                         attrs=provider_attrs(entladen_freigegeben=wert,
+                                              laden_freigegeben=wert))
+    assert b.entlade_kapazitaet_w() == 2500.0
+    assert b._darf_laden() is True
+
+
+def test_ohne_provider_keine_geraetefreigabe_im_status():
+    b = prepare(make_battery())
+    status = b.to_status_dict()
+    assert status["provider_entity"] is None
+    assert status["provider_zustand"] is None
+    assert status["geraet_entladen_freigegeben"] is True
+

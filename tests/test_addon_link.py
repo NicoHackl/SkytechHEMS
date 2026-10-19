@@ -41,7 +41,7 @@ def test_link_nutzt_slug_mit_repository_praefix_und_namen_vom_supervisor():
     sup = InfoSupervisor({"slug": "58c515f2_skytech_hems", "name": "Skytech HEMS"})
     assert run(service(sup).addon_link()) == {
         "name": "Skytech HEMS",
-        "config_path": "/hassio/addon/58c515f2_skytech_hems/config",
+        "config_path": "/config/app/58c515f2_skytech_hems/config",
     }
 
 
@@ -64,7 +64,7 @@ def test_supervisor_ausfall_wird_nicht_gemerkt():
     assert run(svc.addon_link())["config_path"] is None
     sup.fehler = None
     sup.info = {"slug": "58c515f2_skytech_hems", "name": "Skytech HEMS"}
-    assert run(svc.addon_link())["config_path"] == "/hassio/addon/58c515f2_skytech_hems/config"
+    assert run(svc.addon_link())["config_path"] == "/config/app/58c515f2_skytech_hems/config"
 
 
 def test_ablehnung_durch_den_supervisor_liefert_den_ersatznamen():

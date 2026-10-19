@@ -1,12 +1,12 @@
 # Vertrag: SkytechHEMS ↔ Skytech HEMS Battery Provider
 
-**Version:** 1.1
+**Version:** 1.2
 
-**Status:** Dokumentierter Implementierungsstand mit bekannten Betriebsgrenzen; HEMS-Lebenszeichen in beiden Projekten **implementiert**
+**Status:** Dokumentierter Implementierungsstand mit bekannten Betriebsgrenzen; HEMS-Lebenszeichen in beiden Projekten **implementiert**; Schnittstellen-Sensor mit Gerätefreigaben in beiden Projekten **implementiert**, Bedeutung der Gerätefreigaben an Hardware **noch zu bestätigen** (bekannte Grenze)
 
-**Stand:** 07.10.2026
+**Stand:** 18.10.2026
 
-**Geprüfte Codebasis:** SkytechHEMS `e5c0156`, Skytech-HEMS-Battery-Provider `12ae0f3`; Lebenszeichen: SkytechHEMS `f2037f4` (D-062), Battery-Provider D-016.
+**Geprüfte Codebasis:** SkytechHEMS `e5c0156`, Skytech-HEMS-Battery-Provider `12ae0f3`; Lebenszeichen: SkytechHEMS `f2037f4` (D-062), Battery-Provider D-016; Schnittstellen-Sensor: SkytechHEMS D-068, Battery-Provider D-017.
 
 Dieser Vertrag beschreibt den vorhandenen Austausch über Home Assistant. Er führt keine neue
 Steuerungslogik ein. Bekannte Einschränkungen sind ausdrücklich dokumentiert und dürfen nicht
@@ -26,7 +26,7 @@ Adapteraufrufe. Aktuell existieren Marstek-UDP- und E3DC-RSCP-Adapter.
 
 ```text
 SkytechHEMS ── zwei input_*-Ausgabehelfer ──► HA ──► Battery-Provider ──► Speicher
-SkytechHEMS ◄── SoC und Istleistungen ── HA ◄── Battery-Provider ◄── Speicher
+SkytechHEMS ◄── Schnittstellen-Sensor (oder SoC und Istleistungen einzeln) ── HA ◄── Battery-Provider ◄── Speicher
 ```
 
 Es gibt keinen direkten REST-Aufruf zwischen HEMS und Provider. Die Integration berechnet
@@ -63,6 +63,7 @@ sind in der folgenden Tabelle angegeben.
 | `soll_ladeleistung` / `number` | W | Manueller Schreibzugang für Laden. | Kein regulärer HEMS-Ausgabeweg. |
 | `soll_entladeleistung` / `number` | W | Manueller Schreibzugang für Entladen. | Kein regulärer HEMS-Ausgabeweg. |
 | `hems_steuerung_aktiv` / `switch` | – | Pausiert beziehungsweise aktiviert die Bridge. | Nicht vom HEMS automatisch ausgewertet. |
+| `hems_schnittstelle` / `sensor` | – | Schnittstellen-Sensor, siehe [Schnittstellen-Sensor](#schnittstellen-sensor). | `provider_entity` |
 
 Die drei Messsensoren bilden `StorageState` ab. `None` bedeutet fehlender Messwert, `0` einen
 echten Nullwert. Scheitert der Poll oder ist `StorageState.available` falsch, sind Messsensoren
@@ -78,10 +79,91 @@ Die manuellen `number.*`-Werte spiegeln die HEMS-Bridge nicht. Sie zeigen ihren 
 beziehungsweise den zuletzt manuell gesetzten Wert. Auch während einer Pause kann der letzte
 erfolgreiche HEMS-Sollsensorwert weiterhin sichtbar sein; er ist kein Lebenszeichen.
 
+## Schnittstellen-Sensor
+
+Status: **Implementiert** — Provider D-017 (`sensor.py`, `adapters/marstek_udp.py`,
+`adapters/e3dc_rscp.py`), HEMS D-068 (`provider_entity`). Nur vorhanden, wenn
+`hems_entity_prefix` gesetzt ist.
+
+Ein Sensor je Speicher bündelt alles, was zwischen HEMS und Provider fließt. Richtung
+Provider → HEMS: Messwerte und Gerätefreigaben. Richtung HEMS → Provider bleibt bei den
+[Ausgabehelfern](#hems--provider-ausgabehelfer); der Sensor **spiegelt** nur, was der Provider
+davon gelesen und gesendet hat. Er ist immer verfügbar.
+
+| State | Bedeutung | HEMS |
+|---|---|---|
+| `bereit` | Messwerte gültig, das Gerät sperrt keine Richtung (oder macht dazu keine Angabe). | Regelt normal. |
+| `laden_gesperrt` | Messwerte gültig, das Gerät sperrt das Laden. | Laden gesperrt (`geraet_laden_gesperrt`). |
+| `entladen_gesperrt` | Messwerte gültig, das Gerät sperrt das Entladen. | Entladen gesperrt (`geraet_entladen_gesperrt`). |
+| `gesperrt` | Messwerte gültig, beide Richtungen gesperrt. | Beide Richtungen gesperrt. |
+| `getrennt` | Letzter Poll gescheitert oder Adapter meldet keinen gültigen Zustand. | Messwerte ungültig → `0 W` und `standby`. |
+
+Das HEMS wertet die Freigaben aus den **Attributen** aus, nicht aus dem State; der State dient der
+Anzeige und dem Verlauf. `unavailable`, `unknown` oder ein fehlender Sensor gelten im HEMS wie
+`getrennt`.
+
+| Attribut | Typ | Einheit | Bedeutung | Recorder |
+|---|---|---|---|---|
+| `schnittstelle_version` | Ganzzahl | – | `1`. Steigt nur bei inkompatibler Änderung; neue Attribute kommen additiv. | ja |
+| `messung_ok` | Bool | – | Letzter Poll erfolgreich. | ja |
+| `gemessen_am` | Text oder `null` | – | `TT.MM.JJJJ hh:mm:ss`, Berliner Zeit; nur Anzeige, nicht zur Auswertung. | nein |
+| `soc_prozent` | Zahl oder `null` | % | Gemessener Ladezustand. | ja |
+| `ist_ladeleistung_w` | Zahl oder `null` | W | Tatsächliche Ladeleistung, nicht negativ. | nein |
+| `ist_entladeleistung_w` | Zahl oder `null` | W | Tatsächliche Entladeleistung, nicht negativ. | nein |
+| `laden_freigegeben` | Bool oder `null` | – | Ladefreigabe des Geräts. `null` = Gerät macht keine Angabe. | ja |
+| `entladen_freigegeben` | Bool oder `null` | – | Entladefreigabe des Geräts. `null` = Gerät macht keine Angabe. | ja |
+| `sperrgruende` | Liste von Text | – | `geraet_laden_gesperrt`, `geraet_entladen_gesperrt`, `ladesperrzeit`, `entladesperrzeit`, `notstromreserve`. Leer ohne Sperre. | ja |
+| `batterietemperatur_c` | Zahl oder `null` | °C | Nur Information. | ja |
+| `nennkapazitaet_wh` | Zahl oder `null` | Wh | Nur Information. | ja |
+| `geraet_status_roh` | Ganzzahl oder `null` | – | Rohes Statusbitfeld (E3DC `EMS_STATUS`), nur Diagnose. | ja |
+| `hems_anforderung_w` | Zahl oder `null` | W | Spiegel von `anforderung_leistung_w`, signiert wie im Helfer. | nein |
+| `hems_anforderung_betriebsart` | Text oder `null` | – | Spiegel von `anforderung_betriebsart`. | ja |
+| `gesendet_ladeleistung_w` | Zahl oder `null` | W | Zuletzt erfolgreich gesendete Ladeleistung; `null` vor dem ersten Erfolg und nach einem Schreibfehler. | nein |
+| `gesendet_entladeleistung_w` | Zahl oder `null` | W | Wie oben, Entladeleistung. | nein |
+| `senden_ok` | Bool | – | Letzter Schreibversuch erfolgreich. | ja |
+| `hems_lebenszeichen` | Bool | – | HEMS-Lebenszeichen frisch (siehe [HEMS-Lebenszeichen](#hems-lebenszeichen)). | ja |
+| `hems_steuerung_aktiv` | Bool | – | Bridge nicht pausiert. | ja |
+
+Herkunft der Freigaben, höchstens alle 15 s am Gerät gelesen:
+
+| Adapter | `laden_freigegeben` | `entladen_freigegeben` |
+|---|---|---|
+| Marstek UDP | `Bat.GetStatus.charg_flag` | `Bat.GetStatus.dischrg_flag` |
+| E3DC RSCP | `EMS_STATUS` Bit 0 (Laden gesperrt) und Bit 5 (Ladesperrzeit) nicht gesetzt | `EMS_STATUS` Bit 1 (Entladen gesperrt) und Bit 6 (Entladesperrzeit) nicht gesetzt, Notstromreserve nicht erreicht |
+
+Regeln:
+
+- `null` bei einer Freigabe bedeutet „keine Angabe", **nie** „gesperrt". Das HEMS wertet `null`,
+  ein fehlendes Attribut und jeden Nicht-Bool-Wert als erlaubt.
+- Scheitert nur die Statusabfrage am Gerät, bleiben die Freigaben `null`, Messwerte und State
+  (`bereit`) bleiben gültig.
+- Attribute mit „Recorder: nein" stehen in `_unrecorded_attributes`. Ihr Verlauf liegt in den
+  Einzel-Sensoren, die unverändert weiter bestehen.
+- **Bekannte Grenze:** Ob Marstek `dischrg_flag` die am 18.10.2026 beobachtete Entladeverweigerung
+  bei 12–15 % SoC meldet und ob die RSCP-Bitbelegung von `EMS_STATUS` der E3DC-Modbus-Doku
+  entspricht, ist an Hardware noch nicht bestätigt. Bis dahin gilt der Austausch als implementiert,
+  die Bedeutung der Freigaben als unbestätigt.
+
 ## HEMS-Konfiguration
 
-Der Provider liefert die getrennte Leistungssensor-Variante des HEMS-Speichervertrags.
-Beispiel mit angenommenen, vor Ort zu prüfenden Entity-IDs und beispielhaften Gerätegrenzen:
+Der Provider liefert zwei Varianten des HEMS-Speichervertrags: den Schnittstellen-Sensor
+(`provider_entity`, empfohlen) oder die getrennte Leistungssensor-Variante. Ist `provider_entity`
+gesetzt, liest das HEMS SoC, Istleistungen und Gerätefreigaben ausschließlich daraus;
+`soc_entity` und die Leistungsfelder sind dann keine Pflicht und wirken nicht auf die Regelung.
+
+```yaml
+devices:
+  - name: acspeicher1
+    class: battery
+    entity_prefix: acspeicher1
+    provider_entity: sensor.ac_speicher_1_hems_schnittstelle
+    available_charge_power_w: 2500
+    available_discharge_power_w: 2500
+```
+
+Ohne `provider_entity` gilt die getrennte Leistungssensor-Variante; Gerätefreigaben kennt das HEMS
+dann nicht. Beispiel mit angenommenen, vor Ort zu prüfenden Entity-IDs und beispielhaften
+Gerätegrenzen:
 
 ```yaml
 battery_residual_power_entity: sensor.hausleistungsbilanz_fur_ac_speicher
@@ -250,6 +332,8 @@ mit garantiertem physischem Stillstand.
 | Geräteverbindung ausgefallen | Messsensoren werden nicht verfügbar; Schreibfehler werden separat sichtbar. Physischer Stopp ist ohne erreichbaren Transport nicht garantiert. |
 | HEMS-Notabschaltung bei pausierter Bridge | HEMS setzt Helfer auf null/Standby; die Bridge beobachtet den Notabschaltungsstatus nicht gesondert und führt während der Pause keinen neuen Sync aus. |
 | Unterschiedliche Herstellerlimits | Bridge führt keine generische Prüfung gegen HEMS-`available_*_w` aus; richtige Konfiguration und Adapter-/Gerätegrenzen bleiben erforderlich. |
+| Gerät verweigert ohne gesetzte Sperre | Meldet das Gerät eine Freigabe, führt aber trotzdem nicht aus, erkennt das HEMS das nicht; es gibt keinen Abgleich Soll gegen Ist. |
+| Statusabfrage verzögert | Eine neue Gerätesperre wird bis zu 15 s plus ein Poll-Intervall später sichtbar. |
 
 Besonders bei Richtungswechseln kann die neue Betriebsart kurzfristig mit dem alten
 Leistungsbetrag zusammen gelesen werden. Beispiel: `laden`/`+1000` wird zu `entladen`/`-500`;
@@ -276,6 +360,7 @@ Die Vertragsdokumentation ersetzt diese Hardwareprüfung nicht.
 | Ausgabehelfer | schreibt | liest |
 | Geräteprotokoll und Verbindungsaufbau | kein direkter Zugriff | verantwortlich |
 | Ist-SoC und Istleistungen | liest | veröffentlicht |
+| Gerätefreigaben | sperrt die betroffene Richtung, gibt das Defizit an den nächsten Speicher weiter | liest am Gerät, veröffentlicht im Schnittstellen-Sensor |
 | Schreibdiagnose | sieht Erfolg des HA-Helferzugriffs | sieht Ergebnis seiner Adapteraufrufe |
 | Geräteautonomie bei Verbindungsverlust | keine physische Bestätigung | adapterabhängig; keine allgemeine Stoppgarantie |
 | `sensor.ems_<prefix>_lade_limit_w` | veröffentlicht als Diagnose | wird von der Bridge nicht gelesen |
@@ -298,5 +383,5 @@ Implementierungsreferenzen:
 
 | Repository | Dateien |
 |---|---|
-| SkytechHEMS | `app/status_publisher.py`, `app/ems/devices.py` (`BatteryDevice`), `app/ems/ops.py`, `app/emergency.py`, `docs/device_classes/battery.md` |
+| SkytechHEMS | `app/status_publisher.py`, `app/ems/devices.py` (`BatteryDevice`), `app/ems/state.py`, `app/ems/ops.py`, `app/emergency.py`, `app/configuration.py`, `docs/device_classes/battery.md` |
 | Skytech-HEMS-Battery-Provider | `custom_components/battery_bridge/hems_bridge.py`, `heartbeat.py`, `binary_sensor.py`, `sensor.py`, `number.py`, `switch.py`, `coordinator.py`, `const.py`, `adapters/marstek_udp.py`, `adapters/e3dc_rscp.py` (unter `custom_components/battery_bridge/`) |

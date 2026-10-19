@@ -271,7 +271,9 @@ nur der Hausanteil), `verbraucher_anteil_w` (Überbrückung, D-060), `schutz_w`,
 `lade_limit_gueltig`, `entlade_limit_gueltig`, `umschaltsperre_rest_s`, `lade_blockiert_grund`,
 `entlade_blockiert_grund`, `blockiert_grund`, `ladestufen` (Liste `{n, aktiv, soc_prozent, max_w,
 greift}`), `ladestufe_aktiv`, `ladestufe_max_w`, `ladestufen_abbruch` (`{stufe, entity, state}` oder
-`null`). Dazu `energie_kwh`, sofern `capacity_kwh > 0`
+`null`), `provider_entity`, `provider_zustand`, `geraet_laden_freigegeben`,
+`geraet_entladen_freigegeben`, `geraet_sperrgruende` (Schnittstellen-Sensor, D-068; ohne ihn
+`null`/`true`/`true`/`[]`). Dazu `energie_kwh`, sofern `capacity_kwh > 0`
 konfiguriert ist. `soc_reserve_prozent` ist **entfallen**.
 
 Fallstricke, die schon Fehler verursacht haben:
@@ -293,6 +295,10 @@ Fallstricke, die schon Fehler verursacht haben:
 - **Die Hausleistungsbilanz ersetzt den Überschuss-Sensor nicht.** `battery_residual_w` ist nur
   die Entladegröße der AC-Speicher. `pool_w` und `current_deficit_w` bleiben am
   `residual_power_entity`; eine ungültige Bilanz sperrt daher nur die Speicher.
+- **Gerätesperre ist kein Konfigurationsfehler.** `geraet_entladen_gesperrt` und
+  `geraet_laden_gesperrt` in den Sperrgrund-Feldern heißen: der Speicher selbst meldet die Sperre
+  über den Schnittstellen-Sensor (D-068). `geraet_*_freigegeben` ist ohne Schnittstelle immer
+  `true`.
 - **Drei Sperrgrund-Felder statt einem.** `lade_blockiert_grund` und `entlade_blockiert_grund`
   beantworten je Pfad „warum passiert gerade nichts", `blockiert_grund` trägt nur die Gründe der
   Richtungsauflösung (`umschaltsperre`, `totzone`). Ein Speicher in `nur_entladen` hat einen
