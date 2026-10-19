@@ -524,6 +524,9 @@ const GERAET_SPERRGRUND_LABELS: Record<string, string> = {
   ladesperrzeit: 'Ladesperrzeit',
   entladesperrzeit: 'Entladesperrzeit',
   notstromreserve: 'Notstromreserve erreicht',
+  // Soll/Ist-Vergleich der Speicher-Integration (Provider D-018)
+  keine_reaktion_laden: 'reagiert nicht auf Laden',
+  keine_reaktion_entladen: 'reagiert nicht auf Entladen',
 }
 
 /** Was der Speicher selbst gerade sperrt, als Klartext – null, wenn er nichts sperrt. */

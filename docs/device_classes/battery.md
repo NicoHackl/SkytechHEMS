@@ -218,9 +218,12 @@ Das HEMS nutzt daraus:
   die HA-Helfer nicht.
 - Statusfelder: `provider_entity`, `provider_zustand`, `geraet_laden_freigegeben`,
   `geraet_entladen_freigegeben`, `geraet_sperrgruende`.
-- **Bekannte Grenze:** Ob der Marstek die am 18.10.2026 beobachtete Entladeverweigerung über
-  `entladen_freigegeben: false` meldet, ist noch nicht an Hardware bestätigt
-  ([bekannte-luecken.md](../bekannte-luecken.md#gerätefreigaben-über-den-battery-provider-d-068)).
+- Beim Marstek meldet das Gerät selbst keine Entladesperre (Befund 19.10.2026). Die Freigaben
+  kommen dort aus dem Soll/Ist-Vergleich des Providers (Provider D-018): Setzt der Speicher einen
+  Sollwert über die Erkennungszeit (Default 30 s) nicht um, meldet der Provider die Richtung als
+  gesperrt (`keine_reaktion_laden`/`keine_reaktion_entladen`), bis sich der SoC um 1 % bewegt hat.
+  Das HEMS behandelt das wie jede Gerätesperre; die Statuskarte zeigt „reagiert nicht auf
+  Entladen“.
 
 ## Externe, nur gelesene Entitäten
 

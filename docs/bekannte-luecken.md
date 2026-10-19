@@ -161,8 +161,9 @@ das HEMS die Gerätefreigaben über `provider_entity` lesen.
 
 | Grenze | Folge | Stand |
 |---|---|---|
-| Ob Marstek `dischrg_flag` die Verweigerung meldet, ist nicht an Hardware bestätigt | Meldet das Gerät `true` und verweigert trotzdem, bleibt das Verhalten wie am 18.10.2026 | `provider_entity` erst setzen, wenn die History von `entladen_freigegeben` im unteren SoC-Band bestätigt ist |
-| Kein Abgleich Soll gegen Ist | Eine Verweigerung ohne gemeldete Sperre erkennt das HEMS nicht | Bewusst nicht umgesetzt, die Ursache soll vom Gerät kommen |
+| Marstek `dischrg_flag` meldet die Verweigerung **nicht** (Test des Users am 19.10.2026 bei 12 % SoC) | Ohne weitere Maßnahme bliebe das Verhalten wie am 18.10.2026 | Gelöst im Provider: Soll/Ist-Vergleich (Provider D-018, Vertrag 1.3). Das HEMS braucht dafür `provider_entity` |
+| Bis zur Erkennung fließt Leistung aus dem Netz | Je Fehlversuch bis zur Erkennungszeit des Providers (Default 30 s); nach der Freigabe bei SoC +1 % sind weitere Fehlversuche möglich, solange das Gerät noch sperrt | Provider-Option je Speicher |
+| E3DC: kein Soll/Ist-Vergleich, Statusbits nicht negativ getestet | Eine Verweigerung ohne gesetztes Bit erkennt weder Provider noch HEMS | Offen, Entscheidung des Users |
 | Die Freigaben sind bis zu 15 s plus ein Poll-Intervall alt | Eine neue Sperre greift entsprechend später | Provider-Taktung, Vertrag 1.2 |
 | `device_controls_schema` (Energy Pilot) kennt `provider_entity` nicht | Der Energy Pilot sieht weiterhin nur `soc_entity`; ist es leer, fehlt ihm der SoC | `soc_entity` zusätzlich setzen |
 
