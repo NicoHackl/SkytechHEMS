@@ -1,6 +1,6 @@
 # Plan: PV-Prognosekurve über die Zeitumstellung hinweg korrekt prüfen
 
-Stand: 19.10.2026 · Status: Plan, nicht umgesetzt · Variante: **A** (mit User festgelegt am
+Stand: 19.10.2026 · Status: **umgesetzt am 19.10.2026** (Frühjahr Fall b mit umgesetzt, siehe 2.3 und 4) · Variante: **A** (mit User festgelegt am
 19.10.2026) · Bezug: D-065 (Preis- und Prognosemodul)
 
 ## 1. Problem
@@ -21,6 +21,9 @@ Stand: 19.10.2026 · Status: Plan, nicht umgesetzt · Variante: **A** (mit User 
   2026-10-25T03:00:00+01:00   ← Wanduhr +15 min, real +75 min
   ```
 
+- Nachprüfung per MCP am 19.10.2026: Der Sprung zu `03:00+01:00` (real 75 min) ist der einzige
+  Abstand ≠ 15 min. p10/p90 sind nur in der Zukunft gesetzt; 142 vergangene Einträge haben `null`
+  (zulässig, ohne Folgen).
 - Lokal nachgestellt mit dem Live-Zustand liefert `parse_pv_curve`:
   `Kurve ist lückenhaft, unsortiert oder hat gemischte Abstände`.
 
@@ -94,14 +97,17 @@ Für jede als Zeitumstellung erkannte Stelle im Herbst:
 
 ### 2.3 Frühjahr (Vorstellung der Uhr)
 
-Im März fehlt die Wanduhrzeit 02:00–02:59. Wie Helios das ausgibt, ist **noch nicht bekannt**
-(offene Frage F1):
+Geklärt über den Quelltext von Helios 2026.9.6 (`forecast.py`, `build_forecast_series`): Helios
+beginnt um Berliner Mitternacht und zählt `t += step` auf der Ortszeit mit Zone, also nach Wanduhr.
+Lokal nachgestellt ergibt das im Herbst genau die Ausgabe aus 1.1. Im Frühjahr gilt deshalb
+**Fall b**: Helios liefert die nicht existierenden Zeiten `02:00`–`02:45` mit `+01:00`. Das sind real
+dieselben Zeitpunkte wie `03:00`–`03:45+02:00` (Abstand −45 min, 96 statt 92 Einträge).
 
-- **Fall a:** `01:45+01:00 → 03:00+02:00`. Real 15 min → besteht schon heute als Normalfall,
-  keine Sonderbehandlung nötig. Test wird trotzdem ergänzt.
-- **Fall b:** Helios liefert auch die nicht existierenden Zeiten `02:00`–`02:45`. Je nach
-  Offset entstehen doppelte Zeitpunkte oder Abstand 0. Das wäre eine zweite Regel, die erst nach
-  Klärung mit dem User festgelegt wird – **nicht** Bestandteil dieses Plans.
+Regel (mit dem User festgelegt am 19.10.2026): Ein Eintrag wird verworfen, wenn sein Offset nicht
+zu Berlin passt, seine Wanduhrzeit in der übersprungenen Stunde liegt und sein realer Zeitpunkt in
+der Kurve noch einmal vorkommt – und nur, wenn er 0 W ist. Sonst ist die Kurve ungültig mit Grund
+„Zeitumstellung TT.MM.JJJJ: Helios-Werte der übersprungenen Stunde sind nicht 0 W“. Fall a (real
+lückenlos) bleibt ohne Sonderbehandlung gültig.
 
 ## 3. Umsetzung
 
@@ -182,13 +188,9 @@ Pflichtfälle:
 - Nach dem Update in HA prüfen: `sensor.ems_dyn_pv_prognose` → `kurve_gueltig: true`,
   `kurve_bis` = 26.10.2026 00:00 (bei Kurvenende 25.10.2026 23:45).
 
-## 4. Offene Fragen (vor der Umsetzung zu klären)
+## 4. Entscheidungen (19.10.2026, vorher offene Fragen)
 
-- **F1 – Frühjahr:** Wie gibt `helios_forecast` die Vorstellung im März aus (Fall a oder b)?
-  Kann der Quelltext der Integration eingesehen werden, oder soll das per Test ermittelt werden?
-- **F2 – 0-W-Schranke:** Soll das Auffüllen nur bei 0 W der Wanduhr-Zwillinge erlaubt sein
-  (Vorschlag), oder bei jedem Wert?
-- **F3 – Data Insight:** Sollen die vier aufgefüllten Slots wie normale Slots nach Data Insight
-  geschrieben werden (Vorschlag), oder dort weggelassen bzw. gekennzeichnet werden?
-- **F4 – Entscheidungslog:** Reicht eine Ergänzung von D-065, oder soll es eine eigene D-Nummer
-  mit ADR geben?
+- **F1 – Frühjahr:** Fall b laut Quelltext von Helios; mit umgesetzt (2.3).
+- **F2 – 0-W-Schranke:** ja, im Herbst wie im Frühjahr.
+- **F3 – Data Insight:** aufgefüllte Slots gehen wie normale Slots in den PV-Lauf.
+- **F4 – Entscheidungslog:** Ergänzung von D-065 (ADR Punkt 3), keine eigene D-Nummer.

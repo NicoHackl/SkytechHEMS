@@ -48,6 +48,13 @@ Option A. Festgelegt mit dem User am 12.10.2026:
    (Attribut `data` mit `start_time`, `end_time`, `price_per_kwh`), Endpreis. Raster 15/60 min aus
    dem Sensor ermittelt oder fest gewählt. Das HEMS rechnet keine Aufschläge auf.
 3. **PV-Prognose:** Helios (heute, morgen, Rest heute, 15-min-Kurve).
+   *Ergänzung 19.10.2026 – Zeitumstellung:* Helios zählt die Slots nach Berliner Wanduhr. Die Kurve
+   muss real lückenlos sein; toleriert wird nur die Zeitumstellung in `Europe/Berlin` und nur bei
+   0 W in den betroffenen Slots. Im Herbst werden die fehlenden Slots der doppelten Stunde mit den
+   Werten derselben Wanduhrzeit eingefügt (`dst_filled`), im Frühjahr die Einträge der
+   übersprungenen Stunde verworfen, die reale Zeitpunkte doppeln. Alles andere bleibt ungültig, mit
+   Grund (Attribut `kurve_grund`). Aufgefüllte Slots gehen wie alle anderen nach Data Insight.
+   Plan und Herleitung: [erweiterungen/pv_prognose_zeitumstellung/plan.md](../../erweiterungen/pv_prognose_zeitumstellung/plan.md).
 4. **Verbrauchsprognose:** deterministisches Profil aus der Grundlast (Hausverbrauch ohne
    HEMS-Verbraucher und ohne Speicher, die im Hausverbrauch-Sensor stecken).
 5. **Datenhaltung in Data-Insight** über eine eigene Rolle `skytech_hems` (Weg B des

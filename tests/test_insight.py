@@ -9,7 +9,7 @@ Skytech-Data-Insight anlegen).
 
 import asyncio
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -23,7 +23,7 @@ from tariff.insight_sync import GrundlastTerm, InsightSync, build_roles, compute
 from tariff.price_source import parse_price_curve
 from tariff.pv_source import parse_pv_curve
 
-from test_tariff import NOW, price_state, pv_curve_state
+from test_tariff import NOW, helios_state, price_state, pv_curve_state
 
 UTC = timezone.utc
 
@@ -246,6 +246,17 @@ def test_sync_skips_price_run_already_stored_after_restart():
     sync.client.prices = {slot.start: slot.price for slot in price.slots}
     asyncio.run(sync.tick(NOW, STATES, price, None, {}))
     assert sync.client.runs == []
+
+
+def test_sync_pv_run_across_autumn_dst_has_unique_gapless_times():
+    sync, _ = _sync()
+    now = datetime(2026, 10, 24, 18, 0, tzinfo=timezone.utc)
+    curve = parse_pv_curve(helios_state(date(2026, 10, 19)), "forecast", now)
+    asyncio.run(sync.tick(now, STATES, None, curve, {"heute": 1.0, "morgen": 1.0, "rest_heute": 0.0}))
+    times = sync.client.runs[0]["times"]
+    assert len(times) == len(set(times)) == 29 * 4           # real 29 h bis Kurvenende, doppelte Stunde inklusive
+    assert {b - a for a, b in zip(times, times[1:])} == {timedelta(minutes=15)}
+    assert datetime(2026, 10, 25, 1, 0, tzinfo=timezone.utc) in times
 
 
 def test_sync_pv_run_throttling_and_grundlast():

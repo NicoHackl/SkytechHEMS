@@ -8,6 +8,22 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Behoben — 19.10.2026 (PV-Prognosekurve über die Zeitumstellung)
+
+- Die PV-Prognosekurve war seit 19.10.2026 ungültig („Kurve ist lückenhaft, unsortiert oder hat
+  gemischte Abstände“): Helios zählt die Viertelstunden nach Wanduhr und liefert am 25.10.2026 die
+  doppelte Stunde 02:00–02:59 nur einmal, also 96 statt 100 Slots. Eine einzige solche Stelle machte
+  die ganze Kurve ungültig – ohne Kurve keine Speicherreichweite mit PV, keine Tagessummen in der
+  Übersicht und kein PV-Prognoselauf in Data Insight. Jetzt werden die fehlenden Slots der
+  Winterzeit mit den Werten derselben Wanduhrzeit eingefügt.
+- Im Frühjahr (erstmals 28.03.2027) liefert Helios die übersprungene Stunde 02:00–02:59 mit, als
+  Doppel realer Zeitpunkte. Diese Einträge werden verworfen.
+- Beides nur, wenn die betroffenen Werte 0 W sind (nachts); sonst bleibt die Kurve ungültig, mit
+  Grund. Echte Lücken nennen jetzt die Stelle, z. B. „Kurve ist lückenhaft zwischen 19.10.2026 01:45
+  und 19.10.2026 03:00“.
+- `sensor.ems_dyn_pv_prognose` hat das neue Attribut `kurve_grund`: der Grund einer ungültigen
+  Kurve, sonst leer.
+
 ### Hinzugefügt — 18.10.2026 (Speicher über die Schnittstelle der Speicher-Integration)
 
 - Ein Speicher lässt sich jetzt über den Sensor „HEMS-Schnittstelle“ der Speicher-Integration

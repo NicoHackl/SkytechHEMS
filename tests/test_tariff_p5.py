@@ -5,7 +5,7 @@ Alles hier ist reine Anzeige; geprüft wird Rechnung und Datenfluss, keine Regel
 """
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -19,7 +19,7 @@ from tariff.pv_source import parse_pv_curve
 from tariff_publisher import build_states
 
 from test_insight import DEVICES, STATES, _sync
-from test_tariff import NOW, price_state, pv_curve_state
+from test_tariff import NOW, helios_state, price_state, pv_curve_state
 
 UTC = timezone.utc
 SLOT = timedelta(minutes=15)
@@ -111,6 +111,15 @@ def test_simulation_reach_deficit_and_next_surplus():
     assert reach.next_surplus == datetime(2026, 10, 13, 8, 0, tzinfo=UTC)
     gap = (reach.next_surplus - reach.until).total_seconds() / 3600
     assert reach.deficit_after_kwh == pytest.approx(gap, abs=0.01)
+
+
+def test_simulation_runs_across_autumn_dst():
+    now = datetime(2026, 10, 24, 18, 0, tzinfo=timezone.utc)
+    pv = parse_pv_curve(helios_state(date(2026, 10, 19)), "forecast", now)
+    reach = simulate(now, 40.0, 50.0, 0.85, _flat_load(now, 100.0), pv)
+    # Speicher reicht: die Rechnung läuft bis zum Kurvenende 26.10.2026 00:00, nicht nur bis 25.10.2026 02:45.
+    assert reach.until is None
+    assert reach.horizon_end == datetime(2026, 10, 25, 23, 0, tzinfo=timezone.utc)
 
 
 def test_simulation_charges_on_surplus_and_reaches_beyond_horizon():
