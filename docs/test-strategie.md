@@ -112,6 +112,8 @@ Für die HEMS-internen Ersatzwerte (D-061) zusätzlich verpflichtend:
 Preisen, 15- und 60-min-Raster samt fester Einstellung, jede Prüfregel mit Grund (Einheit, fehlende
 Daten, `unavailable`, NaN, Zeitstempel ohne Zone, Lücke, falsche Reihenfolge, gemischtes Raster,
 Zeitpunkt außerhalb), Zeitumstellung (100 Viertelstunden am 25.10.2026), PV-Tageswerte und -Kurve,
+PV-Kurve im Wanduhr-Format von Helios über beide Zeitumstellungen (Herbst aufgefüllt, Frühjahr
+verworfen, 15 und 60 min, Schranke 0 W, falscher Tag, fehlende Zwillinge, Lücke mit Ortsangabe),
 Warnung „Preise für morgen fehlen“ vor und nach der Uhrzeit, veralteter Schnappschuss, Modul aus,
 Anzeige-Sensoren nur bei Änderung oder fehlender Entität, Prüfung der Optionen.
 

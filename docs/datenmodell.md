@@ -483,7 +483,7 @@ bei geändertem Inhalt oder wenn die Entität nach einem HA-Neustart fehlt. Rein
 | Entität | State | Attribute |
 |---|---|---|
 | `sensor.ems_dyn_preis` | aktueller Endpreis in €/kWh, `unavailable` bei ungültiger Kurve | `gueltig`, `grund`, `quelle`, `raster_min`, `horizont_bis` (ISO), `morgen_vorhanden`, `guenstigster_slot` und `teuerster_slot` (je `von`, `bis` ISO, `preis`) |
-| `sensor.ems_dyn_pv_prognose` | PV-Prognose Rest heute in kWh, sonst `unavailable` | `gueltig`, `grund`, `heute_kwh`, `morgen_kwh`, `kurve_gueltig`, `kurve_bis` (ISO) |
+| `sensor.ems_dyn_pv_prognose` | PV-Prognose Rest heute in kWh, sonst `unavailable` | `gueltig`, `grund`, `heute_kwh`, `morgen_kwh`, `kurve_gueltig`, `kurve_bis` (ISO), `kurve_grund` (Grund einer ungültigen Kurve, sonst leer) |
 | `sensor.ems_dyn_verbrauch_prognose` (P5) | Verbrauchsprognose bis Ende morgen in kWh, sonst `unavailable` | `gueltig`, `grund`, `methode`, `historie_tage`, `naechste_24h_kwh`, `p10_kwh`, `p90_kwh` |
 | `sensor.ems_dyn_speicher_reichweite` (P5) | Reichweite bis (ISO, auf die Viertelstunde gerundet), `über Horizont` oder `unavailable` | `gueltig`, `grund`, `nutzbar_kwh`, `reichweite_vorsichtig`, `reichweite_zuversichtlich` (ISO), `ueber_horizont` |
 | `sensor.ems_dyn_preisfenster` (P5) | mittlerer Preis des günstigsten Ladeblocks innerhalb der Reichweite in €/kWh, sonst `unavailable` | `gueltig`, `von`, `bis`, `gesamt_preis`, `gesamt_von`, `gesamt_bis` (ISO), `horizont_reicht` |

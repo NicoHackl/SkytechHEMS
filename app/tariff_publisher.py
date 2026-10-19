@@ -73,6 +73,7 @@ def build_states(status: Dict[str, Any]) -> List[Tuple[str, str, Dict[str, Any]]
         "morgen_kwh":          (pv.get("morgen") or {}).get("wert_kwh"),
         "kurve_gueltig":       bool(curve.get("gueltig")),
         "kurve_bis":           curve.get("bis_iso"),
+        "kurve_grund":         None if curve.get("gueltig") else curve.get("grund"),
     }))
 
     # Phase P5 – nur vorhanden, wenn die Auswertung gelaufen ist.

@@ -7,7 +7,7 @@ den echten Sensoren der Referenzanlage (EPEX Spot, Helios).
 
 import asyncio
 import math
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from hypothesis import given, settings, strategies as st
 
@@ -43,6 +43,29 @@ def pv_curve_state(start=DAY_START, count=672, minutes=15):
         forecast.append({"datetime": moment.astimezone(BERLIN).isoformat(), "watts": watts,
                          "p10": watts * 0.8 if i else None, "p90": watts * 1.2 if i else None})
     return {"state": "0", "attributes": {"unit_of_measurement": "W", "forecast": forecast}}
+
+
+def helios_state(day, days=7, minutes=15, watts=None):
+    """Kurve wie Helios 2026.9.6 (`build_forecast_series`): ab Berliner Mitternacht `t += step` auf der
+    Ortszeit mit Zone, also nach Wanduhr – im Herbst fehlt die zweite 02:00-Stunde, im Frühjahr
+    kommen die übersprungenen Zeiten 02:00–02:45 mit +01:00 vor."""
+    watts = watts or (lambda moment: 4000.0 if 10 <= moment.hour < 14 else 0.0)
+    moment = datetime(day.year, day.month, day.day, tzinfo=BERLIN)
+    end = moment + timedelta(days=days)
+    forecast = []
+    while moment < end:
+        value = watts(moment)
+        forecast.append({"datetime": moment.isoformat(), "watts": value, "p10": value * 0.8, "p90": value * 1.2})
+        moment += timedelta(minutes=minutes)
+    return {"state": "0", "attributes": {"unit_of_measurement": "W", "forecast": forecast}}
+
+
+def _slots_on(curve, day):
+    return [slot for slot in curve.slots if slot.start.astimezone(BERLIN).date() == day]
+
+
+def _real_steps(curve):
+    return {following.start - previous.start for previous, following in zip(curve.slots, curve.slots[1:])}
 
 
 def energy(value, unit="kWh"):
@@ -157,6 +180,79 @@ def test_pv_curve_invalid_cases():
     assert "Vergangenheit" in old.reason
 
 
+AUTUMN_NOW = datetime(2026, 10, 19, 15, 0, tzinfo=UTC)
+SPRING_NOW = datetime(2027, 3, 26, 12, 0, tzinfo=UTC)
+
+
+def test_pv_curve_autumn_dst_fills_second_hour_from_wall_clock_twins():
+    state = helios_state(date(2026, 10, 19))
+    assert len(state["attributes"]["forecast"]) == 672            # wie live am 19.10.2026
+    curve = parse_pv_curve(state, "forecast", AUTUMN_NOW)
+    assert curve.valid and curve.raster_min == 15 and len(curve.slots) == 676
+    assert _real_steps(curve) == {timedelta(minutes=15)}
+    assert len(_slots_on(curve, date(2026, 10, 25))) == 100
+    filled = [slot for slot in curve.slots if slot.dst_filled]
+    assert [slot.start for slot in filled] == [datetime(2026, 10, 25, 1, 15 * i, tzinfo=UTC) for i in range(4)]
+    assert all(slot.watts == 0 and slot.p10 == 0 and slot.p90 == 0 for slot in filled)
+    assert filled[0].start.isoformat() == "2026-10-25T02:00:00+01:00"
+    assert curve.until == datetime(2026, 10, 26, tzinfo=BERLIN)
+    assert curve.energy_per_day_kwh()[date(2026, 10, 25)] == 16.0
+
+    hourly = parse_pv_curve(helios_state(date(2026, 10, 19), minutes=60), "forecast", AUTUMN_NOW)
+    assert hourly.valid and hourly.raster_min == 60 and len(_slots_on(hourly, date(2026, 10, 25))) == 25
+    assert [slot.start for slot in hourly.slots if slot.dst_filled] == [datetime(2026, 10, 25, 1, tzinfo=UTC)]
+
+
+def test_pv_curve_dst_pattern_only_where_berlin_switches():
+    # Echte Lücke von 75 min an einem gewöhnlichen Tag: ungültig, Grund nennt die Stelle.
+    state = helios_state(date(2026, 10, 19))
+    del state["attributes"]["forecast"][8:12]
+    reason = parse_pv_curve(state, "forecast", AUTUMN_NOW).reason
+    assert reason == "Kurve ist lückenhaft zwischen 19.10.2026 01:45 und 19.10.2026 03:00"
+
+    # Scheinbare Umstellung am 20.10.2026 (Wanduhr lückenlos, Offset +01:00 ist an dem Tag falsch).
+    state = helios_state(date(2026, 10, 19))
+    for entry in state["attributes"]["forecast"]:
+        if entry["datetime"].startswith("2026-10-20T") and entry["datetime"][11:16] >= "03:00":
+            entry["datetime"] = entry["datetime"][:19] + "+01:00"
+    assert "lückenhaft zwischen 20.10.2026 02:45" in parse_pv_curve(state, "forecast", AUTUMN_NOW).reason
+
+    # Doppelte Stunde mit Leistung: nicht auffüllen.
+    night = helios_state(date(2026, 10, 19), watts=lambda moment: 50.0 if moment.hour == 2 else 0.0)
+    assert parse_pv_curve(night, "forecast", AUTUMN_NOW).reason == \
+        "Zeitumstellung 25.10.2026: Helios-Werte der doppelten Stunde sind nicht 0 W"
+
+    # Umstellung am Kurvenanfang: Wanduhr-Zwillinge fehlen.
+    state = helios_state(date(2026, 10, 25), days=1)
+    del state["attributes"]["forecast"][:11]                     # beginnt 02:45+02:00
+    assert parse_pv_curve(state, "forecast", AUTUMN_NOW).reason == \
+        "Zeitumstellung 25.10.2026: Werte der doppelten Stunde fehlen"
+
+
+def test_pv_curve_spring_dst_drops_phantom_hour():
+    state = helios_state(date(2027, 3, 26), days=4)
+    phantoms = [entry["datetime"] for entry in state["attributes"]["forecast"]
+                if entry["datetime"].startswith("2027-03-28T02:")]
+    assert phantoms == [f"2027-03-28T02:{minute:02d}:00+01:00" for minute in (0, 15, 30, 45)]
+    curve = parse_pv_curve(state, "forecast", SPRING_NOW)
+    assert curve.valid and len(_slots_on(curve, date(2027, 3, 28))) == 92
+    assert _real_steps(curve) == {timedelta(minutes=15)}
+    assert len({slot.start for slot in curve.slots}) == len(curve.slots) == 4 * 96 - 4
+    assert not any(slot.dst_filled for slot in curve.slots)
+
+    hourly = parse_pv_curve(helios_state(date(2027, 3, 26), days=4, minutes=60), "forecast", SPRING_NOW)
+    assert hourly.valid and len(_slots_on(hourly, date(2027, 3, 28))) == 23
+
+    lit = helios_state(date(2027, 3, 26), days=4, watts=lambda moment: 50.0 if moment.hour == 2 else 0.0)
+    assert parse_pv_curve(lit, "forecast", SPRING_NOW).reason == \
+        "Zeitumstellung 28.03.2027: Helios-Werte der übersprungenen Stunde sind nicht 0 W"
+
+    # Fall a – real lückenlos (01:45+01:00 → 03:00+02:00) – war schon gültig und bleibt es.
+    real = parse_pv_curve(pv_curve_state(start=datetime(2027, 3, 27, 23, tzinfo=UTC), count=192), "forecast",
+                          SPRING_NOW)
+    assert real.valid and len(_slots_on(real, date(2027, 3, 28))) == 92
+
+
 # ---------------------------------------------------------------------------
 # Dienst und Anzeige-Sensoren
 # ---------------------------------------------------------------------------
@@ -231,8 +327,11 @@ def test_publisher_writes_only_changes_or_missing_entities():
     # Nach einem HA-Neustart fehlt die Entität im Schnappschuss: erneut schreiben.
     assert asyncio.run(publisher.publish(ha, status, {PV_ENTITY_ID: {}})) == 1
 
+    assert states[1][2]["kurve_gueltig"] is True and states[1][2]["kurve_grund"] is None
+
     invalid = TariffService(CONFIG).evaluate({}, 5, NOW)
     assert [state for _, state, _ in build_states(invalid)] == ["unavailable", "unavailable"]
+    assert build_states(invalid)[1][2]["kurve_grund"] == "Sensor der Prognosekurve nicht gefunden"
 
 
 # ---------------------------------------------------------------------------
