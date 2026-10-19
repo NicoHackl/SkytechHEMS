@@ -60,6 +60,12 @@ Schnittstellen-Sensor.
 - **Aufwand:** Zwei Resolver in `state.py`, ein Lesepfad und zwei Sperrgründe in `BatteryDevice`,
   ein Formularfeld und eine Statuszeile.
 
+**Nachtrag 19.10.2026:** Der Test des Users bestätigt, dass der Marstek seine Entladesperre
+nicht über `dischrg_flag` meldet. Der Soll/Ist-Vergleich läuft auf Wunsch des Users im Provider
+(Provider D-018, Vertrag 1.3): Er meldet eine nicht umgesetzte Richtung als
+`entladen_freigegeben: false` mit Sperrgrund `keine_reaktion_entladen`. Im HEMS ändert sich an
+der Regelung nichts, nur die Statuskarte kennt die neuen Sperrgründe.
+
 ## Rücknahmebedingung
 
 Meldet das Gerät eine Sperre nicht zuverlässig (Freigabe `true`, Ist bleibt bei angeforderter

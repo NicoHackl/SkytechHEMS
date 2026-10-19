@@ -8,6 +8,15 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Geändert — 19.10.2026 (Speicher reagiert nicht)
+
+- Die Statuskarte eines Speichers zeigt jetzt auch, wenn die Speicher-Integration erkannt hat,
+  dass der Speicher einen Sollwert nicht umsetzt: „Speicher: sperrt Entladen (reagiert nicht auf
+  Entladen)“. Hintergrund: Der Marstek meldet seine Entladesperre nicht selbst; die
+  Speicher-Integration vergleicht deshalb Soll und Ist (Vertrag 1.3). Das HEMS lässt dann den
+  nächsten Speicher einspringen — dafür muss beim Speicher die „Schnittstelle zum Speicher“
+  eingetragen sein.
+
 ### Behoben — 19.10.2026 (PV-Prognosekurve über die Zeitumstellung)
 
 - Die PV-Prognosekurve war seit 19.10.2026 ungültig („Kurve ist lückenhaft, unsortiert oder hat

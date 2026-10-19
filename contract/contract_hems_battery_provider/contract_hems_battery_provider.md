@@ -1,12 +1,12 @@
 # Vertrag: SkytechHEMS ↔ Skytech HEMS Battery Provider
 
-**Version:** 1.2
+**Version:** 1.3
 
-**Status:** Dokumentierter Implementierungsstand mit bekannten Betriebsgrenzen; HEMS-Lebenszeichen in beiden Projekten **implementiert**; Schnittstellen-Sensor mit Gerätefreigaben in beiden Projekten **implementiert**, Bedeutung der Gerätefreigaben an Hardware **noch zu bestätigen** (bekannte Grenze)
+**Status:** Dokumentierter Implementierungsstand mit bekannten Betriebsgrenzen; HEMS-Lebenszeichen in beiden Projekten **implementiert**; Schnittstellen-Sensor mit Gerätefreigaben in beiden Projekten **implementiert**; Marstek-Freigaben aus Soll/Ist-Vergleich des Providers **implementiert**, E3DC-Statusbits an Hardware **noch nicht negativ getestet** (bekannte Grenze)
 
-**Stand:** 18.10.2026
+**Stand:** 19.10.2026
 
-**Geprüfte Codebasis:** SkytechHEMS `e5c0156`, Skytech-HEMS-Battery-Provider `12ae0f3`; Lebenszeichen: SkytechHEMS `f2037f4` (D-062), Battery-Provider D-016; Schnittstellen-Sensor: SkytechHEMS D-068, Battery-Provider D-017.
+**Geprüfte Codebasis:** SkytechHEMS `e5c0156`, Skytech-HEMS-Battery-Provider `12ae0f3`; Lebenszeichen: SkytechHEMS `f2037f4` (D-062), Battery-Provider D-016; Schnittstellen-Sensor: SkytechHEMS D-068, Battery-Provider D-017; Soll/Ist-Vergleich Marstek: Battery-Provider D-018.
 
 Dieser Vertrag beschreibt den vorhandenen Austausch über Home Assistant. Er führt keine neue
 Steuerungslogik ein. Bekannte Einschränkungen sind ausdrücklich dokumentiert und dürfen nicht
@@ -82,7 +82,7 @@ erfolgreiche HEMS-Sollsensorwert weiterhin sichtbar sein; er ist kein Lebenszeic
 ## Schnittstellen-Sensor
 
 Status: **Implementiert** — Provider D-017 (`sensor.py`, `adapters/marstek_udp.py`,
-`adapters/e3dc_rscp.py`), HEMS D-068 (`provider_entity`). Nur vorhanden, wenn
+`adapters/e3dc_rscp.py`) und D-018 (Soll/Ist-Vergleich Marstek), HEMS D-068 (`provider_entity`). Nur vorhanden, wenn
 `hems_entity_prefix` gesetzt ist.
 
 Ein Sensor je Speicher bündelt alles, was zwischen HEMS und Provider fließt. Richtung
@@ -112,7 +112,8 @@ Anzeige und dem Verlauf. `unavailable`, `unknown` oder ein fehlender Sensor gelt
 | `ist_entladeleistung_w` | Zahl oder `null` | W | Tatsächliche Entladeleistung, nicht negativ. | nein |
 | `laden_freigegeben` | Bool oder `null` | – | Ladefreigabe des Geräts. `null` = Gerät macht keine Angabe. | ja |
 | `entladen_freigegeben` | Bool oder `null` | – | Entladefreigabe des Geräts. `null` = Gerät macht keine Angabe. | ja |
-| `sperrgruende` | Liste von Text | – | `geraet_laden_gesperrt`, `geraet_entladen_gesperrt`, `ladesperrzeit`, `entladesperrzeit`, `notstromreserve`. Leer ohne Sperre. | ja |
+| `sperrgruende` | Liste von Text | – | `geraet_laden_gesperrt`, `geraet_entladen_gesperrt`, `ladesperrzeit`, `entladesperrzeit`, `notstromreserve`, `keine_reaktion_laden`, `keine_reaktion_entladen`. Leer ohne Sperre. | ja |
+| `sperre_bis_soc_prozent` | Zahl oder `null` | % | Nur bei `keine_reaktion_*`: Ladezustand, ab dem die Richtung wieder freigegeben wird. Nur Anzeige. | ja |
 | `batterietemperatur_c` | Zahl oder `null` | °C | Nur Information. | ja |
 | `nennkapazitaet_wh` | Zahl oder `null` | Wh | Nur Information. | ja |
 | `geraet_status_roh` | Ganzzahl oder `null` | – | Rohes Statusbitfeld (E3DC `EMS_STATUS`), nur Diagnose. | ja |
@@ -128,7 +129,7 @@ Herkunft der Freigaben, höchstens alle 15 s am Gerät gelesen:
 
 | Adapter | `laden_freigegeben` | `entladen_freigegeben` |
 |---|---|---|
-| Marstek UDP | `Bat.GetStatus.charg_flag` | `Bat.GetStatus.dischrg_flag` |
+| Marstek UDP | `Bat.GetStatus.charg_flag` und kein Soll/Ist-Befund | `Bat.GetStatus.dischrg_flag` und kein Soll/Ist-Befund |
 | E3DC RSCP | `EMS_STATUS` Bit 0 (Laden gesperrt) und Bit 5 (Ladesperrzeit) nicht gesetzt | `EMS_STATUS` Bit 1 (Entladen gesperrt) und Bit 6 (Entladesperrzeit) nicht gesetzt, Notstromreserve nicht erreicht |
 
 Regeln:
@@ -139,10 +140,16 @@ Regeln:
   (`bereit`) bleiben gültig.
 - Attribute mit „Recorder: nein" stehen in `_unrecorded_attributes`. Ihr Verlauf liegt in den
   Einzel-Sensoren, die unverändert weiter bestehen.
-- **Bekannte Grenze:** Ob Marstek `dischrg_flag` die am 18.10.2026 beobachtete Entladeverweigerung
-  bei 12–15 % SoC meldet und ob die RSCP-Bitbelegung von `EMS_STATUS` der E3DC-Modbus-Doku
-  entspricht, ist an Hardware noch nicht bestätigt. Bis dahin gilt der Austausch als implementiert,
-  die Bedeutung der Freigaben als unbestätigt.
+- **Soll/Ist-Vergleich (nur Marstek, Provider D-018).** Der Marstek meldet seine Entladesperre
+  nicht über `dischrg_flag` (Befund 19.10.2026: Flag `true`, Entladung bei 12 % SoC verweigert).
+  Der Provider sperrt deshalb eine Richtung selbst, wenn ein bestätigter Sollwert ab
+  `response_check_min_request_w` über aufsummiert `response_check_time_seconds` nicht umgesetzt
+  wird (Ist unter `response_check_max_actual_w`). Die Werte sind Provider-Optionen je Speicher
+  (Defaults 100 W, 30 s, 20 W; Erkennungszeit 0 = aus). Entladesperre fällt bei
+  SoC ≥ Sperr-SoC + 1 %, Ladesperre bei SoC ≤ Sperr-SoC − 1 %; die nächste Anforderung wird neu
+  geprüft. Für das HEMS sieht das aus wie jede andere Gerätesperre.
+- **Bekannte Grenze:** Ob die RSCP-Bitbelegung von `EMS_STATUS` der E3DC-Modbus-Doku entspricht
+  und ob der E3DC eine Verweigerung darüber meldet, ist noch nicht negativ getestet.
 
 ## HEMS-Konfiguration
 
@@ -332,7 +339,7 @@ mit garantiertem physischem Stillstand.
 | Geräteverbindung ausgefallen | Messsensoren werden nicht verfügbar; Schreibfehler werden separat sichtbar. Physischer Stopp ist ohne erreichbaren Transport nicht garantiert. |
 | HEMS-Notabschaltung bei pausierter Bridge | HEMS setzt Helfer auf null/Standby; die Bridge beobachtet den Notabschaltungsstatus nicht gesondert und führt während der Pause keinen neuen Sync aus. |
 | Unterschiedliche Herstellerlimits | Bridge führt keine generische Prüfung gegen HEMS-`available_*_w` aus; richtige Konfiguration und Adapter-/Gerätegrenzen bleiben erforderlich. |
-| Gerät verweigert ohne gesetzte Sperre | Meldet das Gerät eine Freigabe, führt aber trotzdem nicht aus, erkennt das HEMS das nicht; es gibt keinen Abgleich Soll gegen Ist. |
+| Gerät verweigert ohne gesetzte Sperre | Marstek: der Provider erkennt das nach der Erkennungszeit (Default 30 s) und meldet die Richtung als gesperrt; bis dahin fließt Leistung aus dem Netz. E3DC: kein Abgleich Soll gegen Ist. |
 | Statusabfrage verzögert | Eine neue Gerätesperre wird bis zu 15 s plus ein Poll-Intervall später sichtbar. |
 
 Besonders bei Richtungswechseln kann die neue Betriebsart kurzfristig mit dem alten
@@ -360,7 +367,7 @@ Die Vertragsdokumentation ersetzt diese Hardwareprüfung nicht.
 | Ausgabehelfer | schreibt | liest |
 | Geräteprotokoll und Verbindungsaufbau | kein direkter Zugriff | verantwortlich |
 | Ist-SoC und Istleistungen | liest | veröffentlicht |
-| Gerätefreigaben | sperrt die betroffene Richtung, gibt das Defizit an den nächsten Speicher weiter | liest am Gerät, veröffentlicht im Schnittstellen-Sensor |
+| Gerätefreigaben | sperrt die betroffene Richtung, gibt das Defizit an den nächsten Speicher weiter | liest am Gerät bzw. ermittelt sie per Soll/Ist-Vergleich (Marstek), veröffentlicht im Schnittstellen-Sensor |
 | Schreibdiagnose | sieht Erfolg des HA-Helferzugriffs | sieht Ergebnis seiner Adapteraufrufe |
 | Geräteautonomie bei Verbindungsverlust | keine physische Bestätigung | adapterabhängig; keine allgemeine Stoppgarantie |
 | `sensor.ems_<prefix>_lade_limit_w` | veröffentlicht als Diagnose | wird von der Bridge nicht gelesen |
