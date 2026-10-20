@@ -168,6 +168,14 @@ das HEMS die Freigaben aus `sensor.battery_provider_schnittstelle`.
 | HEMS 3.0.0 und Battery-/Wallbox-Provider müssen zusammen aktualisiert werden | Ohne `sensor.hems_schnittstelle` sehen die Provider kein Lebenszeichen und halten Speicher bzw. Wallbox gestoppt | Vertrag Battery 2.0, Wallbox 2.0 |
 | `sensor.hems_schnittstelle` ändert sich jeden Zyklus und wird per REST geschrieben | Der Recorder speichert jede Änderung samt Attributen; `_unrecorded_attributes` greift für REST-Zustände nicht | Empfehlung: im Recorder ausschließen (`recorder: exclude: entities`) |
 
+## Schnittstellen-Grundsatz ausgerollt (D-070)
+
+| Grenze | Folge | Stand |
+|---|---|---|
+| HEMS 4.0.0 und Energy Pilot müssen zusammen aktualisiert werden | Mit einem alten EP fehlt `sensor.energy_pilot_schnittstelle`; alle Geräte fallen auf die Nutzerwerte zurück (`ep_proposal_status` `missing_commit`) | Sicherer Rückfall, kein Fehlverhalten |
+| Wallbox-Freigabe gilt für jedes regelbare Gerät, dessen Präfix in `sensor.wallbox_provider_schnittstelle` steht | Ein falsch vergebenes Präfix im Provider könnte einen Heizstab sperren | Präfixe im Provider eindeutig wählen |
+| Die Flow-Card-Sensoren folgen dem Grundsatz nicht | Zwei Entitäten statt einer für die Karte | Dokumentierte Ausnahme |
+
 ## Grenzen des dynamischen Strompreises (D-065)
 
 Alles reine Anzeige; die Grenzen betreffen die Aussagekraft, nicht die Regelung.

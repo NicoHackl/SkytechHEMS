@@ -6,7 +6,7 @@ Semantik (überall): auto = KI/EP, manuell = normale Regeln, aus = aus.
       auto    -> EP (überspringt das Gerätetyp-Gate)
       manuell -> normale Regeln (Nutzer-Helfer, Typ-Gate gilt)
       aus     -> Gerät aus
-Fällt ein sensor.ep_*_vorschlag aus, greift der Nutzerwert (Fallback).
+Fällt ein Vorschlag in sensor.energy_pilot_schnittstelle aus, greift der Nutzerwert (Fallback).
 """
 
 import pytest
@@ -28,20 +28,26 @@ def _dev0(res):
     return res["status"]["devices"][0]
 
 
-def _committed(mapping: dict, *, commit_plan_id: str = "plan-1", valid: bool = True):
-    """Baut einen vollständig publizierten EP-Plan einschließlich Commit-Marker."""
+def _committed(mapping: dict, *, valid: bool = True):
+    """Baut eine gültige sensor.energy_pilot_schnittstelle (D-070) aus Kurzschreibweise.
+
+    Einträge `sensor.ep_<prefix>_<feld>_vorschlag` im Mapping werden zu Attributen
+    `<prefix>_<feld>` der Schnittstelle; alles andere bleibt ein normaler State.
+    """
     valid_from = "2020-01-01T00:00:00+00:00"
     valid_until = "2100-01-01T00:00:00+00:00" if valid else "2020-01-02T00:00:00+00:00"
-    states = {**mapping, "sensor.ep_plan_commit": commit_plan_id}
-    attributes = {
-        entity_id: {"plan_id": "plan-1", "valid_from": valid_from, "valid_until": valid_until}
-        for entity_id in states
-        if entity_id.startswith("sensor.ep_") and entity_id != "sensor.ep_plan_commit"
-    }
-    attributes["sensor.ep_plan_commit"] = {
-        "valid_from": valid_from,
-        "valid_until": valid_until,
-    }
+    states, felder = {}, {}
+    for entity_id, value in mapping.items():
+        if entity_id.startswith("sensor.ep_") and entity_id.endswith("_vorschlag"):
+            felder[entity_id[len("sensor.ep_"):-len("_vorschlag")]] = value
+        else:
+            states[entity_id] = value
+    prefixes = sorted({key.split("_")[0] for key in felder})
+    states["sensor.energy_pilot_schnittstelle"] = ",".join(prefixes)
+    attributes = {"sensor.energy_pilot_schnittstelle": {
+        "plan_id": "plan-1", "valid_from": valid_from, "valid_until": valid_until,
+        "schnittstelle_version": 1, **felder,
+    }}
     return make_states(states, attributes=attributes)
 
 
@@ -239,17 +245,51 @@ def test_expired_commit_falls_back_to_user_values():
     assert dev["ep_proposal_status"] == "expired_commit"
 
 
-def test_mismatched_plan_id_falls_back_to_user_values():
+def test_missing_field_falls_back_to_user_value():
+    """Fehlt ein Feld in der Schnittstelle, greift genau für dieses Feld der Nutzerwert."""
+    ctrl = _ctrl_heizstab()
+    states = {
+        **_global(**{"input_select.ems_regelmodus": "auto"}),
+        **_controllable_w("heizstab", prio=7),
+        "sensor.ep_heizstab_freigabe_vorschlag": "on",
+        "sensor.s": 5000,
+        "sensor.heizstab_ist": 0,
+    }
+    dev = _dev0(ctrl.run_cycle(_committed(states)))
+    assert dev["priority"] == 7
+    assert dev["eligible"] is True
+    assert dev["ep_proposal_status"] == "missing_value"
+
+
+def test_echte_typen_aus_der_schnittstelle():
+    """D-070: der Energy Pilot schreibt Zahlen und Bools als echte JSON-Typen."""
+    ctrl = _ctrl_heizstab()
+    states = {
+        **_global(**{"input_select.ems_regelmodus": "auto"}),
+        **_controllable_w("heizstab", prio=7, min_w=500, max_w=3000),
+        "sensor.ep_heizstab_prio_vorschlag": 3,
+        "sensor.ep_heizstab_freigabe_vorschlag": False,
+        "sensor.ep_heizstab_geschutzte_mindestleistung_w_vorschlag": 800.0,
+        "sensor.s": 5000,
+        "sensor.heizstab_ist": 0,
+    }
+    dev = _dev0(ctrl.run_cycle(_committed(states)))
+    assert dev["priority"] == 3
+    assert dev["eligible"] is False
+    assert dev["ep_proposal_status"] == "valid"
+
+
+def test_alte_einzelsensoren_werden_ignoriert():
+    """Die Einzelsensoren aus Vertrag 1.0 wirken nicht mehr (D-070)."""
     ctrl = _ctrl_heizstab()
     states = {
         **_global(**{"input_select.ems_regelmodus": "auto"}),
         **_controllable_w("heizstab", prio=7),
         "sensor.ep_heizstab_prio_vorschlag": 2,
-        "sensor.ep_heizstab_freigabe_vorschlag": "off",
+        "sensor.ep_plan_commit": "plan-1",
         "sensor.s": 5000,
         "sensor.heizstab_ist": 0,
     }
-    dev = _dev0(ctrl.run_cycle(_committed(states, commit_plan_id="plan-2")))
+    dev = _dev0(ctrl.run_cycle(make_states(states)))
     assert dev["priority"] == 7
-    assert dev["eligible"] is True
-    assert dev["ep_proposal_status"] == "mismatched_plan"
+    assert dev["ep_proposal_status"] == "missing_commit"

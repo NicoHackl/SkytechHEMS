@@ -250,7 +250,8 @@ Damit ist beantwortbar, welcher Wert gerade wirkt und warum nicht der aus Home A
 
 Regelbares Gerät: `type`, `id`, `label`, `priority`, `eligible`, `source`, `actual_w`,
 `anforderung_current_w`, `alloc_w`, `new_w`, `schutz_w`, `geschuetzte_mindestleistung_w`,
-`output_unit`. Im Ampere-Modus zusätzlich `current_phases`, `allowed_phases`, `voltage_l1..l3`,
+`output_unit`, `geraet_sperrgrund` (Sperrgrund aus `sensor.wallbox_provider_schnittstelle`, D-070;
+sonst `null`). Im Ampere-Modus zusätzlich `current_phases`, `allowed_phases`, `voltage_l1..l3`,
 `new_a`, `schutz_a`, `geschuetzte_mindestleistung_a` und — solange die Sperre läuft —
 `phase_lock_remaining_s`.
 
@@ -394,8 +395,9 @@ Regelstatus direkt über die HEMS-HTTP-API. Die Vorschläge laufen dagegen über
 |---|---|---|
 | `sensor.ep_plan_status` | EP → HEMS | Gesamtstatus des Plans, Attribute `label`, `valid_until`, `in_window`, `abweichungen` |
 | `sensor.ep_hems_verbindung` | EP → HEMS | `online`/`offline`, Attribute `last_cycle_at`, `cycle_count`, `global_mode`, `error` |
-| `sensor.ep_<prefix>_<feld>_vorschlag` | EP → HEMS | Vorschlag je Gerät und Feld, Attribute `plan_id`, `valid_from`, `valid_until`, `friendly_name` (`"<Gerät> – <Feld> (Vorschlag)"`) und optional `unit_of_measurement` |
-| `sensor.ep_plan_commit` | EP → HEMS | Atomarer Commit-Marker; State = `plan_id`, Attribute `valid_from` und `valid_until`. Nur exakt passende Vorschläge werden übernommen |
+| `sensor.energy_pilot_schnittstelle` | EP → HEMS | Vorschläge aller Geräte (D-070): State = Präfixe; Attribute `plan_id`, `valid_from`, `valid_until`, `schnittstelle_version`, je Gerät `<prefix>_label` und `<prefix>_<feld>` |
+| `sensor.ep_<obj>_vorschlag` | EP → Anzeige | Zusatz-Vorschläge für frei konfigurierte Nutzer-Entitäten; vom HEMS nicht gelesen |
+| `sensor.wallbox_provider_schnittstelle` | Wallbox-Provider → HEMS | Freigabe und Sperrgrund je Wallbox (`<prefix>_freigabe`, `<prefix>_sperrgrund`, D-070) |
 
 Übernommen werden **Priorität**, **Freigabe** und die **geschützte Mindestleistung** (nur
 Watt-Geräte), abhängig vom Regelmodus: `auto` → alle Geräte folgen dem Vorschlag; `manuell`,

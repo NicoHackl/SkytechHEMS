@@ -60,6 +60,8 @@ export interface ControllableDevice extends DeviceBase, ForceStatus {
   /** Roher Sockel, wie der Nutzer ihn gepflegt hat — nicht schutz_w. */
   geschuetzte_mindestleistung_w: number
   output_unit: 'watt' | 'ampere'
+  /** Sperrgrund aus sensor.wallbox_provider_schnittstelle (D-070), sonst null. */
+  geraet_sperrgrund?: string | null
   /* Nur bei output_unit === 'ampere' vorhanden: */
   current_phases?: number
   allowed_phases?: number[]

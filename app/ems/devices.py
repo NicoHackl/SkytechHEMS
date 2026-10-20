@@ -28,7 +28,12 @@ log = logging.getLogger(__name__)
 # Vermeidet fragile exakte Float-Vergleiche (x == 0) bei aus Umrechnungen
 # stammenden Werten.
 EPS_W = 1.0
-EP_COMMIT_ENTITY = "sensor.ep_plan_commit"
+# Schnittstellen-Entität des Energy Pilot (D-070, Vertrag HEMS ↔ Energy-Pilot 2.0): alle
+# Vorschläge eines Plans als Attribute `<prefix>_<feld>`, Gültigkeit global.
+EP_INTERFACE_ENTITY = "sensor.energy_pilot_schnittstelle"
+# Schnittstellen-Entität des Wallbox-Providers (D-070, Vertrag HEMS ↔ Wallbox-Provider 2.1):
+# je Wallbox `<prefix>_freigabe` und `<prefix>_sperrgrund`.
+WALLBOX_INTERFACE_ENTITY = "sensor.wallbox_provider_schnittstelle"
 
 # Gründe, warum ein angeforderter Zwang (D-053) nicht wirkt. Die technische
 # Freigabe und die Schreibziel-Gesundheit bleiben auch unter Zwang hartes Gate;
@@ -384,12 +389,9 @@ class Device(ABC):
 
     # ------------------------------------------------------------------
     # EP-Vorschlagswerte (Energy Pilot) lesen – mit Fallback auf Nutzerwert.
-    # Fällt ein Vorschlagssensor aus, greift der Nutzerwert (KI-Ausfall darf die
+    # Fällt ein Vorschlag aus, greift der Nutzerwert (KI-Ausfall darf die
     # Anlage nie blockieren).
     # ------------------------------------------------------------------
-
-    def _ep_entity(self, field: str) -> str:
-        return f"sensor.ep_{self._entity_prefix}_{field}_vorschlag"
 
     def _mark_ep_failure(self, status: str) -> None:
         """Bewahrt den ersten Vorschlagsfehler eines Zyklus für die Diagnose."""
@@ -397,21 +399,22 @@ class Device(ABC):
             self._ep_proposal_status = status
 
     def _ep_raw(self, st: StateProxy, field: str) -> object:
-        """Liest nur einen vollständig publizierten und aktuell gültigen EP-Vorschlag."""
-        entity_id = self._ep_entity(field)
-        raw = st.get(entity_id)
-        if raw in ("unavailable", "unknown", None):
-            self._mark_ep_failure("missing_value")
-            return None
+        """Liest einen aktuell gültigen Vorschlag aus sensor.energy_pilot_schnittstelle (D-070).
 
-        commit_plan_id = st.get(EP_COMMIT_ENTITY)
-        commit_attrs = st.getattr(EP_COMMIT_ENTITY) or {}
-        if commit_plan_id in ("unavailable", "unknown", None):
+        Der Energy Pilot schreibt den ganzen Plan in **einem** Schreibvorgang; einen
+        Commit-Marker braucht es deshalb nicht mehr. Die Diagnosecodes bleiben
+        dieselben wie vorher, damit der Energy Pilot sie weiter lesen kann:
+        `missing_commit` = Schnittstelle fehlt, `invalid_commit`/`expired_commit` =
+        Gültigkeitsfenster kaputt oder abgelaufen, `missing_value` = Feld fehlt.
+        """
+        raw_state = st.get(EP_INTERFACE_ENTITY)
+        if raw_state in ("unavailable", "unknown", None):
             self._mark_ep_failure("missing_commit")
             return None
+        attrs = st.getattr(EP_INTERFACE_ENTITY) or {}
 
-        valid_from = parse_ts(commit_attrs.get("valid_from"))
-        valid_until = parse_ts(commit_attrs.get("valid_until"))
+        valid_from = parse_ts(attrs.get("valid_from"))
+        valid_until = parse_ts(attrs.get("valid_until"))
         if valid_from <= 0 or valid_until <= valid_from:
             self._mark_ep_failure("invalid_commit")
             return None
@@ -419,15 +422,9 @@ class Device(ABC):
             self._mark_ep_failure("expired_commit")
             return None
 
-        proposal_attrs = st.getattr(entity_id) or {}
-        proposal_from = parse_ts(proposal_attrs.get("valid_from"))
-        proposal_until = parse_ts(proposal_attrs.get("valid_until"))
-        if (
-            str(proposal_attrs.get("plan_id") or "") != str(commit_plan_id)
-            or proposal_from != valid_from
-            or proposal_until != valid_until
-        ):
-            self._mark_ep_failure("mismatched_plan")
+        raw = attrs.get(f"{self._entity_prefix}_{field}")
+        if raw is None:
+            self._mark_ep_failure("missing_value")
             return None
 
         if self._ep_proposal_status == "not_requested":
@@ -542,6 +539,10 @@ class ControllableDevice(Device):
                           geschrieben.
     """
 
+    # Liest die Freigabe aus sensor.wallbox_provider_schnittstelle (D-070). Der Speicher
+    # (Unterklasse) hat seine eigene Provider-Schnittstelle und schaltet das ab.
+    READS_WALLBOX_INTERFACE = True
+
     def __init__(self, id: str, allowed_modes: List[str],
                  entity_actual_w: str, entity_anforderung_w: str,
                  entity_prefix: Optional[str] = None,
@@ -561,6 +562,8 @@ class ControllableDevice(Device):
         super().__init__(id, allowed_modes, entity_prefix, label)
         self.entity_actual_w      = entity_actual_w
         self.entity_anforderung_w = entity_anforderung_w
+        # Sperrgrund aus sensor.wallbox_provider_schnittstelle (D-070), None ohne Sperre.
+        self._geraet_sperrgrund: Optional[str] = None
         self.output_unit          = output_unit if output_unit in ('watt', 'ampere') else 'watt'
         self._allowed_phases               = sorted(set(allowed_phases or [1]))
         self.voltage_l1_entity             = voltage_l1_entity
@@ -803,6 +806,8 @@ class ControllableDevice(Device):
         # `unavailable`. Watt-Geräte bleiben bewusst beim bisherigen Verhalten.
         if self.output_unit == 'ampere' and actual.state != STATE_VALID:
             self.mark_inactive("istleistung_ungueltig")
+        if self.READS_WALLBOX_INTERFACE:
+            self._read_wallbox_release(st)
 
         # Sollwert lesen; aus nativer Einheit nach Watt mit HA-Phasenanzahl umrechnen (für Genauigkeit)
         raw_anf = self._num(st, self.entity_anforderung_w, "request", internal=0.0)
@@ -1127,6 +1132,24 @@ class ControllableDevice(Device):
 
         return ops
 
+    def _read_wallbox_release(self, st: StateProxy) -> None:
+        """Freigabe des Wallbox-Providers (D-070, Vertrag HEMS ↔ Wallbox-Provider 2.1).
+
+        `<entity_prefix>_freigabe: false` (nicht erreichbar, Gerätefehler, kein
+        Fahrzeug) nimmt das Gerät wie eine ungültige Istleistung aus der Regelung:
+        0 A, kein Anteil am Überschuss, kein Zwang. Fehlt die Entität oder das
+        Attribut, oder ist es kein Bool, gilt das Gerät als frei – keine
+        Information ist keine Sperre, und ein Heizstab steht nie in der Liste.
+        """
+        pfx = self._entity_prefix
+        freigabe = st.resolve_attribute_bool(WALLBOX_INTERFACE_ENTITY, f"{pfx}_freigabe")
+        grund = (st.getattr(WALLBOX_INTERFACE_ENTITY) or {}).get(f"{pfx}_sperrgrund")
+        if freigabe.value is False:
+            self._geraet_sperrgrund = grund if isinstance(grund, str) and grund else "gesperrt"
+            self.mark_inactive("wallbox_gesperrt")
+        else:
+            self._geraet_sperrgrund = None
+
     def to_status_dict(self) -> Dict:
         d: Dict = {
             "type":                  "controllable",
@@ -1156,6 +1179,8 @@ class ControllableDevice(Device):
             # dieser Rohwert da (Energy-Pilot Plan-Rückkopplung).
             "geschuetzte_mindestleistung_w": self.geschuetzte_mindestleistung_w,
             "output_unit":           self.output_unit,
+            # Sperrgrund aus sensor.wallbox_provider_schnittstelle (D-070), sonst None.
+            "geraet_sperrgrund":     self._geraet_sperrgrund,
         }
         if self.output_unit == 'ampere':
             eff = self._eff()
@@ -1538,6 +1563,8 @@ class BatteryDevice(ControllableDevice):
     # Schnittstellen-Entität des Battery-Providers (D-069, Vertrag 2.0): eine für
     # alle Speicher, Freigaben je Speicher als `<prefix>_ladefreigabe` usw.
     PROVIDER_ENTITY = "sensor.battery_provider_schnittstelle"
+    # Die Wallbox-Freigabe (D-070) gilt nicht für Speicher.
+    READS_WALLBOX_INTERFACE = False
 
     def __init__(self, id: str, allowed_modes: List[str], *,
                  soc_entity: str,

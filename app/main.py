@@ -30,7 +30,7 @@ from emergency import (
 from emergency_rules import condition_error
 from ha_client import HAClient
 from ems import EMSController, StateProxy
-from ems.devices import BatteryDevice, Device
+from ems.devices import EP_INTERFACE_ENTITY, BatteryDevice, Device
 from ems.state import is_gate_entity
 from internal_values import (
     INTERNAL_VALUES_FILENAME,
@@ -898,18 +898,20 @@ class HEMSApp:
             return web.json_response({"error": str(exc)}, status=500)
 
     async def _handle_ep(self, request: web.Request) -> web.Response:
-        """Liefert die vom Energy Pilot veröffentlichten `sensor.ep_*`-Entitäten.
+        """Liefert die vom Energy Pilot veröffentlichten Entitäten.
 
-        Reine Anzeige: EP schreibt seine KI-Vorschläge (`sensor.ep_<gerät>_*_vorschlag`)
-        und Status-Sensoren (`sensor.ep_plan_status`, `sensor.ep_hems_verbindung`) als
-        HA-Entitäten; HEMS liest sie – wie den Rest – über die HA-REST-API und spiegelt
-        sie in der Weboberfläche. Kein direkter Add-on-zu-Add-on-Aufruf nötig.
+        Reine Anzeige: EP schreibt seine Vorschläge für das HEMS in
+        `sensor.energy_pilot_schnittstelle` (D-070), dazu Zusatz-Vorschläge
+        (`sensor.ep_<obj>_vorschlag`) und Status-Sensoren (`sensor.ep_plan_status`,
+        `sensor.ep_hems_verbindung`). HEMS liest sie – wie den Rest – über die
+        HA-REST-API und spiegelt sie in der Weboberfläche. Kein direkter
+        Add-on-zu-Add-on-Aufruf nötig.
         """
         try:
             states = await self.ha.fetch_all_states()
             ep = {
                 eid: data for eid, data in states.items()
-                if eid.startswith("sensor.ep_")
+                if eid.startswith("sensor.ep_") or eid == EP_INTERFACE_ENTITY
             }
             return web.json_response(ep)
         except Exception as exc:

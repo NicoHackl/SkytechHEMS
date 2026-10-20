@@ -33,7 +33,7 @@ export function EnergyPilotVorschlaege() {
             <div className="empty">
               <Icon name="spark" size={40} />
               <p>Keine gültigen Vorschläge gefunden.</p>
-              <span>Der Energy Pilot veröffentlicht sie als <code>sensor.ep_…_vorschlag</code>.</span>
+              <span>Der Energy Pilot veröffentlicht sie in <code>sensor.energy_pilot_schnittstelle</code>.</span>
             </div>
           </div>
         )
@@ -47,6 +47,29 @@ function displayValue(state: string, unit: string | undefined): { text: string; 
   if (state === 'on') return { text: 'Ja', tone: 'ok' }
   if (state === 'off') return { text: 'Nein', tone: 'err' }
   return { text: unit ? `${state} ${unit}` : state, tone: 'plain' }
+}
+
+/* Schnittstellen-Entität des Energy Pilot (D-070, Vertrag HEMS ↔ Energy-Pilot 2.0). */
+const EP_INTERFACE = 'sensor.energy_pilot_schnittstelle'
+
+/* Feste Vorschlagsfelder: Attribut-Endung → Anzeige. Längere Endungen zuerst, damit
+   `_entlade_prio` nicht als `_prio` erkannt wird. */
+const INTERFACE_FIELDS: { suffix: string; label: string; unit?: string }[] = [
+  { suffix: 'geschutzte_mindestleistung_w', label: 'Geschützte Mindestleistung', unit: 'W' },
+  { suffix: 'geschutzte_mindestleistung_a', label: 'Geschützte Mindestleistung', unit: 'A' },
+  { suffix: 'soc_ziel_prozent', label: 'SoC-Ziel', unit: '%' },
+  { suffix: 'soc_min_prozent', label: 'SoC-Minimum', unit: '%' },
+  { suffix: 'entlade_prio', label: 'Entladepriorität' },
+  { suffix: 'betriebsart', label: 'Betriebsart' },
+  { suffix: 'freigabe', label: 'Freigabe' },
+  { suffix: 'prio', label: 'Priorität' },
+]
+
+/** Attributwert als Zustandstext wie bei einer HA-Entität (`on`/`off` für Bools). */
+function asStateText(value: unknown): string {
+  if (typeof value === 'boolean') return value ? 'on' : 'off'
+  if (value === null || value === undefined) return ''
+  return String(value)
 }
 
 interface SuggestionField {
@@ -91,6 +114,29 @@ const AUSSER_DIENST = ['_lade_max_w_vorschlag', '_entlade_max_w_vorschlag']
 function groupSuggestions(states: HaEntities, now: number): SuggestionGroup[] {
   const grouped: Record<string, Record<string, SuggestionField>> = {}
 
+  // Feste Vorschläge je Gerät aus der Schnittstellen-Entität.
+  const iface = states[EP_INTERFACE]
+  const ifaceUntil = Date.parse(String(iface?.attributes.valid_until ?? ''))
+  if (iface && !(ifaceUntil < now)) {
+    const attrs = iface.attributes as Record<string, unknown>
+    const prefixes = iface.state.split(',').map((p) => p.trim()).filter(Boolean)
+    for (const prefix of prefixes) {
+      const label = typeof attrs[`${prefix}_label`] === 'string' ? (attrs[`${prefix}_label`] as string) : prefix
+      const fields = grouped[label] ?? (grouped[label] = {})
+      for (const field of INTERFACE_FIELDS) {
+        const value = attrs[`${prefix}_${field.suffix}`]
+        if (value === undefined || value === null) continue
+        fields[field.label] = {
+          label: field.label,
+          state: asStateText(value),
+          unit: field.unit,
+          validUntil: Number.isNaN(ifaceUntil) ? 0 : ifaceUntil,
+        }
+      }
+    }
+  }
+
+  // Zusatz-Vorschläge bleiben eigene Sensoren `sensor.ep_<obj>_vorschlag`.
   for (const [entityId, entity] of Object.entries(states)) {
     if (!entityId.endsWith('_vorschlag')) continue
     if (AUSSER_DIENST.some((feld) => entityId.endsWith(feld))) continue // (0) nicht mehr gelesen

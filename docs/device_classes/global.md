@@ -303,20 +303,20 @@ Sicherheitsdefaults, die auf den Klassenseiten dokumentiert sind.
 
 ## Energy-Pilot-Vertrag
 
-Im globalen Regelmodus `auto` oder im Gerätemodus `auto` liest das HEMS zusätzlich
-`sensor.ep_<prefix>_<feld>_vorschlag`. Ein Vorschlag wird nur verwendet, wenn State und Attribute
-zu diesem Commit-Marker passen:
+Im globalen Regelmodus `auto` oder im Gerätemodus `auto` liest das HEMS zusätzlich die Vorschläge
+aus der Schnittstellen-Entität des Energy Pilot (D-070, [Vertrag 2.0](../../contract/contract_hems_energy_pilot/contract_hems_energy_pilot.md#ep--hems-sensorenergy_pilot_schnittstelle)):
 
 ```text
-sensor.ep_plan_commit
+sensor.energy_pilot_schnittstelle   Attribut <prefix>_<feld>
 ```
 
-Der Commit-State enthält `plan_id`; seine Attribute enthalten `valid_from` und `valid_until`.
-Fehlt ein gültiger Vorschlag, verwendet das HEMS den entsprechenden HA-Helferwert. Das ist ein
+Ein Vorschlag wird nur verwendet, wenn die Entität verfügbar ist und `valid_from <= jetzt <
+valid_until` gilt (globale Attribute). Ein Commit-Marker ist nicht mehr nötig, weil der Energy Pilot
+den ganzen Plan in einem Schreibvorgang veröffentlicht. Fehlt ein gültiger Vorschlag, verwendet das HEMS den entsprechenden HA-Helferwert. Das ist ein
 **EP-zu-HA-Fallback**, kein Add-on-Konfigurationsfallback. Die klassenspezifischen Vorschlagsfelder
 stehen auf den jeweiligen Klassenseiten.
 
-Diese beiden globalen EP-Sensoren werden ausschließlich für die Anzeige über `/api/ep` gespiegelt
+Diese beiden globalen EP-Sensoren sind Anzeige-Entitäten, werden über `/api/ep` gespiegelt
 und beeinflussen die Regelung nicht:
 
 ```text

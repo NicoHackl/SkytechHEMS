@@ -194,21 +194,23 @@ ist nur Anzeige. Ein Umbenennen des Labels bricht damit keine Zuordnung.
 bereits auf verfügbaren PV-Überschuss. Ein Planer darf Netzbezug deshalb nicht als kausalen
 Abschaltgrund für diese Verbraucher verwenden.
 
-### EP-Plan-Commit
+### EP-Vorschläge (D-070)
 
-Vorschläge unter `sensor.ep_<gerät>_<feld>_vorschlag` werden nur übernommen, wenn ihre Attribute
-`plan_id` und `valid_until` zu `sensor.ep_plan_commit` passen. Der Commit-State ist die `plan_id`;
-seine Attribute enthalten `valid_from` und `valid_until`. Fehlt der Commit, stimmen IDs oder
-Gültigkeit nicht überein oder ist das Zeitfenster abgelaufen, nutzt HEMS für das betreffende Feld
-den Nutzerwert. `ep_proposal_status` im Gerätestatus nennt die Ursache.
+Vorschläge stehen als Attribute `<gerät>_<feld>` in `sensor.energy_pilot_schnittstelle`, mit
+globalem `valid_from`/`valid_until`. Fehlt die Entität, ist das Zeitfenster ungültig oder
+abgelaufen oder fehlt das Feld, nutzt HEMS für das betreffende Feld den Nutzerwert.
+`ep_proposal_status` im Gerätestatus nennt die Ursache (`missing_commit`, `invalid_commit`,
+`expired_commit`, `missing_value`). Vertrag:
+[contract_hems_energy_pilot.md](../contract/contract_hems_energy_pilot/contract_hems_energy_pilot.md).
 
 ### `GET /api/ep`
 
-Spiegelt die vom **Energy Pilot** veröffentlichten `sensor.ep_*`-Entitäten, gefiltert aus dem
-HA-State. Reine Anzeige — es gibt keinen direkten Add-on-zu-Add-on-Aufruf.
+Spiegelt die vom **Energy Pilot** veröffentlichten Entitäten, gefiltert aus dem HA-State:
+`sensor.energy_pilot_schnittstelle` und alle `sensor.ep_*`. Reine Anzeige — es gibt keinen
+direkten Add-on-zu-Add-on-Aufruf.
 
-Relevant sind `sensor.ep_plan_status`, `sensor.ep_hems_verbindung` und je Gerät und Feld ein
-`sensor.ep_<gerät>_<feld>_vorschlag`. Zum Umgang mit verwaisten Vorschlägen siehe
+Relevant sind `sensor.energy_pilot_schnittstelle` (Vorschläge je Gerät), `sensor.ep_plan_status`,
+`sensor.ep_hems_verbindung` und die Zusatz-Vorschläge `sensor.ep_<obj>_vorschlag`. Zum Umgang mit verwaisten Vorschlägen siehe
 [datenmodell.md](datenmodell.md).
 
 **Fehler `500`** `{"error": "<Meldung>"}`.

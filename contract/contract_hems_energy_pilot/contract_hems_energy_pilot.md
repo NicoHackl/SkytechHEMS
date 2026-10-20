@@ -1,12 +1,12 @@
 # Vertrag: SkytechHEMS ↔ Skytech Energy Pilot
 
-**Version:** 1.0
+**Version:** 2.0
 
-**Status:** Dokumentierter Implementierungsstand mit bekannten Kompatibilitätsgrenzen
+**Status:** Dokumentierter Implementierungsstand mit bekannten Kompatibilitätsgrenzen; Schnittstellen-Entität `sensor.energy_pilot_schnittstelle` in beiden Projekten **implementiert**
 
-**Stand:** 06.10.2026
+**Stand:** 20.10.2026
 
-**Geprüfte Codebasis:** SkytechHEMS `e5c0156`, Skytech-Energy-Pilot `e08e211`.
+**Geprüfte Codebasis:** SkytechHEMS `e5c0156`, Skytech-Energy-Pilot `e08e211`; Schnittstellen-Entität: SkytechHEMS D-070, Energy Pilot D-069.
 
 Dieser Vertrag beschreibt den tatsächlich vorhandenen Austausch. Er führt keine neuen
 Laufzeitfunktionen ein. Einseitig implementierte Fähigkeiten und bekannte Abweichungen stehen
@@ -26,14 +26,18 @@ Ein EP-Vorschlag ist weder ein direkter Gerätesollwert noch eine garantierte Le
 ```text
 Energy Pilot ── GET Schema und Status ──► SkytechHEMS
 Energy Pilot ◄── Gerätebeschreibung und Regelstatus ── SkytechHEMS
-Energy Pilot ── Vorschlagssensoren + Plan-Commit ──► Home Assistant ──► SkytechHEMS
+Energy Pilot ── sensor.energy_pilot_schnittstelle ──► Home Assistant ──► SkytechHEMS
 Energy Pilot ◄── States der im Schema genannten Entitäten ── Home Assistant
 ```
 
-EP schreibt im regulären Vorschlagspfad ausschließlich eigene `sensor.ep_*`-Zustände über
-die HA-State-API. HEMS liest sie aus seinem Zyklus-Schnappschuss und schreibt seine
-`input_*`-Ausgabehelfer selbst. Der gesonderte EP-Original-Schreibweg für konfigurierte
-Zusatz-Entitäten ist unten als Ausnahme beschrieben.
+**Grundsatz (seit 2.0):** Jede Einheit veröffentlicht genau eine Entität
+`sensor.<einheit>_schnittstelle` mit allen Informationen für die anderen Teilnehmer (siehe
+`contract/README.md`). EP schreibt seine Vorschläge für das HEMS deshalb ausschließlich in
+`sensor.energy_pilot_schnittstelle` über die HA-State-API. HEMS liest sie aus seinem
+Zyklus-Schnappschuss und schreibt seine `input_*`-Ausgabehelfer selbst. Die Richtung HEMS → EP
+bleibt bewusst REST (Schema und Status sind groß und werden nur bei Bedarf gelesen; dokumentierte
+Ausnahme). Der gesonderte EP-Original-Schreibweg für konfigurierte Zusatz-Entitäten ist unten als
+Ausnahme beschrieben.
 
 ## Bezeichner und Konfiguration
 
@@ -120,20 +124,29 @@ letzten Zyklus davor zeigen. EP besitzt derzeit keine eigene umfassende Auswertu
 `GET /api/controls` existiert ebenfalls im EP-Client, wird im regulären Collector-Pfad aber
 nicht verwendet. Es liefert HA-Helferzustände, keine HEMS-internen Ersatzwerte.
 
-## EP → HEMS: Vorschläge und unterstützter Umfang
+## EP → HEMS: `sensor.energy_pilot_schnittstelle`
 
-Alle regulären Vorschlagssensoren folgen
-`sensor.ep_<prefix>_<feld>_vorschlag`. Boolesche Werte veröffentlicht EP als `on`/`off`, Zahlen
-als numerische Strings. Jeder Sensor trägt `plan_id`, `valid_from`, `valid_until`,
-`friendly_name`, `source` und bei Leistung `unit_of_measurement`.
+Status: **Implementiert** — EP D-069 (`suggestion_publisher.py`), HEMS D-070 (`app/ems/devices.py`).
 
-| Gerätekonstellation | EP veröffentlicht regulär | Aktuelle HEMS-Übernahme |
+| Feld | Typ | Bedeutung |
+|---|---|---|
+| `state` | Text | `entity_prefix` aller Geräte mit mindestens einem Vorschlag, durch Komma getrennt. |
+| `attributes.schnittstelle_version` | Ganzzahl | `1`. |
+| `attributes.plan_id` | Text | Kennung des Plans. |
+| `attributes.valid_from`, `valid_until` | Text | ISO-8601-Zeitstempel mit Zeitzone; Gültigkeitsfenster aller Vorschläge. |
+| `attributes.schema_version` | Text | Version des EP-Plan-Schemas; keine Versionsprüfung im HEMS. |
+| `attributes.<prefix>_label` | Text | Anzeigename des Geräts; nur Anzeige. |
+| `attributes.<prefix>_<feld>` | Zahl oder Bool | Ein Vorschlag. `<feld>` ist der HEMS-Feldname ohne `_vorschlag`. |
+
+Felder je Gerätekonstellation:
+
+| Gerätekonstellation | EP liefert regulär | Aktuelle HEMS-Übernahme |
 |---|---|---|
 | `binary`, normales Präfix | `prio`, `freigabe` | Beide Felder bei Quelle `ep`. |
 | `controllable`, Watt, normales Präfix | `prio`, `freigabe`, `geschutzte_mindestleistung_w` | Alle drei Felder bei Quelle `ep`. |
 | `controllable`, Ampere, normales Präfix | `prio`, `freigabe`, `geschutzte_mindestleistung_a` | Nur `prio` und `freigabe`; der Ampere-Schutzvorschlag wird derzeit nicht gelesen. |
 | EP-Sonderfall Präfix `batterie` | Nur `geschutzte_mindestleistung_w`; EP behandelt Priorität 1 und Freigabe als feste Planungsannahmen. | Nicht gleichbedeutend mit HEMS-Geräteklasse `battery`; keine pauschale Kompatibilitätszusage. |
-| HEMS-Geräteklasse `battery` | Kein vollständiger, ausdrücklich implementierter EP-Pfad. | HEMS kann sieben Vorschlagsfelder lesen; EP liefert diesen Satz derzeit nicht. |
+| HEMS-Geräteklasse `battery` | Kein vollständiger, ausdrücklich implementierter EP-Pfad. | HEMS kann sieben Felder lesen; EP liefert diesen Satz derzeit nicht. |
 
 Die sieben HEMS-seitigen Speicherfelder sind `freigabe`, `prio`,
 `geschutzte_mindestleistung_w`, `entlade_prio`, `soc_ziel_prozent`, `soc_min_prozent` und
@@ -142,32 +155,23 @@ Physische Wechselrichtergrenzen sind keine EP-Vorschlagsfelder.
 
 ## Veröffentlichung und Gültigkeit
 
-EP übergibt kein vollständiges Plan-JSON an einen HEMS-REST-Endpunkt. Der Austausch erfolgt
-über einzelne HA-Sensoren mit einem gemeinsamen Sichtbarkeitsmarker:
-
-1. EP setzt `sensor.ep_plan_commit` auf `publishing` und macht dessen Zeitfenster ungültig.
-   Schlägt bereits das fehl, wird die Veröffentlichung abgebrochen.
-2. EP schreibt die Vorschlagssensoren mit gemeinsamer Plan-ID und gemeinsamem Zeitfenster.
-3. Nur wenn alle Vorschlagssensoren erfolgreich geschrieben wurden, setzt EP den Commit-State
-   auf die `plan_id`. Seine Attribute enthalten `plan_id`, `valid_from`, `valid_until` und
-   `schema_version` des EP-Plans.
-4. HEMS liest Commit und Vorschläge aus seinem nächsten HA-Schnappschuss.
+EP schreibt den ganzen Vorschlagssatz eines Plans in **einem** Schreibvorgang. Damit ist er für
+das HEMS atomar sichtbar; der Commit-Marker `sensor.ep_plan_commit` und die Einzelsensoren
+`sensor.ep_<prefix>_<feld>_vorschlag` aus Version 1.0 entfallen. EP entfernt sie beim ersten
+Veröffentlichen nach dem Start über `DELETE /api/states/<entity_id>`.
 
 HEMS akzeptiert ein angefragtes Feld nur, wenn:
 
-- Sensor und Commit einen vorhandenen, verfügbaren State haben;
-- das Commit-Zeitfenster gültig ist und `valid_from <= jetzt < valid_until` gilt;
-- Sensor-`plan_id` gleich Commit-State ist;
-- beide Zeitgrenzen nach dem Parsen exakt mit denen des Commits übereinstimmen.
+- `sensor.energy_pilot_schnittstelle` einen vorhandenen, verfügbaren State hat;
+- `valid_from` und `valid_until` gültig sind und `valid_from <= jetzt < valid_until` gilt;
+- das Attribut `<prefix>_<feld>` vorhanden ist.
 
-Bei fehlenden, nicht passenden oder abgelaufenen Angaben fällt genau das betreffende Feld auf
-den normalen Nutzer-/Ersatzwert zurück. `ep_proposal_status` nennt den ersten erkannten
-Vorschlagsfehler, etwa `missing_value`, `missing_commit`, `invalid_commit`, `expired_commit`
-oder `mismatched_plan`.
-
-Das ist eine Freigabe eines vollständig veröffentlichten Vorschlagssatzes, keine Datenbank-
-Transaktion und keine Alles-oder-nichts-Anwendung sämtlicher Felder. Während der Veröffentlichung
-wirken Fallbackwerte. Ein nachträglich fehlendes Feld lässt andere gültige Felder weiter wirken.
+Bei fehlenden oder abgelaufenen Angaben fällt genau das betreffende Feld auf den normalen
+Nutzer-/Ersatzwert zurück. `ep_proposal_status` nennt den ersten erkannten Vorschlagsfehler:
+`missing_commit` (Entität fehlt oder ist nicht verfügbar), `invalid_commit` (Zeitfenster
+unbrauchbar), `expired_commit` (außerhalb des Fensters) oder `missing_value` (Feld fehlt). Die
+Namen bleiben aus Version 1.0 erhalten, damit EP sie weiter auswerten kann; `mismatched_plan`
+entfällt.
 
 Zeitgrenzen sind maschinenlesbare ISO-8601-Zeitstempel mit Zeitzoneninformation. Für Menschen
 ausgegebene Zeiten werden als `TT.MM.JJJJ hh:mm:ss` in Berliner Ortszeit dargestellt.
@@ -189,15 +193,16 @@ Ungültige Vorschläge führen nicht zu einer automatischen Änderung dieser Mod
 Freigaben, Schreibzielgesundheit und Gerätebegrenzungen bleiben HEMS-Aufgabe. Zwang und
 Notabschaltung sind zusätzliche HEMS-Pfade, die EP nicht durch Vorschläge aufheben kann.
 
-EP-Zusatz-Entitäten erzeugen weitere advisorische Sensoren. Sie gehören nicht zum regulären
-HEMS-Vorschlagsfeldsatz. Die explizite Option „In Original schreiben“ kann zusätzlich
+EP-Zusatz-Entitäten erzeugen weitere advisorische Sensoren `sensor.ep_<obj>_vorschlag`. Sie
+gehören nicht zum regulären HEMS-Vorschlagsfeldsatz und nicht in die Schnittstellen-Entität. Die explizite Option „In Original schreiben“ kann zusätzlich
 HA-Service-Aufrufe für erlaubte Helferdomänen auslösen. Diese Aufrufe erfolgen nach dem
 Vorschlags-Commit, sind nicht dessen Transaktion und werden durch die EP-Modusauswertung
 begrenzt. Diese reduzierte Modusauswertung ist keine vollständige Kopie aller HEMS-Schutzgates.
 
-`sensor.ep_plan_status` und `sensor.ep_hems_verbindung` sind Diagnoseausgaben. Sie ersetzen
-weder den Plan-Commit noch den Gerätesollwert. HEMS kann die EP-Sensoren über `/api/ep` für
-seine Oberfläche spiegeln; HEMS ruft dafür keine EP-HTTP-API auf.
+`sensor.ep_plan_status` und `sensor.ep_hems_verbindung` sind Anzeige-Entitäten und bleiben
+einzeln. Sie ersetzen weder die Schnittstelle noch den Gerätesollwert. HEMS spiegelt
+`sensor.energy_pilot_schnittstelle` und die EP-Sensoren über `/api/ep` für seine Oberfläche; HEMS
+ruft dafür keine EP-HTTP-API auf.
 
 ## Kompatibilitätsgrenzen des aktuellen Stands
 
@@ -206,16 +211,16 @@ seine Oberfläche spiegeln; HEMS ruft dafür keine EP-HTTP-API auf.
    oder ausgelassen werden. Der Sonderfall `entity_prefix == "batterie"` ersetzt keine
    Unterstützung der Geräteklasse. Die zusätzlichen Speicher-Vorschläge sind nicht durchgängig
    vom Plan-Schema bis zum Verbraucher implementiert.
-2. **Ampere-Schutzsockel:** EP kann `_a_vorschlag` veröffentlichen; HEMS übernimmt in
+2. **Ampere-Schutzsockel:** EP kann `<prefix>_geschutzte_mindestleistung_a` veröffentlichen; HEMS übernimmt in
    `ControllableDevice.update_from_ha()` den Schutzvorschlag nur bei `output_unit == "watt"`.
 3. **Interne Werte und Add-on-Fallbacks:** HEMS kann fehlende oder ungültige HA-Eingaben aus
    internen Werten beziehungsweise Add-on-Optionen ersetzen. EP liest die Schema-Entities aus
    HA und übernimmt diese Ersatzwertkette nicht vollständig. Auch das Original-Schreibgate
    verwendet HA-Modi und liest keine HEMS-internen Modi. Gleiche wirksame Eingaben sind daher
    ohne passende HA-Helfer nicht zugesagt.
-4. **Validierung:** HEMS prüft den Commit-Bezug und verwendet seine Feldparser. Es führt keine
-   erneute vollständige EP-Plan-JSON-Schemaprüfung aus und prüft die Commit-`schema_version`
-   nicht als Versionsgate. Boolesche Vorschläge werden als `on`, `true`, `1` interpretiert;
+4. **Validierung:** HEMS prüft das Gültigkeitsfenster und verwendet seine Feldparser. Es führt keine
+   erneute vollständige EP-Plan-JSON-Schemaprüfung aus und prüft `schema_version` nicht als
+   Versionsgate. Boolesche Vorschläge werden als echter Bool oder als `on`, `true`, `1` interpretiert;
    andere vorhandene Strings werden als boolesch falsch interpretiert. Nicht konvertierbare
    Zahlen fallen über den Zahlenparser zurück; `NaN` und Unendlich werden dort nicht ausdrücklich
    ausgeschlossen. Die Vorschlagsdiagnose ist kein vollständiger Typvalidierungsnachweis.
@@ -230,32 +235,29 @@ gegebenenfalls eine gemeinsame Vertragserweiterung.
 ## Beispiel eines gültigen Vorschlagssatzes
 
 Beispiel für einen regelbaren Watt-Verbraucher mit Präfix `heizstab`; die Zeitstempel gehören
-zur maschinenlesbaren Nutzlast. Alle drei Sensoren erhalten dieselben Gültigkeitsattribute:
+zur maschinenlesbaren Nutzlast:
 
 ```json
 {
-  "sensor.ep_heizstab_prio_vorschlag": {
-    "state": "2",
-    "attributes": {"plan_id": "plan-42", "valid_from": "2026-10-06T08:00:00Z", "valid_until": "2026-10-06T09:00:00Z"}
-  },
-  "sensor.ep_heizstab_freigabe_vorschlag": {
-    "state": "on",
-    "attributes": {"plan_id": "plan-42", "valid_from": "2026-10-06T08:00:00Z", "valid_until": "2026-10-06T09:00:00Z"}
-  },
-  "sensor.ep_heizstab_geschutzte_mindestleistung_w_vorschlag": {
-    "state": "600",
-    "attributes": {"plan_id": "plan-42", "valid_from": "2026-10-06T08:00:00Z", "valid_until": "2026-10-06T09:00:00Z", "unit_of_measurement": "W"}
-  },
-  "sensor.ep_plan_commit": {
-    "state": "plan-42",
-    "attributes": {"plan_id": "plan-42", "schema_version": "1.0", "valid_from": "2026-10-06T08:00:00Z", "valid_until": "2026-10-06T09:00:00Z"}
+  "sensor.energy_pilot_schnittstelle": {
+    "state": "heizstab",
+    "attributes": {
+      "schnittstelle_version": 1,
+      "plan_id": "plan-42",
+      "schema_version": "1.0",
+      "valid_from": "2026-10-06T08:00:00Z",
+      "valid_until": "2026-10-06T09:00:00Z",
+      "heizstab_label": "Heizstab",
+      "heizstab_prio": 2,
+      "heizstab_freigabe": true,
+      "heizstab_geschutzte_mindestleistung_w": 600
+    }
   }
 }
 ```
 
-Anzeigeattribute sind hier gekürzt. Vor dem finalen Commit steht der Marker vorübergehend auf
-`publishing`. Auch mit gültigem Commit kann HEMS den Verbraucher wegen seiner eigenen Gates
-sperren oder ihm weniger Leistung als den gewünschten Schutzsockel zuteilen.
+Anzeigeattribute sind hier gekürzt. Auch mit gültigem Vorschlag kann HEMS den Verbraucher wegen
+seiner eigenen Gates sperren oder ihm weniger Leistung als den gewünschten Schutzsockel zuteilen.
 
 ## Zuständigkeiten und Änderungen
 
@@ -263,13 +265,17 @@ sperren oder ihm weniger Leistung als den gewünschten Schutzsockel zuteilen.
 |---|---|---|
 | Geräteliste und Schema-Identitäten | erzeugt | entdeckt und liest |
 | Prognose, KI-Plan, lokale Planvalidierung | führt nicht aus | verantwortlich |
-| Vorschlagssensoren und Commit | liest und prüft Feldbezug | veröffentlicht |
+| `sensor.energy_pilot_schnittstelle` | liest und prüft Gültigkeit | veröffentlicht |
 | Freigaben, Messwertprüfung, Pool und Gerätesollwerte | entscheidet | beobachtet |
 | Physische Gerätekommunikation | nachgelagerte Integration/Automation | kein regulärer Zugriff |
 | Notabschaltung | führt aus | erhält Diagnose, quittiert nicht automatisch |
 
-Die Dokumentversion `1.0`, die HEMS-Schema-Zahl `2` und die EP-Plan-Schemaversion `"1.0"`
-sind unterschiedliche Versionsachsen. Eine Änderung dieses Dokuments ändert keine davon im Code.
+Version `2.0` (20.10.2026) ist inkompatibel zu `1.0`: Die Einzelsensoren und der Commit-Marker
+entfallen, EP und HEMS (ab 4.0.0) müssen zusammen aktualisiert werden. Ohne passende Schnittstelle
+fällt das HEMS auf die Nutzerwerte zurück (sicher).
+
+Die Dokumentversion, die HEMS-Schema-Zahl `2`, `schnittstelle_version` und die
+EP-Plan-Schemaversion `"1.0"` sind unterschiedliche Versionsachsen. Eine Änderung dieses Dokuments ändert keine davon im Code.
 Neue optionale Felder sind additiv; Umbenennungen, entfernte Felder, andere Einheiten oder
 geänderte Übernahmebedingungen müssen gemeinsam geprüft und versioniert werden.
 

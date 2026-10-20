@@ -282,22 +282,22 @@ wirkungslos. Netzladen mit dynamischem Strompreis ist als eigenes Modul geplant
 
 ## Energy-Pilot-Vorschläge
 
-Im EP-Modus liest ein Speicher diese Vorschläge:
+Im EP-Modus liest ein Speicher diese Attribute aus `sensor.energy_pilot_schnittstelle`:
 
 ```text
-sensor.ep_<prefix>_freigabe_vorschlag
-sensor.ep_<prefix>_prio_vorschlag
-sensor.ep_<prefix>_geschutzte_mindestleistung_w_vorschlag
-sensor.ep_<prefix>_entlade_prio_vorschlag
-sensor.ep_<prefix>_soc_ziel_prozent_vorschlag
-sensor.ep_<prefix>_soc_min_prozent_vorschlag
-sensor.ep_<prefix>_betriebsart_vorschlag
+<prefix>_freigabe
+<prefix>_prio
+<prefix>_geschutzte_mindestleistung_w
+<prefix>_entlade_prio
+<prefix>_soc_ziel_prozent
+<prefix>_soc_min_prozent
+<prefix>_betriebsart
 ```
 
 `lade_max_w` und `entlade_max_w` gehören **nicht** mehr dazu und werden ignoriert: der Energy Pilot
 darf physische Grenzen des Wechselrichters nicht überschreiben.
 
-Für alle übrigen gelten der [Commit-Vertrag und der Fallback auf die HA-Helfer](global.md#energy-pilot-vertrag).
+Für alle übrigen gelten die Gültigkeitsprüfung und der [Fallback auf die HA-Helfer](global.md#energy-pilot-vertrag).
 Die technische Freigabe und gültige Messwerte bleiben harte Gates.
 
 ## Global zusätzlich erforderlich

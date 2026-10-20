@@ -8,6 +8,18 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Geändert — 20.10.2026 (Energy Pilot und Wallbox über je eine Schnittstelle, Version 4.0.0)
+
+- Die Vorschläge des Energy Pilot liest das HEMS jetzt aus dessen Sensor
+  „Energy-Pilot-Schnittstelle“ (`sensor.energy_pilot_schnittstelle`). Die bisherigen Einzelsensoren
+  je Gerät und `sensor.ep_plan_commit` werden nicht mehr gelesen (D-070). **Energy Pilot und HEMS
+  müssen zusammen aktualisiert werden** — sonst wirken keine Vorschläge, und das HEMS nimmt die
+  eigenen Einstellungen.
+- Die Seite „Energy Pilot → Vorschläge“ zeigt die Vorschläge aus der neuen Schnittstelle.
+- Neu: Meldet die Wallbox-Integration eine Wallbox als gesperrt (nicht erreichbar, Gerätefehler,
+  kein Fahrzeug verbunden), nimmt das HEMS sie aus der Verteilung, schreibt 0 A und gibt den
+  Überschuss an den nächsten Verbraucher. Die Statuskarte nennt den Grund.
+
 ### Geändert — 20.10.2026 (eine Schnittstelle je Einheit, Version 3.0.0)
 
 - Das HEMS veröffentlicht jetzt genau einen Sensor für die Speicher- und Wallbox-Integrationen:
