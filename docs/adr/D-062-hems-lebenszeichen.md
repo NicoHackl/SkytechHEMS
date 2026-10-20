@@ -12,7 +12,8 @@ erneut, weil sonst `last_changed` und damit Hoch-/Runter-Regelzeit zerstört wü
 ## Entscheidung
 
 - `app/status_publisher.py` veröffentlicht nach jedem durchlaufenen Zyklus
-  `sensor.skytech_hems_status`; Felder und Auswertung legt der gemeinsame Vertrag fest
+  `sensor.skytech_hems_status` (seit [D-069](D-069-eine-schnittstelle-je-einheit.md): Attribut
+  `zyklus_zaehler` in `sensor.hems_schnittstelle`); Felder und Auswertung legt der gemeinsame Vertrag fest
   (`contract/contract_hems_wallbox_provider/`, `contract/contract_hems_battery_provider/`).
 - Der Zähler ändert sich bei jeder Veröffentlichung, auch nach einem fehlgeschlagenen Schreiben.
   Provider werten nur die Änderung mit ihrer eigenen Uhr aus.

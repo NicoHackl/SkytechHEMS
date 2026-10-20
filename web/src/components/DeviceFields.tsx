@@ -182,7 +182,6 @@ export function DeviceFieldsBinary({ device, patch, entities, error }: Props) {
 
 export function DeviceFieldsBattery({ device, patch, entities, supported, error }: PropsMitSupported) {
   const signiert = Boolean(device.power_entity)
-  const ueberProvider = Boolean(device.provider_entity)
 
   return (
     <>
@@ -190,36 +189,18 @@ export function DeviceFieldsBattery({ device, patch, entities, supported, error 
         <div className="card-head"><h2>Messwerte</h2></div>
         <div className="card-body form-grid">
           <EntityField
-            label="Schnittstelle zum Speicher" wide
-            value={device.provider_entity ?? ''} entities={entities} domains={['sensor']}
-            error={error('provider_entity')}
-            hint="Sensor „HEMS-Schnittstelle“ der Speicher-Integration. Liefert Ladezustand, Leistung und ob der Speicher gerade laden oder entladen darf."
-            onChange={(value) => patch({ provider_entity: value })}
-          />
-          {ueberProvider ? (
-            <div className="wide">
-              <p className="hint-box">
-                Ladezustand und Leistung kommen aus der Schnittstelle. Die Felder darunter werden
-                für die Regelung <b>nicht</b> gebraucht; ein Ladezustand-Sensor hilft aber weiter
-                der Energiefluss-Karte und der Datenerhebung.
-              </p>
-            </div>
-          ) : null}
-          <EntityField
-            label="Ladezustand (SoC)" required={!ueberProvider} wide
+            label="Ladezustand (SoC)" required wide
             value={device.soc_entity ?? ''} entities={entities} domains={['sensor']}
             error={error('soc_entity')} hint="In Prozent."
             onChange={(value) => patch({ soc_entity: value })}
           />
-          {ueberProvider ? null : (
-            <div className="wide">
-              <p className="hint-box">
-                Genau <b>eine</b> Ist-Leistungsvariante ausfüllen: entweder zwei vorzeichenlose
-                Sensoren für Laden und Entladen oder einen signierten Sensor. Beides zugleich ist
-                ungültig.
-              </p>
-            </div>
-          )}
+          <div className="wide">
+            <p className="hint-box">
+              Genau <b>eine</b> Ist-Leistungsvariante ausfüllen: entweder zwei vorzeichenlose
+              Sensoren für Laden und Entladen oder einen signierten Sensor. Beides zugleich ist
+              ungültig.
+            </p>
+          </div>
           <EntityField
             label="Ist-Ladeleistung" value={device.charge_power_entity ?? ''}
             entities={entities} domains={['sensor']} error={error('charge_power_entity')}

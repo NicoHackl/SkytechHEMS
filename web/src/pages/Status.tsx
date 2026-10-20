@@ -519,7 +519,7 @@ const BLOCK_LABELS: Record<string, string> = {
   geraet_entladen_gesperrt: 'Speicher sperrt Entladen',
 }
 
-/* Warum der Speicher selbst eine Richtung sperrt (Schnittstellen-Sensor, D-068). */
+/* Warum die Speicher-Integration eine Richtung sperrt (sensor.battery_provider_schnittstelle, D-069). */
 const GERAET_SPERRGRUND_LABELS: Record<string, string> = {
   ladesperrzeit: 'Ladesperrzeit',
   entladesperrzeit: 'Entladesperrzeit',
@@ -527,6 +527,7 @@ const GERAET_SPERRGRUND_LABELS: Record<string, string> = {
   // Soll/Ist-Vergleich der Speicher-Integration (Provider D-018)
   keine_reaktion_laden: 'reagiert nicht auf Laden',
   keine_reaktion_entladen: 'reagiert nicht auf Entladen',
+  nicht_erreichbar: 'nicht erreichbar',
 }
 
 /** Was der Speicher selbst gerade sperrt, als Klartext – null, wenn er nichts sperrt. */

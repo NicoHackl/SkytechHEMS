@@ -8,6 +8,22 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Geändert — 20.10.2026 (eine Schnittstelle je Einheit, Version 3.0.0)
+
+- Das HEMS veröffentlicht jetzt genau einen Sensor für die Speicher- und Wallbox-Integrationen:
+  **„HEMS-Schnittstelle“** (`sensor.hems_schnittstelle`). Er enthält das Lebenszeichen und je
+  Speicher die gemessene Lade- und Entladeleistung. Der bisherige Sensor
+  `sensor.skytech_hems_status` entfällt (D-069).
+- Ob ein Speicher laden oder entladen darf, liest das HEMS jetzt aus dem einen Sensor der
+  Speicher-Integration („Battery-Provider-Schnittstelle“). Das Feld „Schnittstelle zum Speicher“
+  im Geräteformular entfällt; Ladezustand und Leistung kommen wieder aus den eingetragenen
+  Sensoren.
+- Die Statuskarte zeigt „Speicher: sperrt … (nicht erreichbar)“, wenn die Speicher-Integration den
+  Speicher nicht erreicht.
+- **Speicher- und Wallbox-Integration müssen zusammen mit dieser Version aktualisiert werden** —
+  sonst sehen sie kein Lebenszeichen und halten die Geräte gestoppt.
+- Empfehlung: `sensor.hems_schnittstelle` im Recorder ausschließen; er ändert sich jeden Zyklus.
+
 ### Geändert — 19.10.2026 (Speicher reagiert nicht)
 
 - Die Statuskarte eines Speichers zeigt jetzt auch, wenn die Speicher-Integration erkannt hat,

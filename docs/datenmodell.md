@@ -271,9 +271,8 @@ nur der Hausanteil), `verbraucher_anteil_w` (Überbrückung, D-060), `schutz_w`,
 `lade_limit_gueltig`, `entlade_limit_gueltig`, `umschaltsperre_rest_s`, `lade_blockiert_grund`,
 `entlade_blockiert_grund`, `blockiert_grund`, `ladestufen` (Liste `{n, aktiv, soc_prozent, max_w,
 greift}`), `ladestufe_aktiv`, `ladestufe_max_w`, `ladestufen_abbruch` (`{stufe, entity, state}` oder
-`null`), `provider_entity`, `provider_zustand`, `geraet_laden_freigegeben`,
-`geraet_entladen_freigegeben`, `geraet_sperrgruende` (Schnittstellen-Sensor, D-068; ohne ihn
-`null`/`true`/`true`/`[]`). Dazu `energie_kwh`, sofern `capacity_kwh > 0`
+`null`), `geraet_laden_freigegeben`, `geraet_entladen_freigegeben`, `geraet_sperrgruende`
+(Freigaben aus `sensor.battery_provider_schnittstelle`, D-069; ohne Provider `true`/`true`/`[]`). Dazu `energie_kwh`, sofern `capacity_kwh > 0`
 konfiguriert ist. `soc_reserve_prozent` ist **entfallen**.
 
 Fallstricke, die schon Fehler verursacht haben:

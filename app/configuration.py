@@ -485,9 +485,6 @@ def _normalize_device(raw: Dict[str, Any]) -> Dict[str, Any]:
     elif cls == "battery":
         device.update({
             "soc_entity": _as_text(raw.get("soc_entity")),
-            # Schnittstellen-Sensor des Battery-Providers (D-068). Gesetzt ersetzt er
-            # soc_entity und die Leistungsvarianten für die Regelung.
-            "provider_entity": _as_text(raw.get("provider_entity")),
             "charge_power_entity": _as_text(raw.get("charge_power_entity")),
             "discharge_power_entity": _as_text(raw.get("discharge_power_entity")),
             "power_entity": _as_text(raw.get("power_entity")),
@@ -941,26 +938,6 @@ def _validate_binary(device: Dict[str, Any], fail) -> None:
             text="Endliche Zahl ab 0 Sekunden.")
 
 
-def _validate_battery_provider(device: Dict[str, Any], fail) -> None:
-    """D-068: Der Schnittstellen-Sensor liefert SoC und Ist-Leistung.
-
-    Die Einzelfelder sind dann keine Pflicht und wirken nicht auf die Regelung.
-    Gesetzt dürfen sie bleiben (Data Insight, Flow-Card), müssen aber formal stimmen.
-    """
-    value = device["provider_entity"]
-    if not _ENTITY_RE.match(value) or not value.startswith("sensor."):
-        fail("provider_entity",
-             "Sensor-Entität erwartet, z. B. sensor.speicher_hems_schnittstelle.")
-    for key in ("soc_entity", "power_entity", "charge_power_entity",
-                "discharge_power_entity"):
-        _optional_entity(device, key, fail)
-    if device["power_entity"] and (device["charge_power_entity"]
-                                   or device["discharge_power_entity"]):
-        fail("power_entity",
-             "Entweder ein signierter Sensor oder das Paar aus Lade- und "
-             "Entladeleistung – nicht beides.")
-
-
 def _validate_battery_sensors(device: Dict[str, Any], fail) -> None:
     """Ohne Schnittstellen-Sensor: SoC-Sensor und genau eine Leistungsvariante."""
     _require_entity(device, "soc_entity", fail)
@@ -988,10 +965,7 @@ def _validate_battery(device: Dict[str, Any], fail) -> None:
         _number(device, key, fail, minimum=0.0,
                 text="Pflichtfeld: endliche Zahl ab 0 W.")
 
-    if device.get("provider_entity"):
-        _validate_battery_provider(device, fail)
-    else:
-        _validate_battery_sensors(device, fail)
+    _validate_battery_sensors(device, fail)
 
     capacity = _as_float(device.get("capacity_kwh"), None)
     if capacity is None or not math.isfinite(capacity) or capacity < 0:

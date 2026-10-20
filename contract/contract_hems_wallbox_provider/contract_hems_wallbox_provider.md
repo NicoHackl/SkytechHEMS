@@ -1,10 +1,10 @@
 # Vertrag: SkytechHEMS ↔ Skytech HEMS Wallbox Provider
 
-**Version:** 1.1
+**Version:** 2.0
 
 **Status:** V1 in beiden Projekten implementiert; Hardware-Abnahme des Providers offen; einzelne Punkte sind je Abschnitt gekennzeichnet
 
-**Stand:** 07.10.2026
+**Stand:** 20.10.2026
 
 **Gültig ab:** Implementierung des ersten Providers `go-e Charger Gemini 11 kW`
 
@@ -147,27 +147,29 @@ Status: **Implementiert, Hardware offen**.
 
 ## HEMS-Lebenszeichen
 
-Status: HEMS-Seite **implementiert** (SkytechHEMS, D-062); Auswertung im Provider
-**implementiert, Hardware offen** (Wallbox-Provider D-004).
+Status: HEMS-Seite **implementiert** (SkytechHEMS, D-062, seit 2.0 D-069); Auswertung im Provider
+**implementiert, Hardware offen** (Wallbox-Provider D-004, seit 2.0 D-006).
 Entität, Attribute und Frisch-Regel
 sind im Vertrag HEMS ↔ Battery-Provider identisch; nur die Reaktion bei nicht frischem
 Lebenszeichen ist gerätespezifisch.
 
 Ein unverändert bleibender Sollwert ist normaler Betrieb. Ein HEMS-Ausfall ist deshalb nicht am
-Alter eines Sollwerthelfers erkennbar. Das HEMS veröffentlicht stattdessen in jedem Zyklus eine
-eigene Statusentität:
+Alter eines Sollwerthelfers erkennbar. Das HEMS trägt das Lebenszeichen deshalb in seiner
+Schnittstellen-Entität, die es in jedem Zyklus veröffentlicht (Grundsatz: jede Einheit
+veröffentlicht genau eine `sensor.<einheit>_schnittstelle`, siehe `contract/README.md`;
+SkytechHEMS D-069). Bis Version 1.1 war es `sensor.skytech_hems_status`; diese Entität entfällt.
 
 ```
-POST {HA_URL}/api/states/sensor.skytech_hems_status
+POST {HA_URL}/api/states/sensor.hems_schnittstelle
 ```
 
 | Feld | Typ | Bedeutung |
 |---|---|---|
-| `state` | Zahl als Text | Zyklus-Zähler; wird in jedem Zyklus verändert (Überlauf erlaubt). |
-| `attributes.zyklus_zaehler` | Ganzzahl | Gleicher Wert wie `state`. |
+| `state` | Text | Präfixe der HEMS-Speicher, durch Komma getrennt; für die Wallbox ohne Bedeutung, ändert sich nicht je Zyklus und ist **kein** Lebenszeichen. Leer ohne Speicher. |
+| `attributes.zyklus_zaehler` | Ganzzahl | Zyklus-Zähler; wird in jedem Zyklus verändert (Überlauf erlaubt). |
 | `attributes.zyklus_intervall_s` | Zahl > 0 | Aktuell konfigurierte Zykluslänge des HEMS in Sekunden. |
 | `attributes.erzeugt_am` | Text | `TT.MM.JJJJ hh:mm:ss`, Berliner Zeit; nur Anzeige, nicht zur Auswertung. |
-| `attributes.vertrag_version` | Ganzzahl | `1`. Unbekannte zusätzliche Attribute ignoriert der Provider. |
+| `attributes.vertrag_version` | Ganzzahl | `2`. Unbekannte zusätzliche Attribute (z. B. Istwerte der Speicher) ignoriert der Provider. |
 
 Das HEMS aktualisiert die Entität in jedem Zyklus, auch bei deaktivierter PV-Regelung. Wie bei der
 Flow-Card-Entität überlebt ein per `POST /api/states` angelegter Sensor keinen HA-Neustart; sein
@@ -181,7 +183,8 @@ Fehlen bedeutet "kein frischer Zyklus".
   `hems_timeout_faktor × zyklus_intervall_s` zurückliegt. `hems_timeout_faktor` ist eine
   Provider-Option (Standard `3`, zulässig `2..10`). Fehlt `zyklus_intervall_s` oder ist ungültig,
   gilt ein fester Wert von `90 s`.
-- Ist die Entität nicht vorhanden, `unknown` oder `unavailable`, ist das Lebenszeichen nicht frisch.
+- Ist die Entität nicht vorhanden, `unknown` oder `unavailable`, oder fehlt `zyklus_zaehler`, ist
+  das Lebenszeichen nicht frisch. Ein leerer State ist gültig.
 - **Nicht frisch:** Der Provider wendet **keinen** positiven Sollwert an und setzt die Wallbox auf
   Stopp (siehe Abschnitt Befehlsausführung). Sobald ein frisches Lebenszeichen vorliegt, wird der
   aktuelle Schnappschuss automatisch angewendet.
@@ -307,7 +310,7 @@ die erkannte RFID-Karte als HA-Ereignis veröffentlichen; Änderungen daran sind
 | Freigabe an der realen Wallbox | indirekt durch Sollwert | übersetzt und bestätigt |
 | RFID, Nutzerverwaltung, Scheduler, Tarif- und PV-Funktion der Hersteller-App | konfiguriert nicht | verändert in V1 nicht |
 | Notabschaltung | schreibt den HEMS-Sollwert auf `0 A` | setzt `0 A` bei Betriebsart `HEMS` sicher um; bei `manuell` nicht (Bekannte Grenze) |
-| HEMS-Lebenszeichen | veröffentlicht `sensor.skytech_hems_status` je Zyklus (implementiert) | wertet es aus und stoppt bei Ausbleiben (implementiert, Hardware offen) |
+| HEMS-Lebenszeichen | veröffentlicht `sensor.hems_schnittstelle` je Zyklus (implementiert) | wertet es aus und stoppt bei Ausbleiben (implementiert, Hardware offen) |
 | Ungültige Istleistung des Providers | setzt den Sollwert auf `0 A` (implementiert, siehe unten) | veröffentlicht `unavailable` |
 
 V1 setzt voraus, dass keine konkurrierende herstellereigene Überschuss-, Zeitplan-, OCPP- oder
@@ -335,6 +338,11 @@ Ausgabehelfer schreiben kann. Das gilt für die Geräteklasse `controllable` mit
 | Geräteidentität | Die Zuordnung `<hems_prefix>` ↔ Provider und die Eindeutigkeit der Provider-Instanzen pflegt der Anwender. |
 
 ## Kompatibilität und Änderungen
+
+Version `2.0` (20.10.2026) ist inkompatibel zu `1.1`: Das Lebenszeichen steht in
+`sensor.hems_schnittstelle` (Zähler im Attribut `zyklus_zaehler`), `sensor.skytech_hems_status`
+entfällt. HEMS (ab 3.0.0) und Wallbox-Provider müssen zusammen aktualisiert werden; ein Provider
+ohne passendes Lebenszeichen stoppt die Wallbox (sicherer Zustand).
 
 Die Version `1.1` ergänzt Betriebsart, Lebenszeichen, Phasenbetrieb und Statuskennzeichnung
 gegenüber `1.0`, die nur ein Entwurf ohne Implementierung war; es entsteht dadurch keine

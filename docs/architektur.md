@@ -76,7 +76,7 @@ Defizit und einer quittierpflichtigen Notabschaltung (D-059).
 | `app/ha_client.py` | Einzige Stelle mit HA-Zugriff: REST für Zustände und Dienste, dazu **eine** WebSocket-Abfrage für die Dashboardliste (D-049), Session-Verwaltung, Timeouts; meldet je Schreiboperation Erfolg oder bereinigten Fehler zurück | Fachlogik enthalten, einen Fehlschlag im Regelpfad verschlucken |
 | `app/ems/ops.py` | `WriteOp` (Operation samt verursachendem Gerät), `WriteResult`, `WriteTarget` | Selbst schreiben |
 | `app/flow_publisher.py` | Anzeigedaten der Power Flow Card (D-046) aus Optionen, Steuerschema und Zyklusstatus bauen und als zwei `sensor.*`-Entitäten veröffentlichen | Ein Gerät schalten, eine Ausnahme nach außen lassen, Home Assistant zusätzlich abfragen |
-| `app/status_publisher.py` | HEMS-Lebenszeichen `sensor.skytech_hems_status` (D-062) nach jedem durchlaufenen Zyklus veröffentlichen | Ein Gerät schalten, eine Ausnahme nach außen lassen |
+| `app/status_publisher.py` | Schnittstellen-Entität `sensor.hems_schnittstelle` (D-069) nach jedem durchlaufenen Zyklus veröffentlichen: Lebenszeichen (D-062) und Istwerte je Speicher | Ein Gerät schalten, eine Ausnahme nach außen lassen |
 | `app/tariff/price_source.py`, `app/tariff/pv_source.py` | Preiskurve und PV-Prognose aus dem Schnappschuss lesen und prüfen (D-065) | HA selbst ansprechen, einen Ersatzwert erfinden |
 | `app/tariff/service.py` | Preis- und Prognosemodul: Auswertung im eigenen Takt (60 s) auf dem Schnappschuss des Regelzyklus, Statusobjekt für `api/tariff/status` | Den Regelzyklus blockieren oder seinen Schreib-Lock nehmen, ein Gerät schalten |
 | `app/tariff_publisher.py` | Anzeige-Sensoren `sensor.ems_dyn_*` (Preis, PV-Prognose, Verbrauchsprognose, Reichweite, Preisfenster, Netzladen), nur bei Änderung | Ein Gerät schalten, eine Ausnahme nach außen lassen |
@@ -284,8 +284,8 @@ Zusagen, auf die sich der gesamte Code verlässt. Wer eine davon bricht, bricht 
    Home Assistant. Ausnahme sind die Zielzeilen der Notabschaltung (D-059): Sie schreiben
    ausdrücklich konfigurierte Fremd-Entitäten, um Geräte in ihre Automatik zurückzuschicken. Darüber hinaus veröffentlicht das Add-on reine Anzeigedaten als eigene
    `sensor.*`-Entitäten, die kein Gerät schalten und in keiner Regelentscheidung vorkommen
-   (D-046, D-057, D-065), sowie das Lebenszeichen `sensor.skytech_hems_status` für die Provider
-   (D-062). Der Regelpfad selbst bleibt davon unberührt.
+   (D-046, D-057, D-065), sowie die Schnittstellen-Entität `sensor.hems_schnittstelle` (Lebenszeichen und
+   Speicher-Istwerte) für die Provider (D-062, D-069). Der Regelpfad selbst bleibt davon unberührt.
 5. **Ein Zyklusfehler schaltet nichts.** Schlägt der Zyklus fehl, bleibt der letzte Sollwert
    stehen; die Anlage fällt nicht in einen undefinierten Zustand.
 6. **Ein Speicher lädt und entlädt nie gleichzeitig.** Sein einzelner signierter Sollwert und die

@@ -2144,35 +2144,15 @@ def test_watt_geraet_ohne_istleistung_bleibt_unveraendert():
 
 
 # ---------------------------------------------------------------------------
-# Schnittstellen-Sensor des Battery-Providers (D-068)
+# Freigaben aus sensor.battery_provider_schnittstelle (D-069)
 # ---------------------------------------------------------------------------
 
-def _provider_battery_cfg(name, **kw):
-    cfg = _battery_cfg(name, **kw)
-    cfg.update({"provider_entity": f"sensor.{name}_hems_schnittstelle", "soc_entity": "",
-                "charge_power_entity": "", "discharge_power_entity": ""})
-    return cfg
-
-
-def _provider_attrs(*, soc=14, entladen=True, laden=True):
-    return {
-        "schnittstelle_version": 1,
-        "messung_ok": True,
-        "soc_prozent": soc,
-        "ist_ladeleistung_w": 0,
-        "ist_entladeleistung_w": 0,
-        "laden_freigegeben": laden,
-        "entladen_freigegeben": entladen,
-        "sperrgruende": [] if entladen else ["geraet_entladen_gesperrt"],
-    }
-
-
 @pytest.mark.parametrize(("entladen", "erwartet_sp1", "erwartet_sp2"), [
-    (True, -2256, 0),     # Gerät gibt frei: der Speicher mit Priorität 1 deckt allein
-    (False, 0, -2256),    # Vorfall 18.10.2026: Gerät sperrt, der nächste übernimmt
+    (True, -2256, 0),     # Speicher gibt frei: der mit Priorität 1 deckt allein
+    (False, 0, -2256),    # Vorfall 18.10.2026: Speicher sperrt, der nächste übernimmt
 ])
 def test_geraetesperre_gibt_defizit_an_naechsten_speicher(entladen, erwartet_sp1, erwartet_sp2):
-    cfg = [_provider_battery_cfg("sp1", entlade_limit=2500), _battery_cfg("sp2")]
+    cfg = [_battery_cfg("sp1", entlade_limit=2500), _battery_cfg("sp2")]
     ctrl = EMSController(
         cfg,
         residual_power_entity="sensor.ueberschuss",
@@ -2182,13 +2162,19 @@ def test_geraetesperre_gibt_defizit_an_naechsten_speicher(entladen, erwartet_sp1
         **_global(),
         **_battery("sp1", entlade_prio=1),
         **_battery("sp2", entlade_prio=10),
-        "sensor.sp1_hems_schnittstelle": "bereit" if entladen else "entladen_gesperrt",
+        "sensor.battery_provider_schnittstelle": "sp1,sp2",
         "sensor.ueberschuss": 0,
         "sensor.hausleistungsbilanz": -2256,
         "input_number.ems_ac_speicher_entlade_abschlag_w": 0,
     }
+    attrs = {
+        "sp1_ladefreigabe": True, "sp1_entladefreigabe": entladen,
+        "sp1_ladesperrgrund": None,
+        "sp1_entladesperrgrund": None if entladen else "keine_reaktion_entladen",
+        "sp2_ladefreigabe": True, "sp2_entladefreigabe": True,
+    }
     res = ctrl.run_cycle(make_states(
-        states, attributes={"sensor.sp1_hems_schnittstelle": _provider_attrs(entladen=entladen)}))
+        states, attributes={"sensor.battery_provider_schnittstelle": attrs}))
 
     v1 = _op_for(res["write_ops"], "input_number.ems_sp1_anforderung_leistung_w")
     v2 = _op_for(res["write_ops"], "input_number.ems_sp2_anforderung_leistung_w")
@@ -2196,3 +2182,24 @@ def test_geraetesperre_gibt_defizit_an_naechsten_speicher(entladen, erwartet_sp1
     assert (v2[2]["value"] if v2 else 0) == pytest.approx(erwartet_sp2)
     if not entladen:
         assert _dev(res, "sp1")["entlade_blockiert_grund"] == "geraet_entladen_gesperrt"
+
+
+def test_battery_interface_values_fuer_hems_schnittstelle():
+    """D-069: Präfix und Istwerte je Speicher; ohne gültige Messung keine Istwerte."""
+    ctrl = EMSController(
+        [_battery_cfg("sp1"), _battery_cfg("sp2")],
+        residual_power_entity="sensor.ueberschuss",
+        battery_residual_power_entity="sensor.hausleistungsbilanz",
+    )
+    states = {
+        **_global(),
+        **_battery("sp1", lade_ist=420),
+        **_battery("sp2", entlade_ist="unavailable"),
+        "sensor.ueberschuss": 0,
+        "sensor.hausleistungsbilanz": 0,
+        "input_number.ems_ac_speicher_entlade_abschlag_w": 0,
+    }
+    ctrl.run_cycle(make_states(states))
+    assert ctrl.battery_interface_values() == [("sp1", 420.0, 0.0), ("sp2", None, None)]
+    assert ctrl.battery_interface_values(with_actuals=False) == [
+        ("sp1", None, None), ("sp2", None, None)]
