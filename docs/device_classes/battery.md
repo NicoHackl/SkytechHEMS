@@ -13,8 +13,7 @@ Zusätzlich zu den hier beschriebenen Feldern und Entitäten gelten die
 
 | Feld | Pflicht | Default | Funktion beziehungsweise zugehörige Entität |
 |---|---:|---|---|
-| `provider_entity` | Variante C | – | Schnittstellen-Sensor des Battery-Providers (`sensor.<provider>_hems_schnittstelle`, D-068). Liefert SoC, Ist-Leistung und die Lade-/Entladefreigabe des Geräts; ersetzt dann `soc_entity` und Variante A/B für die Regelung |
-| `soc_entity` | ja, außer mit `provider_entity` | – | Vollständige Entity-ID des Ladezustandssensors in Prozent |
+| `soc_entity` | ja | – | Vollständige Entity-ID des Ladezustandssensors in Prozent |
 | `available_charge_power_w` | ja | – | Direkt konfigurierte verfügbare **Ladeleistung** in Watt; `0` sperrt Laden |
 | `available_discharge_power_w` | ja | – | Direkt konfigurierte verfügbare **Entladeleistung** in Watt; `0` sperrt Entladen |
 | `charge_power_entity` | Variante A | – | Ist-Ladeleistung in W, immer ≥ `0` |
@@ -32,9 +31,6 @@ Es muss **genau eine** Leistungssensor-Variante vollständig konfiguriert sein:
 
 - **Variante A:** `charge_power_entity` **und** `discharge_power_entity`
 - **Variante B:** `power_entity`, dazu passend `power_sign`
-- **Variante C:** `provider_entity` (siehe [Schnittstellen-Sensor](#schnittstellen-sensor-des-battery-providers-d-068)).
-  Dann sind `soc_entity` und Variante A/B keine Pflicht. Gesetzt dürfen sie bleiben: Data Insight
-  (`tariff_*`) und die Flow-Card lesen `soc_entity` weiter, die Regelung nicht.
 
 Beide Varianten gleichzeitig sind ungültig — welche gilt, wäre nicht mehr eindeutig. Fehlen
 `soc_entity`, eine vollständige Leistungsvariante oder einer der beiden `available_*_w`-Werte,
@@ -195,35 +191,37 @@ Zustandsänderung auf. Per `POST /api/states` erzeugte Entitäten überleben kei
 jeder Zyklus schreibt, ist der Sensor spätestens ein Regelintervall später wieder da. Beispiel
 Präfix `e3dc_speicher`: `sensor.ems_e3dc_speicher_lade_limit_w`.
 
-## Schnittstellen-Sensor des Battery-Providers (D-068)
+## Freigaben des Battery-Providers (D-069)
 
-Mit `provider_entity` liest das HEMS je Zyklus den Schnittstellen-Sensor. Attribute, Zustände und
-Regeln stehen verbindlich im
-[Vertrag](../../contract/contract_hems_battery_provider/contract_hems_battery_provider.md#schnittstellen-sensor).
-Das HEMS nutzt daraus:
+Jeder Speicher liest zusätzlich die Freigaben aus der Schnittstellen-Entität des
+Battery-Providers, ohne Konfiguration über sein `entity_prefix`. Verbindlich:
+[Vertrag](../../contract/contract_hems_battery_provider/contract_hems_battery_provider.md#provider--hems-sensorbattery_provider_schnittstelle).
 
-| Attribut | Wirkung im HEMS |
+| Attribut in `sensor.battery_provider_schnittstelle` | Wirkung im HEMS |
 |---|---|
-| `soc_prozent` | SoC; fehlt er oder ist er ungültig, Sperrgrund `sensor_ungueltig` |
-| `ist_ladeleistung_w`, `ist_entladeleistung_w` | Ist-Leistung; beide nötig, sonst `sensor_ungueltig` |
-| `laden_freigegeben` | `false` sperrt den Ladepfad, Sperrgrund `geraet_laden_gesperrt` |
-| `entladen_freigegeben` | `false` sperrt den Entladepfad, Sperrgrund `geraet_entladen_gesperrt`; die Entladekapazität ist `0`, und das Hausdefizit geht an den nächsten Speicher nach `entlade_prioritat` |
-| `sperrgruende` | nur Anzeige in der Statuskarte |
+| `<entity_prefix>_ladefreigabe` | `false` sperrt den Ladepfad, Sperrgrund `geraet_laden_gesperrt` |
+| `<entity_prefix>_entladefreigabe` | `false` sperrt den Entladepfad, Sperrgrund `geraet_entladen_gesperrt`; die Entladekapazität ist `0`, das Hausdefizit geht an den nächsten Speicher nach `entlade_prioritat` |
+| `<entity_prefix>_ladesperrgrund`, `<entity_prefix>_entladesperrgrund` | nur Anzeige in der Statuskarte (Statusfeld `geraet_sperrgruende`) |
 
-- Zustand `getrennt`, `unavailable`, `unknown`, ein fehlender Sensor, ein unbekannter Zustand oder
-  eine `schnittstelle_version` ungleich `1` machen SoC und Leistung ungültig: `0 W` und `standby`.
-- Eine Freigabe `null`, ein fehlendes Attribut oder ein Nicht-Bool-Wert gilt als **erlaubt**
-  (Entscheidung des Users, 18.10.2026): keine Information ist keine Sperre.
-- Die Gerätefreigaben wirken **zusätzlich** zu `laden_erlaubt`/`entladen_erlaubt`, sie ersetzen
-  die HA-Helfer nicht.
-- Statusfelder: `provider_entity`, `provider_zustand`, `geraet_laden_freigegeben`,
-  `geraet_entladen_freigegeben`, `geraet_sperrgruende`.
-- Beim Marstek meldet das Gerät selbst keine Entladesperre (Befund 19.10.2026). Die Freigaben
-  kommen dort aus dem Soll/Ist-Vergleich des Providers (Provider D-018): Setzt der Speicher einen
-  Sollwert über die Erkennungszeit (Default 30 s) nicht um, meldet der Provider die Richtung als
-  gesperrt (`keine_reaktion_laden`/`keine_reaktion_entladen`), bis sich der SoC um 1 % bewegt hat.
-  Das HEMS behandelt das wie jede Gerätesperre; die Statuskarte zeigt „reagiert nicht auf
-  Entladen“.
+- Fehlt die Entität oder das Attribut, oder ist der Wert kein Bool, gilt die Richtung als
+  **erlaubt**: keine Information ist keine Sperre. Ein nicht erreichbarer Speicher wird vom
+  Provider selbst als gesperrt gemeldet (`nicht_erreichbar`).
+- Beim Marstek kommen die Freigaben aus dem Soll/Ist-Vergleich des Providers
+  (`keine_reaktion_laden`/`keine_reaktion_entladen`, Provider D-018/D-019); er rechnet mit den
+  Istwerten, die das HEMS in `sensor.hems_schnittstelle` veröffentlicht.
+- Die Freigaben wirken **zusätzlich** zu `laden_erlaubt`/`entladen_erlaubt`.
+- Statusfelder: `geraet_laden_freigegeben`, `geraet_entladen_freigegeben`, `geraet_sperrgruende`.
+- SoC und Ist-Leistung liest das HEMS weiterhin aus `soc_entity` und der Leistungsvariante. Das
+  Feld `provider_entity` (D-068) ist entfallen; steht es noch in der Konfiguration, wird es mit
+  einer Warnung im Log ignoriert.
+
+## Istwerte für die Provider (D-069)
+
+Nach jedem Zyklus schreibt das HEMS `sensor.hems_schnittstelle` (Lebenszeichen, D-062). Je Speicher
+stehen dort `<entity_prefix>_ladeleistung` und `<entity_prefix>_entladeleistung` in W, gemessen mit
+den konfigurierten Sensoren dieses Zyklus. Sind die Messwerte ungültig oder läuft die
+Notabschaltung, fehlen die beiden Attribute dieses Speichers. State ist die Liste aller
+Speicher-Präfixe, durch Komma getrennt.
 
 ## Externe, nur gelesene Entitäten
 
@@ -326,10 +324,9 @@ Die Option `speicher_in_residual_enthalten` betrifft weiterhin nur die Pool-Bere
 
 ## Pflicht für eine funktionsfähige Instanz
 
-- Add-on-Felder `name`, `class: battery`, `available_charge_power_w` und
+- Add-on-Felder `name`, `class: battery`, `soc_entity`, `available_charge_power_w` und
   `available_discharge_power_w`
-- entweder `provider_entity` oder `soc_entity` zusammen mit beiden Feldern
-  `charge_power_entity` und `discharge_power_entity` oder mit `power_entity`
+- entweder beide Felder `charge_power_entity` und `discharge_power_entity` oder `power_entity`
 - alle [gemeinsamen HA-Helfer](global.md#gemeinsame-ha-helfer)
 - beide Anforderungshelfer: negatives Minimum beim Sollwert, drei Optionen bei der Betriebsart
 - globale Hausleistungsbilanz (`battery_residual_power_entity`), Entlade-Abschlag und korrekt
@@ -362,19 +359,4 @@ devices:
     capacity_kwh: 12.8
     soc_max_hysteresis_percent: 2
     direction_switch_delay_s: 5
-```
-
-Mit Schnittstellen-Sensor des Battery-Providers (Variante C, D-068):
-
-```yaml
-devices:
-  - name: acspeicher1
-    label: "AC-Speicher"
-    class: battery
-    entity_prefix: acspeicher1
-    allowed_modes: "manuell,nur_heizen,nur_laden"
-    provider_entity: sensor.ac_speicher_1_hems_schnittstelle
-    soc_entity: sensor.ac_speicher_1_ladezustand   # optional, nur Flow-Card und Data Insight
-    available_charge_power_w: 2500
-    available_discharge_power_w: 2500
 ```

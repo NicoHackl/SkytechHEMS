@@ -42,7 +42,7 @@ import battery_publisher
 import flow_publisher
 from battery_latch import BATTERY_LATCH_FILENAME, BatteryLatchStore
 from flow_publisher import FlowPublisher
-from status_publisher import StatusPublisher
+from status_publisher import BatteryInterfaceValue, StatusPublisher
 from supervisor_client import SupervisorClient
 from tariff.analysis import analyse
 from tariff.insight_sync import InsightSync
@@ -495,6 +495,14 @@ class HEMSApp:
         # kurze Unterbrechung sähe sonst wie ein abgeschlossener Neustart aus.
         self.instance_id: str = uuid.uuid4().hex
         self._raw_options = _load_raw_options()
+        for raw_device in self._raw_options.get("devices") or []:
+            if isinstance(raw_device, dict) and raw_device.get("provider_entity"):
+                # D-069: Variante C entfällt; das Feld bleibt nur im Schema, damit
+                # eine gespeicherte Bestandsoption den Start nicht verhindert.
+                log.warning("Gerät '%s': provider_entity wird nicht mehr ausgewertet – "
+                            "Freigaben kommen aus sensor.battery_provider_schnittstelle, "
+                            "SoC und Leistung aus soc_entity und den Leistungssensoren.",
+                            raw_device.get("name", "?"))
         validated = validate_options(self._raw_options)
         options = validated.options
         self._options = options
@@ -670,8 +678,9 @@ class HEMSApp:
             self._last_states_at = time.monotonic()
             if await self._emergency_cycle(states):
                 # Auch während der Notabschaltung lebt das HEMS: die Provider
-                # setzen dann die vom HEMS genullten Helfer um.
-                await self._publish_heartbeat()
+                # setzen dann die vom HEMS genullten Helfer um. Gemessen wurde in
+                # diesem Zyklus nicht – deshalb ohne Istwerte.
+                await self._publish_heartbeat(with_actuals=False)
                 return
             st     = StateProxy(states, internal=self.internal_values.snapshot())
             result = self.ems.run_cycle(st)
@@ -719,12 +728,18 @@ class HEMSApp:
             self._last_error = str(exc)
             log.error("EMS cycle error: %s", exc, exc_info=True)
 
-    async def _publish_heartbeat(self) -> None:
-        """Lebenszeichen nur nach einem durchlaufenen Zyklus (D-062). Ein Zyklus,
-        der mit einer Ausnahme endet, veröffentlicht keins – die Provider stoppen
-        dann nach ihrer Frist."""
+    async def _publish_heartbeat(self, with_actuals: bool = True) -> None:
+        """sensor.hems_schnittstelle nur nach einem durchlaufenen Zyklus (D-062, D-069).
+
+        Ein Zyklus, der mit einer Ausnahme endet, veröffentlicht nichts – die
+        Provider stoppen dann nach ihrer Frist.
+        """
+        batteries = [BatteryInterfaceValue(prefix, lade, entlade)
+                     for prefix, lade, entlade
+                     in self.ems.battery_interface_values(with_actuals)]
         await self._heartbeat.publish(
-            self.ha, self.interval_s, datetime.datetime.now(BERLIN).strftime(DISPLAY_TIME_FORMAT))
+            self.ha, self.interval_s,
+            datetime.datetime.now(BERLIN).strftime(DISPLAY_TIME_FORMAT), batteries)
 
     async def _scheduler(self) -> None:
         log.info("EMS scheduler started (interval=%ds).", self.interval_s)

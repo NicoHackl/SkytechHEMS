@@ -19,10 +19,20 @@ und Entwürfe. Ein Plan oder eine Dokumentationsänderung allein implementiert k
 Schnittstelle. Lokale Dokumentation verlinkt den Vertrag, statt eine abweichende
 Beschreibung der gemeinsamen Felder zu führen.
 
+## Grundsatz: eine Schnittstellen-Entität je Einheit
+
+Seit 20.10.2026 (Entscheidung des Users) veröffentlicht jede Einheit — SkytechHEMS, jeder
+Provider — genau **eine** Entität `sensor.<einheit>_schnittstelle`, die alle Informationen für
+alle anderen Teilnehmer enthält (Werte als Attribute, je Gerät mit dessen Präfix vorne).
+Umgesetzt: `sensor.hems_schnittstelle` (Lebenszeichen, Istwerte der Speicher) und
+`sensor.battery_provider_schnittstelle` (Freigaben der Speicher). Sollwerte laufen weiter über die
+`input_*`-Ausgabehelfer. Offen: die Paare HEMS ↔ Energy-Pilot, HEMS ↔ Powerflow-Card und
+HEMS ↔ Data-Insight folgen in eigenen Arbeitspaketen.
+
 | Gegenstelle | Vertrag | Stand / Hinweise |
 |---|---|---|
 | Powerflow-Card | [kontrakt.md](contract_powerflow_card_hems/kontrakt.md) | Implementierter Kartenvertrag mit zugehörigen Plänen. |
 | Energy-Pilot | [contract_hems_energy_pilot.md](contract_hems_energy_pilot/contract_hems_energy_pilot.md) | Aktueller Austausch einschließlich dokumentierter Kompatibilitätsgrenzen. |
-| Battery-Provider | [contract_hems_battery_provider.md](contract_hems_battery_provider/contract_hems_battery_provider.md) | Aktueller Austausch einschließlich dokumentierter Betriebsgrenzen; HEMS-Lebenszeichen und Schnittstellen-Sensor mit Gerätefreigaben implementiert, beim Marstek per Soll/Ist-Vergleich des Providers; E3DC-Statusbits noch nicht negativ getestet (Version 1.3). |
-| Wallbox-Provider | [contract_hems_wallbox_provider.md](contract_hems_wallbox_provider/contract_hems_wallbox_provider.md) | Version 1.1; in beiden Projekten implementiert, Hardware-Abnahme des Providers offen. |
+| Battery-Provider | [contract_hems_battery_provider.md](contract_hems_battery_provider/contract_hems_battery_provider.md) | Aktueller Austausch einschließlich dokumentierter Betriebsgrenzen; Version 2.0: je Einheit eine Schnittstellen-Entität (`sensor.hems_schnittstelle`, `sensor.battery_provider_schnittstelle`); Marstek-Freigaben per Soll/Ist-Vergleich mit HEMS-Istwerten; E3DC-Statusbits noch nicht negativ getestet. |
+| Wallbox-Provider | [contract_hems_wallbox_provider.md](contract_hems_wallbox_provider/contract_hems_wallbox_provider.md) | Version 2.0 (Lebenszeichen aus `sensor.hems_schnittstelle`); in beiden Projekten implementiert, Hardware-Abnahme des Providers offen. |
 | Data-Insight | [contract_hems_data_insight.md](contract_hems_data_insight/contract_hems_data_insight.md) | Version 0.3: Datenhaltung für den dynamischen Strompreis (D-065), HEMS-Reihen je Minute, Netzanschluss und Energiezähler. In beiden Projekten implementiert (HEMS-Phasen P4 und P5). |

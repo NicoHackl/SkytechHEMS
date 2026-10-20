@@ -10,7 +10,7 @@ import datetime
 import logging
 import time
 from dataclasses import asdict
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from configuration import (
     DEFAULT_RESIDUAL_ENTITY,
@@ -129,7 +129,6 @@ def _build_devices(device_configs: List[dict]) -> List[Device]:
                 capacity_kwh=cfg["capacity_kwh"],
                 soc_max_hysteresis_percent=cfg["soc_max_hysteresis_percent"],
                 direction_switch_delay_s=cfg["direction_switch_delay_s"],
-                provider_entity=cfg.get("provider_entity") or None,
                 entity_prefix=prefix,
                 label=label,
             ))
@@ -226,6 +225,23 @@ class EMSController:
                  len(self._devices), self._residual_entity,
                  self._battery_residual_entity or "nicht konfiguriert",
                  self._speicher_in_residual, self._protected_minimum_scope)
+
+    def battery_interface_values(self, with_actuals: bool = True
+                                 ) -> List[Tuple[str, Optional[float], Optional[float]]]:
+        """Präfix und Ist-Lade-/Entladeleistung je Speicher für sensor.hems_schnittstelle (D-069).
+
+        Ohne gültige Messwerte – oder mit `with_actuals=False`, wenn in diesem
+        Zyklus nicht gemessen wurde (Notabschaltung) – sind beide Werte None.
+        """
+        values: List[Tuple[str, Optional[float], Optional[float]]] = []
+        for d in self._devices:
+            if not isinstance(d, BatteryDevice):
+                continue
+            if with_actuals and d.sensoren_gueltig:
+                values.append((d.entity_prefix, d.lade_ist_w, d.entlade_ist_w))
+            else:
+                values.append((d.entity_prefix, None, None))
+        return values
 
     def battery_latches(self) -> Dict[str, bool]:
         """Sperre am Ladedeckel je Speicher, zum Speichern unter /data (D-066)."""

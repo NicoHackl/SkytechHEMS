@@ -30,11 +30,9 @@ description: >-
   Add-on-Fallbacks power_w, on_reserve_w, min_runtime_s, min_offtime_s und
   off_delay_s. Optional on_delay_s (Einschaltverzögerung, Default 0).
 
-  Nur battery: entweder provider_entity (Schnittstellen-Sensor des
-  Battery-Providers, liefert SoC, Ist-Leistung und Gerätefreigaben) oder
-  soc_entity mit genau einer Ist-Leistungsvariante
+  Nur battery: soc_entity (Pflicht), genau eine Ist-Leistungsvariante
   (charge_power_entity zusammen mit discharge_power_entity ODER power_entity
-  mit power_sign), dazu die beiden verpflichtenden Wattwerte
+  mit power_sign), die beiden verpflichtenden Wattwerte
   available_charge_power_w und available_discharge_power_w,
   capacity_kwh (nur Anzeige) sowie soc_max_hysteresis_percent und
   direction_switch_delay_s.
@@ -65,7 +63,7 @@ description: >-
   Knoten eine Dashboard-Ansicht hinterlegen, auf die ein Klick springt, z. B.
   /dashboard-pv/pv. Leer heißt: der Klick öffnet wie bisher den
   More-Info-Dialog.
-version: "2.1.31"
+version: "3.0.0"
 slug: "skytech_hems"
 init: false
 arch:
@@ -316,7 +314,7 @@ schema:
       on_delay_s: float?
       power_actual_entity: str?
       soc_entity: str?
-      provider_entity: str?
+      provider_entity: str?  # seit D-069 ohne Wirkung, nur für Bestandsoptionen
       charge_power_entity: str?
       discharge_power_entity: str?
       tariff_in_house_load: bool?

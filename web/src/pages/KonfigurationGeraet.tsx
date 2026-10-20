@@ -41,7 +41,7 @@ export function neuesGeraet(klasse: DeviceClass, supported: ConfigSupported): Co
   }
   return {
     ...basis, ...defaults,
-    soc_entity: '', provider_entity: '', charge_power_entity: '', discharge_power_entity: '',
+    soc_entity: '', charge_power_entity: '', discharge_power_entity: '',
     power_entity: '', power_sign: 'positiv_laden',
     capacity_kwh: 0,
   }

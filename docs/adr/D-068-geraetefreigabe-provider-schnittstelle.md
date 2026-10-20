@@ -1,7 +1,7 @@
 # D-068: Speicher über den Schnittstellen-Sensor des Battery-Providers, mit Gerätefreigaben
 
 - **Datum:** 18.10.2026
-- **Status:** Aktiv
+- **Status:** Ersetzt durch [D-069](D-069-eine-schnittstelle-je-einheit.md) (20.10.2026)
 - **Betrifft:** [`app/ems/devices.py`](../../app/ems/devices.py) (`BatteryDevice`),
   [`app/ems/state.py`](../../app/ems/state.py), [`app/configuration.py`](../../app/configuration.py),
   [`app/ems/controller.py`](../../app/ems/controller.py), [`config.yaml`](../../config.yaml), `web/src/`,

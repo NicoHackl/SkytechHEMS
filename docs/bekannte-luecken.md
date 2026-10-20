@@ -156,16 +156,17 @@ Der Code ist gebaut und getestet; diese Fragen betreffen die **Inbetriebnahme am
 Anlass: Am 18.10.2026 von 09:01 bis 09:16 forderte das HEMS beim Marstek `acspeicher1` bis 2320 W
 Entladung an; der Provider sendete sie, der Speicher führte sie nicht aus (Shelly: rund 8 W
 Leerlauf). Das Defizit ging ins Netz, der E3DC (Entladepriorität 10) bekam 0 W. In den drei Tagen
-davor nur bei 12–15 % SoC nach Wiederaufladen vom Boden, ab 17 % entlud er wieder. Seit D-068 kann
-das HEMS die Gerätefreigaben über `provider_entity` lesen.
+davor nur bei 12–15 % SoC nach Wiederaufladen vom Boden, ab 17 % entlud er wieder. Seit D-069 liest
+das HEMS die Freigaben aus `sensor.battery_provider_schnittstelle`.
 
 | Grenze | Folge | Stand |
 |---|---|---|
-| Marstek `dischrg_flag` meldet die Verweigerung **nicht** (Test des Users am 19.10.2026 bei 12 % SoC) | Ohne weitere Maßnahme bliebe das Verhalten wie am 18.10.2026 | Gelöst im Provider: Soll/Ist-Vergleich (Provider D-018, Vertrag 1.3). Das HEMS braucht dafür `provider_entity` |
+| Marstek `dischrg_flag` meldet die Verweigerung **nicht** (Test des Users am 19.10.2026 bei 12 % SoC) | Ohne weitere Maßnahme bliebe das Verhalten wie am 18.10.2026 | Gelöst im Provider: Soll/Ist-Vergleich mit den HEMS-Istwerten aus `sensor.hems_schnittstelle` (Provider D-018/D-019, Vertrag 2.0) |
 | Bis zur Erkennung fließt Leistung aus dem Netz | Je Fehlversuch bis zur Erkennungszeit des Providers (Default 30 s); nach der Freigabe bei SoC +1 % sind weitere Fehlversuche möglich, solange das Gerät noch sperrt | Provider-Option je Speicher |
 | E3DC: kein Soll/Ist-Vergleich, Statusbits nicht negativ getestet | Eine Verweigerung ohne gesetztes Bit erkennt weder Provider noch HEMS | Offen, Entscheidung des Users |
-| Die Freigaben sind bis zu 15 s plus ein Poll-Intervall alt | Eine neue Sperre greift entsprechend später | Provider-Taktung, Vertrag 1.2 |
-| `device_controls_schema` (Energy Pilot) kennt `provider_entity` nicht | Der Energy Pilot sieht weiterhin nur `soc_entity`; ist es leer, fehlt ihm der SoC | `soc_entity` zusätzlich setzen |
+| Die Freigaben sind bis zu 15 s plus ein Poll-Intervall alt | Eine neue Sperre greift entsprechend später | Provider-Taktung, Vertrag 2.0 |
+| HEMS 3.0.0 und Battery-/Wallbox-Provider müssen zusammen aktualisiert werden | Ohne `sensor.hems_schnittstelle` sehen die Provider kein Lebenszeichen und halten Speicher bzw. Wallbox gestoppt | Vertrag Battery 2.0, Wallbox 2.0 |
+| `sensor.hems_schnittstelle` ändert sich jeden Zyklus und wird per REST geschrieben | Der Recorder speichert jede Änderung samt Attributen; `_unrecorded_attributes` greift für REST-Zustände nicht | Empfehlung: im Recorder ausschließen (`recorder: exclude: entities`) |
 
 ## Grenzen des dynamischen Strompreises (D-065)
 
