@@ -285,3 +285,17 @@ Implementierungsreferenzen:
 |---|---|
 | SkytechHEMS | `app/main.py`, `app/ems/devices.py`, `app/ems/state.py`, `app/internal_values.py` |
 | Skytech-Energy-Pilot | `app/energy_pilot/hems_client.py`, `devices.py`, `constraints.py`, `plan_schema.py`, `suggestion_publisher.py`, `control_mode.py`, `hems_status_collector.py`, `plan_feedback.py` (Dateien unter `app/energy_pilot/`) |
+
+## Additive Watt-Ladeziele — 21.10.2026
+
+HEMS ergänzt im Geräteschema `charging_backend` (leer, `evms`, `wallbox_provider`,
+`automation`). Ein nichtleerer Wert kennzeichnet ein Watt-Ladeziel. `class` bleibt
+`controllable`, `output_unit` ist `watt`; `actual_power_entity` ist dabei leer,
+weil HEMS die Messung aus der gewählten Schnittstellen-Entität liest. Der Gerätestatus
+enthält weiter `actual_w`; zusätzlich `charging_backend`, `charging_assignment_id`
+, `charging_interface` und `charging_measurement_valid`. Die bestehenden EP-Vorschlagsfelder bleiben unverändert.
+
+EP steuert weder EVMS noch Wallboxen direkt. Fahrzeugidentität, automatische Zielanlage,
+Abfahrtszeiten und Ladeziele sind damit nicht implementiert; ein direkter EVMS–EP-Vertrag
+wird erst bei geklärtem Bedarf ergänzt. EP darf neue Ladeziele nicht anhand einer
+fehlenden separaten Sensor-Entity als fehlendes Gerät interpretieren.

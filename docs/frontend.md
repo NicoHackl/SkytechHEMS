@@ -447,3 +447,11 @@ export default defineConfig({
 7. Die Designsprache war geklärt, bevor gebaut wurde — nicht geraten (eiserne Regel 10).
 8. Der Theme-Schalter ist erreichbar, und **jede neue Seite wurde in beiden Modi angesehen**.
    Ein Kontrastfehler fällt nur auf, wer hinschaut.
+
+## Wallbox-Ladeziele und EVMS (D-071)
+
+Das bestehende Formular für regelbare Geräte ergänzt „Wallbox-Anbindung“.
+Die Auswahl stammt aus `supported.charging_backends`. Neue Wege verwenden Watt,
+blenden separate Istsensor-/Ausgabeeinheit-Felder aus und zeigen das Rückmeldungszeitlimit.
+Beim Aktivieren müssen Leistungsgrenzen neu eingegeben werden; keine stillschweigende
+Übernahme von Amperewerten. [Fachliches Verhalten](device_classes/charging.md).

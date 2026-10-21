@@ -397,3 +397,12 @@ Implementierungsreferenzen:
 |---|---|
 | SkytechHEMS | `app/status_publisher.py`, `app/ems/devices.py` (`ControllableDevice`: Phasenwechsel, `istleistung_ungueltig`), `docs/device_classes/controllable.md` |
 | Skytech-HEMS-Wallbox-Provider | `custom_components/wallbox_provider/hems_bridge.py`, `heartbeat.py`, `adapters/goe_modbus.py`, `adapters/modbus_tcp.py`, `sensor.py`, `binary_sensor.py`, `switch.py`, `number.py`, `select.py`; `docs/hardware-abnahme.md` |
+
+## Vorbereitete Watt-Anbindung — 21.10.2026
+
+Der ergänzende [Watt-Vertrag](watt_contract.md) und das
+[Watt-Ladeprotokoll](charging_protocol.md) beschreiben die neue HEMS-Anbindung.
+HEMS ist vorbereitet, der Provider noch nicht. Der hier dokumentierte Ampere-Vertrag
+2.1 bleibt für Bestandsgeräte unverändert aktiv. RFID ist im neuen Zielbild eine
+externe EVMS-Zuordnung über die gemeinsame Schnittstellen-Entität; die ältere Idee
+eines einzelnen HA-Ereignisses oben ist dafür noch keine Implementierung.

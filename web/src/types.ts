@@ -47,6 +47,8 @@ export interface EntityDiagnostic {
 }
 
 export interface ControllableDevice extends DeviceBase, ForceStatus {
+  charging_backend?: string
+  charging_measurement_valid?: boolean
   type: 'controllable'
   /** Effektive, geklemmte Zwangsleistung in Watt; null, solange kein Zwang wirkt. */
   force_w: number | null
@@ -381,6 +383,8 @@ export interface ConfigDevice {
   /* controllable */
   actual_power_entity?: string
   output_unit?: 'watt' | 'ampere'
+  charging_backend?: '' | 'evms' | 'wallbox_provider' | 'automation'
+  charging_feedback_timeout_s?: number | null
   phases?: string
   phase_switch_delay_s?: number | null
   voltage_l1_entity?: string
@@ -602,6 +606,7 @@ export interface ConfigSupported {
   device_classes: DeviceClass[]
   log_levels: string[]
   output_units: string[]
+  charging_backends: string[]
   phases: string[]
   power_signs: string[]
   protected_minimum_scopes: string[]

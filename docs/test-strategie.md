@@ -182,3 +182,10 @@ Für die Oberfläche gibt es bewusst keine automatisierten Tests: Die Seiten ent
 Fachlogik, sie stellen `/api/status` dar. Abgesichert wird sie durch `tsc --noEmit` im Build und
 durch die Sichtprüfung aus [frontend.md](frontend.md) („Was ein Agent vor dem ersten Commit
 prüft").
+
+## Watt-Ladeziele (D-071)
+
+`tests/test_charging.py` prüft die drei Wege im vollständigen Controllerzyklus:
+Watt-Ausgabe, fehlende/falsche/veraltete Rückmeldung, Erstkontakt, Zuordnungswechsel,
+Minimum/Maximum trotz Totband, gesperrter Zwang sowie Budgetbestätigung bei Schreibfehler
+und Notabschaltung. Reale RFID-, Phasen- und Zählerprüfungen folgen nach Hardwarelieferung.

@@ -182,3 +182,12 @@ devices:
     maximum_step_change: 2
     minimum_step_change: 1
 ```
+
+## Neue Wallbox-Wege in Watt
+
+Seit D-071 kann ein regelbares Gerät ausdrücklich als Watt-Ladeziel konfiguriert
+werden: [Wallbox-Ladeziele](charging.md). Mit `charging_backend` gelten die dortigen
+strengeren Mess-/Freigaberegeln, und die Istleistung kommt aus der Gegenstellen-Schnittstelle.
+Die bisherigen Aussagen zu `actual_power_entity`, Ampere und fehlenden Freigaben
+oben gelten für Geräte **ohne** `charging_backend`. Der bisherige Provider bleibt
+bis zur koordinierten Umstellung am Ampere-Vertrag.

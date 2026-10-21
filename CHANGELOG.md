@@ -8,6 +8,15 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Hinzugefügt — 21.10.2026 (Watt-Ladeziele, Version 4.1.0)
+
+- Wallbox-Anbindung wählbar: EVMS, direkter Wallbox-Provider oder eigene HA-Automation.
+  Neue Wege verwenden Watt, prüfen aktuelle Rückmeldungen und binden Vorgaben an die
+  aktuelle Zuordnung. Ohne gültige Gegenstelle bleibt das Ladeziel gestoppt.
+- Bestehende Watt-/Ampere-Geräte bleiben unverändert; keine automatische Migration.
+- EVMS-Verträge und Integrationsplan vorbereitet. EVMS-Laufzeit, Providerumsetzung,
+  RFID und Data-Insight-Erweiterung sind noch nicht implementiert; Hardwareabnahme folgt.
+
 ### Geändert — 20.10.2026 (Energy Pilot und Wallbox über je eine Schnittstelle, Version 4.0.0)
 
 - Die Vorschläge des Energy Pilot liest das HEMS jetzt aus dessen Sensor

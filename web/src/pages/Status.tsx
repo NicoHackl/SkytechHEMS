@@ -352,8 +352,11 @@ const RUNTIME_LABELS: Record<string, string> = {
   schreibziel_nicht_verfuegbar: 'Schreibziel ist nicht verfügbar',
   schreibziel_ungueltig: 'Schreibziel ist falsch angelegt',
   schreiben_fehlgeschlagen: 'Letzter Schreibversuch fehlgeschlagen',
-  istleistung_ungueltig: 'Istleistung ungültig – Sollwert 0 A',
-  wallbox_gesperrt: 'Wallbox gesperrt – Sollwert 0 A',
+  laderueckmeldung_ungueltig: 'Laderückmeldung fehlt oder ist ungültig',
+  laderueckmeldung_veraltet: 'Warte auf aktuelle Laderückmeldung',
+  ladegrenzen_ungueltig: 'Keine nutzbare Ladeleistung verfügbar',
+  istleistung_ungueltig: 'Istleistung ungültig – Laden gestoppt',
+  wallbox_gesperrt: 'Wallbox gesperrt – Laden gestoppt',
 }
 
 /* Sperrgründe aus sensor.wallbox_provider_schnittstelle (D-070); Gerätefehler kommen als Fehlerart. */
@@ -436,7 +439,8 @@ function ControllableCard({ device, elapsed }: { device: ControllableDevice; ela
       <KeyValue label="Freigabe" value={device.eligible ? 'ja' : 'nein'} tone={device.eligible ? 'ok' : 'err'} />
       <ForceRow device={device} />
       <RuntimeRow device={device} />
-      <KeyValue label="Ist" value={fmtW(device.actual_w)} />
+      <KeyValue label="Ist" value={device.charging_backend && !device.charging_measurement_valid
+        ? '—' : fmtW(device.actual_w)} />
       <KeyValue label="Anforderung" value={currentLabel} />
       <KeyValue label="Zuteilung" value={fmtW(device.alloc_w)} />
       <KeyValue label="Schutz (effektiv)" value={fmtW(device.schutz_w)} tone="muted" />

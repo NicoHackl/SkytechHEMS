@@ -347,3 +347,11 @@ docker run --rm -p 8099:8099 -e HA_URL=… -e HA_TOKEN=… skytech-hems
 ```
 
 Konfiguration: [konfiguration.md](konfiguration.md).
+
+## Wallbox-Ladeziele und EVMS (D-071)
+
+HEMS behandelt ein Ladeziel als regelbaren Watt-Verbraucher. `ChargingDevice`
+verwendet die vorhandene Verteilung und ergänzt Prüfung von Rückmeldungen,
+Zuordnungskennung und dynamischen Grenzen. EVMS vermittelt Fahrzeug und Anschluss;
+Provider beziehungsweise Eigenautomation übernehmen Strom-/Phasenwahl.
+[Verhalten](device_classes/charging.md) · [Protokoll](../contract/contract_hems_evms/charging_protocol.md).

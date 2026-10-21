@@ -55,3 +55,22 @@ Dokumentierte Ausnahmen:
 | Battery-Provider | [contract_hems_battery_provider.md](contract_hems_battery_provider/contract_hems_battery_provider.md) | Aktueller Austausch einschließlich dokumentierter Betriebsgrenzen; Version 2.0: je Einheit eine Schnittstellen-Entität (`sensor.hems_schnittstelle`, `sensor.battery_provider_schnittstelle`); Marstek-Freigaben per Soll/Ist-Vergleich mit HEMS-Istwerten; E3DC-Statusbits noch nicht negativ getestet. |
 | Wallbox-Provider | [contract_hems_wallbox_provider.md](contract_hems_wallbox_provider/contract_hems_wallbox_provider.md) | Version 2.1 (Lebenszeichen aus `sensor.hems_schnittstelle`, Freigaben aus `sensor.wallbox_provider_schnittstelle`); in beiden Projekten implementiert, Hardware-Abnahme des Providers offen. |
 | Data-Insight | [contract_hems_data_insight.md](contract_hems_data_insight/contract_hems_data_insight.md) | Version 0.3: Datenhaltung für den dynamischen Strompreis (D-065), HEMS-Reihen je Minute, Netzanschluss und Energiezähler. In beiden Projekten implementiert (HEMS-Phasen P4 und P5). |
+
+## EVMS und Watt-Ladeziele — 21.10.2026
+
+- [HEMS ↔ EVMS](contract_hems_evms/contract_hems_evms.md): HEMS implementiert,
+  EVMS-Laufzeit Entwurf; [Watt-Protokoll](contract_hems_evms/charging_protocol.md).
+- [HEMS ↔ eigene Automation](contract_hems_automation/README.md): HEMS implementiert,
+  einseitiger Integrationsvertrag ohne Gegenrepository.
+- HEMS ↔ Wallbox-Provider: Bestandsvertrag 2.1 bleibt aktiv; neue Watt-Anbindung ist
+  auf HEMS-Seite vorbereitet, Providerumsetzung und Hardwareprüfung stehen aus.
+
+Die HEMS-Schnittstelle erhält additiv `ladevertrag_version` und `ladeziele` als
+Zuordnungsbestätigung nach den Helferschreibvorgängen. Ihr bestehender State bleibt
+Speicherpräfixliste. Das ist eine ausdrückliche Kompatibilitätsausnahme zum allgemeinen
+Präfixlisten-Grundsatz. Sollwerte bleiben bei den Ausgabehelfern, positive Ladebefehle
+benötigen zusätzlich einen passenden Commit. Neue Gegenstelle: `sensor.evms_schnittstelle`.
+
+Neue Wallbox-Gegenstelle:
+[Watt-Vertrag](contract_hems_wallbox_provider/watt_contract.md),
+[Protokollkopie](contract_hems_wallbox_provider/charging_protocol.md).

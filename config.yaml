@@ -63,7 +63,7 @@ description: >-
   Knoten eine Dashboard-Ansicht hinterlegen, auf die ein Klick springt, z. B.
   /dashboard-pv/pv. Leer heißt: der Klick öffnet wie bisher den
   More-Info-Dialog.
-version: "4.0.0"
+version: "4.1.0"
 slug: "skytech_hems"
 init: false
 arch:
@@ -294,6 +294,8 @@ schema:
       allowed_modes: str?
       actual_power_entity: str?
       output_unit: list(watt|ampere)?
+      charging_backend: str?  # leer, evms, wallbox_provider oder automation; App validiert
+      charging_feedback_timeout_s: float?
       phases: str?
       phase_switch_delay_s: float?
       voltage_l1_entity: str?

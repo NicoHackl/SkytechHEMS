@@ -308,6 +308,8 @@ def _device_power(device: Dict[str, Any]) -> Optional[float]:
     """
     kind = device.get("type")
     if kind == "controllable":
+        if device.get("charging_backend") and not device.get("charging_measurement_valid"):
+            return None
         return _as_float(device.get("actual_w"), None)
     if kind == "binary":
         if device.get("power_actual_w") is not None:

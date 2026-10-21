@@ -577,3 +577,15 @@ steht in der Dokumentation beider Repos.
 Home Assistant schließt Attribute jenseits von 16 KiB von der Aufzeichnung aus. Bei rund
 zwanzig Geräten liegt die Nutzlast bei etwa 8 KiB. **Entschärfung:** Der Erzeuger protokolliert
 eine Warnung, sobald die Nutzlast 12 KiB überschreitet.
+
+## EVMS-Vorbereitung — 21.10.2026
+
+Neue HEMS-Watt-Ladeziele bleiben `controllable`/`power_kind: watt`.
+Wenn HEMS die Leistung aus einer Gegenstellen-Schnittstelle liest, bleibt der separate
+`power_entity`-Verweis leer; die Karte nutzt den bereits vorgesehenen HEMS-Statuswert.
+Kein neuer direkter EVMS–Karten-Vertrag und keine Fahrzeug-/Ladehistorie in der Karte.
+Eine physische Wallbox nicht zusätzlich zum virtuellen Ladeziel eintragen, sonst
+würde dieselbe Last doppelt dargestellt. Gemeinsame Live-Abnahme steht noch aus.
+
+Bei neuen Ladezielen gibt HEMS bei fehlender oder veralteter Messung `leistung_w: null`
+aus. Eine gültig gemessene null bleibt `0`.

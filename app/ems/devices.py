@@ -797,8 +797,7 @@ class ControllableDevice(Device):
         # Nach Watt umrechnen mit aktueller Phasenanzahl (kann später von select_phases angepasst werden)
         self._apply_raw_to_watt()
 
-        actual = self._note(self.entity_actual_w, "actual_power",
-                            st.resolve_number(self.entity_actual_w, internal=0.0))
+        actual = self._read_actual_power(st)
         self._actual_w = max(0.0 if actual.value is None else float(actual.value), 0.0)
         # Ampere-Geräte (Wallbox) ohne gültige Istleistung fahren auf 0 A, wie ein
         # Speicher bei ungültigem Sensor: Ohne Messwert ist nicht bekannt, was das
@@ -820,6 +819,11 @@ class ControllableDevice(Device):
             st.get(self.entity_anforderung_w + ".last_changed")
         )
         self._read_speicher_deckung(st)
+
+    def _read_actual_power(self, st: StateProxy) -> Resolved:
+        """Istleistung des Geräts; Ladeziele lesen ihren Schnittstellen-Schnappschuss."""
+        return self._note(self.entity_actual_w, "actual_power",
+                          st.resolve_number(self.entity_actual_w, internal=0.0))
 
     def _read_voltage(self, st: StateProxy, entity: Optional[str], role: str) -> float:
         """Phasenspannung mit Plausibilitätsprüfung 180 < U < 260 V, sonst 230 V.

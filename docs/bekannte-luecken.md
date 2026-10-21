@@ -203,3 +203,15 @@ Alles reine Anzeige; die Grenzen betreffen die Aussagekraft, nicht die Regelung.
 
 Wird ein Punkt behoben, wird er hier **gelöscht** und im [CHANGELOG.md](../CHANGELOG.md) vermerkt.
 Eine Liste voller erledigter Einträge liest niemand mehr.
+
+## Wallbox-Ladeziele und EVMS (D-071)
+
+Die neuen Watt-Wege sind ausschließlich auf HEMS-Seite implementiert.
+EVMS läuft noch nicht; der bestehende Wallbox-Provider liefert noch nicht das neue
+Rückmeldeformat und akzeptiert keine Wattbudgets. Aktivieren einer neuen Anbindung
+führt deshalb bis zur Gegenstellenumsetzung zu einer Sperre.
+
+Modell/Firmware der noch nicht gelieferten go-e, RFID-Verhalten, sichere Phasenwechsel,
+Ladezielmodell, systemweite Prüfung doppelter physischer Anschlüsse und gemeinsame
+Anschlusslimits sind offen. Keine automatische Ampere-Migration.
+[Details und Verträge](device_classes/charging.md).

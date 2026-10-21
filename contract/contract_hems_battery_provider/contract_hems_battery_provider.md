@@ -398,3 +398,11 @@ Implementierungsreferenzen:
 |---|---|
 | SkytechHEMS | `app/status_publisher.py`, `app/main.py`, `app/ems/controller.py`, `app/ems/devices.py` (`BatteryDevice`), `app/ems/state.py`, `app/ems/ops.py`, `app/emergency.py`, `docs/device_classes/battery.md` |
 | Skytech-HEMS-Battery-Provider | `custom_components/battery_bridge/interface.py`, `response_check.py`, `hems_bridge.py`, `heartbeat.py`, `binary_sensor.py`, `sensor.py`, `number.py`, `switch.py`, `coordinator.py`, `const.py`, `adapters/marstek_udp.py`, `adapters/e3dc_rscp.py` (unter `custom_components/battery_bridge/`) |
+
+## Additive Ladeziel-Metadaten im HEMS — 21.10.2026
+
+Für vorbereitete Wallbox-Wege ergänzt HEMS `ladevertrag_version` und `ladeziele`
+in derselben Schnittstellen-Entität. Der Battery-Provider ignoriert diese Attribute.
+Speicherpräfixliste, `vertrag_version: 2`, Lebenszeichen und Speicher-Istwerte bleiben
+unverändert. Der Battery-Provider bleibt ausschließlich für stationäre Speicher
+zuständig; EVMS–Wallbox-Verträge übertragen ihm keine Fahrzeugsteuerung.

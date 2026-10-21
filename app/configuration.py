@@ -38,6 +38,7 @@ LEGACY_MODE = "auto"
 DEVICE_CLASSES: Tuple[str, ...] = ("controllable", "binary", "battery")
 LOG_LEVELS: Tuple[str, ...] = ("debug", "info", "warning", "error")
 OUTPUT_UNITS: Tuple[str, ...] = ("watt", "ampere")
+CHARGING_BACKENDS = ("", "evms", "wallbox_provider", "automation")
 PHASE_VALUES: Tuple[str, ...] = ("1", "3", "1,3")
 POWER_SIGNS: Tuple[str, ...] = ("positiv_laden", "positiv_entladen")
 # Geltungsbereich der geschützten Mindestleistung. Der Standard ist bewusst der
@@ -466,6 +467,10 @@ def _normalize_device(raw: Dict[str, Any]) -> Dict[str, Any]:
         device.update({
             "actual_power_entity": _as_text(raw.get("actual_power_entity")),
             "output_unit": _as_text(raw.get("output_unit")) or "watt",
+            "charging_backend": _as_text(raw.get("charging_backend")),
+            "charging_feedback_timeout_s": (
+                _as_float(raw["charging_feedback_timeout_s"], None)
+                if "charging_feedback_timeout_s" in raw else 90.0),
             "phases": _as_text(raw.get("phases")) or "1",
             "phase_switch_delay_s": _as_float(raw.get("phase_switch_delay_s"), 300.0),
             "voltage_l1_entity": _as_text(raw.get("voltage_l1_entity")),
@@ -895,7 +900,18 @@ def _validate_emergency(options: Dict[str, Any], result: ValidationResult) -> No
 
 
 def _validate_controllable(device: Dict[str, Any], fail) -> None:
-    _require_entity(device, "actual_power_entity", fail)
+    if not device["charging_backend"]:
+        _require_entity(device, "actual_power_entity", fail)
+    elif device["actual_power_entity"]:
+        fail("actual_power_entity", "Bei einer Wallbox-Anbindung kommt die Istleistung aus der Schnittstelle; leer lassen.")
+
+    if device["charging_backend"] not in CHARGING_BACKENDS:
+        fail("charging_backend", "Zulässig sind leer, evms, wallbox_provider oder automation.")
+    if device["charging_backend"]:
+        if device["output_unit"] != "watt":
+            fail("output_unit", "Die Wallbox-Anbindung erwartet Watt.")
+        _number(device, "charging_feedback_timeout_s", fail, exclusive_minimum=0.0,
+                text="Endliche Zeit über 0 Sekunden für die Rückmeldung erforderlich.")
 
     if device["output_unit"] not in OUTPUT_UNITS:
         fail("output_unit", "Zulässig sind watt oder ampere.")

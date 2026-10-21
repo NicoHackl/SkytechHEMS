@@ -32,6 +32,7 @@ const VORZEICHEN_LABEL: Record<string, string> = {
 }
 
 export function DeviceFieldsControllable({ device, patch, entities, supported, error }: PropsMitSupported) {
+  const charging = Boolean(device.charging_backend)
   const ampere = device.output_unit === 'ampere'
   const einheit = ampere ? 'A' : 'W'
   const mehrphasig = ampere && device.phases === '1,3'
@@ -41,19 +42,46 @@ export function DeviceFieldsControllable({ device, patch, entities, supported, e
       <section className="card section-card">
         <div className="card-head"><h2>Messwerte und Ausgabe</h2></div>
         <div className="card-body form-grid">
-          <EntityField
-            label="Ist-Leistungssensor" required wide
-            value={device.actual_power_entity ?? ''} entities={entities} domains={['sensor']}
-            error={error('actual_power_entity')}
-            hint="Leistungsaufnahme in Watt. Wird nur gelesen."
-            onChange={(value) => patch({ actual_power_entity: value })}
-          />
           <SelectField
-            label="Ausgabeeinheit"
-            value={device.output_unit ?? 'watt'} options={supported.output_units}
-            labels={EINHEIT_LABEL} error={error('output_unit')}
-            onChange={(value) => patch({ output_unit: value as 'watt' | 'ampere' })}
+            label="Wallbox-Anbindung"
+            value={device.charging_backend ?? ''}
+            options={supported.charging_backends}
+            labels={{ '': 'Keine / bisherige Anbindung', evms: 'Über EVMS',
+              wallbox_provider: 'Direkt über Wallbox-Provider', automation: 'Eigene HA-Automation' }}
+            error={error('charging_backend')}
+            hint="Neue Anbindungen verwenden Watt. Die Gegenstelle muss das neue Rückmeldeformat unterstützen."
+            onChange={(value) => patch({
+              charging_backend: value as ConfigDevice['charging_backend'],
+              ...(value ? { output_unit: 'watt', actual_power_entity: '', phases: '1',
+                voltage_l1_entity: '', voltage_l2_entity: '', voltage_l3_entity: '',
+                technical_minimum: 0, technical_maximum: 0,
+                maximum_step_change: 1000, minimum_step_change: 0 } : {}),
+            })}
           />
+          {charging ? (
+            <NumberField label="Zeitlimit für Rückmeldungen" unit="s" min={1}
+                         value={device.charging_feedback_timeout_s === undefined
+                           ? 90 : device.charging_feedback_timeout_s}
+                         error={error('charging_feedback_timeout_s')}
+                         hint="Ohne aktuelle Rückmeldung wird die Ladeleistung auf null gesetzt."
+                         onChange={(value) => patch({ charging_feedback_timeout_s: value })} />
+          ) : (
+            <>
+              <EntityField
+                label="Ist-Leistungssensor" required wide
+                value={device.actual_power_entity ?? ''} entities={entities} domains={['sensor']}
+                error={error('actual_power_entity')}
+                hint="Leistungsaufnahme in Watt. Wird nur gelesen."
+                onChange={(value) => patch({ actual_power_entity: value })}
+              />
+              <SelectField
+                label="Ausgabeeinheit"
+                value={device.output_unit ?? 'watt'} options={supported.output_units}
+                labels={EINHEIT_LABEL} error={error('output_unit')}
+                onChange={(value) => patch({ output_unit: value as 'watt' | 'ampere' })}
+              />
+            </>
+          )}
           {ampere ? (
             <SelectField
               label="Phasen"

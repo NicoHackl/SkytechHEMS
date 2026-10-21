@@ -442,6 +442,7 @@ def _build_device_controls_schema(
                             if output_unit == "ampere" and len(allowed_phases) > 1 else "")
             base.update({
                 "output_unit": output_unit,
+                "charging_backend": cfg["charging_backend"],
                 "actual_power_entity": cfg["actual_power_entity"],
                 "request_entity": f"input_number.ems_{prefix}_anforderung_leistung_{suffix}",
                 "phase_entity": phase_entity,
@@ -739,7 +740,8 @@ class HEMSApp:
                      in self.ems.battery_interface_values(with_actuals)]
         await self._heartbeat.publish(
             self.ha, self.interval_s,
-            datetime.datetime.now(BERLIN).strftime(DISPLAY_TIME_FORMAT), batteries)
+            datetime.datetime.now(BERLIN).strftime(DISPLAY_TIME_FORMAT), batteries,
+            self.ems.charging_interface_values(active=with_actuals))
 
     async def _scheduler(self) -> None:
         log.info("EMS scheduler started (interval=%ds).", self.interval_s)

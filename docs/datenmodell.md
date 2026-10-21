@@ -509,3 +509,12 @@ Es gibt kein Schema, das migriert werden müsste. Ändert sich der Statusvertrag
 
 Feldnamen werden **erweitert, nicht umbenannt** (D-034): Ein Rename bräche jede bestehende Anlage
 und den Energy Pilot.
+
+## Wallbox-Ladeziele und EVMS (D-071)
+
+Neue Ladeziele bleiben `class: controllable` mit `output_unit: watt`.
+Istleistung, Freigabe, Grenzen, Prozess-/Zuordnungskennung und Zähler kommen als ein
+Schnappschuss aus der gewählten Gegenstelle. Nach der Ausgabe bestätigt HEMS unter
+`ladeziele` seiner Schnittstellen-Entität Budget, Anbindung und Zuordnung.
+Das [Watt-Protokoll](../contract/contract_hems_evms/charging_protocol.md) definiert die Felder.
+Fahrzeuge und Ladevorgänge werden im HEMS nicht dauerhaft gespeichert.

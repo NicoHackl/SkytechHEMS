@@ -523,3 +523,12 @@ Vom Add-on genutzte Endpunkte von Home Assistant:
 | Home Assistant | `POST /api/services/<domain>/<service>` | Sollwerte, Schaltanforderungen, Post-Cycle-Skript, Timeout 5 s | Eine fehlgeschlagene Write-Op wird ihrem Gerät zugeordnet, geloggt und im Status sichtbar gemacht; das Gerät fährt im nächsten Zyklus nur noch seinen sicheren Zustand, die übrigen regeln weiter. Das Post-Cycle-Skript wirft und wird als Warnung gemeldet |
 | Home Assistant | `POST /api/states/<entity_id>` | Anzeigedaten der Power Flow Card (D-046), `sensor.ems_<prefix>_lade_limit_w` je Speicher (D-057) `sensor.ems_notabschaltung_aktiv` (D-059) und die Schnittstellen-Entität `sensor.hems_schnittstelle` (Lebenszeichen und Speicher-Istwerte, D-062/D-069, Felder siehe [Battery-Vertrag](../contract/contract_hems_battery_provider/contract_hems_battery_provider.md#hems--provider-sensorhems_schnittstelle) und [Wallbox-Vertrag](../contract/contract_hems_wallbox_provider/contract_hems_wallbox_provider.md#hems-lebenszeichen)), Timeout 5 s | Wird protokolliert und verschluckt: ein misslungener Anzeigeschrieb darf keinen Regelzyklus kosten. Die Karte zeichnet in der Lücke aus den HA-Entitäten weiter; der Ladelimit-Sensor behält seinen letzten Wert |
 | Home Assistant | `WS /api/websocket` — `lovelace/dashboards/list`, `lovelace/config` | Dashboards und Ansichten für die Zielauswahl (D-049), Timeout 10 s je Nachricht | Wird protokolliert und verschluckt; die Seite fällt auf ein Textfeld zurück. Strategie- und YAML-Dashboards erscheinen ohne Ansichten mit einer Warnung |
+
+## Wallbox-Ladeziele und EVMS (D-071)
+
+`GET /api/config` ergänzt `supported.charging_backends`; Gerätekonfiguration enthält
+`charging_backend` und `charging_feedback_timeout_s`. Speichern/Validieren verwendet die
+bestehenden Endpunkte. Das Steuerschema bleibt Version 2, Klasse `controllable`, und
+nennt additiv `charging_backend`; beim neuen Weg ist `actual_power_entity` leer.
+Der Gerätestatus ergänzt `charging_backend`, `charging_assignment_id` , `charging_interface` und `charging_measurement_valid`.
+[Konfiguration](device_classes/charging.md) · [Protokoll](../contract/contract_hems_evms/charging_protocol.md).
