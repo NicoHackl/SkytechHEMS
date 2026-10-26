@@ -61,7 +61,7 @@ DEVICES = [
      "soc_max_hysteresis_percent": 4, "direction_switch_delay_s": 5},
 ]
 
-# Helferwerte aus Home Assistant (Schnappschuss 26.10.2026); Testannahmen: geschützte Mindestleistung Heizstab 1000 W (HA: 500 W); alle Reserven und Puffer 0 W (HA: Puffer 100 W, Einschaltreserve 200 W, Heizstab-Reserve 200 W, Heizlüfter-Einschaltreserve 200 W).
+# Helferwerte aus Home Assistant (Schnappschuss 26.10.2026); Testannahmen: geschützte Mindestleistung Heizstab 1000 W (HA: 500 W); alle Reserven, Puffer und Einschaltverzögerung 0 (HA: Einschaltverzögerung 30 s, Puffer 100 W, Einschaltreserve 200 W, Heizstab-Reserve 200 W, Heizlüfter-Einschaltreserve 200 W).
 HELPERS = {
     "input_boolean.ems_pv_regelung_aktiv": "on",
     "input_select.ems_regelmodus": "manuell",
@@ -83,7 +83,7 @@ HELPERS = {
     "input_number.ems_heizlufter_1_prioritat": 20, "input_number.ems_heizlufter_1_leistung_w": 1500,
     "input_number.ems_heizlufter_1_einschaltreserve_w": 0, "input_number.ems_heizlufter_1_mindestlaufzeit_s": 120,
     "input_number.ems_heizlufter_1_mindestauszeit_s": 60, "input_number.ems_heizlufter_1_abschaltverzogerung_s": 30,
-    "input_number.ems_heizlufter_1_einschaltverzogerung_s": 30,
+    "input_number.ems_heizlufter_1_einschaltverzogerung_s": 0,
     # AC Speicher 1
     "input_boolean.ems_acspeicher1_technische_freigabe": "on", "input_boolean.ems_acspeicher1_netzladen_erlaubt": "off",
     "input_select.ems_acspeicher1_modus": "manuell", "input_select.ems_acspeicher1_betriebsart": "auto",
