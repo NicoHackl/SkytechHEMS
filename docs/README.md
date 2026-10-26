@@ -40,6 +40,7 @@ nicht stillschweigend schöngeschrieben.
 | [sicherheit-datenschutz.md](sicherheit-datenschutz.md) | Token, personenbezogene Daten, externe Dienste |
 | [bekannte-luecken.md](bekannte-luecken.md) | Abweichungen Spec ↔ Code, Stolpersteine, offene Bugs |
 | [roadmap.md](roadmap.md) | Meilensteine und realistischer Umsetzungsstand |
+| [grafiken/](grafiken/) | Simulierte Regelverläufe als SVG ([Regelverhalten bei steigendem Überschuss](grafiken/regelverhalten.svg)), erzeugt mit dem echten Regelcode |
 
 ## Pflegeregeln dieser Doku
 

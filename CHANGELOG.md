@@ -8,6 +8,12 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Hinzugefügt — 26.10.2026 (Grafik Regelverhalten)
+
+- `docs/grafiken/`: Grafik des HEMS-Regelverhaltens bei steigendem PV-Überschuss (E3DC Speicher,
+  Heizstab, Heizlüfter 1; AC Speicher 1 ohne Freigabe). Verläufe stammen aus einer Simulation mit
+  dem echten Regelcode und den Helferwerten der Anlage; Skripte zum Neuerzeugen liegen daneben.
+
 ### Hinzugefügt — 21.10.2026 (Watt-Ladeziele, Version 4.1.0)
 
 - Wallbox-Anbindung wählbar: EVMS, direkter Wallbox-Provider oder eigene HA-Automation.
