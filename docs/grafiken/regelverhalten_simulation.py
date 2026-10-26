@@ -61,19 +61,19 @@ DEVICES = [
      "soc_max_hysteresis_percent": 4, "direction_switch_delay_s": 5},
 ]
 
-# Helferwerte aus Home Assistant (Schnappschuss 26.10.2026); Testannahme: geschützte Mindestleistung Heizstab 1000 W (HA: 500 W).
+# Helferwerte aus Home Assistant (Schnappschuss 26.10.2026); Testannahmen: geschützte Mindestleistung Heizstab 1000 W (HA: 500 W); alle Reserven und Puffer 0 W (HA: Puffer 100 W, Einschaltreserve 200 W, Heizstab-Reserve 200 W, Heizlüfter-Einschaltreserve 200 W).
 HELPERS = {
     "input_boolean.ems_pv_regelung_aktiv": "on",
     "input_select.ems_regelmodus": "manuell",
-    "input_number.ems_globaler_puffer_w": 100,
-    "input_number.ems_einschaltreserve_global_w": 200,
+    "input_number.ems_globaler_puffer_w": 0,
+    "input_number.ems_einschaltreserve_global_w": 0,
     "input_number.ems_ac_speicher_entlade_abschlag_w": 0,
     # Heizstab
     "input_boolean.ems_heizstab_freigabe": "on", "input_boolean.ems_heizstab_technische_freigabe": "on",
     "input_boolean.ems_heizstab_force": "off", "input_select.ems_heizstab_modus": "manuell",
     "input_number.ems_heizstab_prioritat": 10, "input_number.ems_heizstab_min_technisch_w": 0,
     "input_number.ems_heizstab_max_technisch_w": 3500, "input_number.ems_heizstab_geschutzte_mindestleistung_w": 1000,
-    "input_number.ems_heizstab_reserve_w": 200, "input_number.ems_heizstab_hoch_regelzeit_s": 1,
+    "input_number.ems_heizstab_reserve_w": 0, "input_number.ems_heizstab_hoch_regelzeit_s": 1,
     "input_number.ems_heizstab_runter_regelzeit_s": 1, "input_number.ems_heizstab_max_anderung_pro_schritt_w": 1000,
     "input_number.ems_heizstab_min_anderung_pro_schritt_w": 50, "input_number.ems_heizstab_force_leistung_w": 700,
     "input_number.ems_heizstab_anforderung_leistung_w": 0,
@@ -81,7 +81,7 @@ HELPERS = {
     "input_boolean.ems_heizlufter_1_technische_freigabe": "on", "input_boolean.ems_heizlufter_1_force": "off",
     "input_boolean.ems_heizlufter_1_anforderung_an": "off", "input_select.ems_heizlufter_1_modus": "manuell",
     "input_number.ems_heizlufter_1_prioritat": 20, "input_number.ems_heizlufter_1_leistung_w": 1500,
-    "input_number.ems_heizlufter_1_einschaltreserve_w": 200, "input_number.ems_heizlufter_1_mindestlaufzeit_s": 120,
+    "input_number.ems_heizlufter_1_einschaltreserve_w": 0, "input_number.ems_heizlufter_1_mindestlaufzeit_s": 120,
     "input_number.ems_heizlufter_1_mindestauszeit_s": 60, "input_number.ems_heizlufter_1_abschaltverzogerung_s": 30,
     "input_number.ems_heizlufter_1_einschaltverzogerung_s": 30,
     # AC Speicher 1

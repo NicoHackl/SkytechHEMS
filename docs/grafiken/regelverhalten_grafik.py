@@ -120,10 +120,10 @@ tx = ML + PW + 24
 a(f'<text x="{tx}" y="{MT+16}" font-size="14" font-weight="600">Leistungsgrenzen (Anlage, Test)</text>')
 panel = [
     ("E3DC Speicher · Prio 5", "c-e3dc", ["Ladelimit 5.200 W (Stufe 1, SoC 40–80 %)", "Geschützte Mindestleistung 3.000 W", "Schritt min. 25 W · Regelzeit 3 s"]),
-    ("Heizstab · Prio 10", "c-stab", ["Maximum 3.500 W", "Geschützte Mindestleistung 1.000 W (Testannahme)", "Schritt min. 50 W, max. 1.000 W · Reserve 200 W"]),
-    ("Heizlüfter 1 · Prio 20 (binär)", "c-fan", ["Leistung 1.500 W (ein/aus)", "Einschalten: Pool ≥ 1.500 W + 200 W globale Reserve", "Mindestlaufzeit 120 s · Einschaltverzögerung 30 s"]),
+    ("Heizstab · Prio 10", "c-stab", ["Maximum 3.500 W", "Geschützte Mindestleistung 1.000 W (Testannahme)", "Schritt min. 50 W, max. 1.000 W"]),
+    ("Heizlüfter 1 · Prio 20 (binär)", "c-fan", ["Leistung 1.500 W (ein/aus)", "Einschalten ab Überschuss 5.500 W (3.000 + 1.000 + 1.500)", "Mindestlaufzeit 120 s · Einschaltverzögerung 30 s"]),
     ("AC Speicher 1 · Prio 8", "mut", ["Keine Freigabe (Testannahme) → 0 W"]),
-    ("Global", "mut", ["Puffer 100 W · Einschaltreserve 200 W", "Mindestleistungs-Scope: binär + regelbar"]),
+    ("Global", "mut", ["Alle Reserven und Puffer 0 W (Testannahme)", "Mindestleistungs-Scope: binär + regelbar"]),
 ]
 cy = MT + 46
 for title, col, lines in panel:
@@ -144,8 +144,8 @@ for n, (key, label, cls) in enumerate(SERIES):
     area = {"e3dc": "area-e3dc", "heizstab": "area-stab", "heizlufter": "area-fan"}[key]
     a(f'<rect class="{area}" x="{lx}" y="{yy-10}" width="28" height="14" fill-opacity="0.85"/>')
     a(f'<text x="{lx+36}" y="{yy+2}" font-size="13">{label}</text>')
-a(f'<text class="mut" x="{ML}" y="{ly+54}" font-size="12">Der Abstand zwischen Überschusslinie und Flächenoberkante ist ungenutzter Überschuss (Reserve/Puffer, Einspeisung).</text>')
-a(f'<text class="mut" x="{ML}" y="{ly+72}" font-size="12">Geschützte Mindestleistung: E3DC 3.000 W, Heizstab 1.000 W. Der Heizlüfter schaltet erst bei ca. 6.000 W ein, E3DC gibt dafür Leistung ab.</text>')
+a(f'<text class="mut" x="{ML}" y="{ly+54}" font-size="12">Der Abstand zwischen Überschusslinie und Flächenoberkante ist ungenutzter Überschuss (Einspeisung ins Netz).</text>')
+a(f'<text class="mut" x="{ML}" y="{ly+72}" font-size="12">Geschützte Mindestleistung: E3DC 3.000 W, Heizstab 1.000 W. Der Heizlüfter (1.500 W) schaltet erst ein, wenn sie beide zusätzlich gedeckt sind: ab 5.500 W Überschuss.</text>')
 a("</svg>")
 
 (HERE / "regelverhalten.svg").write_text("\n".join(out), encoding="utf-8")
