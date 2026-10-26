@@ -12,7 +12,9 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 - `docs/grafiken/`: Grafik des HEMS-Regelverhaltens bei steigendem PV-Überschuss (E3DC Speicher,
   Heizstab, Heizlüfter 1; AC Speicher 1 ohne Freigabe). Verläufe stammen aus einer Simulation mit
-  dem echten Regelcode und den Helferwerten der Anlage; Skripte zum Neuerzeugen liegen daneben.
+  dem echten Regelcode und den Helferwerten der Anlage (Testannahme: geschützte Mindestleistung
+  Heizstab 1.000 W); Skripte zum Neuerzeugen liegen daneben. Leistungswerte je Gerät, Grenzen und
+  Einschaltzeitpunkte stehen direkt im Diagramm.
 
 ### Hinzugefügt — 21.10.2026 (Watt-Ladeziele, Version 4.1.0)
 

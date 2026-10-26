@@ -61,7 +61,7 @@ DEVICES = [
      "soc_max_hysteresis_percent": 4, "direction_switch_delay_s": 5},
 ]
 
-# Helferwerte aus Home Assistant (Schnappschuss 26.10.2026).
+# Helferwerte aus Home Assistant (Schnappschuss 26.10.2026); Testannahme: geschützte Mindestleistung Heizstab 1000 W (HA: 500 W).
 HELPERS = {
     "input_boolean.ems_pv_regelung_aktiv": "on",
     "input_select.ems_regelmodus": "manuell",
@@ -72,7 +72,7 @@ HELPERS = {
     "input_boolean.ems_heizstab_freigabe": "on", "input_boolean.ems_heizstab_technische_freigabe": "on",
     "input_boolean.ems_heizstab_force": "off", "input_select.ems_heizstab_modus": "manuell",
     "input_number.ems_heizstab_prioritat": 10, "input_number.ems_heizstab_min_technisch_w": 0,
-    "input_number.ems_heizstab_max_technisch_w": 3500, "input_number.ems_heizstab_geschutzte_mindestleistung_w": 500,
+    "input_number.ems_heizstab_max_technisch_w": 3500, "input_number.ems_heizstab_geschutzte_mindestleistung_w": 1000,
     "input_number.ems_heizstab_reserve_w": 200, "input_number.ems_heizstab_hoch_regelzeit_s": 1,
     "input_number.ems_heizstab_runter_regelzeit_s": 1, "input_number.ems_heizstab_max_anderung_pro_schritt_w": 1000,
     "input_number.ems_heizstab_min_anderung_pro_schritt_w": 50, "input_number.ems_heizstab_force_leistung_w": 700,
