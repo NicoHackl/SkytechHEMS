@@ -315,7 +315,8 @@ zeigen im Stoppzustand `0`, weil genau das gesendet wurde.
 | Marstek-Keep-Alive | Aktueller Helfer-Schnappschuss alle 60 s; Adapter verwendet einen 300-s-Passive-Mode-Zeitraum. |
 | E3DC-Keep-Alive | Aktueller Helfer-Schnappschuss alle 5 s, einschließlich Nullanforderung. |
 | Messwert-Poll | Standard 5 s, konfigurierbar 1–60 s; getrennt vom Keep-Alive. |
-| Poll-Ausfall | Coordinator verwendet vorübergehend 30 s; erfolgreicher Poll stellt den normalen Takt wieder her. |
+| Poll-Ausfall | Coordinator verwendet vorübergehend `failed_poll_interval` des Adapters (Marstek 10 s, E3DC 30 s); erfolgreicher Poll stellt den normalen Takt wieder her. Ein Marstek-Aufruf gilt nach bis zu 9 s als gescheitert, kürzere Aussetzer machen die Messsensoren nicht verfügbar (D-021). |
+| Nach Poll-Ausfall oder Aussetzer | Bridge sendet den aktuellen Helfer-Schnappschuss sofort erneut, ohne auf den Keep-Alive zu warten; Pause und Lebenszeichen gelten dabei wie immer. Status: implementiert, Wirkung an Hardware noch zu messen (D-021). |
 | Bridge-Schalter aus | Unterbindet neue automatische Syncs einschließlich Keep-Alive; sendet selbst keinen Stopp. |
 | Bridge-Schalter ein | Sofortige Synchronisierung einschließlich erneuter Richtungsinitialisierung. |
 | Neustart/Neuladen | Bridge wieder aktiv; pausierter Zustand und letzter Befehl werden nicht wiederhergestellt. Bis zum ersten frisch gesehenen HEMS-Zyklus beide Richtungen 0 W. |

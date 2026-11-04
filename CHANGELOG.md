@@ -8,6 +8,12 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Dokumentation — 04.11.2026 (Battery-Provider D-021)
+
+- Battery-Provider-Vertrag nachgezogen: Der Provider meldet einen Marstek-Ausfall erst nach bis zu
+  9 s, prüft im Ausfall alle 10 s und sendet danach den aktuellen Sollwert sofort erneut. Am HEMS
+  ändert sich nichts.
+
 ### Hinzugefügt — 26.10.2026 (Grafik Regelverhalten)
 
 - `docs/grafiken/`: Grafik des HEMS-Regelverhaltens bei steigendem PV-Überschuss (E3DC Speicher,
