@@ -4,9 +4,9 @@
 
 **Status:** Dokumentierter Implementierungsstand mit bekannten Betriebsgrenzen; je Einheit eine Schnittstellen-Entität (`sensor.hems_schnittstelle`, `sensor.battery_provider_schnittstelle`) in beiden Projekten **implementiert**; Marstek-Freigaben aus dem Soll/Ist-Vergleich des Providers mit HEMS-Istwerten **implementiert**; E3DC-Statusbits an Hardware **noch nicht negativ getestet** (bekannte Grenze)
 
-**Stand:** 20.10.2026
+**Stand:** 05.11.2026
 
-**Geprüfte Codebasis:** SkytechHEMS `e5c0156`, Skytech-HEMS-Battery-Provider `12ae0f3`; Lebenszeichen: SkytechHEMS `f2037f4` (D-062), Battery-Provider D-016; Schnittstellen-Entitäten: SkytechHEMS D-069, Battery-Provider D-019 (lösen D-068/D-017 ab); Soll/Ist-Vergleich Marstek: Battery-Provider D-018/D-019.
+**Geprüfte Codebasis:** SkytechHEMS `e5c0156`, Skytech-HEMS-Battery-Provider `12ae0f3`; Lebenszeichen: SkytechHEMS `f2037f4` (D-062), Battery-Provider D-016; Schnittstellen-Entitäten: SkytechHEMS D-069, Battery-Provider D-019 (lösen D-068/D-017 ab); Soll/Ist-Vergleich Marstek: Battery-Provider D-018/D-019; Marstek über Modbus: Battery-Provider D-022 (implementiert, an Hardware noch nicht abgenommen).
 
 Dieser Vertrag beschreibt den vorhandenen Austausch über Home Assistant. Er führt keine neue
 Steuerungslogik ein. Bekannte Einschränkungen sind ausdrücklich dokumentiert und dürfen nicht
@@ -22,7 +22,7 @@ bleiben übergeordnet; für die Schnittstellenbeschreibung ist dieser Vertrag ma
 SkytechHEMS regelt Speicher als `class: battery`. Es entscheidet über Lade-/Entladeleistung,
 Prioritäten, SoC-Grenzen, Freigaben, Rampen und Richtungswechsel. Der Provider ist die
 Home-Assistant-Custom-Integration `battery_bridge` und übersetzt die HEMS-Ausgabehelfer in
-Adapteraufrufe. Aktuell existieren Marstek-UDP- und E3DC-RSCP-Adapter.
+Adapteraufrufe. Aktuell existieren Marstek-UDP-, Marstek-Modbus- und E3DC-RSCP-Adapter.
 
 ```text
 SkytechHEMS ── zwei input_*-Ausgabehelfer (Sollwerte) ──────────► HA ──► Battery-Provider ──► Speicher
@@ -113,6 +113,7 @@ Herkunft der Freigaben:
 |---|---|---|
 | Poll gescheitert, Speicher nicht erreichbar | `false` (`nicht_erreichbar`) | `false` (`nicht_erreichbar`) |
 | Marstek UDP | `Bat.GetStatus.charg_flag` (fehlt = frei) und keine Soll/Ist-Sperre | `Bat.GetStatus.dischrg_flag` (fehlt = frei) und keine Soll/Ist-Sperre |
+| Marstek Modbus | Keine Soll/Ist-Sperre; eine Gerätefreigabe wird nicht gelesen | Keine Soll/Ist-Sperre; eine Gerätefreigabe wird nicht gelesen |
 | E3DC RSCP | `EMS_STATUS` Bit 0 (Laden gesperrt) und Bit 5 (Ladesperrzeit) nicht gesetzt | `EMS_STATUS` Bit 1 (Entladen gesperrt) und Bit 6 (Entladesperrzeit) nicht gesetzt, Notstromreserve nicht erreicht |
 
 Die Gerätestatus-Abfragen laufen höchstens alle 15 s. Scheitert nur die Statusabfrage, gilt die
@@ -312,15 +313,15 @@ zeigen im Stoppzustand `0`, weil genau das gesendet wurde.
 
 | Verhalten | Aktueller Stand |
 |---|---|
-| Marstek-Keep-Alive | Aktueller Helfer-Schnappschuss alle 60 s; Adapter verwendet einen 300-s-Passive-Mode-Zeitraum. |
+| Marstek-Keep-Alive | Aktueller Helfer-Schnappschuss alle 60 s. UDP: Adapter verwendet einen 300-s-Passive-Mode-Zeitraum. Modbus: Sollwert läuft am Gerät nicht von selbst ab (gemessen über mindestens 200 s, D-022). |
 | E3DC-Keep-Alive | Aktueller Helfer-Schnappschuss alle 5 s, einschließlich Nullanforderung. |
 | Messwert-Poll | Standard 5 s, konfigurierbar 1–60 s; getrennt vom Keep-Alive. |
-| Poll-Ausfall | Coordinator verwendet vorübergehend `failed_poll_interval` des Adapters (Marstek 10 s, E3DC 30 s); erfolgreicher Poll stellt den normalen Takt wieder her. Ein Marstek-Aufruf gilt nach bis zu 9 s als gescheitert, kürzere Aussetzer machen die Messsensoren nicht verfügbar (D-021). |
+| Poll-Ausfall | Coordinator verwendet vorübergehend `failed_poll_interval` des Adapters (Marstek 10 s, E3DC 30 s); erfolgreicher Poll stellt den normalen Takt wieder her. Ein Marstek-Aufruf gilt über UDP nach bis zu 9 s (D-021), über Modbus nach bis zu 12 s (D-022) als gescheitert, kürzere Aussetzer machen die Messsensoren nicht verfügbar. |
 | Nach Poll-Ausfall oder Aussetzer | Bridge sendet den aktuellen Helfer-Schnappschuss sofort erneut, ohne auf den Keep-Alive zu warten; Pause und Lebenszeichen gelten dabei wie immer. Status: implementiert, Wirkung an Hardware noch zu messen (D-021). |
-| Bridge-Schalter aus | Unterbindet neue automatische Syncs einschließlich Keep-Alive; sendet selbst keinen Stopp. |
+| Bridge-Schalter aus | Unterbindet neue automatische Syncs einschließlich Keep-Alive; sendet selbst keinen Stopp. **Bekannte Grenze Marstek Modbus:** Der letzte Sollwert läuft dann unbegrenzt weiter (D-022). |
 | Bridge-Schalter ein | Sofortige Synchronisierung einschließlich erneuter Richtungsinitialisierung. |
 | Neustart/Neuladen | Bridge wieder aktiv; pausierter Zustand und letzter Befehl werden nicht wiederhergestellt. Bis zum ersten frisch gesehenen HEMS-Zyklus beide Richtungen 0 W. |
-| Unload | Entfernt Helfer-Listener und Keep-Alive; kein ausdrücklicher Abschaltbefehl der Bridge. |
+| Unload | Entfernt Helfer-Listener und Keep-Alive; kein ausdrücklicher Abschaltbefehl der Bridge. Marstek Modbus: Der Adapter setzt beim Unload und beim HA-Stopp Standby, die Freigabe bleibt an (D-022). |
 
 Eine Pause bricht einen bereits laufenden Sync nicht ausdrücklich ab. Manuelle Number-Befehle
 haben keinen eigenen Keep-Alive. Das Verhalten bei ausbleibenden Herstellerbefehlen bleibt
@@ -398,7 +399,7 @@ Implementierungsreferenzen:
 | Repository | Dateien |
 |---|---|
 | SkytechHEMS | `app/status_publisher.py`, `app/main.py`, `app/ems/controller.py`, `app/ems/devices.py` (`BatteryDevice`), `app/ems/state.py`, `app/ems/ops.py`, `app/emergency.py`, `docs/device_classes/battery.md` |
-| Skytech-HEMS-Battery-Provider | `custom_components/battery_bridge/interface.py`, `response_check.py`, `hems_bridge.py`, `heartbeat.py`, `binary_sensor.py`, `sensor.py`, `number.py`, `switch.py`, `coordinator.py`, `const.py`, `adapters/marstek_udp.py`, `adapters/e3dc_rscp.py` (unter `custom_components/battery_bridge/`) |
+| Skytech-HEMS-Battery-Provider | `custom_components/battery_bridge/interface.py`, `response_check.py`, `hems_bridge.py`, `heartbeat.py`, `binary_sensor.py`, `sensor.py`, `number.py`, `switch.py`, `coordinator.py`, `const.py`, `adapters/marstek_udp.py`, `adapters/marstek_modbus.py`, `adapters/e3dc_rscp.py` (unter `custom_components/battery_bridge/`) |
 
 ## Additive Ladeziel-Metadaten im HEMS — 21.10.2026
 

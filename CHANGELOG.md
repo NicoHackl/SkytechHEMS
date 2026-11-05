@@ -8,6 +8,12 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Dokumentation — 05.11.2026 (Battery-Provider D-022)
+
+- Battery-Provider-Vertrag nachgezogen: Der Provider kann einen Marstek zusätzlich über Modbus
+  anbinden. Dort läuft ein Sollwert nicht von selbst ab, und beim Entladen sowie beim HA-Stopp geht
+  der Speicher auf Standby. Am HEMS ändert sich nichts.
+
 ### Dokumentation — 04.11.2026 (Battery-Provider D-021)
 
 - Battery-Provider-Vertrag nachgezogen: Der Provider meldet einen Marstek-Ausfall erst nach bis zu
