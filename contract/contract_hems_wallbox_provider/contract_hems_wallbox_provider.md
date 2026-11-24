@@ -1,10 +1,10 @@
 # Vertrag: SkytechHEMS ↔ Skytech HEMS Wallbox Provider
 
-**Version:** 2.0
+**Version:** 2.1
 
 **Status:** V1 in beiden Projekten implementiert; Hardware-Abnahme des Providers offen; einzelne Punkte sind je Abschnitt gekennzeichnet
 
-**Stand:** 20.10.2026
+**Stand:** 20.10.2026 (2.1: Schnittstellen-Entität des Providers)
 
 **Gültig ab:** Implementierung des ersten Providers `go-e Charger Gemini 11 kW`
 
@@ -223,6 +223,41 @@ Status der Tabelle: **Implementiert, Hardware offen**. Zusätzlich (additiv) gib
 `sensor.<provider_prefix>_steuerung` als Diagnose der Steuerung. Für alle Messwerte gilt: Ein fehlender Messwert ist nicht `0`. Bei Kommunikationsfehlern wird
 die Provider-Entity nicht verfügbar; sie darf keine geschätzte Leistung veröffentlichen.
 
+## Provider → HEMS: `sensor.wallbox_provider_schnittstelle`
+
+Status: **Implementiert, Hardware offen** — Provider D-007 (`interface.py`), HEMS D-070
+(`ControllableDevice`).
+
+Grundsatz: Jede Einheit veröffentlicht genau eine Entität `sensor.<einheit>_schnittstelle` mit
+allen Informationen für die anderen Teilnehmer (siehe `contract/README.md`). Der Provider
+veröffentlicht **eine** Entität für alle Wallboxen mit HEMS-Anbindung. Sie ist keine
+Registry-Entität, wird per `hass.states.async_set` geschrieben und steht nach einem HA-Neustart
+wieder, sobald der erste Eintrag geladen ist.
+
+| Feld | Typ | Bedeutung |
+|---|---|---|
+| `state` | Text | `hems_entity_prefix` aller Provider-Einträge mit HEMS-Anbindung, durch Komma getrennt. |
+| `attributes.schnittstelle_version` | Ganzzahl | `1`. |
+| `attributes.<prefix>_freigabe` | Bool | Darf das HEMS diese Wallbox regeln? |
+| `attributes.<prefix>_sperrgrund` | Text oder `null` | Grund einer Sperre, mehrere mit Komma; `null` ohne Sperre. |
+
+Gesperrt (`false`) ist eine Wallbox, wenn mindestens eines zutrifft:
+
+| Grund | Bedingung |
+|---|---|
+| `nicht_erreichbar` | Der letzte Poll ist gescheitert oder der Adapter meldet keinen gültigen Zustand. |
+| Fehlerart (z. B. `fehlerstrom`, `uebertemperatur`) | `sensor.<provider_prefix>_fehler` ist nicht `kein_fehler`. |
+| `kein_fahrzeug` | `binary_sensor.<provider_prefix>_fahrzeug_verbunden` ist aus. |
+
+Ein unbekannter Wert (`null`) ist keine Sperre. Die Betriebsart `manuell` sperrt nicht.
+
+**Auswertung im HEMS:** Ein regelbares Gerät, dessen `entity_prefix` hier mit
+`<prefix>_freigabe: false` steht, wird aus der Regelung genommen (`inactive_reasons`:
+`wallbox_gesperrt`): das HEMS schreibt bedingungslos `0 A`, der Überschuss geht an den nächsten
+Verbraucher, Zwang greift nicht. Der Sperrgrund steht im Statusfeld `geraet_sperrgrund`. Fehlt die
+Entität oder das Attribut, oder ist der Wert kein Bool, gilt die Wallbox als frei. Version 2.1 ist
+deshalb abwärtskompatibel zu 2.0.
+
 ## Betriebsart HEMS und manuell
 
 Status: **Implementiert, Hardware offen** (Wallbox-Provider D-005).
@@ -339,6 +374,9 @@ Ausgabehelfer schreiben kann. Das gilt für die Geräteklasse `controllable` mit
 
 ## Kompatibilität und Änderungen
 
+Version `2.1` (20.10.2026) ergänzt additiv `sensor.wallbox_provider_schnittstelle`; ohne sie
+regelt das HEMS wie unter 2.0.
+
 Version `2.0` (20.10.2026) ist inkompatibel zu `1.1`: Das Lebenszeichen steht in
 `sensor.hems_schnittstelle` (Zähler im Attribut `zyklus_zaehler`), `sensor.skytech_hems_status`
 entfällt. HEMS (ab 3.0.0) und Wallbox-Provider müssen zusammen aktualisiert werden; ein Provider
@@ -359,3 +397,12 @@ Implementierungsreferenzen:
 |---|---|
 | SkytechHEMS | `app/status_publisher.py`, `app/ems/devices.py` (`ControllableDevice`: Phasenwechsel, `istleistung_ungueltig`), `docs/device_classes/controllable.md` |
 | Skytech-HEMS-Wallbox-Provider | `custom_components/wallbox_provider/hems_bridge.py`, `heartbeat.py`, `adapters/goe_modbus.py`, `adapters/modbus_tcp.py`, `sensor.py`, `binary_sensor.py`, `switch.py`, `number.py`, `select.py`; `docs/hardware-abnahme.md` |
+
+## Vorbereitete Watt-Anbindung — 21.10.2026
+
+Der ergänzende [Watt-Vertrag](watt_contract.md) und das
+[Watt-Ladeprotokoll](charging_protocol.md) beschreiben die neue HEMS-Anbindung.
+HEMS ist vorbereitet, der Provider noch nicht. Der hier dokumentierte Ampere-Vertrag
+2.1 bleibt für Bestandsgeräte unverändert aktiv. RFID ist im neuen Zielbild eine
+externe EVMS-Zuordnung über die gemeinsame Schnittstellen-Entität; die ältere Idee
+eines einzelnen HA-Ereignisses oben ist dafür noch keine Implementierung.

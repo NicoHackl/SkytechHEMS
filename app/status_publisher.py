@@ -52,7 +52,8 @@ def _valid_power(value: Optional[float]) -> bool:
 
 
 def build_status_state(counter: int, interval_s: float, created_at: str,
-                       batteries: Iterable[BatteryInterfaceValue] = ()
+                       batteries: Iterable[BatteryInterfaceValue] = (),
+                       charging_targets: Optional[Dict[str, dict]] = None,
                        ) -> Tuple[str, Dict[str, Any]]:
     """State und Attribute der Schnittstellen-Entität.
 
@@ -73,6 +74,9 @@ def build_status_state(counter: int, interval_s: float, created_at: str,
         if _valid_power(battery.lade_ist_w) and _valid_power(battery.entlade_ist_w):
             attributes[f"{battery.prefix}_ladeleistung"] = round(battery.lade_ist_w, 1)
             attributes[f"{battery.prefix}_entladeleistung"] = round(battery.entlade_ist_w, 1)
+    if charging_targets:
+        attributes["ladevertrag_version"] = 1
+        attributes["ladeziele"] = charging_targets
     return ",".join(b.prefix for b in batteries), attributes
 
 
@@ -87,12 +91,13 @@ class StatusPublisher:
         return self._counter
 
     async def publish(self, ha_client, interval_s: float, created_at: str,
-                      batteries: Iterable[BatteryInterfaceValue] = ()) -> bool:
+                      batteries: Iterable[BatteryInterfaceValue] = (),
+                      charging_targets: Optional[Dict[str, dict]] = None) -> bool:
         """Erhöht den Zähler und schreibt den Sensor. Wirft nie."""
         self._counter += 1
         try:
             state, attributes = build_status_state(
-                self._counter, interval_s, created_at, batteries)
+                self._counter, interval_s, created_at, batteries, charging_targets)
             return bool(await ha_client.set_state(STATUS_ENTITY_ID, state, attributes))
         except Exception as exc:
             log.warning("HEMS-Schnittstelle konnte nicht veröffentlicht werden: %s", exc)

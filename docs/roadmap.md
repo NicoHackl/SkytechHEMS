@@ -130,3 +130,10 @@ Grundsatzentscheidung: [D-065](adr/D-065-preis-und-prognosemodul.md).
 Beschlossen, aber noch nicht gebaut → hier mit Status `offen`.
 Gebaut, aber abweichend von der Doku → [bekannte-luecken.md](bekannte-luecken.md).
 Warum so entschieden → [design-entscheidungen.md](design-entscheidungen.md).
+
+## Wallbox-Ladeziele und EVMS (D-071)
+
+HEMS-Vorbereitung implementiert: drei auswählbare Watt-Wege, Rückmeldung und
+Zuordnungsbestätigung, Softwaretests und Formular. Noch offen: EVMS-Laufzeit,
+Provider-Wattumsetzung, RFID, Data-Insight-Migration und gemeinsame Hardwareabnahme.
+[Migration und Grenzen](device_classes/charging.md). Bis zur Abnahme Bestandswege beibehalten.

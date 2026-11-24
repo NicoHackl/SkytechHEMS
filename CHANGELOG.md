@@ -8,6 +8,51 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Hinzugefügt — 24.11.2026
+
+- Das HEMS-Panel bestätigt QR-Kopplungen von Skytech Energy TV auf dem in der Companion App ausgewählten Server.
+
+### Dokumentation — 05.11.2026 (Battery-Provider D-022)
+
+- Battery-Provider-Vertrag nachgezogen: Der Provider kann einen Marstek zusätzlich über Modbus
+  anbinden. Dort läuft ein Sollwert nicht von selbst ab, und beim Entladen sowie beim HA-Stopp geht
+  der Speicher auf Standby. Am HEMS ändert sich nichts.
+
+### Dokumentation — 04.11.2026 (Battery-Provider D-021)
+
+- Battery-Provider-Vertrag nachgezogen: Der Provider meldet einen Marstek-Ausfall erst nach bis zu
+  9 s, prüft im Ausfall alle 10 s und sendet danach den aktuellen Sollwert sofort erneut. Am HEMS
+  ändert sich nichts.
+
+### Hinzugefügt — 26.10.2026 (Grafik Regelverhalten)
+
+- `docs/grafiken/`: Grafik des HEMS-Regelverhaltens bei steigendem PV-Überschuss (E3DC Speicher,
+  Heizstab, Heizlüfter 1; AC Speicher 1 ohne Freigabe). Verläufe stammen aus einer Simulation mit
+  dem echten Regelcode und den Helferwerten der Anlage (Testannahmen: geschützte Mindestleistung
+  Heizstab 1.000 W, alle Reserven und Puffer 0 W, Einschaltverzögerung Heizlüfter 0 s); Skripte zum Neuerzeugen liegen daneben. Leistungswerte je Gerät, Grenzen und
+  Einschaltzeitpunkte stehen direkt im Diagramm.
+
+### Hinzugefügt — 21.10.2026 (Watt-Ladeziele, Version 4.1.0)
+
+- Wallbox-Anbindung wählbar: EVMS, direkter Wallbox-Provider oder eigene HA-Automation.
+  Neue Wege verwenden Watt, prüfen aktuelle Rückmeldungen und binden Vorgaben an die
+  aktuelle Zuordnung. Ohne gültige Gegenstelle bleibt das Ladeziel gestoppt.
+- Bestehende Watt-/Ampere-Geräte bleiben unverändert; keine automatische Migration.
+- EVMS-Verträge und Integrationsplan vorbereitet. EVMS-Laufzeit, Providerumsetzung,
+  RFID und Data-Insight-Erweiterung sind noch nicht implementiert; Hardwareabnahme folgt.
+
+### Geändert — 20.10.2026 (Energy Pilot und Wallbox über je eine Schnittstelle, Version 4.0.0)
+
+- Die Vorschläge des Energy Pilot liest das HEMS jetzt aus dessen Sensor
+  „Energy-Pilot-Schnittstelle“ (`sensor.energy_pilot_schnittstelle`). Die bisherigen Einzelsensoren
+  je Gerät und `sensor.ep_plan_commit` werden nicht mehr gelesen (D-070). **Energy Pilot und HEMS
+  müssen zusammen aktualisiert werden** — sonst wirken keine Vorschläge, und das HEMS nimmt die
+  eigenen Einstellungen.
+- Die Seite „Energy Pilot → Vorschläge“ zeigt die Vorschläge aus der neuen Schnittstelle.
+- Neu: Meldet die Wallbox-Integration eine Wallbox als gesperrt (nicht erreichbar, Gerätefehler,
+  kein Fahrzeug verbunden), nimmt das HEMS sie aus der Verteilung, schreibt 0 A und gibt den
+  Überschuss an den nächsten Verbraucher. Die Statuskarte nennt den Grund.
+
 ### Geändert — 20.10.2026 (eine Schnittstelle je Einheit, Version 3.0.0)
 
 - Das HEMS veröffentlicht jetzt genau einen Sensor für die Speicher- und Wallbox-Integrationen:

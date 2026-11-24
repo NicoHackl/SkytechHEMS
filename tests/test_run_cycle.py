@@ -2203,3 +2203,49 @@ def test_battery_interface_values_fuer_hems_schnittstelle():
     assert ctrl.battery_interface_values() == [("sp1", 420.0, 0.0), ("sp2", None, None)]
     assert ctrl.battery_interface_values(with_actuals=False) == [
         ("sp1", None, None), ("sp2", None, None)]
+
+
+# ---- Freigabe aus sensor.wallbox_provider_schnittstelle (D-070) ----
+
+def _wallbox_interface(freigabe, grund=None):
+    attrs = {"schnittstelle_version": 1, "wallbox_freigabe": freigabe,
+             "wallbox_sperrgrund": grund}
+    return {"sensor.wallbox_provider_schnittstelle": attrs}
+
+
+@pytest.mark.parametrize("grund", ["nicht_erreichbar", "kein_fahrzeug", "fehlerstrom"])
+def test_gesperrte_wallbox_schreibt_null_und_gibt_ueberschuss_frei(grund):
+    ctrl = EMSController([_wallbox_cfg(), _heizstab_cfg()], residual_power_entity="sensor.s")
+    states = {
+        **_wallbox_states(**{"input_number.ems_wallbox_anforderung_leistung_a": 10,
+                             "sensor.s": 5000}),
+        **_controllable_w("heizstab", min_w=500, max_w=3000, prio=2),
+        "sensor.heizstab_ist": 0,
+        "sensor.wallbox_provider_schnittstelle": "wallbox",
+    }
+    res = ctrl.run_cycle(make_states(states, attributes=_wallbox_interface(False, grund)))
+
+    amp = _op_for(res["write_ops"], "input_number.ems_wallbox_anforderung_leistung_a")
+    assert amp is not None and amp[2]["value"] == 0
+    dev = _dev(res, "wallbox_1")
+    assert "wallbox_gesperrt" in dev["inactive_reasons"]
+    assert dev["runtime_active"] is False
+    assert dev["geraet_sperrgrund"] == grund
+    heiz = _op_for(res["write_ops"], "input_number.ems_heizstab_anforderung_leistung_w")
+    assert heiz is not None and heiz[2]["value"] > 0  # Überschuss geht an den Heizstab
+
+
+@pytest.mark.parametrize("attrs", [None, {"wallbox_freigabe": True}, {"wallbox_freigabe": "off"},
+                                   {"andere_wallbox_freigabe": False}])
+def test_wallbox_ohne_sperre_regelt_normal(attrs):
+    """Fehlende Schnittstelle, `true`, kein Bool oder ein anderes Präfix: keine Sperre."""
+    ctrl = EMSController([_wallbox_cfg()], residual_power_entity="sensor.s")
+    states = _wallbox_states(**{"sensor.s": 5000})
+    attributes = None
+    if attrs is not None:
+        states["sensor.wallbox_provider_schnittstelle"] = "wallbox"
+        attributes = {"sensor.wallbox_provider_schnittstelle": attrs}
+    res = ctrl.run_cycle(make_states(states, attributes=attributes))
+    dev = _dev(res, "wallbox_1")
+    assert "wallbox_gesperrt" not in dev["inactive_reasons"]
+    assert dev["geraet_sperrgrund"] is None

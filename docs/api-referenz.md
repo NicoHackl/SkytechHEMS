@@ -194,21 +194,23 @@ ist nur Anzeige. Ein Umbenennen des Labels bricht damit keine Zuordnung.
 bereits auf verfügbaren PV-Überschuss. Ein Planer darf Netzbezug deshalb nicht als kausalen
 Abschaltgrund für diese Verbraucher verwenden.
 
-### EP-Plan-Commit
+### EP-Vorschläge (D-070)
 
-Vorschläge unter `sensor.ep_<gerät>_<feld>_vorschlag` werden nur übernommen, wenn ihre Attribute
-`plan_id` und `valid_until` zu `sensor.ep_plan_commit` passen. Der Commit-State ist die `plan_id`;
-seine Attribute enthalten `valid_from` und `valid_until`. Fehlt der Commit, stimmen IDs oder
-Gültigkeit nicht überein oder ist das Zeitfenster abgelaufen, nutzt HEMS für das betreffende Feld
-den Nutzerwert. `ep_proposal_status` im Gerätestatus nennt die Ursache.
+Vorschläge stehen als Attribute `<gerät>_<feld>` in `sensor.energy_pilot_schnittstelle`, mit
+globalem `valid_from`/`valid_until`. Fehlt die Entität, ist das Zeitfenster ungültig oder
+abgelaufen oder fehlt das Feld, nutzt HEMS für das betreffende Feld den Nutzerwert.
+`ep_proposal_status` im Gerätestatus nennt die Ursache (`missing_commit`, `invalid_commit`,
+`expired_commit`, `missing_value`). Vertrag:
+[contract_hems_energy_pilot.md](../contract/contract_hems_energy_pilot/contract_hems_energy_pilot.md).
 
 ### `GET /api/ep`
 
-Spiegelt die vom **Energy Pilot** veröffentlichten `sensor.ep_*`-Entitäten, gefiltert aus dem
-HA-State. Reine Anzeige — es gibt keinen direkten Add-on-zu-Add-on-Aufruf.
+Spiegelt die vom **Energy Pilot** veröffentlichten Entitäten, gefiltert aus dem HA-State:
+`sensor.energy_pilot_schnittstelle` und alle `sensor.ep_*`. Reine Anzeige — es gibt keinen
+direkten Add-on-zu-Add-on-Aufruf.
 
-Relevant sind `sensor.ep_plan_status`, `sensor.ep_hems_verbindung` und je Gerät und Feld ein
-`sensor.ep_<gerät>_<feld>_vorschlag`. Zum Umgang mit verwaisten Vorschlägen siehe
+Relevant sind `sensor.energy_pilot_schnittstelle` (Vorschläge je Gerät), `sensor.ep_plan_status`,
+`sensor.ep_hems_verbindung` und die Zusatz-Vorschläge `sensor.ep_<obj>_vorschlag`. Zum Umgang mit verwaisten Vorschlägen siehe
 [datenmodell.md](datenmodell.md).
 
 **Fehler `500`** `{"error": "<Meldung>"}`.
@@ -521,3 +523,12 @@ Vom Add-on genutzte Endpunkte von Home Assistant:
 | Home Assistant | `POST /api/services/<domain>/<service>` | Sollwerte, Schaltanforderungen, Post-Cycle-Skript, Timeout 5 s | Eine fehlgeschlagene Write-Op wird ihrem Gerät zugeordnet, geloggt und im Status sichtbar gemacht; das Gerät fährt im nächsten Zyklus nur noch seinen sicheren Zustand, die übrigen regeln weiter. Das Post-Cycle-Skript wirft und wird als Warnung gemeldet |
 | Home Assistant | `POST /api/states/<entity_id>` | Anzeigedaten der Power Flow Card (D-046), `sensor.ems_<prefix>_lade_limit_w` je Speicher (D-057) `sensor.ems_notabschaltung_aktiv` (D-059) und die Schnittstellen-Entität `sensor.hems_schnittstelle` (Lebenszeichen und Speicher-Istwerte, D-062/D-069, Felder siehe [Battery-Vertrag](../contract/contract_hems_battery_provider/contract_hems_battery_provider.md#hems--provider-sensorhems_schnittstelle) und [Wallbox-Vertrag](../contract/contract_hems_wallbox_provider/contract_hems_wallbox_provider.md#hems-lebenszeichen)), Timeout 5 s | Wird protokolliert und verschluckt: ein misslungener Anzeigeschrieb darf keinen Regelzyklus kosten. Die Karte zeichnet in der Lücke aus den HA-Entitäten weiter; der Ladelimit-Sensor behält seinen letzten Wert |
 | Home Assistant | `WS /api/websocket` — `lovelace/dashboards/list`, `lovelace/config` | Dashboards und Ansichten für die Zielauswahl (D-049), Timeout 10 s je Nachricht | Wird protokolliert und verschluckt; die Seite fällt auf ein Textfeld zurück. Strategie- und YAML-Dashboards erscheinen ohne Ansichten mit einer Warnung |
+
+## Wallbox-Ladeziele und EVMS (D-071)
+
+`GET /api/config` ergänzt `supported.charging_backends`; Gerätekonfiguration enthält
+`charging_backend` und `charging_feedback_timeout_s`. Speichern/Validieren verwendet die
+bestehenden Endpunkte. Das Steuerschema bleibt Version 2, Klasse `controllable`, und
+nennt additiv `charging_backend`; beim neuen Weg ist `actual_power_entity` leer.
+Der Gerätestatus ergänzt `charging_backend`, `charging_assignment_id` , `charging_interface` und `charging_measurement_valid`.
+[Konfiguration](device_classes/charging.md) · [Protokoll](../contract/contract_hems_evms/charging_protocol.md).

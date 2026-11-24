@@ -40,6 +40,7 @@ nicht stillschweigend schöngeschrieben.
 | [sicherheit-datenschutz.md](sicherheit-datenschutz.md) | Token, personenbezogene Daten, externe Dienste |
 | [bekannte-luecken.md](bekannte-luecken.md) | Abweichungen Spec ↔ Code, Stolpersteine, offene Bugs |
 | [roadmap.md](roadmap.md) | Meilensteine und realistischer Umsetzungsstand |
+| [grafiken/](grafiken/) | Simulierte Regelverläufe als SVG ([Regelverhalten bei steigendem Überschuss](grafiken/regelverhalten.svg)), erzeugt mit dem echten Regelcode |
 
 ## Pflegeregeln dieser Doku
 
@@ -49,3 +50,9 @@ nicht stillschweigend schöngeschrieben.
 - Nicht zutreffende Dateien werden **gelöscht**, nicht mit Platzhaltertext stehengelassen.
   Ein leeres Gerüst ist schlimmer als eine fehlende Datei, weil ein Agent es für vollständig hält.
 - Änderungen an Verhalten und Doku gehören ins **selbe** Arbeitspaket.
+
+## Vorbereitete Wallbox-Anbindung über EVMS
+
+[Watt-Ladeziele mit drei Anbindungswegen](device_classes/charging.md): HEMS-Seite implementiert und
+softwaregetestet. EVMS, Watt-Provider und Hardwareabnahme folgen nach Lieferung der go-e.
+Bestehende Anbindungen werden nicht automatisch umgestellt.

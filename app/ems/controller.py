@@ -30,6 +30,7 @@ from .ops import WriteOp, WriteResult
 from .state import (SOURCE_FORMULA, SOURCE_HA, SOURCE_INTERNAL, STATE_VALID, Resolved, StateProxy,
                     safe_float)
 from .devices import Device, ControllableDevice, BinaryDevice, BatteryDevice
+from .charging import ChargingDevice
 
 log = logging.getLogger(__name__)
 
@@ -77,7 +78,12 @@ def _build_devices(device_configs: List[dict]) -> List[Device]:
         if cls == "controllable":
             output_unit = cfg["output_unit"]
             suffix      = "a" if output_unit == "ampere" else "w"
-            devices.append(ControllableDevice(
+            device_type = ChargingDevice if cfg["charging_backend"] else ControllableDevice
+            charging_options = ({
+                "charging_backend": cfg["charging_backend"],
+                "feedback_timeout_s": cfg["charging_feedback_timeout_s"],
+            } if cfg["charging_backend"] else {})
+            devices.append(device_type(
                 id=name,
                 allowed_modes=modes,
                 entity_actual_w=cfg["actual_power_entity"],
@@ -96,6 +102,7 @@ def _build_devices(device_configs: List[dict]) -> List[Device]:
                 decrease_delay_s=cfg["decrease_delay_s"],
                 maximum_step_change=cfg["maximum_step_change"],
                 minimum_step_change=cfg["minimum_step_change"],
+                **charging_options,
             ))
 
         elif cls == "binary":
@@ -246,6 +253,22 @@ class EMSController:
     def battery_latches(self) -> Dict[str, bool]:
         """Sperre am Ladedeckel je Speicher, zum Speichern unter /data (D-066)."""
         return {d.id: d.soc_max_latch for d in self._devices if isinstance(d, BatteryDevice)}
+
+    def charging_interface_values(self, active: bool = True) -> Dict[str, dict]:
+        """Bindet erfolgreich geschriebene Wattvorgaben an die aktuelle Zuordnung.
+
+        Empfänger prüfen Helfer UND diesen Commit im HEMS-Schnittstellensensor.
+        Bei Notabschaltung oder Schreibfehler ist das Budget stets null.
+        """
+        return {
+            d.entity_prefix: {
+                "anbindung": d.charging_backend,
+                "zuordnung_id": d.assignment_id,
+                "leistung_w": (d.new_w if active and d.runtime_active
+                               and d.id not in self._write_failures else 0.0),
+            }
+            for d in self._devices if isinstance(d, ChargingDevice)
+        }
 
     def restore_battery_latches(self, latches: Dict[str, bool]) -> None:
         """Übernimmt gespeicherte Sperren. Unbekannte IDs (umbenannte oder

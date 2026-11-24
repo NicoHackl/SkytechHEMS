@@ -769,10 +769,12 @@ def test_ep_maximalvorschlaege_werden_ignoriert():
     """Der Energy Pilot darf physische WR-Limits nicht überschreiben."""
     b = make_battery(available_charge_power_w=1500, available_discharge_power_w=1500)
     b.source = "ep"
-    prepare(b, **{
-        f"sensor.ep_{PREFIX}_lade_max_w_vorschlag": 9000,
-        f"sensor.ep_{PREFIX}_entlade_max_w_vorschlag": 9000,
-    })
+    prepare(b, attributes={"sensor.energy_pilot_schnittstelle": {
+        "valid_from": "2020-01-01T00:00:00+00:00",
+        "valid_until": "2100-01-01T00:00:00+00:00",
+        f"{PREFIX}_lade_max_w": 9000,
+        f"{PREFIX}_entlade_max_w": 9000,
+    }}, **{"sensor.energy_pilot_schnittstelle": PREFIX})
     assert b._lade_limit_w() == 1500.0
     assert b._entlade_limit_w() == 1500.0
 

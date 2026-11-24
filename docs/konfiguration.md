@@ -454,3 +454,11 @@ Entladesensoren werden für die Grundlast noch nicht unterstützt.
 - Fehlt der Token, schlägt der erste HA-Aufruf mit einer Fehlermeldung im Log fehl und der Zyklus
   wird als fehlerhaft markiert; geschaltet wird nichts.
 - Weitergehende Regeln: [sicherheit-datenschutz.md](sicherheit-datenschutz.md).
+
+## Wallbox-Ladeziele und EVMS (D-071)
+
+Unter „Geräte → Regelbar → Wallbox-Anbindung“ wird `charging_backend` gewählt:
+leer = bisheriges Verhalten, `evms`, `wallbox_provider` oder `automation` = neuer Watt-Weg.
+`charging_feedback_timeout_s` begrenzt das Alter der Rückmeldung (Standard 90 Sekunden).
+`actual_power_entity` bleibt beim neuen Weg leer; `output_unit` muss `watt` sein.
+[Grenzen, Beispiel und Migration](device_classes/charging.md). Gegenstellen noch nicht freigegeben.

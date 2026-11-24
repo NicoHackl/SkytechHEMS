@@ -140,3 +140,9 @@ Vor dem ersten Commit lesen: [CONTRIBUTING.md](CONTRIBUTING.md).
 ## Lizenz
 
 Privates Projekt, keine Lizenz erteilt.
+
+## Vorbereitete Wallbox-Anbindung über EVMS
+
+[Watt-Ladeziele mit drei Anbindungswegen](docs/device_classes/charging.md): HEMS-Seite implementiert und
+softwaregetestet. EVMS, Watt-Provider und Hardwareabnahme folgen nach Lieferung der go-e.
+Bestehende Anbindungen werden nicht automatisch umgestellt.

@@ -124,15 +124,27 @@ Helferwert auf das reale Gerät übertragen.
 
 ## Energy-Pilot-Vorschläge
 
-Zusätzlich zu `sensor.ep_<prefix>_freigabe_vorschlag` und
-`sensor.ep_<prefix>_prio_vorschlag` liest ein Watt-Gerät:
+Zusätzlich zu `<prefix>_freigabe` und `<prefix>_prio` liest ein Watt-Gerät aus
+`sensor.energy_pilot_schnittstelle`:
 
 ```text
-sensor.ep_<prefix>_geschutzte_mindestleistung_w_vorschlag
+<prefix>_geschutzte_mindestleistung_w
 ```
 
-Im Ampere-Modus wird dieser Watt-Vorschlag nicht übernommen. Für alle Vorschläge gelten der
-[Commit-Vertrag und der Fallback auf die HA-Helfer](global.md#energy-pilot-vertrag).
+Im Ampere-Modus wird dieser Watt-Vorschlag nicht übernommen. Für alle Vorschläge gelten die
+Gültigkeitsprüfung und der [Fallback auf die HA-Helfer](global.md#energy-pilot-vertrag).
+
+## Freigabe des Wallbox-Providers (D-070)
+
+Jedes regelbare Gerät (nicht `battery`) liest zusätzlich aus `sensor.wallbox_provider_schnittstelle`
+das Attribut `<entity_prefix>_freigabe` ([Vertrag 2.1](../../contract/contract_hems_wallbox_provider/contract_hems_wallbox_provider.md#provider--hems-sensorwallbox_provider_schnittstelle)).
+
+- `false` (nicht erreichbar, Gerätefehler, kein Fahrzeug verbunden) nimmt das Gerät aus der
+  Regelung: `inactive_reasons` enthält `wallbox_gesperrt`, das HEMS schreibt bedingungslos 0 A
+  bzw. 0 W, der Überschuss geht an den nächsten Verbraucher, Zwang greift nicht.
+- Der Grund steht im Statusfeld `geraet_sperrgrund` (Text des Providers, mehrere mit Komma).
+- Fehlt die Entität oder das Attribut, oder ist der Wert kein Bool, gilt das Gerät als frei. Ein
+  Heizstab steht dort nie und ist deshalb nicht betroffen.
 
 ## Pflicht für eine funktionsfähige Instanz
 
@@ -170,3 +182,12 @@ devices:
     maximum_step_change: 2
     minimum_step_change: 1
 ```
+
+## Neue Wallbox-Wege in Watt
+
+Seit D-071 kann ein regelbares Gerät ausdrücklich als Watt-Ladeziel konfiguriert
+werden: [Wallbox-Ladeziele](charging.md). Mit `charging_backend` gelten die dortigen
+strengeren Mess-/Freigaberegeln, und die Istleistung kommt aus der Gegenstellen-Schnittstelle.
+Die bisherigen Aussagen zu `actual_power_entity`, Ampere und fehlenden Freigaben
+oben gelten für Geräte **ohne** `charging_backend`. Der bisherige Provider bleibt
+bis zur koordinierten Umstellung am Ampere-Vertrag.

@@ -30,7 +30,7 @@ from emergency import (
 from emergency_rules import condition_error
 from ha_client import HAClient
 from ems import EMSController, StateProxy
-from ems.devices import BatteryDevice, Device
+from ems.devices import EP_INTERFACE_ENTITY, BatteryDevice, Device
 from ems.state import is_gate_entity
 from internal_values import (
     INTERNAL_VALUES_FILENAME,
@@ -442,6 +442,7 @@ def _build_device_controls_schema(
                             if output_unit == "ampere" and len(allowed_phases) > 1 else "")
             base.update({
                 "output_unit": output_unit,
+                "charging_backend": cfg["charging_backend"],
                 "actual_power_entity": cfg["actual_power_entity"],
                 "request_entity": f"input_number.ems_{prefix}_anforderung_leistung_{suffix}",
                 "phase_entity": phase_entity,
@@ -739,7 +740,8 @@ class HEMSApp:
                      in self.ems.battery_interface_values(with_actuals)]
         await self._heartbeat.publish(
             self.ha, self.interval_s,
-            datetime.datetime.now(BERLIN).strftime(DISPLAY_TIME_FORMAT), batteries)
+            datetime.datetime.now(BERLIN).strftime(DISPLAY_TIME_FORMAT), batteries,
+            self.ems.charging_interface_values(active=with_actuals))
 
     async def _scheduler(self) -> None:
         log.info("EMS scheduler started (interval=%ds).", self.interval_s)
@@ -898,18 +900,20 @@ class HEMSApp:
             return web.json_response({"error": str(exc)}, status=500)
 
     async def _handle_ep(self, request: web.Request) -> web.Response:
-        """Liefert die vom Energy Pilot veröffentlichten `sensor.ep_*`-Entitäten.
+        """Liefert die vom Energy Pilot veröffentlichten Entitäten.
 
-        Reine Anzeige: EP schreibt seine KI-Vorschläge (`sensor.ep_<gerät>_*_vorschlag`)
-        und Status-Sensoren (`sensor.ep_plan_status`, `sensor.ep_hems_verbindung`) als
-        HA-Entitäten; HEMS liest sie – wie den Rest – über die HA-REST-API und spiegelt
-        sie in der Weboberfläche. Kein direkter Add-on-zu-Add-on-Aufruf nötig.
+        Reine Anzeige: EP schreibt seine Vorschläge für das HEMS in
+        `sensor.energy_pilot_schnittstelle` (D-070), dazu Zusatz-Vorschläge
+        (`sensor.ep_<obj>_vorschlag`) und Status-Sensoren (`sensor.ep_plan_status`,
+        `sensor.ep_hems_verbindung`). HEMS liest sie – wie den Rest – über die
+        HA-REST-API und spiegelt sie in der Weboberfläche. Kein direkter
+        Add-on-zu-Add-on-Aufruf nötig.
         """
         try:
             states = await self.ha.fetch_all_states()
             ep = {
                 eid: data for eid, data in states.items()
-                if eid.startswith("sensor.ep_")
+                if eid.startswith("sensor.ep_") or eid == EP_INTERFACE_ENTITY
             }
             return web.json_response(ep)
         except Exception as exc:

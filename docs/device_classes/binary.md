@@ -112,14 +112,14 @@ Der Regelzyklus schreibt diese Anforderung in jedem Zyklus. Er schreibt niemals 
 
 ## Energy-Pilot-Vorschläge
 
-Im EP-Modus liest ein binäres Gerät:
+Im EP-Modus liest ein binäres Gerät diese Attribute aus `sensor.energy_pilot_schnittstelle`:
 
 ```text
-sensor.ep_<prefix>_freigabe_vorschlag
-sensor.ep_<prefix>_prio_vorschlag
+<prefix>_freigabe
+<prefix>_prio
 ```
 
-Für beide gelten der [Commit-Vertrag und der Fallback auf die HA-Helfer](global.md#energy-pilot-vertrag).
+Für beide gelten die Gültigkeitsprüfung und der [Fallback auf die HA-Helfer](global.md#energy-pilot-vertrag).
 
 ## Pflicht für eine funktionsfähige Instanz
 

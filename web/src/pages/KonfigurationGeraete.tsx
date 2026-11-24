@@ -26,7 +26,10 @@ const GRUND_TEXT: Record<string, string> = {
   schreibziel_nicht_verfuegbar: 'Ein Schreibziel ist gerade nicht verfügbar.',
   schreibziel_ungueltig: 'Ein Schreibziel hat die falsche Domain oder fehlende Optionen.',
   schreiben_fehlgeschlagen: 'Der letzte Schreibversuch ist fehlgeschlagen.',
-  istleistung_ungueltig: 'Die Istleistung ist ungültig oder nicht verfügbar; das Gerät fährt auf 0 A.',
+  laderueckmeldung_ungueltig: 'Laderückmeldung fehlt oder ist ungültig',
+  laderueckmeldung_veraltet: 'Warte auf aktuelle Laderückmeldung',
+  ladegrenzen_ungueltig: 'Keine nutzbare Ladeleistung verfügbar',
+  istleistung_ungueltig: 'Die Istleistung ist ungültig oder nicht verfügbar; das Gerät wird gestoppt.',
 }
 
 export function KonfigurationGeraete() {
