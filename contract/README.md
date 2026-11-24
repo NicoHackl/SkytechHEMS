@@ -50,6 +50,7 @@ Dokumentierte Ausnahmen:
 
 | Gegenstelle | Vertrag | Stand / Hinweise |
 |---|---|---|
+| Skytech Energy TV | [QR-Kopplung](contract_hems_energy_tv/pairing.md) | Implementierter lokaler Kopplungsvertrag mit Home Assistant OAuth und PKCE. |
 | Powerflow-Card | [kontrakt.md](contract_powerflow_card_hems/kontrakt.md) | Implementierter Kartenvertrag mit zugehörigen Plänen. |
 | Energy-Pilot | [contract_hems_energy_pilot.md](contract_hems_energy_pilot/contract_hems_energy_pilot.md) | Version 2.0: Vorschläge über `sensor.energy_pilot_schnittstelle`; dokumentierte Kompatibilitätsgrenzen. |
 | Battery-Provider | [contract_hems_battery_provider.md](contract_hems_battery_provider/contract_hems_battery_provider.md) | Aktueller Austausch einschließlich dokumentierter Betriebsgrenzen; Version 2.0: je Einheit eine Schnittstellen-Entität (`sensor.hems_schnittstelle`, `sensor.battery_provider_schnittstelle`); Marstek-Freigaben per Soll/Ist-Vergleich mit HEMS-Istwerten; E3DC-Statusbits noch nicht negativ getestet. |

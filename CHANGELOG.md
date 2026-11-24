@@ -8,6 +8,10 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Hinzugefügt — 24.11.2026
+
+- Das HEMS-Panel bestätigt QR-Kopplungen von Skytech Energy TV auf dem in der Companion App ausgewählten Server.
+
 ### Dokumentation — 05.11.2026 (Battery-Provider D-022)
 
 - Battery-Provider-Vertrag nachgezogen: Der Provider kann einen Marstek zusätzlich über Modbus

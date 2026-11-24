@@ -455,3 +455,10 @@ Die Auswahl stammt aus `supported.charging_backends`. Neue Wege verwenden Watt,
 blenden separate Istsensor-/Ausgabeeinheit-Felder aus und zeigen das Rückmeldungszeitlimit.
 Beim Aktivieren müssen Leistungsgrenzen neu eingegeben werden; keine stillschweigende
 Übernahme von Amperewerten. [Fachliches Verhalten](device_classes/charging.md).
+
+### Skytech Energy TV
+
+Öffnet die Companion App einen gültigen Kopplungspfad, zeigt das gleichursprüngliche
+Ingress-Panel eine eigene Bestätigungsseite. Die Schaltfläche wechselt zur Kopplungsseite
+des Fernsehers. Der [Kopplungsvertrag](../contract/contract_hems_energy_tv/pairing.md)
+beschreibt den weiteren Ablauf.

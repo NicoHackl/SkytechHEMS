@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { HashRouter } from 'react-router-dom'
 import { App } from './App'
+import { EnergyTvPairing } from './pages/EnergyTvPairing'
 import { ThemeProvider } from './components/Theme'
 import { ToastProvider } from './components/Toast'
 import { ConfigDraftProvider } from './components/ConfigDraft'
@@ -23,7 +24,9 @@ createRoot(document.getElementById('root')!).render(
       <ThemeProvider>
         <ToastProvider>
           <ConfigDraftProvider>
-            <App />
+            <EnergyTvPairing>
+              <App />
+            </EnergyTvPairing>
           </ConfigDraftProvider>
         </ToastProvider>
       </ThemeProvider>
