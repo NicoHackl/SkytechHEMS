@@ -212,6 +212,6 @@ Rückmeldeformat und akzeptiert keine Wattbudgets. Aktivieren einer neuen Anbind
 führt deshalb bis zur Gegenstellenumsetzung zu einer Sperre.
 
 Modell/Firmware der noch nicht gelieferten go-e, RFID-Verhalten, sichere Phasenwechsel,
-Ladezielmodell, systemweite Prüfung doppelter physischer Anschlüsse und gemeinsame
-Anschlusslimits sind offen. Keine automatische Ampere-Migration.
+Umsetzung der Wallbox-Klasse und systemweite Prüfung doppelter physischer Anschlüsse
+sind offen. Gemeinsame Anschlusslimits liegen außerhalb des aktuellen Wallbox-Umfangs. Keine automatische Ampere-Migration.
 [Details und Verträge](device_classes/charging.md).

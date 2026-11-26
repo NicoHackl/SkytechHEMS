@@ -8,6 +8,10 @@ um eine Patch-Stelle erhöht (siehe `.github/workflows/bump-version.yaml`).
 
 ## [Unreleased]
 
+### Dokumentation — 26.11.2026
+
+- Virtuellen Ladepunkt, geplante Wallbox-Klasse und Profilwahl beschrieben. Der Konfigurationsleitfaden erklärt die direkte Wallbox-Steuerung ohne EVMS.
+
 ### Hinzugefügt — 24.11.2026
 
 - Das HEMS-Panel bestätigt QR-Kopplungen von Skytech Energy TV auf dem in der Companion App ausgewählten Server.

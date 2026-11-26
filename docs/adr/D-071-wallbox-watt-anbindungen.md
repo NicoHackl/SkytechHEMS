@@ -8,7 +8,7 @@
 Der Nutzer möchte HEMS → EVMS → Wallbox-Provider, HEMS → Wallbox-Provider sowie
 HEMS → eigene HA-Automation. HEMS verteilt Wattbudgets. EVMS soll Fahrzeuge und
 Anschlusszuordnungen verwalten; die technische Strom-/Phasenumsetzung liegt im
-Provider beziehungsweise in der Eigenautomation. Das EVMS-Ladezielmodell ist offen.
+Provider beziehungsweise in der Eigenautomation. Das damals offene Ladezielmodell ist seit 26.11.2026 in [D-072](D-072-wallbox-ladepunkt.md) festgelegt.
 
 ## Umsetzung
 
